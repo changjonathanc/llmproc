@@ -1,6 +1,8 @@
 [model]
 name = "gpt-4o-mini"
 provider = "openai"
+
+[parameters]
 max_tokens = 100
 
 [prompt]

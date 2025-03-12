@@ -68,13 +68,13 @@ def test_from_toml_complex(mock_env, mock_openai):
 [model]
 name = "gpt-4o"
 provider = "openai"
-temperature = 0.8
-max_tokens = 2000
 
 [prompt]
 system_prompt_file = "prompts/system_prompt.md"
 
 [parameters]
+temperature = 0.8
+max_tokens = 2000
 top_p = 0.95
 frequency_penalty = 0.2
 presence_penalty = 0.1

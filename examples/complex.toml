@@ -1,13 +1,13 @@
 [model]
 name = "gpt-4o"
 provider = "openai"
-temperature = 0.7
-max_tokens = 150
 
 [prompt]
 system_prompt_file = "../prompts/example_prompt.md"
 
 [parameters]
+temperature = 0.7
+max_tokens = 150
 top_p = 0.95
 frequency_penalty = 0.0
 presence_penalty = 0.0

@@ -57,11 +57,6 @@ class LLMProcess:
         model = config['model']
         prompt_config = config.get('prompt', {})
         parameters = config.get('parameters', {})
-        
-        # Add any model-specific parameters from the model section
-        model_params = {k: v for k, v in model.items() 
-                       if k not in ['name', 'provider']}
-        parameters.update(model_params)
 
         if 'system_prompt_file' in prompt_config:
             system_prompt_path = path.parent / prompt_config['system_prompt_file']
