@@ -2,7 +2,7 @@
 name = "gpt-4o"
 provider = "openai"
 temperature = 0.7
-max_tokens = 1000
+max_tokens = 150
 
 [prompt]
 system_prompt_file = "../prompts/example_prompt.md"

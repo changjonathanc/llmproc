@@ -10,10 +10,10 @@ def main() -> None:
     print("Running minimal example...")
     process_minimal = LLMProcess.from_toml("examples/minimal.toml")
     
-    output = process_minimal.run("Hello!")
+    output = process_minimal.run("Hello! Keep your response under 10 words.")
     print(f"Response: {output}\n")
     
-    output = process_minimal.run("Explain quantum computing simply.")
+    output = process_minimal.run("Explain quantum computing in 1-2 sentences only.")
     print(f"Response: {output}\n")
     
     print("-" * 50)
@@ -22,7 +22,7 @@ def main() -> None:
     print("\nRunning complex example...")
     process_complex = LLMProcess.from_toml("examples/complex.toml")
     
-    output = process_complex.run("What is machine learning?")
+    output = process_complex.run("Define machine learning in exactly one sentence.")
     print(f"Response: {output}\n")
     
     print("Conversation state:")
@@ -33,7 +33,7 @@ def main() -> None:
     print("\nResetting conversation state...")
     process_complex.reset_state()
     
-    output = process_complex.run("How does a neural network work?")
+    output = process_complex.run("Explain neural networks in 2-3 bullet points only.")
     print(f"Response after reset: {output}")
 
 
