@@ -1,0 +1,68 @@
+# LLMProc Reference Configuration
+# This file documents all supported options and configuration parameters
+
+#----------------------------------------
+# Model Configuration
+#----------------------------------------
+[model]
+# Required: Name of the model to use
+# Example values:
+#   OpenAI: "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"
+#   Anthropic: "claude-3-opus-20240229", "claude-3-sonnet-20240229"
+name = "gpt-4o"
+
+# Required: Provider of the LLM API
+# Currently supported: "openai"
+# Future support planned: "anthropic", "google"
+provider = "openai"
+
+#----------------------------------------
+# Generation Parameters
+#----------------------------------------
+[parameters]
+# Controls randomness in responses (default: 0.7)
+# - Lower values (e.g., 0.2): More focused, deterministic responses
+# - Higher values (e.g., 0.9): More creative, diverse responses
+# - Range: 0.0-2.0 for OpenAI, 0.0-1.0 for Anthropic
+temperature = 0.7
+
+# Maximum number of tokens to generate (default: varies by model)
+# - One token is roughly 4 characters for English text
+# - Higher values allow longer responses
+# - Consider model context limits when setting this
+max_tokens = 150
+
+# Controls diversity via nucleus sampling (default: 1.0)
+# - Only considers tokens comprising the top X% probability mass
+# - Lower values (e.g., 0.5): More focused responses
+# - Higher values (e.g., 0.9): More diverse responses
+# - Range: 0.0-1.0
+top_p = 0.95
+
+# Reduces repetition by penalizing tokens based on frequency (default: 0.0)
+# - Higher values discourage repeating the same words/phrases
+# - Range: -2.0 to 2.0
+# - Negative values encourage repetition
+frequency_penalty = 0.0
+
+# Reduces repetition by penalizing tokens that have appeared at all (default: 0.0)
+# - Higher values encourage the model to talk about new topics
+# - Range: -2.0 to 2.0
+# - Negative values encourage reusing topics
+presence_penalty = 0.0
+
+#----------------------------------------
+# Prompt Configuration
+#----------------------------------------
+[prompt]
+# System prompt as a string (used if system_prompt_file is not specified)
+# This sets the initial context and instructions for the LLM
+system_prompt = """You are a helpful assistant. 
+Provide clear, accurate, and concise responses to user queries.
+Always maintain a neutral and professional tone."""
+
+# Alternatively, you can specify a file containing the system prompt
+# Path is relative to the location of this TOML file
+# If both system_prompt and system_prompt_file are specified,
+# system_prompt_file takes precedence
+# system_prompt_file = "../prompts/my_system_prompt.md"

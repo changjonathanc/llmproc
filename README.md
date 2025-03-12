@@ -7,28 +7,21 @@ A simple, flexible framework for building LLM-powered applications with a standa
 - Load configurations from TOML files
 - Maintain conversation state
 - Support for different LLM providers (OpenAI initially)
-- Parameter customization
+- Extensive parameter customization
 - Simple API for easy integration
+- Comprehensive documentation for all parameters
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/llmproc.git
-cd llmproc
-
-# Install as a development package using uv
+# recommended
 uv pip install -e .
-
-# Managing dependencies with uv
-uv add pandas        # Add a package to dependencies
-uv add --dev pytest  # Add a package to dev dependencies
-uv remove pandas     # Remove a package
-uv pip freeze > requirements.txt  # Update requirements.txt
+# or
+pip install -e .
 
 # Set up environment variables
-cp .env.example .env
-# Edit .env with your API keys
+# supports .env file
+OPENAI_API_KEY=your_api_key_here
 ```
 
 ## Usage
@@ -66,23 +59,7 @@ provider = "openai"
 system_prompt = "You are a helpful assistant."
 ```
 
-Complex example:
-
-```toml
-[model]
-name = "gpt-4o"
-provider = "openai"
-temperature = 0.7
-max_tokens = 1000
-
-[prompt]
-system_prompt_file = "prompts/example_prompt.md"
-
-[parameters]
-top_p = 0.95
-frequency_penalty = 0.0
-presence_penalty = 0.0
-```
+See `examples/reference.toml` for a comprehensive reference with comments for all supported parameters.
 
 ## License
 
