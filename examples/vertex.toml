@@ -1,0 +1,11 @@
+[model]
+name = "claude-3-haiku@20240307"
+provider = "vertex"
+
+[prompt]
+system_prompt = "You are Claude, a helpful AI assistant deployed through Google Vertex AI. Keep all responses under 3 sentences."
+
+[parameters]
+temperature = 0.7
+max_tokens = 150
+top_p = 0.95

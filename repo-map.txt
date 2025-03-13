@@ -1,0 +1,89 @@
+# LLMProc Repository Map
+
+This file provides an overview of all tracked files in the repository and their purpose.
+
+```
+llmproc/
+├── .env.example                     # Example environment file for API keys
+├── .gitignore                       # Git ignore patterns
+├── .pre-commit-config.yaml          # Pre-commit hooks configuration
+├── PHILOSOPHY.md                    # Core design philosophy and concepts
+├── CLAUDE.md                        # Claude AI session summary and repository information
+├── CONTRIBUTING.md                  # Guidelines for contributing to the project
+├── README.md                        # Project overview and usage instructions
+├── config/                          # Configuration directory
+│   └── mcp_servers.json             # Model Context Protocol servers configuration
+├── docs/                            # Detailed documentation directory
+│   ├── api_parameters.md            # Documentation of OpenAI and Anthropic API parameters
+│   ├── mcp-feature.md               # Documentation for Model Context Protocol (MCP) feature
+│   ├── mcp-feature-status.md        # Status and implementation progress of MCP feature
+│   └── preload-feature.md           # Documentation for file preloading feature
+├── examples/                        # Example TOML configuration files
+│   ├── anthropic.toml               # Anthropic model configuration example
+│   ├── claude_code.toml             # Claude Code assistant with MCP tools configuration
+│   ├── complex.toml                 # Complex configuration example with multiple parameters
+│   ├── minimal.toml                 # Minimal configuration example
+│   ├── mcp.toml                     # Model Context Protocol (MCP) configuration example
+│   ├── openai.toml                  # OpenAI model configuration example
+│   ├── preload.toml                 # Example showing file preloading functionality
+│   ├── reference.toml               # Comprehensive reference with all supported parameters
+│   └── vertex.toml                  # Google Vertex AI model configuration
+├── prompts/                         # Prompt templates for LLMs
+│   ├── claude-code-system-prompt.md # Claude Code system prompt template
+│   └── example_prompt.md            # Example system prompt template
+├── pyproject.toml                   # Python project configuration (build, dependencies)
+├── pytest.ini                       # PyTest configuration
+├── repo-map.txt                     # This file - repository map
+├── session_summaries/                         # Directory of session summaries
+│   ├── 2025-03-12_anthropic_vertex_integration.md # Summary of Anthropic and Vertex AI integration
+│   ├── 2025-03-13_async_mcp_implementation.md     # Summary of MCP async implementation
+│   ├── 2025-03-13_file_preloading.md              # Summary of file preloading implementation
+│   └── 2025-03-13_mcp_implementation_notes.md     # Notes on MCP implementation process
+├── setup.cfg                        # Setup configuration
+├── src/                             # Source code directory
+│   └── llmproc/                     # Main package
+│       ├── __init__.py              # Package initialization, exports LLMProcess
+│       ├── cli.py                   # Command-line interface for interactive chat
+│       ├── llm_process.py           # Core LLMProcess class implementation
+│       └── providers/               # LLM provider implementations directory
+│           ├── __init__.py          # Provider package initialization
+│           ├── anthropic_tools.py   # Anthropic-specific tool implementations
+│           └── providers.py         # Core provider implementations
+└── tests/                           # Test directory
+    ├── __init__.py                  # Test package initialization
+    ├── test_from_toml.py            # Tests for TOML configuration loading
+    ├── test_llm_process.py          # Tests for core LLMProcess functionality
+    ├── test_llm_process_providers.py # Tests for LLMProcess provider integration
+    ├── test_mcp_features.py         # Tests for Model Context Protocol features
+    └── test_providers.py            # Tests for provider implementations
+```
+
+## Main Components
+
+### Core Implementation
+- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, supports file preloading for context, and provides MCP tool integration.
+- `src/llmproc/providers/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI) with asynchronous API support.
+- `src/llmproc/providers/anthropic_tools.py`: Anthropic-specific tool implementations for MCP functionality.
+- `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations, including support for MCP tools.
+
+### Configuration
+- `examples/*.toml`: TOML configuration files for LLMProcess.
+- `examples/mcp.toml`: Example configuration for using Model Context Protocol features.
+- `docs/api_parameters.md`: Documentation of supported parameters for different LLM providers.
+- `config/mcp_servers.json`: Configuration for MCP servers and available tools.
+
+### Usage Examples
+- Command-line: `llmproc-demo [config.toml]` for interactive chat sessions.
+- Example: `llmproc-demo ./examples/claude_code.toml` to run a session with the Claude Code configuration.
+
+### Tests
+- `tests/test_from_toml.py`: Tests for loading LLMProcess from TOML files.
+- `tests/test_llm_process.py`: Tests for core LLMProcess functionality.
+- `tests/test_providers.py`: Tests for provider implementations.
+- `tests/test_llm_process_providers.py`: Tests for LLMProcess integration with different providers.
+- `tests/test_mcp_features.py`: Tests for Model Context Protocol (MCP) features and tool integration.
+
+### Project Configuration
+- `pyproject.toml`: Package metadata, dependencies, and build configuration.
+- `setup.cfg`: Additional setup configuration.
+- `pytest.ini`: PyTest configuration for running tests.

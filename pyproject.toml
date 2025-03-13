@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llmproc"
+version = "0.1.0"
+authors = [
+    {name = "Developer", email = "dev@example.com"},
+]
+description = "A simple framework for LLM-powered applications"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "click>=8.1.8",
+    "mcp-registry>=0.3.3",
+    "openai>=1.0.0",
+    "python-dotenv>=0.19.0",
+    "tomli>=2.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.0.0",
+    "ruff>=0.9.10",
+]
+anthropic = [
+    "anthropic>=0.6.0",
+]
+vertex = [
+    "google-cloud-aiplatform>=1.35.0",
+]
+all = [
+    "anthropic>=0.6.0",
+    "google-cloud-aiplatform>=1.35.0",
+]
+
+[tool.setuptools]
+packages = ["llmproc"]
+package-dir = {"" = "src"}
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E", # pycodestyle errors
+    "F", # pyflakes
+    "I", # isort
+    "W", # pycodestyle warnings
+    "N", # pep8-naming
+    "D", # pydocstyle
+    "UP", # pyupgrade
+    "B", # flake8-bugbear
+]
+ignore = [
+    "D203", 
+    "D212",
+    "E501",  # Line too long
+    "B904",  # Use 'raise from' in exception handling
+    "F401",  # Unused imports
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.10",
+]
+
+[project.scripts]
+llmproc-demo = "llmproc.cli:main"

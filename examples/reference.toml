@@ -1,0 +1,78 @@
+# LLMProc Reference Configuration
+# All supported options and parameters with minimal examples
+
+#----------------------------------------
+# Model Configuration
+#----------------------------------------
+[model]
+# Model name (Required)
+name = "gpt-4o"  # OpenAI example
+# provider = "anthropic"  # For Claude models
+# provider = "vertex"  # For Google Vertex AI
+
+# Provider (Required)
+provider = "openai"  # Options: "openai", "anthropic", "vertex"
+
+# Optional: User-facing display name for the model
+# This is used in CLI interfaces and doesn't affect API calls
+# If not provided, defaults to "{provider} {model_name}"
+display_name = "GPT-4o Assistant"
+
+#----------------------------------------
+# Generation Parameters
+#----------------------------------------
+[parameters]
+# Controls randomness (0.0-2.0 for OpenAI, 0.0-1.0 for Anthropic)
+temperature = 0.7
+
+# Maximum tokens to generate
+max_tokens = 150
+
+# Nucleus sampling parameter (0.0-1.0)
+top_p = 0.95
+
+# Top-K sampling (Anthropic and Vertex AI only)
+# top_k = 40
+
+# Frequency penalty (OpenAI only, -2.0 to 2.0)
+frequency_penalty = 0.0
+
+# Presence penalty (OpenAI only, -2.0 to 2.0)
+presence_penalty = 0.0
+
+#----------------------------------------
+# Prompt Configuration
+#----------------------------------------
+[prompt]
+# System prompt as a string
+system_prompt = """You are a helpful assistant. 
+Provide clear, accurate, and concise responses to user queries.
+Always maintain a neutral and professional tone."""
+
+# OR use a file (relative path, takes precedence over system_prompt)
+# system_prompt_file = "../prompts/my_system_prompt.md"
+
+#----------------------------------------
+# Preload Configuration
+#----------------------------------------
+[preload]
+# Files to preload as context (relative paths)
+# files = [
+#   "../prompts/example_prompt.md",
+#   "../README.md"
+# ]
+
+#----------------------------------------
+# MCP (Model Context Protocol) Configuration
+#----------------------------------------
+[mcp]
+# Path to the MCP servers configuration file
+# config_path = "config/mcp_servers.json"
+
+# Tool Configuration
+# Users must explicitly specify which tools to import from each server
+[mcp.tools]
+# Server name = List of specific tools to import OR "all" to import all tools
+# github = ["search_repositories", "get_file_contents"]
+# codemcp = ["ReadFile"]
+# github = "all"  # Import all tools from GitHub server
