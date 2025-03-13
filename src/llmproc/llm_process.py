@@ -56,6 +56,17 @@ class LLMProcess:
         if preload_files:
             self._preload_files(preload_files)
             
+    def preload_files(self, file_paths: List[str]) -> None:
+        """Add additional files to the conversation context.
+        
+        Args:
+            file_paths: List of file paths to preload
+            
+        Raises:
+            FileNotFoundError: If any of the files cannot be found
+        """
+        self._preload_files(file_paths)
+        
     def _preload_files(self, file_paths: List[str]) -> None:
         """Preload files and add their content to the initial conversation state.
         

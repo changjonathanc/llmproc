@@ -155,3 +155,42 @@ def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provid
     process.reset_state(keep_system_prompt=False)
     
     assert len(process.state) == 0
+
+
+def test_preload_files_method(mock_env, mock_get_provider_client):
+    """Test that the preload_files method works correctly."""
+    # Create a process
+    process = LLMProcess(
+        model_name="test-model",
+        provider="openai",
+        system_prompt="You are a test assistant."
+    )
+    
+    # Create a temporary test file
+    with NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:
+        temp_file.write("This is test content for runtime preloading.")
+        temp_path = temp_file.name
+    
+    try:
+        # Initial state should just have system prompt
+        assert len(process.state) == 1
+        
+        # Use the preload_files method
+        with patch.object(Path, 'exists', return_value=True):
+            with patch.object(Path, 'read_text', return_value="This is test content for runtime preloading."):
+                process.preload_files([temp_path])
+        
+        # Should now have system prompt + 2 messages (user preload and assistant acknowledgment)
+        assert len(process.state) == 3
+        assert process.state[0]["role"] == "system"
+        assert process.state[1]["role"] == "user"
+        assert "<preload>" in process.state[1]["content"]
+        assert process.state[2]["role"] == "assistant"
+        
+        # Check that preloaded content was stored
+        assert len(process.preloaded_content) == 1
+        assert temp_path in process.preloaded_content
+        assert process.preloaded_content[temp_path] == "This is test content for runtime preloading."
+    
+    finally:
+        os.unlink(temp_path)

@@ -26,7 +26,9 @@ files = [
 
 File paths are relative to the location of the TOML file.
 
-## Example
+## Examples
+
+### Configuration-based Preloading
 
 ```python
 from llmproc import LLMProcess
@@ -40,6 +42,25 @@ print(response)  # The response will incorporate information from preloaded file
 
 # Reset conversation but keep preloaded files
 process.reset_state(keep_preloaded=True)
+```
+
+### Runtime Preloading
+
+```python
+from llmproc import LLMProcess
+
+# Start with basic configuration
+process = LLMProcess.from_toml("examples/minimal.toml")
+
+# Add files to the conversation context at runtime
+process.preload_files([
+    "documentation.md",
+    "config_schema.json"
+])
+
+# Now the model has context from these files
+response = process.run("Explain the configuration schema")
+print(response)
 ```
 
 ## XML Formatting

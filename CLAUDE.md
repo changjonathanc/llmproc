@@ -30,9 +30,9 @@
 - Supports system prompts from strings or files
 - Maintains conversation state
 - Parameters configurable via TOML
-- File preloading for context (via [preload] section in TOML)
+- File preloading for context (via [preload] section in TOML or preload_files() method)
 - Supports OpenAI, Anthropic, and Vertex AI models
-- Methods: run(), get_state(), reset_state(), from_toml()
+- Methods: run(), get_state(), reset_state(), from_toml(), preload_files()
 
 ## Session Summary (2025-03-12)
 1. Restructured project to src/llmproc layout
