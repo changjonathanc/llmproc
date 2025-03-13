@@ -16,6 +16,15 @@ except ImportError:
     HAS_MCP = False
 
 from llmproc.providers import get_provider_client
+try:
+    from llmproc.providers.anthropic_tools import (
+        run_anthropic_with_tools,
+        filter_empty_text_blocks,
+        dump_api_error
+    )
+    HAS_ANTHROPIC_TOOLS = True
+except ImportError:
+    HAS_ANTHROPIC_TOOLS = False
 
 load_dotenv()
 
@@ -228,7 +237,7 @@ class LLMProcess:
 
     async def run(self, user_input: str, max_iterations: int = 10) -> str:
         """Run the LLM process with user input asynchronously.
-        
+
         This method supports full tool execution with proper async handling.
         If used in a synchronous context, it will automatically run in a new event loop.
 
@@ -245,30 +254,30 @@ class LLMProcess:
             in_event_loop = True
         except RuntimeError:
             in_event_loop = False
-            
+
         # If not in an event loop, run in a new one
         if not in_event_loop:
             return asyncio.run(self._async_run(user_input, max_iterations))
         else:
             return await self._async_run(user_input, max_iterations)
-            
+
     async def _async_run(self, user_input: str, max_iterations: int = 10) -> str:
         """Internal async implementation of run.
-        
+
         Args:
             user_input: The user message to process
             max_iterations: Maximum number of tool-calling iterations
-            
+
         Returns:
             The model's response as a string
-            
+
         Raises:
             ValueError: If user_input is empty
         """
         # Verify user input isn't empty
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
-            
+
         self.state.append({"role": "user", "content": user_input})
 
         # Extract common parameters
@@ -286,7 +295,7 @@ class LLMProcess:
                 **{k: v for k, v in self.parameters.items()
                    if k not in ['temperature', 'max_tokens']}
             }
-            
+
             try:
                 # Use the async client for OpenAI
                 response = await self.client.chat.completions.create(**api_params)
@@ -299,7 +308,7 @@ class LLMProcess:
                 # Create debug dump directory if it doesn't exist
                 dump_dir = Path("debug_dumps")
                 dump_dir.mkdir(exist_ok=True)
-                
+
                 # Dump message content to file for debugging
                 dump_file = dump_dir / f"openai_api_error_{id(self)}.json"
                 with open(dump_file, "w") as f:
@@ -318,7 +327,7 @@ class LLMProcess:
                             "max_tokens": max_tokens,
                         }
                     }, f, indent=2)
-                
+
                 error_msg = f"Error calling OpenAI API: {str(e)}"
                 print(f"ERROR: {error_msg}")
                 print(f"Debug information dumped to {dump_file}")
@@ -342,19 +351,19 @@ class LLMProcess:
                         # Handle potential structured content (for tools)
                         if isinstance(msg["content"], list):
                             # Filter out empty text blocks
-                            empty_blocks = [i for i, block in enumerate(msg["content"]) 
+                            empty_blocks = [i for i, block in enumerate(msg["content"])
                                            if block.get("type") == "text" and not block.get("text")]
-                            
+
                             if empty_blocks:
                                 # Create a safe copy without empty text blocks
                                 filtered_content = [
-                                    block for block in msg["content"] 
+                                    block for block in msg["content"]
                                     if not (block.get("type") == "text" and not block.get("text"))
                                 ]
                                 msg_copy = msg.copy()
                                 msg_copy["content"] = filtered_content
                                 messages.append(msg_copy)
-                                
+
                                 # Add debugging info to console if debug is enabled
                                 debug = self.parameters.get('debug_tools', False)
                                 if debug:
@@ -374,7 +383,7 @@ class LLMProcess:
                     **{k: v for k, v in self.parameters.items()
                        if k not in ['temperature', 'max_tokens']}
                 }
-                
+
                 try:
                     # Create the response with system prompt separate from messages
                     response = await self.client.messages.create(**api_params)
@@ -387,7 +396,7 @@ class LLMProcess:
                     # Create debug dump directory if it doesn't exist
                     dump_dir = Path("debug_dumps")
                     dump_dir.mkdir(exist_ok=True)
-                    
+
                     # Dump message content to file for debugging
                     dump_file = dump_dir / f"anthropic_api_error_{id(self)}.json"
                     with open(dump_file, "w") as f:
@@ -407,7 +416,7 @@ class LLMProcess:
                                 "max_tokens": max_tokens,
                             }
                         }, f, indent=2)
-                    
+
                     error_msg = f"Error calling Anthropic API: {str(e)}"
                     print(f"ERROR: {error_msg}")
                     print(f"Debug information dumped to {dump_file}")
@@ -426,19 +435,19 @@ class LLMProcess:
                     # Handle potential structured content (for tools)
                     if isinstance(msg["content"], list):
                         # Filter out empty text blocks
-                        empty_blocks = [i for i, block in enumerate(msg["content"]) 
+                        empty_blocks = [i for i, block in enumerate(msg["content"])
                                        if block.get("type") == "text" and not block.get("text")]
-                        
+
                         if empty_blocks:
                             # Create a safe copy without empty text blocks
                             filtered_content = [
-                                block for block in msg["content"] 
+                                block for block in msg["content"]
                                 if not (block.get("type") == "text" and not block.get("text"))
                             ]
                             msg_copy = msg.copy()
                             msg_copy["content"] = filtered_content
                             messages.append(msg_copy)
-                            
+
                             # Add debugging info to console if debug is enabled
                             debug = self.parameters.get('debug_tools', False)
                             if debug:
@@ -458,7 +467,7 @@ class LLMProcess:
                 **{k: v for k, v in self.parameters.items()
                    if k not in ['temperature', 'max_tokens']}
             }
-            
+
             try:
                 # Create the response with system prompt separate from messages
                 response = await self.client.messages.create(**api_params)
@@ -471,7 +480,7 @@ class LLMProcess:
                 # Create debug dump directory if it doesn't exist
                 dump_dir = Path("debug_dumps")
                 dump_dir.mkdir(exist_ok=True)
-                
+
                 # Dump message content to file for debugging
                 dump_file = dump_dir / f"vertex_api_error_{id(self)}.json"
                 with open(dump_file, "w") as f:
@@ -491,7 +500,7 @@ class LLMProcess:
                             "max_tokens": max_tokens,
                         }
                     }, f, indent=2)
-                
+
                 error_msg = f"Error calling Vertex AI API: {str(e)}"
                 print(f"ERROR: {error_msg}")
                 print(f"Debug information dumped to {dump_file}")
@@ -512,11 +521,15 @@ class LLMProcess:
         Returns:
             The final model response as a string
         """
+        if not HAS_ANTHROPIC_TOOLS:
+            raise ImportError("Anthropic tools support requires the llmproc.providers.anthropic_tools module.")
+            
         # Extract common parameters
         temperature = self.parameters.get('temperature', 0.7)
         max_tokens = self.parameters.get('max_tokens', 1000)
+        debug = self.parameters.get('debug_tools', False)
 
-        # Extract system prompt and messages
+        # Extract system prompt and filter messages
         system_prompt = None
         messages = []
 
@@ -524,185 +537,30 @@ class LLMProcess:
             if msg["role"] == "system":
                 system_prompt = msg["content"]
             else:
-                # Handle potential structured content (for tools)
-                if isinstance(msg["content"], list):
-                    # Filter out empty text blocks
-                    empty_blocks = [i for i, block in enumerate(msg["content"]) 
-                                   if block.get("type") == "text" and not block.get("text")]
-                    
-                    if empty_blocks:
-                        # Create a safe copy without empty text blocks
-                        filtered_content = [
-                            block for block in msg["content"] 
-                            if not (block.get("type") == "text" and not block.get("text"))
-                        ]
-                        msg_copy = msg.copy()
-                        msg_copy["content"] = filtered_content
-                        messages.append(msg_copy)
-                        
-                        # Add debugging info to console if debug is enabled
-                        debug = self.parameters.get('debug_tools', False)
-                        if debug:
-                            print(f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}")
-                    else:
-                        messages.append(msg)
-                else:
-                    messages.append(msg)
-
-        # Track iterations to prevent infinite loops
-        iterations = 0
-        final_response = ""
-        debug = self.parameters.get('debug_tools', False)
-
-        if debug:
-            print(f"\n=== Starting Anthropic Tool Execution ===")
-            print(f"Tools available: {len(self.tools)}")
-            
-        # Continue the conversation until no more tool calls or max iterations reached
-        while iterations < max_iterations:
-            iterations += 1
-            if debug:
-                print(f"\n--- Iteration {iterations}/{max_iterations} ---")
-
-            try:
-                # Call Claude with current conversation and tools
-                if debug:
-                    print(f"Calling Anthropic API with {len(messages)} messages...")
+                messages.append(msg)
                 
-                # Prepare API parameters
-                api_params = {
-                    "model": self.model_name,
-                    "system": system_prompt,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "tools": self.tools,
-                    **{k: v for k, v in self.parameters.items()
-                       if k not in ['temperature', 'max_tokens', 'debug_tools']}
-                }
-                
-                try:
-                    # Use the async client for Anthropic
-                    response = await self.client.messages.create(**api_params)
-                except Exception as e:
-                    # Create debug dump directory if it doesn't exist
-                    dump_dir = Path("debug_dumps")
-                    dump_dir.mkdir(exist_ok=True)
-                    
-                    # Dump message content to file for debugging
-                    dump_file = dump_dir / f"anthropic_api_error_{id(self)}_{iterations}.json"
-                    with open(dump_file, "w") as f:
-                        json.dump({
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "api_params": {
-                                "model": self.model_name,
-                                "system": system_prompt,
-                                "messages": [
-                                    {
-                                        "role": m["role"],
-                                        "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
-                                    } for m in messages
-                                ],
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
-                                "tools_count": len(self.tools) if self.tools else 0
-                            }
-                        }, f, indent=2)
-                    
-                    error_msg = f"Error calling Anthropic API: {str(e)}"
-                    print(f"ERROR: {error_msg}")
-                    print(f"Debug information dumped to {dump_file}")
-                    raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
-
-                # Process the response
-                has_tool_calls = False
-                response_text = ""
-                tool_calls = []
-
-                # Process text content and tool calls
-                for content in response.content:
-                    if content.type == "text":
-                        response_text = content.text
-                        final_response = response_text  # Save the text response
-                    elif content.type == "tool_use":
-                        has_tool_calls = True
-                        tool_calls.append(content)
-                
-                if debug:
-                    print(f"Response received - Text: {len(response_text)} chars, Tool calls: {len(tool_calls)}")
-
-                # If this is the final response (no tool calls), or we've reached max iterations,
-                # add it to our main state and finish
-                if not has_tool_calls or iterations >= max_iterations:
-                    # Add the final assistant response to our permanent state
-                    self.state.append({"role": "assistant", "content": final_response})
-                    if debug:
-                        print(f"Final response (no more tool calls or max iterations reached)")
-                    break
-                
-                # For intermediate responses, we need to keep track of them differently
-                # Add assistant's message to the temporary conversation array, but don't save it to state yet
-                messages.append({"role": "assistant", "content": [
-                    {"type": "text", "text": response_text}
-                ] + [
-                    {"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input} 
-                    for tc in tool_calls
-                ]})
-
-                if debug:
-                    print(f"Processing {len(tool_calls)} tool calls...")
-                    for tc in tool_calls:
-                        print(f"  - Tool: {tc.name}")
-                
-                # Process tool calls and get results
-                tool_results = await self._process_tool_calls(tool_calls)
-                
-                if debug:
-                    print(f"Received {len(tool_results)} tool results")
-
-                # Add tool results to the conversation
-                for result in tool_results:
-                    # Format the message in Anthropic's expected format for tool results
-                    content_item = {
-                        "type": "tool_result",
-                        "tool_use_id": result["tool_use_id"],
-                        "content": result["content"],
-                        "is_error": result["is_error"]
-                    }
-                    
-                    # Add as a user message
-                    tool_result_message = {
-                        "role": "user",
-                        "content": [content_item]
-                    }
-                    
-                    # Add to temporary messages array
-                    messages.append(tool_result_message)
-                    
-                    if debug:
-                        print(f"  - Added result for tool_id: {result['tool_use_id']}")
-                        print(f"    Is error: {result['is_error']}")
-
-            except Exception as e:
-                # Handle API errors
-                error_message = f"Error calling Anthropic API: {str(e)}"
-                print(f"API Error: {error_message}")
-                final_response = f"I encountered an error: {error_message}"
-
-                # Update state with error
-                self.state.append({"role": "assistant", "content": final_response})
-                if debug:
-                    print(f"Error: {error_message}")
-                break
-
-        # Only save the final assistant response and any tool results to our state
-        # Earlier tool calls and intermediate responses aren't saved to state
+        # Filter messages to remove empty text blocks
+        messages = filter_empty_text_blocks(messages, debug)
         
-        if debug:
-            print(f"=== Completed Anthropic Tool Execution ===")
-            print(f"Final response: {final_response[:100]}...")
-            
+        # Run the tool interaction loop through the specialized module
+        final_response = await run_anthropic_with_tools(
+            client=self.client,
+            model_name=self.model_name,
+            system_prompt=system_prompt,
+            messages=messages,
+            tools=self.tools,
+            aggregator=self.aggregator,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            max_iterations=max_iterations,
+            debug=debug,
+            **{k: v for k, v in self.parameters.items()
+               if k not in ['temperature', 'max_tokens', 'debug_tools']}
+        )
+        
+        # Add the final response to the permanent state
+        self.state.append({"role": "assistant", "content": final_response})
+        
         return final_response
 
     def get_state(self) -> List[Dict[str, str]]:
@@ -769,13 +627,13 @@ class LLMProcess:
         # Register tools based on user configuration
         print(f"Tool configuration: {self.mcp_tools}")
         registered_tools = set()  # Track registered tools to avoid duplicates
-        
+
         # First try the traditional filtering approach
         for server_name, tool_config in self.mcp_tools.items():
             if server_name in server_tools:
                 server_tool_list = server_tools[server_name]
                 print(f"Found {len(server_tool_list)} tools for server '{server_name}'")
-                
+
                 # Apply the filtering based on configuration
                 if tool_config == "all":
                     # Enable all tools from this server
@@ -792,7 +650,7 @@ class LLMProcess:
                     for tool_name in tool_config:
                         # Try different name patterns
                         patterns = [
-                            tool_name,  # As provided 
+                            tool_name,  # As provided
                             f"{server_name}.{tool_name}",  # With server prefix
                             tool_name.split(".")[-1]  # Just the last part
                         ]
@@ -808,7 +666,7 @@ class LLMProcess:
                                     registered_tools.add(tool.name)
             else:
                 print(f"<warning>Server '{server_name}' not found in MCP registry</warning>")
-                
+
                 # Fallback approach - try to match by partial name
                 for tool in results.tools:
                     # Check if server name is substring of tool name
@@ -819,11 +677,11 @@ class LLMProcess:
                             "input_schema": tool.inputSchema,
                         })
                         registered_tools.add(tool.name)
-        
+
         # If no tools registered yet, try a more permissive approach
         if not self.tools:
             print("<warning>No tools matched specific criteria, trying more flexible matching...</warning>")
-            
+
             # Register all tools as a last resort if "all" was used for any server
             all_requested = any(config == "all" for config in self.mcp_tools.values())
             if all_requested:
@@ -835,21 +693,21 @@ class LLMProcess:
                             "input_schema": tool.inputSchema,
                         })
                         registered_tools.add(tool.name)
-        
+
         # Ensure the input_schema is properly formatted for Anthropic
         for tool in self.tools:
             # Make sure required fields exist
             if "input_schema" in tool:
                 schema = tool["input_schema"]
-                
+
                 # Ensure required fields
                 if "type" not in schema:
                     schema["type"] = "object"
-                
+
                 # Ensure properties exist
                 if "properties" not in schema:
                     schema["properties"] = {}
-                    
+
         # Show final tools
         print(f"Registered {len(self.tools)} tools from MCP registry:")
         for i, tool in enumerate(self.tools, 1):
@@ -880,23 +738,23 @@ class LLMProcess:
             try:
                 # Call the tool through the aggregator
                 start_time = asyncio.get_event_loop().time()
-                
+
                 # Use the async aggregator call
                 result = await self.aggregator.call_tool(tool_name, tool_args)
-                    
+
                 end_time = asyncio.get_event_loop().time()
-                
+
                 if debug:
                     print(f"  Tool execution time: {end_time - start_time:.2f}s")
 
                 # Extract content and error status based on result type
                 content = None
                 is_error = False
-                
+
                 # Check if the result has content attribute
                 if hasattr(result, 'content'):
                     content = result.content
-                    
+
                     # Try to determine if it's JSON-serializable
                     try:
                         # This will validate if the content can be serialized to JSON
@@ -909,7 +767,7 @@ class LLMProcess:
                 else:
                     # If no content attribute, use the whole result
                     content = result
-                    
+
                     # Same serialization check
                     try:
                         json.dumps(content)
@@ -924,27 +782,27 @@ class LLMProcess:
                 # For some tools, error might be indicated in the content
                 elif isinstance(content, dict) and ('error' in content or 'errors' in content):
                     is_error = True
-                
+
                 tool_result = {
                     "tool_use_id": tool_id,
                     "content": content,
                     "is_error": is_error
                 }
-                
+
                 if debug:
                     print(f"  Result: {'ERROR' if is_error else 'SUCCESS'}")
                     if isinstance(content, dict):
                         print(f"  Content (truncated): {json.dumps(content, indent=2)[:200]}...")
                     else:
                         print(f"  Content (truncated): {str(content)[:200]}...")
-                
+
             except Exception as e:
                 # For errors in the tool execution itself, create an error result
                 error_message = f"Error calling MCP tool {tool_name}: {str(e)}"
-                
+
                 if debug:
                     print(f"  EXCEPTION: {error_message}")
-                
+
                 tool_result = {
                     "tool_use_id": tool_id,
                     "content": {"error": error_message},
