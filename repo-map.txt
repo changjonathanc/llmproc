@@ -10,10 +10,10 @@ llmproc/
 ├── CLAUDE.md                        # Claude AI session summary and repository information
 ├── CONTRIBUTING.md                  # Guidelines for contributing to the project
 ├── README.md                        # Project overview and usage instructions
-├── api_parameters.md                # Documentation of OpenAI and Anthropic API parameters
 ├── config/                          # Configuration directory
 │   └── mcp_servers.json             # Model Context Protocol servers configuration
 ├── docs/                            # Detailed documentation directory
+│   ├── api_parameters.md            # Documentation of OpenAI and Anthropic API parameters
 │   ├── mcp-feature.md               # Documentation for Model Context Protocol (MCP) feature
 │   ├── mcp-feature-status.md        # Status and implementation progress of MCP feature
 │   └── preload-feature.md           # Documentation for file preloading feature
@@ -31,8 +31,11 @@ llmproc/
 ├── pyproject.toml                   # Python project configuration (build, dependencies)
 ├── pytest.ini                       # PyTest configuration
 ├── repo-map.txt                     # This file - repository map
-├── session_summaries/                # Directory of session summaries
-│   └── 2025-03-13_file_preloading.md # Summary of file preloading implementation session
+├── session_summaries/                         # Directory of session summaries
+│   ├── 2025-03-12_anthropic_vertex_integration.md # Summary of Anthropic and Vertex AI integration
+│   ├── 2025-03-13_async_mcp_implementation.md     # Summary of MCP async implementation
+│   ├── 2025-03-13_file_preloading.md              # Summary of file preloading implementation
+│   └── 2025-03-13_mcp_implementation_notes.md     # Notes on MCP implementation process
 ├── setup.cfg                        # Setup configuration
 ├── src/                             # Source code directory
 │   └── llmproc/                     # Main package
@@ -59,7 +62,7 @@ llmproc/
 ### Configuration
 - `examples/*.toml`: TOML configuration files for LLMProcess.
 - `examples/mcp.toml`: Example configuration for using Model Context Protocol features.
-- `api_parameters.md`: Documentation of supported parameters for different LLM providers.
+- `docs/api_parameters.md`: Documentation of supported parameters for different LLM providers.
 - `config/mcp_servers.json`: Configuration for MCP servers and available tools.
 
 ### Usage Examples
