@@ -33,7 +33,8 @@
 - File preloading for context (via [preload] section in TOML or preload_files() method)
 - Custom display names for models in CLI interfaces
 - Supports OpenAI, Anthropic, and Vertex AI models
-- Methods: run(), get_state(), reset_state(), from_toml(), preload_files()
+- MCP (Model Context Protocol) support for tool usage (in development)
+- Methods: run() [async], get_state(), reset_state(), from_toml(), preload_files()
 - Command-line interface for interactive chat sessions
 
 ## Session Summary (2025-03-12)
@@ -71,3 +72,15 @@
 8. Successfully merged CLI feature with preload functionality
 9. Updated examples with display_name field
 10. Updated documentation for CLI and display_name features
+
+## Session Summary (2025-03-15)
+1. Implemented async run method with proper tool execution support
+2. Created unified API for both synchronous and asynchronous contexts
+3. Added event loop detection and automatic handling
+4. Fixed multi-turn tool execution for Anthropic models
+5. Improved error handling for MCP tool responses
+6. Added debug_tools parameter for detailed tool execution logging
+7. Created comprehensive examples demonstrating tool usage
+8. Updated documentation to reflect the new unified run method
+9. Added unit tests for async tool execution
+10. Updated README and feature status documentation

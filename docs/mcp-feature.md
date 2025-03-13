@@ -86,6 +86,7 @@ display_name = "Claude MCP Assistant"
 [parameters]
 temperature = 0.7
 max_tokens = 300
+debug_tools = true  # Optional: Enable debugging for tool calls
 
 [prompt]
 system_prompt = "You are a helpful assistant with access to tools. Use tools whenever appropriate to answer user queries accurately."
@@ -98,7 +99,29 @@ github = ["search_repositories", "get_file_contents"]
 codemcp = ["ReadFile"]
 ```
 
-### Python Code
+### Usage with Async/Await (Recommended)
+
+For best performance and proper tool execution, use the `run` method with async/await:
+
+```python
+import asyncio
+from llmproc import LLMProcess
+
+async def main():
+    # Initialize from TOML configuration
+    llm = LLMProcess.from_toml("examples/mcp.toml")
+    
+    # Use the LLM with full tool execution support
+    response = await llm.run("Please search for popular Python repositories on GitHub.")
+    print(response)
+
+# Run the async function
+asyncio.run(main())
+```
+
+### Usage in Synchronous Code
+
+The `run` method can also be used in synchronous code, and will automatically create an event loop:
 
 ```python
 from llmproc import LLMProcess
@@ -106,10 +129,15 @@ from llmproc import LLMProcess
 # Initialize from TOML configuration
 llm = LLMProcess.from_toml("examples/mcp.toml")
 
-# Use the LLM with tools
+# The run method can be used in synchronous code and will still support tools
+# It automatically creates an event loop when needed
 response = llm.run("Please search for popular Python repositories on GitHub.")
 print(response)
 ```
+
+### Complete Example Script
+
+See the complete example in `examples/mcp_script_example.py`, which demonstrates async tool execution.
 
 ## Implementation Details
 

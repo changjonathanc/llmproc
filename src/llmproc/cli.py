@@ -3,6 +3,7 @@
 
 import os
 import sys
+import asyncio
 from pathlib import Path
 
 import click
@@ -115,7 +116,8 @@ def main(config_path=None) -> None:
                 click.echo("Conversation state has been reset.")
                 continue
                 
-            response = process.run(user_input)
+            # Run the process with async support
+            response = asyncio.run(process.run(user_input))
             click.echo(f"\n{process.display_name}> {response}")
             
     except Exception as e:

@@ -4,10 +4,11 @@ import os
 from typing import Any, Optional, Union
 
 # Import API clients
-from openai import OpenAI
+from openai import AsyncOpenAI as OpenAI  # Use async client for OpenAI
 try:
     import anthropic
-    from anthropic import Anthropic, AnthropicVertex
+    from anthropic import AsyncAnthropic as Anthropic  # Use async client for Anthropic
+    from anthropic import AsyncAnthropicVertex as AnthropicVertex  # Use async client for Vertex
 except ImportError:
     anthropic = None
     Anthropic = None

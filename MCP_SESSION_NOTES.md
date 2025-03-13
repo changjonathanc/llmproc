@@ -67,36 +67,38 @@ The implementation follows this process:
 5. Apply fallback matching if exact matches fail
 6. Format tool schemas properly for Anthropic API
 
-## Remaining Tasks Before Merge
+## Progress on Implementation
 
-1. **Full Asynchronous Support**
-   - Implement `async_run()` method
-   - Fix tool execution in async context
-   - Handle multi-turn tool conversations
+1. **✅ Full Asynchronous Support**
+   - ✅ Implemented unified async `run()` method
+   - ✅ Fixed tool execution in async context
+   - ✅ Added proper handling of multi-turn tool conversations
+   - ✅ Added event loop detection for sync/async compatibility
 
-2. **Error Handling & Validation**
-   - Improve MCP dependency checking
-   - Add schema validation
-   - Better error messages
+2. **⚠️ Error Handling & Validation (In Progress)**
+   - ✅ Improved error handling for tool execution
+   - ⚠️ Need to improve MCP dependency checking
+   - ⚠️ Need to add schema validation
+   - ✅ Added better error messages and debug output
 
-3. **Documentation**
-   - Complete API documentation 
-   - Add usage examples
-   - Document sync vs. async usage
+3. **✅ Documentation**
+   - ✅ Updated API documentation 
+   - ✅ Added comprehensive usage examples
+   - ✅ Documented async usage with both async/await and synchronous code
 
-4. **Testing**
-   - Add integration tests
-   - Mock MCP server tests
-   - Performance testing
+4. **⚠️ Testing (In Progress)**
+   - ✅ Added unit tests
+   - ⚠️ Need more integration tests
+   - ⚠️ Need mock MCP server tests
 
-5. **OpenAI Support**
-   - Implement function calling API support
-   - Create adapter for OpenAI tool format
+5. **❌ OpenAI Support (Not Started)**
+   - ❌ Implement function calling API support
+   - ❌ Create adapter for OpenAI tool format
 
-6. **Code Cleanup**
-   - Remove debug prints
-   - Optimize matching logic
-   - Standardize error messages
+6. **⚠️ Code Cleanup (In Progress)**
+   - ✅ Added debug_tools parameter for optional debugging
+   - ⚠️ Need to optimize matching logic
+   - ⚠️ Need to standardize error messages
 
 ## Command Reference
 
@@ -111,9 +113,9 @@ The implementation follows this process:
 
 ## Next Steps
 
-1. Implement `async_run()` method for LLMProcess
-2. Complete async tool execution
-3. Add OpenAI support
-4. Clean up code and improve error handling
-5. Complete documentation
-6. Finalize tests
+1. ✅ Implement unified async `run()` method for LLMProcess
+2. ✅ Fix async tool execution with proper event loop handling
+3. ❌ Add OpenAI support (next major task)
+4. ⚠️ Continue improving error handling and schema validation
+5. ⚠️ Add more tests with mock MCP server
+6. ⚠️ Code cleanup and optimization

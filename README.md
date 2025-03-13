@@ -6,11 +6,13 @@ A simple, flexible framework for building LLM-powered applications with a standa
 
 - Load configurations from TOML files
 - Maintain conversation state
-- Support for different LLM providers (OpenAI initially)
+- Support for different LLM providers (OpenAI, Anthropic, Vertex)
 - Extensive parameter customization
 - Simple API for easy integration
 - Command-line interface for interactive chat sessions
 - Comprehensive documentation for all parameters
+- File preloading for context preparation
+- Model Context Protocol (MCP) support for tool usage *(in development)*
 
 ## Installation
 
@@ -45,6 +47,41 @@ print(output)
 
 # Reset the conversation state
 process.reset_state()
+```
+
+### Example with MCP Tools (Experimental)
+
+```python
+import asyncio
+from llmproc import LLMProcess
+
+async def main():
+    # Load configuration with MCP tools enabled
+    process = LLMProcess.from_toml('examples/mcp.toml')
+    
+    # Run the process with tool support
+    output = await process.run('Search for popular Python repositories on GitHub')
+    print(output)
+    
+    # Continue with follow-up questions that may use tools
+    output = await process.run('Which of these has the most stars?')
+    print(output)
+
+# Run the async example
+asyncio.run(main())
+```
+
+The `run` method also works in synchronous code and will automatically handle the event loop creation:
+
+```python
+from llmproc import LLMProcess
+
+# Load configuration with MCP tools
+process = LLMProcess.from_toml('examples/mcp.toml')
+
+# This will automatically create an event loop if needed
+output = process.run('Search for Python repositories on GitHub')
+print(output)
 ```
 
 ### TOML Configuration

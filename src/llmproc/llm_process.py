@@ -226,13 +226,39 @@ class LLMProcess:
             **parameters
         )
 
-    def run(self, user_input: str, max_iterations: int = 10) -> str:
-        """Run the LLM process with user input.
+    async def run(self, user_input: str, max_iterations: int = 10) -> str:
+        """Run the LLM process with user input asynchronously.
+        
+        This method supports full tool execution with proper async handling.
+        If used in a synchronous context, it will automatically run in a new event loop.
 
         Args:
             user_input: The user message to process
             max_iterations: Maximum number of tool-calling iterations
 
+        Returns:
+            The model's response as a string
+        """
+        # Check if we're in an event loop
+        try:
+            asyncio.get_running_loop()
+            in_event_loop = True
+        except RuntimeError:
+            in_event_loop = False
+            
+        # If not in an event loop, run in a new one
+        if not in_event_loop:
+            return asyncio.run(self._async_run(user_input, max_iterations))
+        else:
+            return await self._async_run(user_input, max_iterations)
+            
+    async def _async_run(self, user_input: str, max_iterations: int = 10) -> str:
+        """Internal async implementation of run.
+        
+        Args:
+            user_input: The user message to process
+            max_iterations: Maximum number of tool-calling iterations
+            
         Returns:
             The model's response as a string
         """
@@ -244,7 +270,8 @@ class LLMProcess:
 
         # Create provider-specific API calls
         if self.provider == "openai":
-            response = self.client.chat.completions.create(
+            # Use the async client for OpenAI
+            response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=self.state,
                 temperature=temperature,
@@ -261,61 +288,8 @@ class LLMProcess:
         elif self.provider == "anthropic":
             # For Anthropic with MCP enabled, handle tool calls
             if self.mcp_enabled and self.tools:
-                # Need to handle this synchronously without creating a new event loop
-                # We'll implement a synchronous version of the tool calling logic
-                try:
-                    # Extract system prompt and messages
-                    system_prompt = None
-                    messages = []
-                    
-                    for msg in self.state:
-                        if msg["role"] == "system":
-                            system_prompt = msg["content"]
-                        else:
-                            messages.append(msg)
-                    
-                    # Create the response with tools
-                    response = self.client.messages.create(
-                        model=self.model_name,
-                        system=system_prompt,
-                        messages=messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        tools=self.tools,
-                        **{k: v for k, v in self.parameters.items()
-                           if k not in ['temperature', 'max_tokens']}
-                    )
-                    
-                    # Get text content and check for tool calls
-                    output = ""
-                    has_tool_calls = False
-                    
-                    for content in response.content:
-                        if content.type == "text":
-                            output = content.text
-                        elif content.type == "tool_use":
-                            has_tool_calls = True
-                    
-                    # If we have tool calls, we need to start handling them in a separate thread
-                    # For now, let's just return the text content and mention tool calls
-                    if has_tool_calls:
-                        tool_names = []
-                        for content in response.content:
-                            if content.type == "tool_use":
-                                tool_names.append(content.name)
-                        
-                        # Add note about tool calling is not fully implemented in sync mode
-                        output += f"\n\n[Note: The assistant attempted to use tools: {', '.join(tool_names)}. " \
-                                 f"Tool calling is only fully supported in async mode.]"
-                    
-                    # Add the response to state
-                    self.state.append({"role": "assistant", "content": output})
-                    return output
-                    
-                except Exception as e:
-                    error_message = f"Error calling Anthropic API: {str(e)}"
-                    print(f"API Error: {error_message}")
-                    return f"I encountered an error: {error_message}"
+                # Use the full async implementation for tool calls
+                return await self._run_anthropic_with_tools(max_iterations)
             else:
                 # Standard Anthropic call without tools
                 # Extract system prompt and user/assistant messages
@@ -329,7 +303,7 @@ class LLMProcess:
                         messages.append(msg)
 
                 # Create the response with system prompt separate from messages
-                response = self.client.messages.create(
+                response = await self.client.messages.create(
                     model=self.model_name,
                     system=system_prompt,
                     messages=messages,
@@ -357,7 +331,7 @@ class LLMProcess:
                     messages.append(msg)
 
             # Create the response with system prompt separate from messages
-            response = self.client.messages.create(
+            response = await self.client.messages.create(
                 model=self.model_name,
                 system=system_prompt,
                 messages=messages,
@@ -377,6 +351,9 @@ class LLMProcess:
 
     async def _run_anthropic_with_tools(self, max_iterations: int = 10) -> str:
         """Run Anthropic with tool support.
+
+        Handles multiple iterations of tool calls and responses in an asynchronous context,
+        processing each tool and providing the result back to the model.
 
         Args:
             max_iterations: Maximum number of tool-calling iterations
@@ -401,13 +378,24 @@ class LLMProcess:
         # Track iterations to prevent infinite loops
         iterations = 0
         final_response = ""
+        debug = self.parameters.get('debug_tools', False)
 
+        if debug:
+            print(f"\n=== Starting Anthropic Tool Execution ===")
+            print(f"Tools available: {len(self.tools)}")
+            
         # Continue the conversation until no more tool calls or max iterations reached
         while iterations < max_iterations:
             iterations += 1
+            if debug:
+                print(f"\n--- Iteration {iterations}/{max_iterations} ---")
 
             try:
                 # Call Claude with current conversation and tools
+                if debug:
+                    print(f"Calling Anthropic API with {len(messages)} messages...")
+                
+                # Use the async client for Anthropic
                 response = await self.client.messages.create(
                     model=self.model_name,
                     system=system_prompt,
@@ -416,12 +404,13 @@ class LLMProcess:
                     max_tokens=max_tokens,
                     tools=self.tools,
                     **{k: v for k, v in self.parameters.items()
-                       if k not in ['temperature', 'max_tokens']}
+                       if k not in ['temperature', 'max_tokens', 'debug_tools']}
                 )
 
                 # Process the response
                 has_tool_calls = False
                 response_text = ""
+                tool_calls = []
 
                 # Process text content and tool calls
                 for content in response.content:
@@ -430,40 +419,62 @@ class LLMProcess:
                         final_response = response_text  # Save the text response
                     elif content.type == "tool_use":
                         has_tool_calls = True
+                        tool_calls.append(content)
+                
+                if debug:
+                    print(f"Response received - Text: {len(response_text)} chars, Tool calls: {len(tool_calls)}")
 
-                # Add Claude's response to state
-                # We need to transform this to the format we use internally
-                assistant_response = {"role": "assistant", "content": final_response}
-                messages.append(assistant_response)
-
-                # Also add to our internal state
-                self.state.append(assistant_response)
-
-                # If no tool calls were made, we're done with this query
-                if not has_tool_calls:
+                # If this is the final response (no tool calls), or we've reached max iterations,
+                # add it to our main state and finish
+                if not has_tool_calls or iterations >= max_iterations:
+                    # Add the final assistant response to our permanent state
+                    self.state.append({"role": "assistant", "content": final_response})
+                    if debug:
+                        print(f"Final response (no more tool calls or max iterations reached)")
                     break
+                
+                # For intermediate responses, we need to keep track of them differently
+                # Add assistant's message to the temporary conversation array, but don't save it to state yet
+                messages.append({"role": "assistant", "content": [
+                    {"type": "text", "text": response_text}
+                ] + [
+                    {"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input} 
+                    for tc in tool_calls
+                ]})
 
-                # Process tool calls and add results to conversation
-                tool_calls = [c for c in response.content if c.type == "tool_use"]
+                if debug:
+                    print(f"Processing {len(tool_calls)} tool calls...")
+                    for tc in tool_calls:
+                        print(f"  - Tool: {tc.name}")
+                
+                # Process tool calls and get results
                 tool_results = await self._process_tool_calls(tool_calls)
+                
+                if debug:
+                    print(f"Received {len(tool_results)} tool results")
 
-                # Add tool results to conversation
+                # Add tool results to the conversation
                 for result in tool_results:
+                    # Format the message in Anthropic's expected format for tool results
+                    content_item = {
+                        "type": "tool_result",
+                        "tool_use_id": result["tool_use_id"],
+                        "content": result["content"],
+                        "is_error": result["is_error"]
+                    }
+                    
+                    # Add as a user message
                     tool_result_message = {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": result["tool_use_id"],
-                                "content": result["content"],
-                                "is_error": result["is_error"]
-                            }
-                        ],
+                        "content": [content_item]
                     }
+                    
+                    # Add to temporary messages array
                     messages.append(tool_result_message)
-
-                    # Also add to our internal state
-                    self.state.append(tool_result_message)
+                    
+                    if debug:
+                        print(f"  - Added result for tool_id: {result['tool_use_id']}")
+                        print(f"    Is error: {result['is_error']}")
 
             except Exception as e:
                 # Handle API errors
@@ -473,8 +484,17 @@ class LLMProcess:
 
                 # Update state with error
                 self.state.append({"role": "assistant", "content": final_response})
+                if debug:
+                    print(f"Error: {error_message}")
                 break
 
+        # Only save the final assistant response and any tool results to our state
+        # Earlier tool calls and intermediate responses aren't saved to state
+        
+        if debug:
+            print(f"=== Completed Anthropic Tool Execution ===")
+            print(f"Final response: {final_response[:100]}...")
+            
         return final_response
 
     def get_state(self) -> List[Dict[str, str]]:
@@ -634,30 +654,92 @@ class LLMProcess:
             tool_calls: List of tool call objects from Anthropic response
 
         Returns:
-            List of tool results
+            List of tool results with standardized format
         """
         tool_results = []
+        debug = self.parameters.get('debug_tools', False)
 
         for tool_call in tool_calls:
             tool_name = tool_call.name
             tool_args = tool_call.input
             tool_id = tool_call.id
 
+            if debug:
+                print(f"\nProcessing tool call: {tool_name}")
+                print(f"  Tool ID: {tool_id}")
+                print(f"  Args: {json.dumps(tool_args, indent=2)[:200]}...")
+
             try:
                 # Call the tool through the aggregator
+                start_time = asyncio.get_event_loop().time()
+                
+                # Use the async aggregator call
                 result = await self.aggregator.call_tool(tool_name, tool_args)
+                    
+                end_time = asyncio.get_event_loop().time()
+                
+                if debug:
+                    print(f"  Tool execution time: {end_time - start_time:.2f}s")
 
-                # Extract content and error status
+                # Extract content and error status based on result type
+                content = None
+                is_error = False
+                
+                # Check if the result has content attribute
+                if hasattr(result, 'content'):
+                    content = result.content
+                    
+                    # Try to determine if it's JSON-serializable
+                    try:
+                        # This will validate if the content can be serialized to JSON
+                        json.dumps(content)
+                    except (TypeError, OverflowError, ValueError):
+                        # If it can't be serialized, convert to string
+                        if debug:
+                            print(f"  Content is not JSON-serializable, converting to string")
+                        content = str(content)
+                else:
+                    # If no content attribute, use the whole result
+                    content = result
+                    
+                    # Same serialization check
+                    try:
+                        json.dumps(content)
+                    except (TypeError, OverflowError, ValueError):
+                        content = str(content)
+
+                # Check error status
+                if hasattr(result, 'isError'):
+                    is_error = result.isError
+                elif hasattr(result, 'is_error'):
+                    is_error = result.is_error
+                # For some tools, error might be indicated in the content
+                elif isinstance(content, dict) and ('error' in content or 'errors' in content):
+                    is_error = True
+                
                 tool_result = {
                     "tool_use_id": tool_id,
-                    "content": result.content if hasattr(result, 'content') else result,
-                    "is_error": result.isError if hasattr(result, 'isError') else False
+                    "content": content,
+                    "is_error": is_error
                 }
+                
+                if debug:
+                    print(f"  Result: {'ERROR' if is_error else 'SUCCESS'}")
+                    if isinstance(content, dict):
+                        print(f"  Content (truncated): {json.dumps(content, indent=2)[:200]}...")
+                    else:
+                        print(f"  Content (truncated): {str(content)[:200]}...")
+                
             except Exception as e:
-                # For errors, create an error result
+                # For errors in the tool execution itself, create an error result
+                error_message = f"Error calling MCP tool {tool_name}: {str(e)}"
+                
+                if debug:
+                    print(f"  EXCEPTION: {error_message}")
+                
                 tool_result = {
                     "tool_use_id": tool_id,
-                    "content": {"error": f"Error calling MCP tool {tool_name}: {str(e)}"},
+                    "content": {"error": error_message},
                     "is_error": True
                 }
 

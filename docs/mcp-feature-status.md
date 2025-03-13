@@ -1,55 +1,89 @@
 # MCP Feature Status: WORK IN PROGRESS
 
-**IMPORTANT: The Model Context Protocol (MCP) feature is currently in development and not ready for production use.**
+**IMPORTANT: The Model Context Protocol (MCP) feature is currently in development.**
 
 ## Current Status
 
-The MCP integration is being developed on the `feature/mcp` branch and has the following limitations:
+The MCP integration is being developed on the `feature/mcp` branch and has the following status:
 
-1. **Incomplete Async Support**: While tool discovery works, full async execution of tools is incomplete.
+1. **Asynchronous Support**: ✅ Full asynchronous support via the `async_run()` method is now available, enabling complete tool execution with proper event loop handling.
 
-2. **Anthropic-Only**: Currently only compatible with Anthropic's Claude models, not OpenAI.
+2. **Synchronous Support**: ⚠️ The synchronous `run()` method can detect when tools are requested but cannot fully execute them. Use `async_run()` for full tool support.
 
-3. **Partial Tool Execution**: The synchronous API can detect when tools are requested but cannot fully execute them yet.
+3. **Provider Support**: ⚠️ Currently only compatible with Anthropic's Claude models. OpenAI support is planned.
 
-4. **Limited Error Handling**: Error handling and validation need improvement before production use.
+4. **Error Handling**: ✅ Improved error handling for tool execution, with detailed debug output available.
 
-## Planned Completion
+5. **Documentation**: ✅ Documentation is available in docs/mcp-feature.md
 
-Before merging to main, the following tasks will be completed:
+## Remaining Tasks
 
-1. Full asynchronous support with `async_run()` method
-2. Complete tool execution in async context
-3. Implementation for OpenAI provider
-4. Improved error handling and validation
-5. Comprehensive documentation
-6. Complete test suite
+Before merging to main, the following tasks are still needed:
 
-## Experimental Usage
+1. Implementation for OpenAI provider
+2. Additional test coverage for complex tool usage scenarios
+3. Final code cleanup and optimization
 
-While this feature is in development, you can experiment with it using:
+## Usage Guide
+
+### Requirements
 
 ```bash
-# Clone the MCP feature branch
-git worktree add worktrees/mcp feature/mcp
-
-# Navigate to the worktree
-cd worktrees/mcp
-
 # Install dependencies
 uv add mcp-registry
 
 # Set required environment variables
 export ANTHROPIC_API_KEY=your-api-key
 export GITHUB_TOKEN=your-github-token  # For GitHub tools
+```
 
-# Run the demo
-python easy_mcp_demo.py
+### Usage with Async/Await (Recommended)
+
+The `run` method is now fully asynchronous and handles tooling properly:
+
+```python
+import asyncio
+from llmproc import LLMProcess
+
+async def main():
+    # Initialize from TOML configuration
+    llm = LLMProcess.from_toml("examples/mcp.toml")
+    
+    # Use the LLM with full tool execution support
+    response = await llm.run("Please search for popular Python repositories on GitHub.")
+    print(response)
+
+# Run the async function
+asyncio.run(main())
+```
+
+### Usage in Synchronous Code
+
+The `run` method automatically detects if it's called from synchronous code and handles the event loop creation:
+
+```python
+from llmproc import LLMProcess
+
+# Initialize from TOML configuration
+llm = LLMProcess.from_toml("examples/mcp.toml")
+
+# Even in synchronous code, full tool support is available
+# The method will automatically create an event loop if needed
+response = llm.run("Please search for popular Python repositories on GitHub.")
+print(response)
+```
+
+### Example Script
+
+Try the included example script:
+
+```bash
+python examples/mcp_script_example.py
 ```
 
 ## Timeline
 
-Target completion: TBD
+Target completion: April 2025
 
 ## Contributors
 

@@ -276,27 +276,54 @@ github = 123  # This is invalid, should be a list or "all"
                     LLMProcess.from_toml(config_file)
 
 
-def test_anthropic_run_with_tools():
-    """Test that anthropic provider can run with tools in a simpler way."""
-    # Instead of trying to mock the full async path, we'll test at a higher level
-    # Since the run method doesn't give us a good way to override _run_anthropic_with_tools
-    # we'll just verify the implementation works correctly as a unit test
-
-    # Simplified test of run conditional logic
-    class MockLLMProcess:
-        def run(self, user_input, max_iterations=10):
-            self.mcp_enabled = True
-            self.tools = [{"name": "test_tool"}]
-            self.provider = "anthropic"
-            if self.mcp_enabled and self.tools and self.provider == "anthropic":
-                # This is the critical branch we want to test
-                return "Test response after tool call"
-            return "Regular response"
+@patch("llmproc.llm_process.HAS_MCP", True)
+@patch("llmproc.providers.anthropic", MagicMock())
+@patch("llmproc.providers.Anthropic")
+def test_run_with_tools(mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file):
+    """Test the run method with tool support."""
+    # Setup mock client
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
     
-    # Create a mock instance and test it
-    process = MockLLMProcess()
-    response = process.run("test input")
-    assert response == "Test response after tool call"
+    # Mock the async create method
+    mock_response = MagicMock()
+    mock_content = [
+        MagicMock(type="text", text="This is a test response"),
+        MagicMock(type="tool_use", id="tool1", name="test.tool", input={"arg": "value"})
+    ]
+    mock_response.content = mock_content
+    mock_client.messages.create = AsyncMock(return_value=mock_response)
+    
+    # Also mock _run_anthropic_with_tools to avoid actual execution
+    async def mock_run_with_tools(*args, **kwargs):
+        return "Mocked tool execution response"
+    
+    # Create LLMProcess with MCP configuration
+    process = LLMProcess(
+        model_name="claude-3-haiku-20240307",
+        provider="anthropic",
+        system_prompt="You are a test assistant.",
+        mcp_config_path=mcp_config_file,
+        mcp_tools={"github": ["search_repositories"]}
+    )
+    
+    # Patch the internal method
+    with patch.object(process, '_run_anthropic_with_tools', new=mock_run_with_tools):
+        # Run the test using asyncio.run to handle the async method
+        result = asyncio.run(process.run("Test input"))
+        
+        # Check the result
+        assert result == "Mocked tool execution response"
+        
+        # Verify the appropriate methods were called
+        assert len(process.state) == 2  # system prompt + user input
+        
+    # Test with a mocked async method
+    # This tests that the _async_run method is properly called
+    with patch.object(process, '_async_run', new=AsyncMock(return_value="Mocked _async_run result")):
+        # Run in async context
+        result = asyncio.run(process.run("Test input in async context"))
+        assert result == "Mocked _async_run result"
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
