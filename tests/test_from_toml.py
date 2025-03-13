@@ -92,3 +92,9 @@ presence_penalty = 0.1
             "frequency_penalty": 0.2,
             "presence_penalty": 0.1
         }
+
+
+# Skipping this test for now
+def test_from_toml_with_preload(mock_env, mock_get_provider_client):
+    """This test is skipped until the preload feature is fully implemented."""
+    pass

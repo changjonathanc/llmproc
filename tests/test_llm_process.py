@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -124,6 +125,33 @@ def test_reset_state(mock_env, mock_get_provider_client):
     assert process.state[0] == {"role": "system", "content": "You are a test assistant."}
     
     # Reset without system prompt
+    process.reset_state(keep_system_prompt=False)
+    
+    assert len(process.state) == 0
+
+
+def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provider_client):
+    """Test that LLMProcess.reset_state works correctly with the keep_system_prompt parameter."""
+    # Create a process with our mocked provider client
+    process = LLMProcess(
+        model_name="test-model",
+        provider="openai",
+        system_prompt="You are a test assistant."
+    )
+    
+    # Manually add messages to the state
+    process.state.append({"role": "user", "content": "Hello!"})
+    process.state.append({"role": "assistant", "content": "Test response"})
+    
+    assert len(process.state) == 3
+    
+    # Reset with keep_system_prompt=True (default)
+    process.reset_state()
+    
+    assert len(process.state) == 1
+    assert process.state[0] == {"role": "system", "content": "You are a test assistant."}
+    
+    # Reset with keep_system_prompt=False
     process.reset_state(keep_system_prompt=False)
     
     assert len(process.state) == 0

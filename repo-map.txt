@@ -17,6 +17,7 @@ llmproc/
 │   ├── complex.toml                 # Complex configuration example with multiple parameters
 │   ├── minimal.toml                 # Minimal configuration example
 │   ├── openai.toml                  # OpenAI model configuration example
+│   ├── preload.toml                 # Example showing file preloading functionality
 │   ├── reference.toml               # Comprehensive reference with all supported parameters
 │   └── vertex.toml                  # Google Vertex AI model configuration
 ├── prompts/                         # Prompt templates for LLMs
@@ -43,7 +44,7 @@ llmproc/
 ## Main Components
 
 ### Core Implementation
-- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, and processes configurations.
+- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, and supports file preloading for context.
 - `src/llmproc/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI).
 
 ### Configuration

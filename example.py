@@ -35,6 +35,34 @@ def main() -> None:
     
     output = process_complex.run("Explain neural networks in 2-3 bullet points only.")
     print(f"Response after reset: {output}")
+    
+    print("-" * 50)
+    
+    # Example with preloaded files
+    print("\nRunning preload example...")
+    try:
+        process_preload = LLMProcess.from_toml("examples/preload.toml")
+        
+        # The model already has context from preloaded files
+        print("Initial conversation state contains preloaded files:")
+        for message in process_preload.get_state():
+            print(f"[{message['role']}]: {message['content'][:50]}...")
+        
+        output = process_preload.run("What are the key features of LLMProc?")
+        print(f"\nResponse with preloaded context: {output}\n")
+        
+        # Reset but keep preloaded files
+        print("Resetting with preloaded files...")
+        process_preload.reset_state(keep_preloaded=True)
+        
+        # Check that preloaded files are still in the state
+        print("State after reset still contains preloaded files:")
+        for message in process_preload.get_state():
+            print(f"[{message['role']}]: {message['content'][:50]}...")
+            
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        print("Note: Make sure preloaded files exist relative to the examples directory.")
 
 
 if __name__ == "__main__":

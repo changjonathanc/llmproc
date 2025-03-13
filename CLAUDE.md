@@ -30,7 +30,8 @@
 - Supports system prompts from strings or files
 - Maintains conversation state
 - Parameters configurable via TOML
-- Supports OpenAI models
+- File preloading for context (via [preload] section in TOML)
+- Supports OpenAI, Anthropic, and Vertex AI models
 - Methods: run(), get_state(), reset_state(), from_toml()
 
 ## Session Summary (2025-03-12)
@@ -42,3 +43,13 @@
 6. Fixed file path issues in examples
 7. Updated example script for shorter responses
 8. Created and updated repository documentation
+
+## Session Summary (2025-03-13)
+1. Added file preloading feature to LLMProcess
+2. Created preload.toml example to demonstrate the feature
+3. Updated reference.toml with preload section documentation
+4. Enhanced example.py to showcase preload functionality
+5. Implemented XML-formatted warnings for missing files
+6. Added XML-tagged format for preloaded file content
+7. Updated reset_state to handle preloaded content consistently
+8. Updated documentation in repo-map.txt and CLAUDE.md

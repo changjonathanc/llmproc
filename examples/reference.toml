@@ -74,3 +74,14 @@ Always maintain a neutral and professional tone."""
 # If both system_prompt and system_prompt_file are specified,
 # system_prompt_file takes precedence
 # system_prompt_file = "../prompts/my_system_prompt.md"
+
+#----------------------------------------
+# Preload Configuration
+#----------------------------------------
+[preload]
+# List of files to preload into the conversation context
+# File paths are relative to the location of this TOML file
+# files = [
+#   "../prompts/example_prompt.md",
+#   "../README.md"
+# ]
