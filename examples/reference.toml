@@ -1,86 +1,57 @@
 # LLMProc Reference Configuration
-# This file documents all supported options and configuration parameters
+# All supported options and parameters with minimal examples
 
 #----------------------------------------
 # Model Configuration
 #----------------------------------------
 [model]
-# Required: Name of the model to use
-# Example values:
-#   OpenAI: "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"
-#   Anthropic: "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"
-#   Vertex AI (Claude): "claude-3-opus@20240229", "claude-3-sonnet@20240229", "claude-3-haiku@20240307"
-name = "gpt-4o"
+# Model name (Required)
+name = "gpt-4o"  # OpenAI example
+# provider = "anthropic"  # For Claude models
+# provider = "vertex"  # For Google Vertex AI
 
-# Required: Provider of the LLM API
-# Supported providers: "openai", "anthropic", "vertex"
-provider = "openai"
+# Provider (Required)
+provider = "openai"  # Options: "openai", "anthropic", "vertex"
 
 #----------------------------------------
 # Generation Parameters
 #----------------------------------------
 [parameters]
-# Controls randomness in responses (default: 0.7)
-# - Lower values (e.g., 0.2): More focused, deterministic responses
-# - Higher values (e.g., 0.9): More creative, diverse responses
-# - Range: 0.0-2.0 for OpenAI, 0.0-1.0 for Anthropic
+# Controls randomness (0.0-2.0 for OpenAI, 0.0-1.0 for Anthropic)
 temperature = 0.7
 
-# Maximum number of tokens to generate (default: varies by model)
-# - One token is roughly 4 characters for English text
-# - Higher values allow longer responses
-# - Consider model context limits when setting this
-# - For Vertex AI, this is called max_output_tokens
+# Maximum tokens to generate
 max_tokens = 150
 
-# Controls diversity via nucleus sampling (default: 1.0)
-# - Only considers tokens comprising the top X% probability mass
-# - Lower values (e.g., 0.5): More focused responses
-# - Higher values (e.g., 0.9): More diverse responses
-# - Range: 0.0-1.0
+# Nucleus sampling parameter (0.0-1.0)
 top_p = 0.95
 
-# Only sample from the top K options for each token (Anthropic and Vertex AI only)
-# - Used to remove "long tail" low probability responses
-# - Default is None/-1 (disabled)
+# Top-K sampling (Anthropic and Vertex AI only)
 # top_k = 40
 
-# Reduces repetition by penalizing tokens based on frequency (default: 0.0)
-# - Higher values discourage repeating the same words/phrases
-# - Range: -2.0 to 2.0
-# - Negative values encourage repetition
-# - OpenAI only
+# Frequency penalty (OpenAI only, -2.0 to 2.0)
 frequency_penalty = 0.0
 
-# Reduces repetition by penalizing tokens that have appeared at all (default: 0.0)
-# - Higher values encourage the model to talk about new topics
-# - Range: -2.0 to 2.0
-# - Negative values encourage reusing topics
-# - OpenAI only
+# Presence penalty (OpenAI only, -2.0 to 2.0)
 presence_penalty = 0.0
 
 #----------------------------------------
 # Prompt Configuration
 #----------------------------------------
 [prompt]
-# System prompt as a string (used if system_prompt_file is not specified)
-# This sets the initial context and instructions for the LLM
+# System prompt as a string
 system_prompt = """You are a helpful assistant. 
 Provide clear, accurate, and concise responses to user queries.
 Always maintain a neutral and professional tone."""
 
-# Alternatively, you can specify a file containing the system prompt
-# Path is relative to the location of this TOML file
-# If both system_prompt and system_prompt_file are specified,
-# system_prompt_file takes precedence
+# OR use a file (relative path, takes precedence over system_prompt)
 # system_prompt_file = "../prompts/my_system_prompt.md"
 
 #----------------------------------------
 # Preload Configuration
 #----------------------------------------
 [preload]
-# List of files to preload into the conversation context
-# File paths are relative to the location of this TOML file
+# Files to preload as context (relative paths)
 # files = [
 #   "../prompts/example_prompt.md",
 #   "../README.md"
