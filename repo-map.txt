@@ -43,7 +43,10 @@ llmproc/
 │       ├── __init__.py              # Package initialization, exports LLMProcess
 │       ├── cli.py                   # Command-line interface for interactive chat
 │       ├── llm_process.py           # Core LLMProcess class implementation
-│       └── providers.py             # LLM provider implementations
+│       └── providers/               # LLM provider implementations directory
+│           ├── __init__.py          # Provider package initialization
+│           ├── anthropic_tools.py   # Anthropic-specific tool implementations
+│           └── providers.py         # Core provider implementations
 └── tests/                           # Test directory
     ├── __init__.py                  # Test package initialization
     ├── test_from_toml.py            # Tests for TOML configuration loading
@@ -57,7 +60,8 @@ llmproc/
 
 ### Core Implementation
 - `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, supports file preloading for context, and provides MCP tool integration.
-- `src/llmproc/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI) with asynchronous API support.
+- `src/llmproc/providers/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI) with asynchronous API support.
+- `src/llmproc/providers/anthropic_tools.py`: Anthropic-specific tool implementations for MCP functionality.
 - `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations, including support for MCP tools.
 
 ### Configuration
