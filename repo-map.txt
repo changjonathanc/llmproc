@@ -11,13 +11,18 @@ llmproc/
 ├── CONTRIBUTING.md                  # Guidelines for contributing to the project
 ├── README.md                        # Project overview and usage instructions
 ├── api_parameters.md                # Documentation of OpenAI and Anthropic API parameters
+├── config/                          # Configuration directory
+│   └── mcp_servers.json             # Model Context Protocol servers configuration
 ├── docs/                            # Detailed documentation directory
+│   ├── mcp-feature.md               # Documentation for Model Context Protocol (MCP) feature
+│   ├── mcp-feature-status.md        # Status and implementation progress of MCP feature
 │   └── preload-feature.md           # Documentation for file preloading feature
 ├── example.py                       # Example script demonstrating LLMProc usage
 ├── examples/                        # Example TOML configuration files
 │   ├── anthropic.toml               # Anthropic model configuration example
 │   ├── complex.toml                 # Complex configuration example with multiple parameters
 │   ├── minimal.toml                 # Minimal configuration example
+│   ├── mcp.toml                     # Model Context Protocol (MCP) configuration example
 │   ├── openai.toml                  # OpenAI model configuration example
 │   ├── preload.toml                 # Example showing file preloading functionality
 │   ├── reference.toml               # Comprehensive reference with all supported parameters
@@ -29,6 +34,7 @@ llmproc/
 ├── repo-map.txt                     # This file - repository map
 ├── repomix-output.txt               # Output from repository analysis tool
 ├── requirements.txt                 # Project dependencies
+├── run_mcp_demo.sh                  # Shell script to set up and run MCP demo
 ├── session_summary.md               # Summary of implementation sessions
 ├── setup.cfg                        # Setup configuration
 ├── src/                             # Source code directory
@@ -42,29 +48,34 @@ llmproc/
     ├── test_from_toml.py            # Tests for TOML configuration loading
     ├── test_llm_process.py          # Tests for core LLMProcess functionality
     ├── test_llm_process_providers.py # Tests for LLMProcess provider integration
+    ├── test_mcp_features.py         # Tests for Model Context Protocol features
     └── test_providers.py            # Tests for provider implementations
 ```
 
 ## Main Components
 
 ### Core Implementation
-- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, and supports file preloading for context.
-- `src/llmproc/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI).
-- `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations.
+- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, supports file preloading for context, and provides MCP tool integration.
+- `src/llmproc/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI) with asynchronous API support.
+- `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations, including support for MCP tools.
 
 ### Configuration
 - `examples/*.toml`: TOML configuration files for LLMProcess.
+- `examples/mcp.toml`: Example configuration for using Model Context Protocol features.
 - `api_parameters.md`: Documentation of supported parameters for different LLM providers.
+- `config/mcp_servers.json`: Configuration for MCP servers and available tools.
 
 ### Usage Examples
 - `example.py`: Demonstrates how to use LLMProcess with different configurations.
 - Command-line: `llmproc-demo [config.toml]` for interactive chat sessions.
+- `run_mcp_demo.sh`: Shell script to set up environment and run the MCP demo with all prerequisites.
 
 ### Tests
 - `tests/test_from_toml.py`: Tests for loading LLMProcess from TOML files.
 - `tests/test_llm_process.py`: Tests for core LLMProcess functionality.
 - `tests/test_providers.py`: Tests for provider implementations.
 - `tests/test_llm_process_providers.py`: Tests for LLMProcess integration with different providers.
+- `tests/test_mcp_features.py`: Tests for Model Context Protocol (MCP) features and tool integration.
 
 ### Project Configuration
 - `pyproject.toml`: Package metadata, dependencies, and build configuration.
