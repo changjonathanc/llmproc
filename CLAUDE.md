@@ -31,8 +31,10 @@
 - Maintains conversation state
 - Parameters configurable via TOML
 - File preloading for context (via [preload] section in TOML or preload_files() method)
+- Custom display names for models in CLI interfaces
 - Supports OpenAI, Anthropic, and Vertex AI models
 - Methods: run(), get_state(), reset_state(), from_toml(), preload_files()
+- Command-line interface for interactive chat sessions
 
 ## Session Summary (2025-03-12)
 1. Restructured project to src/llmproc layout
@@ -57,3 +59,15 @@
 10. Added LLM evaluation test for preload feature
 11. Updated pytest.ini with markers for API tests
 12. Updated documentation in repo-map.txt and CLAUDE.md
+
+## Session Summary (2025-03-14)
+1. Added command-line interface (CLI) for interactive chat
+2. Implemented model display name feature for better UX
+3. Fixed Anthropic API system message handling 
+4. Created configuration file selection functionality
+5. Added configuration summary display
+6. Implemented interactive chat with custom prompts
+7. Added direct TOML file path specification support
+8. Successfully merged CLI feature with preload functionality
+9. Updated examples with display_name field
+10. Updated documentation for CLI and display_name features

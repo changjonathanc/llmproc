@@ -34,6 +34,7 @@ llmproc/
 ├── src/                             # Source code directory
 │   └── llmproc/                     # Main package
 │       ├── __init__.py              # Package initialization, exports LLMProcess
+│       ├── cli.py                   # Command-line interface for interactive chat
 │       ├── llm_process.py           # Core LLMProcess class implementation
 │       └── providers.py             # LLM provider implementations
 └── tests/                           # Test directory
@@ -49,6 +50,7 @@ llmproc/
 ### Core Implementation
 - `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, and supports file preloading for context.
 - `src/llmproc/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI).
+- `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations.
 
 ### Configuration
 - `examples/*.toml`: TOML configuration files for LLMProcess.
@@ -56,6 +58,7 @@ llmproc/
 
 ### Usage Examples
 - `example.py`: Demonstrates how to use LLMProcess with different configurations.
+- Command-line: `llmproc-demo [config.toml]` for interactive chat sessions.
 
 ### Tests
 - `tests/test_from_toml.py`: Tests for loading LLMProcess from TOML files.
