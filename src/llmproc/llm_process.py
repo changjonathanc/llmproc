@@ -339,7 +339,30 @@ class LLMProcess:
                     if msg["role"] == "system":
                         system_prompt = msg["content"]
                     else:
-                        messages.append(msg)
+                        # Handle potential structured content (for tools)
+                        if isinstance(msg["content"], list):
+                            # Filter out empty text blocks
+                            empty_blocks = [i for i, block in enumerate(msg["content"]) 
+                                           if block.get("type") == "text" and not block.get("text")]
+                            
+                            if empty_blocks:
+                                # Create a safe copy without empty text blocks
+                                filtered_content = [
+                                    block for block in msg["content"] 
+                                    if not (block.get("type") == "text" and not block.get("text"))
+                                ]
+                                msg_copy = msg.copy()
+                                msg_copy["content"] = filtered_content
+                                messages.append(msg_copy)
+                                
+                                # Add debugging info to console if debug is enabled
+                                debug = self.parameters.get('debug_tools', False)
+                                if debug:
+                                    print(f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}")
+                            else:
+                                messages.append(msg)
+                        else:
+                            messages.append(msg)
 
                 # Prepare API parameters
                 api_params = {
@@ -400,7 +423,30 @@ class LLMProcess:
                 if msg["role"] == "system":
                     system_prompt = msg["content"]
                 else:
-                    messages.append(msg)
+                    # Handle potential structured content (for tools)
+                    if isinstance(msg["content"], list):
+                        # Filter out empty text blocks
+                        empty_blocks = [i for i, block in enumerate(msg["content"]) 
+                                       if block.get("type") == "text" and not block.get("text")]
+                        
+                        if empty_blocks:
+                            # Create a safe copy without empty text blocks
+                            filtered_content = [
+                                block for block in msg["content"] 
+                                if not (block.get("type") == "text" and not block.get("text"))
+                            ]
+                            msg_copy = msg.copy()
+                            msg_copy["content"] = filtered_content
+                            messages.append(msg_copy)
+                            
+                            # Add debugging info to console if debug is enabled
+                            debug = self.parameters.get('debug_tools', False)
+                            if debug:
+                                print(f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}")
+                        else:
+                            messages.append(msg)
+                    else:
+                        messages.append(msg)
 
             # Prepare API parameters
             api_params = {
@@ -478,7 +524,30 @@ class LLMProcess:
             if msg["role"] == "system":
                 system_prompt = msg["content"]
             else:
-                messages.append(msg)
+                # Handle potential structured content (for tools)
+                if isinstance(msg["content"], list):
+                    # Filter out empty text blocks
+                    empty_blocks = [i for i, block in enumerate(msg["content"]) 
+                                   if block.get("type") == "text" and not block.get("text")]
+                    
+                    if empty_blocks:
+                        # Create a safe copy without empty text blocks
+                        filtered_content = [
+                            block for block in msg["content"] 
+                            if not (block.get("type") == "text" and not block.get("text"))
+                        ]
+                        msg_copy = msg.copy()
+                        msg_copy["content"] = filtered_content
+                        messages.append(msg_copy)
+                        
+                        # Add debugging info to console if debug is enabled
+                        debug = self.parameters.get('debug_tools', False)
+                        if debug:
+                            print(f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}")
+                    else:
+                        messages.append(msg)
+                else:
+                    messages.append(msg)
 
         # Track iterations to prevent infinite loops
         iterations = 0
