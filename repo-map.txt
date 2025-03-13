@@ -17,7 +17,6 @@ llmproc/
 │   ├── mcp-feature.md               # Documentation for Model Context Protocol (MCP) feature
 │   ├── mcp-feature-status.md        # Status and implementation progress of MCP feature
 │   └── preload-feature.md           # Documentation for file preloading feature
-├── example.py                       # Example script demonstrating LLMProc usage
 ├── examples/                        # Example TOML configuration files
 │   ├── anthropic.toml               # Anthropic model configuration example
 │   ├── complex.toml                 # Complex configuration example with multiple parameters
@@ -32,10 +31,8 @@ llmproc/
 ├── pyproject.toml                   # Python project configuration (build, dependencies)
 ├── pytest.ini                       # PyTest configuration
 ├── repo-map.txt                     # This file - repository map
-├── repomix-output.txt               # Output from repository analysis tool
-├── requirements.txt                 # Project dependencies
-├── run_mcp_demo.sh                  # Shell script to set up and run MCP demo
-├── session_summary.md               # Summary of implementation sessions
+├── session_summaries/                # Directory of session summaries
+│   └── 2025-03-13_file_preloading.md # Summary of file preloading implementation session
 ├── setup.cfg                        # Setup configuration
 ├── src/                             # Source code directory
 │   └── llmproc/                     # Main package
@@ -66,9 +63,8 @@ llmproc/
 - `config/mcp_servers.json`: Configuration for MCP servers and available tools.
 
 ### Usage Examples
-- `example.py`: Demonstrates how to use LLMProcess with different configurations.
 - Command-line: `llmproc-demo [config.toml]` for interactive chat sessions.
-- `run_mcp_demo.sh`: Shell script to set up environment and run the MCP demo with all prerequisites.
+- Example: `llmproc-demo ./examples/mcp.toml` to run a session with MCP tools enabled.
 
 ### Tests
 - `tests/test_from_toml.py`: Tests for loading LLMProcess from TOML files.

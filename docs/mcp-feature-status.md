@@ -73,12 +73,12 @@ response = llm.run("Please search for popular Python repositories on GitHub.")
 print(response)
 ```
 
-### Example Script
+### Using the CLI
 
-Try the included example script:
+Try the included CLI tool with the MCP configuration:
 
 ```bash
-python examples/mcp_script_example.py
+llmproc-demo ./examples/mcp.toml
 ```
 
 ## Timeline

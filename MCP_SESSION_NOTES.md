@@ -30,7 +30,7 @@ We've implemented Model Context Protocol (MCP) integration for the LLMProcess cl
   - `/tests/test_mcp_features.py` - Tests for MCP functionality
 
 - **Demo**:
-  - `/easy_mcp_demo.py` - Simple demo script
+  - CLI: `llmproc-demo ./examples/mcp.toml` - Interactive demo
 
 ## Current Branch: feature/mcp
 
@@ -104,7 +104,7 @@ The implementation follows this process:
 
 - Install dependencies: `uv add mcp-registry`
 - Run tests: `python -m pytest -v tests/test_mcp_features.py`
-- Run demo: `python easy_mcp_demo.py`
+- Run demo: `llmproc-demo ./examples/mcp.toml`
 
 ## Environment Requirements
 

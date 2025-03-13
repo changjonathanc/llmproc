@@ -135,9 +135,9 @@ response = llm.run("Please search for popular Python repositories on GitHub.")
 print(response)
 ```
 
-### Complete Example Script
+### Complete Example
 
-See the complete example in `examples/mcp_script_example.py`, which demonstrates async tool execution.
+See the TOML configuration in `examples/mcp.toml`, which demonstrates MCP tool configuration.
 
 ## Implementation Details
 

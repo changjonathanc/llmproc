@@ -13,31 +13,36 @@ Thank you for considering contributing to LLMProc! This document provides guidel
 # Install uv if you don't have it
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install the package in development mode
-uv pip install -e .
+# Create a virtual environment and install the package in development mode
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -e ".[dev,all]"  # Install with all optional dependencies
 
 # Install pre-commit hooks
-uv pip install pre-commit
 pre-commit install
 ```
 
 ### Managing Dependencies
 
-We use `uv` to manage dependencies:
+We use `uv` and `pyproject.toml` to manage dependencies:
 
 ```bash
-# Add a dependency
-uv add pandas
+# Add a runtime dependency
+uv add package_name
+# This adds the dependency to pyproject.toml
 
 # Add a development dependency
-uv add --dev pytest
+uv add --dev package_name
+# This adds the dependency to the [project.optional-dependencies] dev section
 
 # Remove a dependency
-uv remove pandas
+uv remove package_name
 
-# Update requirements.txt
-uv pip freeze > requirements.txt
+# Update lockfile (recommended after dependency changes)
+uv lock
 ```
+
+Note: We don't use requirements.txt for dependency management. All dependencies should be defined in pyproject.toml.
 
 ## Code Standards
 

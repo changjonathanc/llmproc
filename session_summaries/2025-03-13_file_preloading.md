@@ -21,7 +21,6 @@ Today's session focused on implementing a new file preloading feature that allow
    - Created preload.toml example to demonstrate the feature
    - Updated reference.toml with preload section documentation
    - Added detailed documentation in docs/preload-feature.md
-   - Enhanced example.py to showcase preload functionality
 
 4. **Testing**
    - Updated tests to handle the new feature

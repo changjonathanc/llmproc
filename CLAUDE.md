@@ -12,8 +12,8 @@
 - End of Session: Update repo-map.txt with any changes made during the session
 
 ## Key Commands
-- Install: `uv pip install -e .`
-- Run example: `python example.py`
+- Install: `uv pip install -e ".[dev,all]"`
+- Start CLI: `llmproc-demo ./examples/mcp.toml`
 - Run tests: `pytest -v`
 - Manage dependencies: `uv add <package>`, `uv add --dev <package>`, `uv remove <package>`
 - Create worktree: `git worktree add worktrees/feature-name feature/feature-name`
