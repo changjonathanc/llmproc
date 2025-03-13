@@ -261,7 +261,14 @@ class LLMProcess:
             
         Returns:
             The model's response as a string
+            
+        Raises:
+            ValueError: If user_input is empty
         """
+        # Verify user input isn't empty
+        if not user_input or user_input.strip() == "":
+            raise ValueError("User input cannot be empty")
+            
         self.state.append({"role": "user", "content": user_input})
 
         # Extract common parameters
@@ -270,20 +277,52 @@ class LLMProcess:
 
         # Create provider-specific API calls
         if self.provider == "openai":
-            # Use the async client for OpenAI
-            response = await self.client.chat.completions.create(
-                model=self.model_name,
-                messages=self.state,
-                temperature=temperature,
-                max_tokens=max_tokens,
+            # Prepare API parameters
+            api_params = {
+                "model": self.model_name,
+                "messages": self.state,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
                 **{k: v for k, v in self.parameters.items()
                    if k not in ['temperature', 'max_tokens']}
-            )
-            output = response.choices[0].message.content.strip()
+            }
+            
+            try:
+                # Use the async client for OpenAI
+                response = await self.client.chat.completions.create(**api_params)
+                output = response.choices[0].message.content.strip()
 
-            # Update state with assistant response
-            self.state.append({"role": "assistant", "content": output})
-            return output
+                # Update state with assistant response
+                self.state.append({"role": "assistant", "content": output})
+                return output
+            except Exception as e:
+                # Create debug dump directory if it doesn't exist
+                dump_dir = Path("debug_dumps")
+                dump_dir.mkdir(exist_ok=True)
+                
+                # Dump message content to file for debugging
+                dump_file = dump_dir / f"openai_api_error_{id(self)}.json"
+                with open(dump_file, "w") as f:
+                    json.dump({
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "api_params": {
+                            "model": self.model_name,
+                            "messages": [
+                                {
+                                    "role": m["role"],
+                                    "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
+                                } for m in self.state
+                            ],
+                            "temperature": temperature,
+                            "max_tokens": max_tokens,
+                        }
+                    }, f, indent=2)
+                
+                error_msg = f"Error calling OpenAI API: {str(e)}"
+                print(f"ERROR: {error_msg}")
+                print(f"Debug information dumped to {dump_file}")
+                raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
 
         elif self.provider == "anthropic":
             # For Anthropic with MCP enabled, handle tool calls
@@ -302,21 +341,54 @@ class LLMProcess:
                     else:
                         messages.append(msg)
 
-                # Create the response with system prompt separate from messages
-                response = await self.client.messages.create(
-                    model=self.model_name,
-                    system=system_prompt,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
+                # Prepare API parameters
+                api_params = {
+                    "model": self.model_name,
+                    "system": system_prompt,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
                     **{k: v for k, v in self.parameters.items()
                        if k not in ['temperature', 'max_tokens']}
-                )
-                output = response.content[0].text
+                }
+                
+                try:
+                    # Create the response with system prompt separate from messages
+                    response = await self.client.messages.create(**api_params)
+                    output = response.content[0].text
 
-                # Update state with assistant response
-                self.state.append({"role": "assistant", "content": output})
-                return output
+                    # Update state with assistant response
+                    self.state.append({"role": "assistant", "content": output})
+                    return output
+                except Exception as e:
+                    # Create debug dump directory if it doesn't exist
+                    dump_dir = Path("debug_dumps")
+                    dump_dir.mkdir(exist_ok=True)
+                    
+                    # Dump message content to file for debugging
+                    dump_file = dump_dir / f"anthropic_api_error_{id(self)}.json"
+                    with open(dump_file, "w") as f:
+                        json.dump({
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "api_params": {
+                                "model": self.model_name,
+                                "system": system_prompt,
+                                "messages": [
+                                    {
+                                        "role": m["role"],
+                                        "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
+                                    } for m in messages
+                                ],
+                                "temperature": temperature,
+                                "max_tokens": max_tokens,
+                            }
+                        }, f, indent=2)
+                    
+                    error_msg = f"Error calling Anthropic API: {str(e)}"
+                    print(f"ERROR: {error_msg}")
+                    print(f"Debug information dumped to {dump_file}")
+                    raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
 
         elif self.provider == "vertex":
             # AnthropicVertex uses the same API signature as Anthropic
@@ -330,21 +402,54 @@ class LLMProcess:
                 else:
                     messages.append(msg)
 
-            # Create the response with system prompt separate from messages
-            response = await self.client.messages.create(
-                model=self.model_name,
-                system=system_prompt,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
+            # Prepare API parameters
+            api_params = {
+                "model": self.model_name,
+                "system": system_prompt,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
                 **{k: v for k, v in self.parameters.items()
                    if k not in ['temperature', 'max_tokens']}
-            )
-            output = response.content[0].text
+            }
+            
+            try:
+                # Create the response with system prompt separate from messages
+                response = await self.client.messages.create(**api_params)
+                output = response.content[0].text
 
-            # Update state with assistant response
-            self.state.append({"role": "assistant", "content": output})
-            return output
+                # Update state with assistant response
+                self.state.append({"role": "assistant", "content": output})
+                return output
+            except Exception as e:
+                # Create debug dump directory if it doesn't exist
+                dump_dir = Path("debug_dumps")
+                dump_dir.mkdir(exist_ok=True)
+                
+                # Dump message content to file for debugging
+                dump_file = dump_dir / f"vertex_api_error_{id(self)}.json"
+                with open(dump_file, "w") as f:
+                    json.dump({
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "api_params": {
+                            "model": self.model_name,
+                            "system": system_prompt,
+                            "messages": [
+                                {
+                                    "role": m["role"],
+                                    "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
+                                } for m in messages
+                            ],
+                            "temperature": temperature,
+                            "max_tokens": max_tokens,
+                        }
+                    }, f, indent=2)
+                
+                error_msg = f"Error calling Vertex AI API: {str(e)}"
+                print(f"ERROR: {error_msg}")
+                print(f"Debug information dumped to {dump_file}")
+                raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
 
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
@@ -395,17 +500,51 @@ class LLMProcess:
                 if debug:
                     print(f"Calling Anthropic API with {len(messages)} messages...")
                 
-                # Use the async client for Anthropic
-                response = await self.client.messages.create(
-                    model=self.model_name,
-                    system=system_prompt,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    tools=self.tools,
+                # Prepare API parameters
+                api_params = {
+                    "model": self.model_name,
+                    "system": system_prompt,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "tools": self.tools,
                     **{k: v for k, v in self.parameters.items()
                        if k not in ['temperature', 'max_tokens', 'debug_tools']}
-                )
+                }
+                
+                try:
+                    # Use the async client for Anthropic
+                    response = await self.client.messages.create(**api_params)
+                except Exception as e:
+                    # Create debug dump directory if it doesn't exist
+                    dump_dir = Path("debug_dumps")
+                    dump_dir.mkdir(exist_ok=True)
+                    
+                    # Dump message content to file for debugging
+                    dump_file = dump_dir / f"anthropic_api_error_{id(self)}_{iterations}.json"
+                    with open(dump_file, "w") as f:
+                        json.dump({
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "api_params": {
+                                "model": self.model_name,
+                                "system": system_prompt,
+                                "messages": [
+                                    {
+                                        "role": m["role"],
+                                        "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
+                                    } for m in messages
+                                ],
+                                "temperature": temperature,
+                                "max_tokens": max_tokens,
+                                "tools_count": len(self.tools) if self.tools else 0
+                            }
+                        }, f, indent=2)
+                    
+                    error_msg = f"Error calling Anthropic API: {str(e)}"
+                    print(f"ERROR: {error_msg}")
+                    print(f"Debug information dumped to {dump_file}")
+                    raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
 
                 # Process the response
                 has_tool_calls = False
