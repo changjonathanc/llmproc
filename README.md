@@ -9,6 +9,7 @@ A simple, flexible framework for building LLM-powered applications with a standa
 - Support for different LLM providers (OpenAI initially)
 - Extensive parameter customization
 - Simple API for easy integration
+- Command-line interface for interactive chat sessions
 - Comprehensive documentation for all parameters
 
 ## Installation
@@ -60,6 +61,30 @@ system_prompt = "You are a helpful assistant."
 ```
 
 See `examples/reference.toml` for a comprehensive reference with comments for all supported parameters.
+
+## Command-Line Demo
+
+LLMProc includes a simple command-line demo for interacting with LLM models:
+
+```bash
+# Start the interactive demo (select from examples)
+llmproc-demo
+
+# Start with a specific TOML configuration file
+llmproc-demo path/to/your/config.toml
+```
+
+The demo will:
+1. If no config is specified, show a list of available TOML configurations from the examples directory
+2. Let you select a configuration by number, or use the specified config file
+3. Start an interactive chat session with the selected model
+
+### Interactive Commands
+
+In the interactive session, you can use the following commands:
+
+- Type `exit` or `quit` to end the session
+- Type `reset` to reset the conversation state
 
 ## License
 

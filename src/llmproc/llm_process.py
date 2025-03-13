@@ -20,6 +20,7 @@ class LLMProcess:
         provider: str, 
         system_prompt: str, 
         preload_files: Optional[List[str]] = None,
+        display_name: Optional[str] = None,
         **kwargs: Any
     ) -> None:
         """Initialize LLMProcess.
@@ -29,6 +30,7 @@ class LLMProcess:
             provider: Provider of the model (openai, anthropic, or vertex)
             system_prompt: System message to provide to the model
             preload_files: List of file paths to preload as context
+            display_name: User-facing name for the model in CLI interfaces
             **kwargs: Additional parameters to pass to the model
         
         Raises:
@@ -39,6 +41,7 @@ class LLMProcess:
         self.model_name = model_name
         self.provider = provider
         self.system_prompt = system_prompt
+        self.display_name = display_name or f"{provider.title()} {model_name}"
         self.parameters = kwargs
         self.preloaded_content = {}
         
@@ -140,11 +143,15 @@ class LLMProcess:
                 if not Path(file_path).exists():
                     print(f"<warning>{os.path.abspath(file_path)} does not exist.</warning>")
 
+        # Get display name if present
+        display_name = model.get('display_name', None)
+        
         return cls(
             model_name=model['name'],
             provider=model['provider'],
             system_prompt=system_prompt,
             preload_files=preload_files,
+            display_name=display_name,
             **parameters
         )
 
@@ -176,9 +183,22 @@ class LLMProcess:
             output = response.choices[0].message.content.strip()
             
         elif self.provider == "anthropic":
+            # Anthropic requires system prompt to be passed separately
+            # Extract system prompt and user/assistant messages
+            system_prompt = None
+            messages = []
+            
+            for msg in self.state:
+                if msg["role"] == "system":
+                    system_prompt = msg["content"]
+                else:
+                    messages.append(msg)
+            
+            # Create the response with system prompt separate from messages
             response = self.client.messages.create(
                 model=self.model_name,
-                messages=self.state,
+                system=system_prompt,
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 **{k: v for k, v in self.parameters.items() 
@@ -188,9 +208,21 @@ class LLMProcess:
             
         elif self.provider == "vertex":
             # AnthropicVertex uses the same API signature as Anthropic
+            # Extract system prompt and user/assistant messages
+            system_prompt = None
+            messages = []
+            
+            for msg in self.state:
+                if msg["role"] == "system":
+                    system_prompt = msg["content"]
+                else:
+                    messages.append(msg)
+            
+            # Create the response with system prompt separate from messages
             response = self.client.messages.create(
                 model=self.model_name,
-                messages=self.state,
+                system=system_prompt,
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 **{k: v for k, v in self.parameters.items() 

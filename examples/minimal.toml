@@ -1,6 +1,7 @@
 [model]
 name = "gpt-4o-mini"
 provider = "openai"
+display_name = "Mini Assistant"
 
 [parameters]
 max_tokens = 100
