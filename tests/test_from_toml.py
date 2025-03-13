@@ -11,12 +11,12 @@ from llmproc import LLMProcess
 
 
 @pytest.fixture
-def mock_provider_client():
+def mock_get_provider_client():
     """Mock the provider client function."""
     with patch("llmproc.providers.get_provider_client") as mock_get_client:
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
-        yield mock_client
+        yield mock_get_client
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def mock_env():
     os.environ.update(original_env)
 
 
-def test_from_toml_minimal(mock_env, mock_provider_client):
+def test_from_toml_minimal(mock_env, mock_get_provider_client):
     """Test loading from a minimal TOML configuration."""
     with NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as temp_file:
         temp_file.write("""
@@ -53,7 +53,7 @@ system_prompt = "You are a test assistant."
         os.unlink(temp_path)
 
 
-def test_from_toml_complex(mock_env, mock_provider_client):
+def test_from_toml_complex(mock_env, mock_get_provider_client):
     """Test loading from a complex TOML configuration."""
     with TemporaryDirectory() as temp_dir:
         # Create a system prompt file

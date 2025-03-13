@@ -10,24 +10,37 @@ from llmproc import LLMProcess
 
 
 @pytest.fixture
-def mock_client():
-    """Mock the provider client."""
+def mock_get_provider_client():
+    """Mock the provider client function."""
     with patch("llmproc.providers.get_provider_client") as mock_get_client:
+        # Set up a mock client that will be returned
         mock_client = MagicMock()
-        mock_get_client.return_value = mock_client
         
-        # Setup for OpenAI-like response
-        mock_completion = MagicMock()
-        mock_client.chat.completions.create.return_value = mock_completion
+        # Configure the mock chat completions
+        mock_chat = MagicMock()
+        mock_client.chat = mock_chat
+        
+        mock_completions = MagicMock()
+        mock_chat.completions = mock_completions
+        
+        mock_create = MagicMock()
+        mock_completions.create = mock_create
+        
+        # Set up a response
+        mock_response = MagicMock()
+        mock_create.return_value = mock_response
         
         mock_choice = MagicMock()
-        mock_completion.choices = [mock_choice]
+        mock_response.choices = [mock_choice]
         
         mock_message = MagicMock()
         mock_choice.message = mock_message
         mock_message.content = "Test response"
         
-        yield mock_client
+        # Make get_provider_client return our configured mock
+        mock_get_client.return_value = mock_client
+        
+        yield mock_get_client
 
 
 @pytest.fixture
@@ -40,7 +53,7 @@ def mock_env():
     os.environ.update(original_env)
 
 
-def test_initialization(mock_env, mock_client):
+def test_initialization(mock_env, mock_get_provider_client):
     """Test that LLMProcess initializes correctly."""
     process = LLMProcess(
         model_name="test-model",
@@ -54,32 +67,30 @@ def test_initialization(mock_env, mock_client):
     assert process.parameters == {}
 
 
-def test_run(mock_env, mock_client):
+def test_run(mock_env, mock_get_provider_client):
     """Test that LLMProcess.run works correctly."""
-    # We need to patch the actual method calls to avoid real API calls
-    with patch.object(mock_client, 'chat') as mock_chat:
-        mock_completions = MagicMock()
-        mock_chat.completions = mock_completions
-        
-        mock_create = MagicMock()
-        mock_completions.create = mock_create
-        
-        mock_response = MagicMock()
-        mock_create.return_value = mock_response
-        
-        mock_choices = [MagicMock()]
-        mock_response.choices = mock_choices
-        
-        mock_message = MagicMock()
-        mock_choices[0].message = mock_message
-        mock_message.content = "Test response"
-        
+    # Completely mock out the OpenAI client creation
+    with patch("openai.OpenAI"):
+        # Create a process with our mocked provider client
         process = LLMProcess(
             model_name="test-model",
             provider="openai",
             system_prompt="You are a test assistant."
         )
         
+        # Mock the client's chat.completions.create method directly
+        mock_response = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = "Test response"
+        mock_choice.message = mock_message
+        mock_response.choices = [mock_choice]
+        
+        # Apply the mock to the instance's client
+        process.client = MagicMock()
+        process.client.chat.completions.create.return_value = mock_response
+        
+        # Run the process
         response = process.run("Hello!")
     
     assert response == "Test response"
@@ -89,35 +100,20 @@ def test_run(mock_env, mock_client):
     assert process.state[2] == {"role": "assistant", "content": "Test response"}
 
 
-def test_reset_state(mock_env, mock_client):
+def test_reset_state(mock_env, mock_get_provider_client):
     """Test that LLMProcess.reset_state works correctly."""
-    # We need to patch the actual method calls to avoid real API calls
-    with patch.object(mock_client, 'chat') as mock_chat:
-        mock_completions = MagicMock()
-        mock_chat.completions = mock_completions
-        
-        mock_create = MagicMock()
-        mock_completions.create = mock_create
-        
-        mock_response = MagicMock()
-        mock_create.return_value = mock_response
-        
-        mock_choices = [MagicMock()]
-        mock_response.choices = mock_choices
-        
-        mock_message = MagicMock()
-        mock_choices[0].message = mock_message
-        mock_message.content = "Test response"
-        
-        process = LLMProcess(
-            model_name="test-model",
-            provider="openai",
-            system_prompt="You are a test assistant."
-        )
-        
-        # Add some messages to the state
-        process.run("Hello!")
-        process.run("How are you?")
+    # Create a process with our mocked provider client
+    process = LLMProcess(
+        model_name="test-model",
+        provider="openai",
+        system_prompt="You are a test assistant."
+    )
+    
+    # Manually add messages to the state instead of calling run() to avoid making API calls
+    process.state.append({"role": "user", "content": "Hello!"})
+    process.state.append({"role": "assistant", "content": "Test response"})
+    process.state.append({"role": "user", "content": "How are you?"})
+    process.state.append({"role": "assistant", "content": "Test response 2"})
     
     assert len(process.state) == 5
     
