@@ -1,32 +1,36 @@
 """LLMProcess class for handling LLM interactions."""
 
-import os
-import json
-import tomllib
 import asyncio
+import json
+import os
+import tomllib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Set
+from typing import Any
 
 from dotenv import load_dotenv
 
 try:
-    from mcp_registry import ServerRegistry, MCPAggregator, get_config_path
+    from mcp_registry import MCPAggregator, ServerRegistry, get_config_path
+
     HAS_MCP = True
 except ImportError:
     HAS_MCP = False
 
 from llmproc.providers import get_provider_client
+
 try:
     from llmproc.providers.anthropic_tools import (
-        run_anthropic_with_tools,
+        dump_api_error,
         filter_empty_text_blocks,
-        dump_api_error
+        run_anthropic_with_tools,
     )
+
     HAS_ANTHROPIC_TOOLS = True
 except ImportError:
     HAS_ANTHROPIC_TOOLS = False
 
 load_dotenv()
+
 
 class LLMProcess:
     """Process for interacting with LLMs using standardized configuration."""
@@ -36,11 +40,11 @@ class LLMProcess:
         model_name: str,
         provider: str,
         system_prompt: str,
-        preload_files: Optional[List[str]] = None,
-        display_name: Optional[str] = None,
-        mcp_config_path: Optional[str] = None,
-        mcp_tools: Optional[Dict[str, Union[List[str], str]]] = None,
-        **kwargs: Any
+        preload_files: list[str] | None = None,
+        display_name: str | None = None,
+        mcp_config_path: str | None = None,
+        mcp_tools: dict[str, list[str] | str] | None = None,
+        **kwargs: Any,
     ) -> None:
         """Initialize LLMProcess.
 
@@ -76,11 +80,15 @@ class LLMProcess:
         # Setup MCP if configured
         if mcp_config_path and mcp_tools:
             if not HAS_MCP:
-                raise ImportError("MCP features require the mcp-registry package. Install it with 'pip install mcp-registry'.")
+                raise ImportError(
+                    "MCP features require the mcp-registry package. Install it with 'pip install mcp-registry'."
+                )
 
             # Currently only support Anthropic with MCP
             if provider != "anthropic":
-                raise ValueError("MCP features are currently only supported with the Anthropic provider")
+                raise ValueError(
+                    "MCP features are currently only supported with the Anthropic provider"
+                )
 
             self.mcp_enabled = True
             self.mcp_config_path = mcp_config_path
@@ -90,8 +98,8 @@ class LLMProcess:
             asyncio.run(self._initialize_mcp_tools())
 
         # Get project_id and region for Vertex if provided in parameters
-        project_id = kwargs.pop('project_id', None)
-        region = kwargs.pop('region', None)
+        project_id = kwargs.pop("project_id", None)
+        region = kwargs.pop("region", None)
 
         # Initialize the client
         self.client = get_provider_client(provider, model_name, project_id, region)
@@ -103,7 +111,7 @@ class LLMProcess:
         if preload_files:
             self._preload_files(preload_files)
 
-    def preload_files(self, file_paths: List[str]) -> None:
+    def preload_files(self, file_paths: list[str]) -> None:
         """Add additional files to the conversation context.
 
         Args:
@@ -114,7 +122,7 @@ class LLMProcess:
         """
         self._preload_files(file_paths)
 
-    def _preload_files(self, file_paths: List[str]) -> None:
+    def _preload_files(self, file_paths: list[str]) -> None:
         """Preload files and add their content to the initial conversation state.
 
         Args:
@@ -129,7 +137,9 @@ class LLMProcess:
         for file_path in file_paths:
             path = Path(file_path)
             if not path.exists():
-                print(f"<warning>{os.path.abspath(file_path)} does not exist.</warning>")
+                print(
+                    f"<warning>{os.path.abspath(file_path)} does not exist.</warning>"
+                )
                 continue
 
             content = path.read_text()
@@ -137,23 +147,27 @@ class LLMProcess:
 
             # Add file content with filename to the preload content
             filename = path.name
-            preload_content += f"<file path=\"{filename}\">\n{content}\n</file>\n"
+            preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
 
         preload_content += "</preload>"
 
         # Add the combined preload content as a single user message
         if preload_content != "<preload>\n</preload>":  # Only add if there's content
-            self.state.append({
-                "role": "user",
-                "content": f"Please read the following preloaded files:\n{preload_content}"
-            })
-            self.state.append({
-                "role": "assistant",
-                "content": "I've read all the preloaded files. I'll incorporate this information in our conversation."
-            })
+            self.state.append(
+                {
+                    "role": "user",
+                    "content": f"Please read the following preloaded files:\n{preload_content}",
+                }
+            )
+            self.state.append(
+                {
+                    "role": "assistant",
+                    "content": "I've read all the preloaded files. I'll incorporate this information in our conversation.",
+                }
+            )
 
     @classmethod
-    def from_toml(cls, toml_path: Union[str, Path]) -> "LLMProcess":
+    def from_toml(cls, toml_path: str | Path) -> "LLMProcess":
         """Create an LLMProcess from a TOML configuration file.
 
         Args:
@@ -166,52 +180,60 @@ class LLMProcess:
             ValueError: If MCP configuration is invalid
         """
         path = Path(toml_path)
-        with path.open('rb') as f:
+        with path.open("rb") as f:
             config = tomllib.load(f)
 
-        model = config['model']
-        prompt_config = config.get('prompt', {})
-        parameters = config.get('parameters', {})
-        preload_config = config.get('preload', {})
-        mcp_config = config.get('mcp', {})
+        model = config["model"]
+        prompt_config = config.get("prompt", {})
+        parameters = config.get("parameters", {})
+        preload_config = config.get("preload", {})
+        mcp_config = config.get("mcp", {})
 
-        if 'system_prompt_file' in prompt_config:
-            system_prompt_path = path.parent / prompt_config['system_prompt_file']
+        if "system_prompt_file" in prompt_config:
+            system_prompt_path = path.parent / prompt_config["system_prompt_file"]
             system_prompt = system_prompt_path.read_text()
         else:
-            system_prompt = prompt_config.get('system_prompt', '')
+            system_prompt = prompt_config.get("system_prompt", "")
 
         # Handle preload files if specified
         preload_files = None
-        if 'files' in preload_config:
+        if "files" in preload_config:
             # Convert all paths to be relative to the TOML file's directory
-            preload_files = [str(path.parent / file_path) for file_path in preload_config['files']]
+            preload_files = [
+                str(path.parent / file_path) for file_path in preload_config["files"]
+            ]
             # Check if all preloaded files exist
             for file_path in preload_files:
                 if not Path(file_path).exists():
-                    print(f"<warning>{os.path.abspath(file_path)} does not exist.</warning>")
+                    print(
+                        f"<warning>{os.path.abspath(file_path)} does not exist.</warning>"
+                    )
 
         # Get display name if present
-        display_name = model.get('display_name', None)
+        display_name = model.get("display_name", None)
 
         # Handle MCP configuration if specified
         mcp_config_path = None
         mcp_tools = None
 
         if mcp_config:
-            if 'config_path' in mcp_config:
+            if "config_path" in mcp_config:
                 # Convert path to be relative to the TOML file's directory
-                config_path = path.parent / mcp_config['config_path']
+                config_path = path.parent / mcp_config["config_path"]
                 if not config_path.exists():
-                    print(f"<warning>MCP config file {os.path.abspath(config_path)} does not exist.</warning>")
+                    print(
+                        f"<warning>MCP config file {os.path.abspath(config_path)} does not exist.</warning>"
+                    )
                 else:
                     mcp_config_path = str(config_path)
 
             # Get tool configuration
-            if 'tools' in mcp_config:
-                tools_config = mcp_config['tools']
+            if "tools" in mcp_config:
+                tools_config = mcp_config["tools"]
                 if not isinstance(tools_config, dict):
-                    raise ValueError("MCP tools configuration must be a dictionary mapping server names to tool lists")
+                    raise ValueError(
+                        "MCP tools configuration must be a dictionary mapping server names to tool lists"
+                    )
 
                 # Process the tools configuration
                 mcp_tools = {}
@@ -222,17 +244,19 @@ class LLMProcess:
                     elif isinstance(tool_config, list):
                         mcp_tools[server_name] = tool_config
                     else:
-                        raise ValueError(f"Invalid tool configuration for server '{server_name}'. Expected 'all' or a list of tool names")
+                        raise ValueError(
+                            f"Invalid tool configuration for server '{server_name}'. Expected 'all' or a list of tool names"
+                        )
 
         return cls(
-            model_name=model['name'],
-            provider=model['provider'],
+            model_name=model["name"],
+            provider=model["provider"],
             system_prompt=system_prompt,
             preload_files=preload_files,
             display_name=display_name,
             mcp_config_path=mcp_config_path,
             mcp_tools=mcp_tools,
-            **parameters
+            **parameters,
         )
 
     async def run(self, user_input: str, max_iterations: int = 10) -> str:
@@ -281,8 +305,8 @@ class LLMProcess:
         self.state.append({"role": "user", "content": user_input})
 
         # Extract common parameters
-        temperature = self.parameters.get('temperature', 0.7)
-        max_tokens = self.parameters.get('max_tokens', 1000)
+        temperature = self.parameters.get("temperature", 0.7)
+        max_tokens = self.parameters.get("max_tokens", 1000)
 
         # Create provider-specific API calls
         if self.provider == "openai":
@@ -292,8 +316,11 @@ class LLMProcess:
                 "messages": self.state,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                **{k: v for k, v in self.parameters.items()
-                   if k not in ['temperature', 'max_tokens']}
+                **{
+                    k: v
+                    for k, v in self.parameters.items()
+                    if k not in ["temperature", "max_tokens"]
+                },
             }
 
             try:
@@ -312,21 +339,30 @@ class LLMProcess:
                 # Dump message content to file for debugging
                 dump_file = dump_dir / f"openai_api_error_{id(self)}.json"
                 with open(dump_file, "w") as f:
-                    json.dump({
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "api_params": {
-                            "model": self.model_name,
-                            "messages": [
-                                {
-                                    "role": m["role"],
-                                    "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
-                                } for m in self.state
-                            ],
-                            "temperature": temperature,
-                            "max_tokens": max_tokens,
-                        }
-                    }, f, indent=2)
+                    json.dump(
+                        {
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "api_params": {
+                                "model": self.model_name,
+                                "messages": [
+                                    {
+                                        "role": m["role"],
+                                        "content": (
+                                            m["content"][:500] + "..."
+                                            if len(m["content"]) > 500
+                                            else m["content"]
+                                        ),
+                                    }
+                                    for m in self.state
+                                ],
+                                "temperature": temperature,
+                                "max_tokens": max_tokens,
+                            },
+                        },
+                        f,
+                        indent=2,
+                    )
 
                 error_msg = f"Error calling OpenAI API: {str(e)}"
                 print(f"ERROR: {error_msg}")
@@ -351,23 +387,32 @@ class LLMProcess:
                         # Handle potential structured content (for tools)
                         if isinstance(msg["content"], list):
                             # Filter out empty text blocks
-                            empty_blocks = [i for i, block in enumerate(msg["content"])
-                                           if block.get("type") == "text" and not block.get("text")]
+                            empty_blocks = [
+                                i
+                                for i, block in enumerate(msg["content"])
+                                if block.get("type") == "text" and not block.get("text")
+                            ]
 
                             if empty_blocks:
                                 # Create a safe copy without empty text blocks
                                 filtered_content = [
-                                    block for block in msg["content"]
-                                    if not (block.get("type") == "text" and not block.get("text"))
+                                    block
+                                    for block in msg["content"]
+                                    if not (
+                                        block.get("type") == "text"
+                                        and not block.get("text")
+                                    )
                                 ]
                                 msg_copy = msg.copy()
                                 msg_copy["content"] = filtered_content
                                 messages.append(msg_copy)
 
                                 # Add debugging info to console if debug is enabled
-                                debug = self.parameters.get('debug_tools', False)
+                                debug = self.parameters.get("debug_tools", False)
                                 if debug:
-                                    print(f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}")
+                                    print(
+                                        f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
+                                    )
                             else:
                                 messages.append(msg)
                         else:
@@ -380,8 +425,11 @@ class LLMProcess:
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
-                    **{k: v for k, v in self.parameters.items()
-                       if k not in ['temperature', 'max_tokens']}
+                    **{
+                        k: v
+                        for k, v in self.parameters.items()
+                        if k not in ["temperature", "max_tokens"]
+                    },
                 }
 
                 try:
@@ -400,22 +448,31 @@ class LLMProcess:
                     # Dump message content to file for debugging
                     dump_file = dump_dir / f"anthropic_api_error_{id(self)}.json"
                     with open(dump_file, "w") as f:
-                        json.dump({
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "api_params": {
-                                "model": self.model_name,
-                                "system": system_prompt,
-                                "messages": [
-                                    {
-                                        "role": m["role"],
-                                        "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
-                                    } for m in messages
-                                ],
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
-                            }
-                        }, f, indent=2)
+                        json.dump(
+                            {
+                                "error": str(e),
+                                "error_type": type(e).__name__,
+                                "api_params": {
+                                    "model": self.model_name,
+                                    "system": system_prompt,
+                                    "messages": [
+                                        {
+                                            "role": m["role"],
+                                            "content": (
+                                                m["content"][:500] + "..."
+                                                if len(m["content"]) > 500
+                                                else m["content"]
+                                            ),
+                                        }
+                                        for m in messages
+                                    ],
+                                    "temperature": temperature,
+                                    "max_tokens": max_tokens,
+                                },
+                            },
+                            f,
+                            indent=2,
+                        )
 
                     error_msg = f"Error calling Anthropic API: {str(e)}"
                     print(f"ERROR: {error_msg}")
@@ -435,23 +492,32 @@ class LLMProcess:
                     # Handle potential structured content (for tools)
                     if isinstance(msg["content"], list):
                         # Filter out empty text blocks
-                        empty_blocks = [i for i, block in enumerate(msg["content"])
-                                       if block.get("type") == "text" and not block.get("text")]
+                        empty_blocks = [
+                            i
+                            for i, block in enumerate(msg["content"])
+                            if block.get("type") == "text" and not block.get("text")
+                        ]
 
                         if empty_blocks:
                             # Create a safe copy without empty text blocks
                             filtered_content = [
-                                block for block in msg["content"]
-                                if not (block.get("type") == "text" and not block.get("text"))
+                                block
+                                for block in msg["content"]
+                                if not (
+                                    block.get("type") == "text"
+                                    and not block.get("text")
+                                )
                             ]
                             msg_copy = msg.copy()
                             msg_copy["content"] = filtered_content
                             messages.append(msg_copy)
 
                             # Add debugging info to console if debug is enabled
-                            debug = self.parameters.get('debug_tools', False)
+                            debug = self.parameters.get("debug_tools", False)
                             if debug:
-                                print(f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}")
+                                print(
+                                    f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
+                                )
                         else:
                             messages.append(msg)
                     else:
@@ -464,8 +530,11 @@ class LLMProcess:
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                **{k: v for k, v in self.parameters.items()
-                   if k not in ['temperature', 'max_tokens']}
+                **{
+                    k: v
+                    for k, v in self.parameters.items()
+                    if k not in ["temperature", "max_tokens"]
+                },
             }
 
             try:
@@ -484,22 +553,31 @@ class LLMProcess:
                 # Dump message content to file for debugging
                 dump_file = dump_dir / f"vertex_api_error_{id(self)}.json"
                 with open(dump_file, "w") as f:
-                    json.dump({
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "api_params": {
-                            "model": self.model_name,
-                            "system": system_prompt,
-                            "messages": [
-                                {
-                                    "role": m["role"],
-                                    "content": (m["content"][:500] + "..." if len(m["content"]) > 500 else m["content"])
-                                } for m in messages
-                            ],
-                            "temperature": temperature,
-                            "max_tokens": max_tokens,
-                        }
-                    }, f, indent=2)
+                    json.dump(
+                        {
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "api_params": {
+                                "model": self.model_name,
+                                "system": system_prompt,
+                                "messages": [
+                                    {
+                                        "role": m["role"],
+                                        "content": (
+                                            m["content"][:500] + "..."
+                                            if len(m["content"]) > 500
+                                            else m["content"]
+                                        ),
+                                    }
+                                    for m in messages
+                                ],
+                                "temperature": temperature,
+                                "max_tokens": max_tokens,
+                            },
+                        },
+                        f,
+                        indent=2,
+                    )
 
                 error_msg = f"Error calling Vertex AI API: {str(e)}"
                 print(f"ERROR: {error_msg}")
@@ -522,12 +600,14 @@ class LLMProcess:
             The final model response as a string
         """
         if not HAS_ANTHROPIC_TOOLS:
-            raise ImportError("Anthropic tools support requires the llmproc.providers.anthropic_tools module.")
-            
+            raise ImportError(
+                "Anthropic tools support requires the llmproc.providers.anthropic_tools module."
+            )
+
         # Extract common parameters
-        temperature = self.parameters.get('temperature', 0.7)
-        max_tokens = self.parameters.get('max_tokens', 1000)
-        debug = self.parameters.get('debug_tools', False)
+        temperature = self.parameters.get("temperature", 0.7)
+        max_tokens = self.parameters.get("max_tokens", 1000)
+        debug = self.parameters.get("debug_tools", False)
 
         # Extract system prompt and filter messages
         system_prompt = None
@@ -538,10 +618,10 @@ class LLMProcess:
                 system_prompt = msg["content"]
             else:
                 messages.append(msg)
-                
+
         # Filter messages to remove empty text blocks
         messages = filter_empty_text_blocks(messages, debug)
-        
+
         # Run the tool interaction loop through the specialized module
         final_response = await run_anthropic_with_tools(
             client=self.client,
@@ -554,16 +634,19 @@ class LLMProcess:
             max_tokens=max_tokens,
             max_iterations=max_iterations,
             debug=debug,
-            **{k: v for k, v in self.parameters.items()
-               if k not in ['temperature', 'max_tokens', 'debug_tools']}
+            **{
+                k: v
+                for k, v in self.parameters.items()
+                if k not in ["temperature", "max_tokens", "debug_tools"]
+            },
         )
-        
+
         # Add the final response to the permanent state
         self.state.append({"role": "assistant", "content": final_response})
-        
+
         return final_response
 
-    def get_state(self) -> List[Dict[str, str]]:
+    def get_state(self) -> list[dict[str, str]]:
         """Return the current conversation state.
 
         Returns:
@@ -597,7 +680,7 @@ class LLMProcess:
         for tool in results.tools:
             try:
                 # Extract server name from tool name (prefix before first '.')
-                parts = tool.name.split('.')
+                parts = tool.name.split(".")
                 if len(parts) > 1:
                     server_name = parts[0]
                     tool_name = parts[1]  # The actual tool name without server prefix
@@ -639,11 +722,13 @@ class LLMProcess:
                     # Enable all tools from this server
                     for tool in server_tool_list:
                         if tool.name not in registered_tools:
-                            self.tools.append({
-                                "name": tool.name,
-                                "description": tool.description,
-                                "input_schema": tool.inputSchema,
-                            })
+                            self.tools.append(
+                                {
+                                    "name": tool.name,
+                                    "description": tool.description,
+                                    "input_schema": tool.inputSchema,
+                                }
+                            )
                             registered_tools.add(tool.name)
                 elif isinstance(tool_config, list):
                     # Enable specific tools
@@ -652,46 +737,58 @@ class LLMProcess:
                         patterns = [
                             tool_name,  # As provided
                             f"{server_name}.{tool_name}",  # With server prefix
-                            tool_name.split(".")[-1]  # Just the last part
+                            tool_name.split(".")[-1],  # Just the last part
                         ]
 
                         for pattern in patterns:
                             for tool in server_tool_list:
-                                if (pattern in tool.name or tool.name in pattern) and tool.name not in registered_tools:
-                                    self.tools.append({
-                                        "name": tool.name,
-                                        "description": tool.description,
-                                        "input_schema": tool.inputSchema,
-                                    })
+                                if (
+                                    pattern in tool.name or tool.name in pattern
+                                ) and tool.name not in registered_tools:
+                                    self.tools.append(
+                                        {
+                                            "name": tool.name,
+                                            "description": tool.description,
+                                            "input_schema": tool.inputSchema,
+                                        }
+                                    )
                                     registered_tools.add(tool.name)
             else:
-                print(f"<warning>Server '{server_name}' not found in MCP registry</warning>")
+                print(
+                    f"<warning>Server '{server_name}' not found in MCP registry</warning>"
+                )
 
                 # Fallback approach - try to match by partial name
                 for tool in results.tools:
                     # Check if server name is substring of tool name
                     if server_name in tool.name and tool.name not in registered_tools:
-                        self.tools.append({
-                            "name": tool.name,
-                            "description": tool.description,
-                            "input_schema": tool.inputSchema,
-                        })
+                        self.tools.append(
+                            {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "input_schema": tool.inputSchema,
+                            }
+                        )
                         registered_tools.add(tool.name)
 
         # If no tools registered yet, try a more permissive approach
         if not self.tools:
-            print("<warning>No tools matched specific criteria, trying more flexible matching...</warning>")
+            print(
+                "<warning>No tools matched specific criteria, trying more flexible matching...</warning>"
+            )
 
             # Register all tools as a last resort if "all" was used for any server
             all_requested = any(config == "all" for config in self.mcp_tools.values())
             if all_requested:
                 for tool in results.tools:
                     if tool.name not in registered_tools:
-                        self.tools.append({
-                            "name": tool.name,
-                            "description": tool.description,
-                            "input_schema": tool.inputSchema,
-                        })
+                        self.tools.append(
+                            {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "input_schema": tool.inputSchema,
+                            }
+                        )
                         registered_tools.add(tool.name)
 
         # Ensure the input_schema is properly formatted for Anthropic
@@ -723,7 +820,7 @@ class LLMProcess:
             List of tool results with standardized format
         """
         tool_results = []
-        debug = self.parameters.get('debug_tools', False)
+        debug = self.parameters.get("debug_tools", False)
 
         for tool_call in tool_calls:
             tool_name = tool_call.name
@@ -752,7 +849,7 @@ class LLMProcess:
                 is_error = False
 
                 # Check if the result has content attribute
-                if hasattr(result, 'content'):
+                if hasattr(result, "content"):
                     content = result.content
 
                     # Try to determine if it's JSON-serializable
@@ -762,7 +859,9 @@ class LLMProcess:
                     except (TypeError, OverflowError, ValueError):
                         # If it can't be serialized, convert to string
                         if debug:
-                            print(f"  Content is not JSON-serializable, converting to string")
+                            print(
+                                "  Content is not JSON-serializable, converting to string"
+                            )
                         content = str(content)
                 else:
                     # If no content attribute, use the whole result
@@ -775,24 +874,28 @@ class LLMProcess:
                         content = str(content)
 
                 # Check error status
-                if hasattr(result, 'isError'):
+                if hasattr(result, "isError"):
                     is_error = result.isError
-                elif hasattr(result, 'is_error'):
+                elif hasattr(result, "is_error"):
                     is_error = result.is_error
                 # For some tools, error might be indicated in the content
-                elif isinstance(content, dict) and ('error' in content or 'errors' in content):
+                elif isinstance(content, dict) and (
+                    "error" in content or "errors" in content
+                ):
                     is_error = True
 
                 tool_result = {
                     "tool_use_id": tool_id,
                     "content": content,
-                    "is_error": is_error
+                    "is_error": is_error,
                 }
 
                 if debug:
                     print(f"  Result: {'ERROR' if is_error else 'SUCCESS'}")
                     if isinstance(content, dict):
-                        print(f"  Content (truncated): {json.dumps(content, indent=2)[:200]}...")
+                        print(
+                            f"  Content (truncated): {json.dumps(content, indent=2)[:200]}..."
+                        )
                     else:
                         print(f"  Content (truncated): {str(content)[:200]}...")
 
@@ -806,14 +909,16 @@ class LLMProcess:
                 tool_result = {
                     "tool_use_id": tool_id,
                     "content": {"error": error_message},
-                    "is_error": True
+                    "is_error": True,
                 }
 
             tool_results.append(tool_result)
 
         return tool_results
 
-    def reset_state(self, keep_system_prompt: bool = True, keep_preloaded: bool = True) -> None:
+    def reset_state(
+        self, keep_system_prompt: bool = True, keep_preloaded: bool = True
+    ) -> None:
         """Reset the conversation state.
 
         Args:
@@ -826,20 +931,28 @@ class LLMProcess:
             self.state = []
 
         # Re-add preloaded content if requested
-        if keep_preloaded and hasattr(self, 'preloaded_content') and self.preloaded_content:
+        if (
+            keep_preloaded
+            and hasattr(self, "preloaded_content")
+            and self.preloaded_content
+        ):
             # Rebuild the preload content in the same format
             preload_content = "<preload>\n"
             for file_path, content in self.preloaded_content.items():
                 filename = Path(file_path).name
-                preload_content += f"<file path=\"{filename}\">\n{content}\n</file>\n"
+                preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
             preload_content += "</preload>"
 
             # Add as a single message
-            self.state.append({
-                "role": "user",
-                "content": f"Please read the following preloaded files:\n{preload_content}"
-            })
-            self.state.append({
-                "role": "assistant",
-                "content": "I've read all the preloaded files. I'll incorporate this information in our conversation."
-            })
+            self.state.append(
+                {
+                    "role": "user",
+                    "content": f"Please read the following preloaded files:\n{preload_content}",
+                }
+            )
+            self.state.append(
+                {
+                    "role": "assistant",
+                    "content": "I've read all the preloaded files. I'll incorporate this information in our conversation.",
+                }
+            )

@@ -12,7 +12,7 @@ A simple, flexible framework for building LLM-powered applications with a standa
 - Command-line interface for interactive chat sessions
 - Comprehensive documentation for all parameters
 - File preloading for context preparation
-- Model Context Protocol (MCP) support for tool usage *(in development)*
+- Model Context Protocol (MCP) support for tool usage
 
 ## Installation
 
@@ -32,55 +32,60 @@ OPENAI_API_KEY=your_api_key_here
 ### Basic Example
 
 ```python
+import asyncio
 from llmproc import LLMProcess
 
-# Load configuration from TOML
-process = LLMProcess.from_toml('examples/minimal.toml')
+async def main():
+    # Load configuration from TOML
+    process = LLMProcess.from_toml('examples/minimal.toml')
 
-# Run the process with user input
-output = process.run('Hello!')
-print(output)
+    # Run the process with user input
+    output = await process.run('Hello!')
+    print(output)
 
-# Continue the conversation
-output = process.run('Tell me more about that.')
-print(output)
+    # Continue the conversation
+    output = await process.run('Tell me more about that.')
+    print(output)
 
-# Reset the conversation state
-process.reset_state()
+    # Reset the conversation state
+    process.reset_state()
+
+# Run the async example
+asyncio.run(main())
 ```
 
-### Example with MCP Tools (Experimental)
+### Async Example
 
 ```python
 import asyncio
 from llmproc import LLMProcess
 
 async def main():
-    # Load configuration with MCP tools enabled
-    process = LLMProcess.from_toml('examples/mcp.toml')
+    # Load configuration with MCP tools
+    process = LLMProcess.from_toml('examples/minimal.toml')
     
-    # Run the process with tool support
-    output = await process.run('Search for popular Python repositories on GitHub')
+    # Run the process with user input
+    output = await process.run('Hello, how are you today?')
     print(output)
     
-    # Continue with follow-up questions that may use tools
-    output = await process.run('Which of these has the most stars?')
+    # Continue the conversation
+    output = await process.run('Tell me more about yourself.')
     print(output)
 
 # Run the async example
 asyncio.run(main())
 ```
 
-The `run` method also works in synchronous code and will automatically handle the event loop creation:
+While `run()` is an async method, it automatically handles event loops when called from synchronous code:
 
 ```python
 from llmproc import LLMProcess
 
-# Load configuration with MCP tools
-process = LLMProcess.from_toml('examples/mcp.toml')
+# Load configuration from TOML
+process = LLMProcess.from_toml('examples/minimal.toml')
 
-# This will automatically create an event loop if needed
-output = process.run('Search for Python repositories on GitHub')
+# This works in synchronous code too (creates event loop internally)
+output = process.run('Hello, what can you tell me about Python?')
 print(output)
 ```
 
@@ -109,6 +114,9 @@ llmproc-demo
 
 # Start with a specific TOML configuration file
 llmproc-demo path/to/your/config.toml
+
+# Start with Claude Code example configuration
+llmproc-demo ./examples/claude_code.toml
 ```
 
 The demo will:
@@ -125,4 +133,4 @@ In the interactive session, you can use the following commands:
 
 ## License
 
-MIT
+Apache License 2.0

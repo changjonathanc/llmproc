@@ -20,6 +20,7 @@ llmproc/
 │   └── preload-feature.md           # Documentation for file preloading feature
 ├── examples/                        # Example TOML configuration files
 │   ├── anthropic.toml               # Anthropic model configuration example
+│   ├── claude_code.toml             # Claude Code assistant with MCP tools configuration
 │   ├── complex.toml                 # Complex configuration example with multiple parameters
 │   ├── minimal.toml                 # Minimal configuration example
 │   ├── mcp.toml                     # Model Context Protocol (MCP) configuration example
@@ -28,6 +29,7 @@ llmproc/
 │   ├── reference.toml               # Comprehensive reference with all supported parameters
 │   └── vertex.toml                  # Google Vertex AI model configuration
 ├── prompts/                         # Prompt templates for LLMs
+│   ├── claude-code-system-prompt.md # Claude Code system prompt template
 │   └── example_prompt.md            # Example system prompt template
 ├── pyproject.toml                   # Python project configuration (build, dependencies)
 ├── pytest.ini                       # PyTest configuration
@@ -72,7 +74,7 @@ llmproc/
 
 ### Usage Examples
 - Command-line: `llmproc-demo [config.toml]` for interactive chat sessions.
-- Example: `llmproc-demo ./examples/mcp.toml` to run a session with MCP tools enabled.
+- Example: `llmproc-demo ./examples/claude_code.toml` to run a session with the Claude Code configuration.
 
 ### Tests
 - `tests/test_from_toml.py`: Tests for loading LLMProcess from TOML files.

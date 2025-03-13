@@ -13,7 +13,7 @@
 
 ## Key Commands
 - Install: `uv pip install -e ".[dev,all]"`
-- Start CLI: `llmproc-demo ./examples/mcp.toml`
+- Start CLI: `llmproc-demo ./examples/claude_code.toml`
 - Run tests: `pytest -v`
 - Manage dependencies: `uv add <package>`, `uv add --dev <package>`, `uv remove <package>`
 - Create worktree: `git worktree add worktrees/feature-name feature/feature-name`
@@ -33,7 +33,7 @@
 - File preloading for context (via [preload] section in TOML or preload_files() method)
 - Custom display names for models in CLI interfaces
 - Supports OpenAI, Anthropic, and Vertex AI models
-- MCP (Model Context Protocol) support for tool usage (in development)
+- MCP (Model Context Protocol) support for tool usage
 - Methods: run() [async], get_state(), reset_state(), from_toml(), preload_files()
 - Command-line interface for interactive chat sessions
 

@@ -1,15 +1,19 @@
 """Providers module for LLMProc."""
 
 # Import from providers.py
-from llmproc.providers.providers import get_provider_client
-from llmproc.providers.providers import OpenAI, Anthropic, AnthropicVertex
+from llmproc.providers.providers import (
+    Anthropic,
+    AnthropicVertex,
+    OpenAI,
+    get_provider_client,
+)
 
 # Import from anthropic_tools.py
 try:
     from llmproc.providers.anthropic_tools import (
-        run_anthropic_with_tools,
+        dump_api_error,
         filter_empty_text_blocks,
-        dump_api_error
+        run_anthropic_with_tools,
     )
 except ImportError:
     # Provide placeholders if the module is not available
@@ -24,5 +28,5 @@ __all__ = [
     "AnthropicVertex",
     "run_anthropic_with_tools",
     "filter_empty_text_blocks",
-    "dump_api_error"
+    "dump_api_error",
 ]
