@@ -44,3 +44,7 @@ uv.lock
 # OS
 .DS_Store
 Thumbs.db
+
+# Debug information
+debug_dumps/*
+!debug_dumps/.gitkeep
