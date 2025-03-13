@@ -102,7 +102,7 @@ provider = "openai"
 system_prompt = "You are a helpful assistant."
 ```
 
-See `examples/reference.toml` for a comprehensive reference with comments for all supported parameters.
+See **`examples/reference.toml`** for a comprehensive reference with comments for all supported parameters.
 
 ## Command-Line Demo
 
