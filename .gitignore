@@ -48,3 +48,6 @@ Thumbs.db
 # Debug information
 debug_dumps/*
 !debug_dumps/.gitkeep
+
+# Local development files
+local/
