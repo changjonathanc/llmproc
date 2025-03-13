@@ -1,6 +1,7 @@
 [model]
 name = "claude-3-haiku-20240307"
 provider = "anthropic"
+display_name = "Claude Haiku"
 
 [prompt]
 system_prompt = "You are Claude, a helpful AI assistant. Keep all responses under 3 sentences for brevity."

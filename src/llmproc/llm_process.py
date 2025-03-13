@@ -19,6 +19,7 @@ class LLMProcess:
         model_name: str, 
         provider: str, 
         system_prompt: str, 
+        display_name: Optional[str] = None,
         **kwargs: Any
     ) -> None:
         """Initialize LLMProcess.
@@ -27,6 +28,7 @@ class LLMProcess:
             model_name: Name of the model to use
             provider: Provider of the model (openai, anthropic, or vertex)
             system_prompt: System message to provide to the model
+            display_name: User-facing name for the model in CLI interfaces
             **kwargs: Additional parameters to pass to the model
         
         Raises:
@@ -36,6 +38,7 @@ class LLMProcess:
         self.model_name = model_name
         self.provider = provider
         self.system_prompt = system_prompt
+        self.display_name = display_name or f"{provider.title()} {model_name}"
         self.parameters = kwargs
         
         # Get project_id and region for Vertex if provided in parameters
@@ -72,10 +75,14 @@ class LLMProcess:
         else:
             system_prompt = prompt_config.get('system_prompt', '')
 
+        # Get display name if present
+        display_name = model.get('display_name', None)
+        
         return cls(
             model_name=model['name'],
             provider=model['provider'],
             system_prompt=system_prompt,
+            display_name=display_name,
             **parameters
         )
 

@@ -16,6 +16,11 @@ name = "gpt-4o"
 # Supported providers: "openai", "anthropic", "vertex"
 provider = "openai"
 
+# Optional: User-facing display name for the model
+# This is used in CLI interfaces and doesn't affect API calls
+# If not provided, defaults to "{provider} {model_name}"
+display_name = "GPT-4o Assistant"
+
 #----------------------------------------
 # Generation Parameters
 #----------------------------------------

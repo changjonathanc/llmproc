@@ -75,6 +75,9 @@ def main(config_path=None) -> None:
             # Show model info
             if "model" in config:
                 model_info = config["model"]
+                # Show display name if available
+                if "display_name" in model_info:
+                    click.echo(f"  Display Name: {model_info['display_name']}")
                 click.echo(f"  Model: {model_info.get('name', 'Not specified')}")
                 click.echo(f"  Provider: {model_info.get('provider', 'Not specified')}")
             
@@ -113,7 +116,7 @@ def main(config_path=None) -> None:
                 continue
                 
             response = process.run(user_input)
-            click.echo(f"\nAI> {response}")
+            click.echo(f"\n{process.display_name}> {response}")
             
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
