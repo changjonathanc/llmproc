@@ -5,12 +5,18 @@
 - `examples/`: TOML configuration examples (minimal.toml, complex.toml)
 - `prompts/`: Contains system prompt templates for LLM configuration
 - `tests/`: Test files with 90% coverage of codebase
+- `worktrees/`: Development branches as worktrees
+
+## Session Procedures
+- Start of Session: Read README.md and repo-map.txt to get familiar with the codebase
+- End of Session: Update repo-map.txt with any changes made during the session
 
 ## Key Commands
 - Install: `uv pip install -e .`
 - Run example: `python example.py`
 - Run tests: `pytest -v`
 - Manage dependencies: `uv add <package>`, `uv add --dev <package>`, `uv remove <package>`
+- Create worktree: `git worktree add worktrees/feature-name feature/feature-name`
 
 ## Code Style Guidelines
 - Uses absolute imports (`from llmproc import X`)

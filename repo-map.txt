@@ -1,0 +1,65 @@
+# LLMProc Repository Map
+
+This file provides an overview of all tracked files in the repository and their purpose.
+
+```
+llmproc/
+├── .env.example                     # Example environment file for API keys
+├── .gitignore                       # Git ignore patterns
+├── .pre-commit-config.yaml          # Pre-commit hooks configuration
+├── CLAUDE.md                        # Claude AI session summary and repository information
+├── CONTRIBUTING.md                  # Guidelines for contributing to the project
+├── README.md                        # Project overview and usage instructions
+├── api_parameters.md                # Documentation of OpenAI and Anthropic API parameters
+├── example.py                       # Example script demonstrating LLMProc usage
+├── examples/                        # Example TOML configuration files
+│   ├── anthropic.toml               # Anthropic model configuration example
+│   ├── complex.toml                 # Complex configuration example with multiple parameters
+│   ├── minimal.toml                 # Minimal configuration example
+│   ├── openai.toml                  # OpenAI model configuration example
+│   ├── reference.toml               # Comprehensive reference with all supported parameters
+│   └── vertex.toml                  # Google Vertex AI model configuration
+├── prompts/                         # Prompt templates for LLMs
+│   └── example_prompt.md            # Example system prompt template
+├── pyproject.toml                   # Python project configuration (build, dependencies)
+├── pytest.ini                       # PyTest configuration
+├── repo-map.txt                     # This file - repository map
+├── repomix-output.txt               # Output from repository analysis tool
+├── requirements.txt                 # Project dependencies
+├── setup.cfg                        # Setup configuration
+├── src/                             # Source code directory
+│   └── llmproc/                     # Main package
+│       ├── __init__.py              # Package initialization, exports LLMProcess
+│       ├── llm_process.py           # Core LLMProcess class implementation
+│       └── providers.py             # LLM provider implementations
+└── tests/                           # Test directory
+    ├── __init__.py                  # Test package initialization
+    ├── test_from_toml.py            # Tests for TOML configuration loading
+    ├── test_llm_process.py          # Tests for core LLMProcess functionality
+    ├── test_llm_process_providers.py # Tests for LLMProcess provider integration
+    └── test_providers.py            # Tests for provider implementations
+```
+
+## Main Components
+
+### Core Implementation
+- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, and processes configurations.
+- `src/llmproc/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI).
+
+### Configuration
+- `examples/*.toml`: TOML configuration files for LLMProcess.
+- `api_parameters.md`: Documentation of supported parameters for different LLM providers.
+
+### Usage Examples
+- `example.py`: Demonstrates how to use LLMProcess with different configurations.
+
+### Tests
+- `tests/test_from_toml.py`: Tests for loading LLMProcess from TOML files.
+- `tests/test_llm_process.py`: Tests for core LLMProcess functionality.
+- `tests/test_providers.py`: Tests for provider implementations.
+- `tests/test_llm_process_providers.py`: Tests for LLMProcess integration with different providers.
+
+### Project Configuration
+- `pyproject.toml`: Package metadata, dependencies, and build configuration.
+- `setup.cfg`: Additional setup configuration.
+- `pytest.ini`: PyTest configuration for running tests.
