@@ -44,8 +44,7 @@ Reference: [forking-an-agent](https://github.com/cccntu/forking-an-agent)
 
 ## Roadmap
 
-1. [ ] Implement Prompt Caching
-2. [ ] Implement Spawn System Call
-3. [ ] Create a Claude Code Program 
-4. [ ] Implement Fork System Call
-5. [ ] Improve OpenAI integration (MCP support)
+1. [ ] Implement Spawn System Call
+2. [ ] Implement Fork System Call
+3. [ ] Implement Prompt Caching, Cost Tracking
+4. [ ] Improve OpenAI integration (MCP support)

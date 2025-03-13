@@ -9,7 +9,8 @@
     "codemcp": {
       "type": "stdio",
       "command": "/bin/zsh",
-      "args": ["-c", "uvx --from git+https://github.com/cccntu/codemcp@main codemcp "]
+      "args": ["-c", "uvx --from git+https://github.com/ezyang/codemcp@main codemcp-multi"]
+
     }
   }
 }

@@ -21,7 +21,7 @@ def mock_env():
     os.environ.update(original_env)
 
 
-@patch("llmproc.providers.OpenAI")
+@patch("llmproc.providers.providers.OpenAI")
 def test_openai_provider_run(mock_openai, mock_env):
     """Test LLMProcess with OpenAI provider."""
     # Setup mock client and response
@@ -66,8 +66,8 @@ def test_openai_provider_run(mock_openai, mock_env):
     ]
 
 
-@patch("llmproc.providers.anthropic", MagicMock())
-@patch("llmproc.providers.Anthropic")
+@patch("llmproc.providers.providers.anthropic", MagicMock())
+@patch("llmproc.providers.providers.Anthropic")
 def test_anthropic_provider_run(mock_anthropic, mock_env):
     """Test LLMProcess with Anthropic provider."""
     # Setup mock client and response
@@ -109,8 +109,8 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
     ]
 
 
-@patch("llmproc.providers.anthropic", MagicMock())
-@patch("llmproc.providers.AnthropicVertex")
+@patch("llmproc.providers.providers.anthropic", MagicMock())
+@patch("llmproc.providers.providers.AnthropicVertex")
 def test_vertex_provider_run(mock_vertex, mock_env):
     """Test LLMProcess with Vertex provider."""
     # Setup mock client and response
