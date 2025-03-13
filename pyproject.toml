@@ -18,6 +18,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.8",
+    "mcp-registry>=0.3.3",
     "openai>=1.0.0",
     "python-dotenv>=0.19.0",
     "tomli>=2.2.1",

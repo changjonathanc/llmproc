@@ -61,3 +61,18 @@ Always maintain a neutral and professional tone."""
 #   "../prompts/example_prompt.md",
 #   "../README.md"
 # ]
+
+#----------------------------------------
+# MCP (Model Context Protocol) Configuration
+#----------------------------------------
+[mcp]
+# Path to the MCP servers configuration file
+# config_path = "config/mcp_servers.json"
+
+# Tool Configuration
+# Users must explicitly specify which tools to import from each server
+[mcp.tools]
+# Server name = List of specific tools to import OR "all" to import all tools
+# github = ["search_repositories", "get_file_contents"]
+# codemcp = ["ReadFile"]
+# github = "all"  # Import all tools from GitHub server

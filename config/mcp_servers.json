@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "codemcp": {
+      "type": "stdio",
+      "command": "/bin/zsh",
+      "args": [
+        "-c",
+        "uvx --from git+https://github.com/cccntu/codemcp@main codemcp "
+      ]
+    }
+  }
+}
