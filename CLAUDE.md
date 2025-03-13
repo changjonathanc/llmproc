@@ -52,4 +52,8 @@
 5. Implemented XML-formatted warnings for missing files
 6. Added XML-tagged format for preloaded file content
 7. Updated reset_state to handle preloaded content consistently
-8. Updated documentation in repo-map.txt and CLAUDE.md
+8. Added preload_files() method for runtime file preloading
+9. Created detailed documentation in docs/preload-feature.md
+10. Added LLM evaluation test for preload feature
+11. Updated pytest.ini with markers for API tests
+12. Updated documentation in repo-map.txt and CLAUDE.md
