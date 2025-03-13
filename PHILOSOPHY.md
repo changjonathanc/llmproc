@@ -1,17 +1,50 @@
 # LLMProc Design Philosophy
 
-This document outlines the core design philosophy behind the LLMProc library.
+## Core Principles
 
-## Core Concepts
+### LLM Agent as Process
 
-### 1. LLM Agent as Process
+We view LLM Agents as processes in a computing environment:
+- It's defined by a program (TOML configuration)
+- It receives input, executes, and returns output
+- It maintains state between executions
+- It interacts with the system through defined interfaces
 
-We view LLM Agents as processes - you can define a program using TOML, you send an input and it might execute commands and return a string. It's stateful by default so you can send another message/command and get a new response.
+### LLMProc as Kernel
 
-### 2. System Calls (Planned)
+The LLMProc library functions as a kernel:
+- Implements system calls for LLM agents
+- Manages resources across agent processes
+- Provides privileged operations agents cannot perform themselves
+- Creates a standardized interface between agents and their environment
 
-We'll implement "system calls" like spawn and fork to enable advanced functions that LLM can call to enable more powerful usecases.
+## Implementation Details
 
-### 3. MCP Integration & Portability
+### Program Definition via TOML
 
-Program definition .toml is portable, so are tools defined in MCP. With these, the core Python library is just a reference implementation. It's easy to create program runners in other languages.
+- Enables agent self-modification (similar to Claude Code updating CLAUDE.md)
+- Makes programs portable across implementations
+- Human-readable and LLM-friendly
+
+### System Calls
+
+> **Note:** System calls are planned but not yet implemented in the current version.
+
+Like Unix kernel system calls, LLMProc will implement:
+- **Spawn**: Create new agent processes (analogous to exec())
+- **Fork**: Duplicate an existing agent with its state (analogous to fork())
+
+Reference: [forking-an-agent](https://github.com/cccntu/forking-an-agent)
+
+### MCP Integration
+
+- System calls are implemented in the LLMProc kernel
+- "Userspace" tools are provided via MCP
+- MCP provides a standard protocol for tools that's independent of the LLMProc implementation
+
+## Roadmap
+
+1. [ ] Implement Spawn System Call
+2. [ ] Create a Claude Code Program 
+3. [ ] Implement Fork System Call
+4. [ ] Improve OpenAI integration (MCP support)
