@@ -10,35 +10,53 @@ import click
 from llmproc import LLMProcess
 
 
-def main() -> None:
-    """Run a simple interactive CLI for LLMProc."""
+@click.command()
+@click.argument("config_path", required=False)
+def main(config_path=None) -> None:
+    """Run a simple interactive CLI for LLMProc.
+    
+    CONFIG_PATH is an optional path to a TOML configuration file.
+    If not provided, you'll be prompted to select from available examples.
+    """
     click.echo("LLMProc CLI Demo")
     click.echo("----------------")
     
-    # Find available config files
-    config_dir = Path("./examples")
-    if not config_dir.exists():
-        click.echo("Error: examples directory not found.")
-        sys.exit(1)
+    # If config path is provided, use it
+    if config_path:
+        config_file = Path(config_path)
+        if not config_file.exists():
+            click.echo(f"Error: Config file not found: {config_path}")
+            sys.exit(1)
+        if config_file.suffix != ".toml":
+            click.echo(f"Error: Config file must be a TOML file: {config_path}")
+            sys.exit(1)
+        selected_config = config_file
+    # Otherwise, prompt user to select from examples
+    else:
+        # Find available config files
+        config_dir = Path("./examples")
+        if not config_dir.exists():
+            click.echo("Error: examples directory not found.")
+            sys.exit(1)
+            
+        config_files = list(config_dir.glob("*.toml"))
+        if not config_files:
+            click.echo("Error: No TOML configuration files found in examples directory.")
+            sys.exit(1)
         
-    config_files = list(config_dir.glob("*.toml"))
-    if not config_files:
-        click.echo("Error: No TOML configuration files found in examples directory.")
-        sys.exit(1)
-    
-    # Display available configs
-    click.echo("\nAvailable configurations:")
-    for i, config_file in enumerate(sorted(config_files), 1):
-        click.echo(f"{i}. {config_file.name}")
-    
-    # Let user select a config
-    selection = click.prompt("\nSelect a configuration (number)", type=int)
-    
-    if selection < 1 or selection > len(config_files):
-        click.echo("Invalid selection.")
-        sys.exit(1)
-    
-    selected_config = sorted(config_files)[selection-1]
+        # Display available configs
+        click.echo("\nAvailable configurations:")
+        for i, config_file in enumerate(sorted(config_files), 1):
+            click.echo(f"{i}. {config_file.name}")
+        
+        # Let user select a config
+        selection = click.prompt("\nSelect a configuration (number)", type=int)
+        
+        if selection < 1 or selection > len(config_files):
+            click.echo("Invalid selection.")
+            sys.exit(1)
+        
+        selected_config = sorted(config_files)[selection-1]
     
     # Load the selected configuration
     try:

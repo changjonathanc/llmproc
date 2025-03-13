@@ -67,13 +67,16 @@ See `examples/reference.toml` for a comprehensive reference with comments for al
 LLMProc includes a simple command-line demo for interacting with LLM models:
 
 ```bash
-# Start the interactive demo
+# Start the interactive demo (select from examples)
 llmproc-demo
+
+# Start with a specific TOML configuration file
+llmproc-demo path/to/your/config.toml
 ```
 
 The demo will:
-1. Show a list of available TOML configurations from the examples directory
-2. Let you select a configuration by number
+1. If no config is specified, show a list of available TOML configurations from the examples directory
+2. Let you select a configuration by number, or use the specified config file
 3. Start an interactive chat session with the selected model
 
 ### Interactive Commands
