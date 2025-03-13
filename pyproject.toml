@@ -24,8 +24,19 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-cov>=4.1.0",
     "black>=23.0.0",
     "isort>=5.0.0",
+]
+anthropic = [
+    "anthropic>=0.6.0",
+]
+vertex = [
+    "google-cloud-aiplatform>=1.35.0",
+]
+all = [
+    "anthropic>=0.6.0",
+    "google-cloud-aiplatform>=1.35.0",
 ]
 
 [tool.setuptools]
