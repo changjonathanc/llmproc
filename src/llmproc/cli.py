@@ -42,9 +42,42 @@ def main() -> None:
     
     # Load the selected configuration
     try:
-        process = LLMProcess.from_toml(selected_config)
-        click.echo(f"\nLoaded configuration from {selected_config}")
+        selected_config_abs = selected_config.absolute()
+        process = LLMProcess.from_toml(selected_config_abs)
+        click.echo(f"\nLoaded configuration from: {selected_config_abs}")
         
+        # Display config summary
+        click.echo("\nConfiguration Summary:")
+        # Try to extract and show key info from the config
+        try:
+            import tomli
+            with open(selected_config_abs, "rb") as f:
+                config = tomli.load(f)
+            
+            # Show model info
+            if "model" in config:
+                model_info = config["model"]
+                click.echo(f"  Model: {model_info.get('name', 'Not specified')}")
+                click.echo(f"  Provider: {model_info.get('provider', 'Not specified')}")
+            
+            # Show brief system prompt summary
+            if "prompt" in config and "system_prompt" in config["prompt"]:
+                system_prompt = config["prompt"]["system_prompt"]
+                # Truncate if too long
+                if len(system_prompt) > 60:
+                    system_prompt = system_prompt[:57] + "..."
+                click.echo(f"  System Prompt: {system_prompt}")
+                
+            # Show a few key parameters if present
+            if "parameters" in config:
+                params = config["parameters"]
+                if "temperature" in params:
+                    click.echo(f"  Temperature: {params['temperature']}")
+                if "max_tokens" in params:
+                    click.echo(f"  Max Tokens: {params['max_tokens']}")
+        except:
+            click.echo("  (Could not parse configuration details)")
+            
         # Start interactive session
         click.echo("\nStarting interactive chat session. Type 'exit' or 'quit' to end.")
         click.echo("Type 'reset' to reset the conversation state.")
