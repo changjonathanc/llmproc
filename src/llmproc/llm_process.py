@@ -107,9 +107,22 @@ class LLMProcess:
             output = response.choices[0].message.content.strip()
             
         elif self.provider == "anthropic":
+            # Anthropic requires system prompt to be passed separately
+            # Extract system prompt and user/assistant messages
+            system_prompt = None
+            messages = []
+            
+            for msg in self.state:
+                if msg["role"] == "system":
+                    system_prompt = msg["content"]
+                else:
+                    messages.append(msg)
+            
+            # Create the response with system prompt separate from messages
             response = self.client.messages.create(
                 model=self.model_name,
-                messages=self.state,
+                system=system_prompt,
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 **{k: v for k, v in self.parameters.items() 
@@ -119,9 +132,21 @@ class LLMProcess:
             
         elif self.provider == "vertex":
             # AnthropicVertex uses the same API signature as Anthropic
+            # Extract system prompt and user/assistant messages
+            system_prompt = None
+            messages = []
+            
+            for msg in self.state:
+                if msg["role"] == "system":
+                    system_prompt = msg["content"]
+                else:
+                    messages.append(msg)
+            
+            # Create the response with system prompt separate from messages
             response = self.client.messages.create(
                 model=self.model_name,
-                messages=self.state,
+                system=system_prompt,
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 **{k: v for k, v in self.parameters.items() 
