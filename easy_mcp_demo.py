@@ -10,6 +10,7 @@ by using the TOML configuration approach.
 import os
 import json
 import sys
+import asyncio
 from pathlib import Path
 
 # Get the repository root directory (where the script is running from)
@@ -90,7 +91,7 @@ unknown = "all"
     
     return toml_path
 
-def run_examples(process):
+async def run_examples(process):
     """Run example queries with the LLMProcess."""
     examples = [
         "What tools are available to you? Explain them briefly.",
@@ -101,12 +102,13 @@ def run_examples(process):
     
     for i, example in enumerate(examples, 1):
         print(f"\n=== Example {i}: {example} ===")
-        response = process.run(example)
+        # Use the async run method for proper tool execution
+        response = await process.run(example)
         print(f"\n{process.display_name}> {response}\n")
         print("-" * 80)
 
-def main():
-    """Main function to run the MCP demo."""
+async def main():
+    """Async main function to run the MCP demo."""
     print(f"Working in repository root: {REPO_ROOT}")
     
     # Set up the MCP config
@@ -144,10 +146,11 @@ def main():
         
         # Run the examples
         print("\nRunning examples...\n")
-        run_examples(process)
+        await run_examples(process)
         
     except Exception as e:
         print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    # Run the async main function
+    asyncio.run(main())
