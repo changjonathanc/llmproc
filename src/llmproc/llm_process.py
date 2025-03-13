@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 
-from llmproc.providers import PROVIDERS
+from llmproc.providers import get_provider_client
 
 load_dotenv()
 
@@ -33,20 +33,20 @@ class LLMProcess:
             NotImplementedError: If the provider is not implemented
             ImportError: If the required package for a provider is not installed
         """
-        if provider not in PROVIDERS:
-            raise NotImplementedError(f"Provider {provider} not implemented.")
-            
         self.model_name = model_name
         self.provider = provider
         self.system_prompt = system_prompt
         self.parameters = kwargs
         
-        # Initialize provider class
-        provider_class = PROVIDERS[provider]
-        self.provider_instance = provider_class(model_name, **kwargs)
+        # Get project_id and region for Vertex if provided in parameters
+        project_id = kwargs.pop('project_id', None)
+        region = kwargs.pop('region', None)
         
-        # Initialize state
-        self.state = self.provider_instance.initialize_state(system_prompt)
+        # Initialize the client
+        self.client = get_provider_client(provider, model_name, project_id, region)
+        
+        # Initialize message state with system prompt
+        self.state = [{"role": "system", "content": self.system_prompt}]
     
     @classmethod
     def from_toml(cls, toml_path: Union[str, Path]) -> "LLMProcess":
@@ -90,8 +90,47 @@ class LLMProcess:
         """
         self.state.append({"role": "user", "content": user_input})
         
-        # Use the provider instance to run the API call
-        output = self.provider_instance.run(self.state)
+        # Extract common parameters
+        temperature = self.parameters.get('temperature', 0.7)
+        max_tokens = self.parameters.get('max_tokens', 1000)
+        
+        # Create provider-specific API calls
+        if self.provider == "openai":
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=self.state,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **{k: v for k, v in self.parameters.items() 
+                   if k not in ['temperature', 'max_tokens']}
+            )
+            output = response.choices[0].message.content.strip()
+            
+        elif self.provider == "anthropic":
+            response = self.client.messages.create(
+                model=self.model_name,
+                messages=self.state,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **{k: v for k, v in self.parameters.items() 
+                   if k not in ['temperature', 'max_tokens']}
+            )
+            output = response.content[0].text
+            
+        elif self.provider == "vertex":
+            # AnthropicVertex uses the same API signature as Anthropic
+            response = self.client.messages.create(
+                model=self.model_name,
+                messages=self.state,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **{k: v for k, v in self.parameters.items() 
+                   if k not in ['temperature', 'max_tokens']}
+            )
+            output = response.content[0].text
+            
+        else:
+            raise NotImplementedError(f"Provider {self.provider} not implemented")
         
         # Update state with assistant response
         self.state.append({"role": "assistant", "content": output})
