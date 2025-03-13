@@ -7,7 +7,7 @@ llmproc/
 ├── .env.example                     # Example environment file for API keys
 ├── .gitignore                       # Git ignore patterns
 ├── .pre-commit-config.yaml          # Pre-commit hooks configuration
-├── ARCHITECTURE.md                  # Core architectural decisions and design philosophy
+├── PHILOSOPHY.md                    # Core design philosophy and concepts
 ├── CLAUDE.md                        # Claude AI session summary and repository information
 ├── CONTRIBUTING.md                  # Guidelines for contributing to the project
 ├── README.md                        # Project overview and usage instructions
