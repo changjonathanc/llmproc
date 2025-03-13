@@ -102,3 +102,25 @@ When resetting the conversation state:
 - Supplying background information to maintain conversation relevance
 - Loading configuration or settings that should persist across the conversation
 - Adding code examples or snippets as reference material
+
+## Testing
+
+The preload feature includes both mechanical tests (checking file loading and state manipulation) and 
+functional tests that verify the LLM actually uses the preloaded content:
+
+```bash
+# Run regular tests (skips actual API calls)
+pytest -v
+
+# Run LLM API tests that verify preloaded content is used in responses
+# Requires OPENAI_API_KEY to be set in environment
+pytest -v -m llm_api
+```
+
+The API test works by:
+1. Creating a temporary file with a unique secret flag
+2. Preloading this file into the conversation
+3. Asking the LLM to identify the secret flag
+4. Verifying the LLM's response contains the secret flag
+
+This ensures the preload mechanism is actually providing content that the LLM can access and use.

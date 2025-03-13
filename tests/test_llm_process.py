@@ -1,6 +1,7 @@
 """Tests for the LLMProcess class."""
 
 import os
+import uuid
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from unittest.mock import MagicMock, patch
@@ -192,5 +193,57 @@ def test_preload_files_method(mock_env, mock_get_provider_client):
         assert temp_path in process.preloaded_content
         assert process.preloaded_content[temp_path] == "This is test content for runtime preloading."
     
+    finally:
+        os.unlink(temp_path)
+
+
+@pytest.mark.llm_api
+def test_llm_actually_uses_preloaded_content():
+    """Test that the LLM actually uses the preloaded content in its responses.
+    
+    This test makes actual API calls to OpenAI and will be skipped by default.
+    To run this test: pytest -v -m llm_api
+    """
+    # Skip this test if we're running without actual API calls
+    try:
+        import openai
+    except ImportError:
+        pytest.skip("OpenAI not installed")
+    
+    if not os.getenv("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set, skipping actual API call test")
+    
+    # Create a unique secret flag that the LLM would only know if it reads the file
+    secret_flag = f"UNIQUE_SECRET_FLAG_{uuid.uuid4().hex[:8]}"
+    
+    # Create a temporary test file with the secret flag
+    with NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:
+        temp_file.write(f"""
+        This is a test document containing a special flag.
+        
+        Important: The secret flag is {secret_flag}
+        
+        Please remember this flag as it will be used to verify preloading functionality.
+        """)
+        temp_path = temp_file.name
+    
+    try:
+        # Create a process with actual OpenAI client
+        process = LLMProcess(
+            model_name="gpt-3.5-turbo",  # Using cheaper model for tests
+            provider="openai",
+            system_prompt="You are a helpful assistant.",
+            max_tokens=150
+        )
+        
+        # Preload the file with the secret flag
+        process.preload_files([temp_path])
+        
+        # Ask the model about the secret flag
+        response = process.run("What is the secret flag mentioned in the preloaded document? Just output the flag and nothing else.")
+        
+        # Assert the secret flag is in the response
+        assert secret_flag in response, f"Secret flag '{secret_flag}' not found in LLM response: '{response}'"
+        
     finally:
         os.unlink(temp_path)
