@@ -11,6 +11,8 @@ llmproc/
 ├── CONTRIBUTING.md                  # Guidelines for contributing to the project
 ├── README.md                        # Project overview and usage instructions
 ├── api_parameters.md                # Documentation of OpenAI and Anthropic API parameters
+├── docs/                            # Detailed documentation directory
+│   └── preload-feature.md           # Documentation for file preloading feature
 ├── example.py                       # Example script demonstrating LLMProc usage
 ├── examples/                        # Example TOML configuration files
 │   ├── anthropic.toml               # Anthropic model configuration example
@@ -27,6 +29,7 @@ llmproc/
 ├── repo-map.txt                     # This file - repository map
 ├── repomix-output.txt               # Output from repository analysis tool
 ├── requirements.txt                 # Project dependencies
+├── session_summary.md               # Summary of implementation sessions
 ├── setup.cfg                        # Setup configuration
 ├── src/                             # Source code directory
 │   └── llmproc/                     # Main package
