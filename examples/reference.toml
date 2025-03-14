@@ -63,6 +63,21 @@ Always maintain a neutral and professional tone."""
 # ]
 
 #----------------------------------------
+# Tools Configuration
+#----------------------------------------
+[tools]
+# List of enabled tools
+# enabled = ["spawn"]  # Enable the spawn tool for program linking
+
+#----------------------------------------
+# Program Linking Configuration
+#----------------------------------------
+[linked_programs]
+# Map program names to their TOML configuration files
+# repo_expert = "./repo_expert.toml"
+# code_helper = "./code_helper.toml"
+
+#----------------------------------------
 # MCP (Model Context Protocol) Configuration
 #----------------------------------------
 [mcp]

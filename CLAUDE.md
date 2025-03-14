@@ -34,6 +34,7 @@
 - Custom display names for models in CLI interfaces
 - Supports OpenAI, Anthropic, and Vertex AI models
 - MCP (Model Context Protocol) support for tool usage
+- Program linking for LLM-to-LLM communication via spawn tool
 - Methods: run() [async], get_state(), reset_state(), from_toml(), preload_files()
 - Command-line interface for interactive chat sessions
 - Comprehensive error handling and diagnostics
@@ -121,3 +122,15 @@
 8. Created comprehensive tests for MCP tools functionality
 9. Fixed mcp.toml example to use correct tool naming format
 10. Optimized server initialization by checking configuration first
+
+## Session Summary (2025-03-19)
+1. Implemented program linking feature for communication between LLMs
+2. Created spawn tool for delegating queries to specialized LLMs
+3. Added [linked_programs] section to TOML configuration
+4. Added support for [tools] section to enable built-in tools
+5. Improved parameter handling with cleaner API parameters approach
+6. Implemented custom tool handlers for non-MCP tools
+7. Added example configurations in examples/program_linking/
+8. Created detailed documentation in docs/program-linking.md
+9. Added comprehensive tests for program linking functionality
+10. Updated reference.toml with documentation for new sections
