@@ -57,14 +57,20 @@ Note: We don't use requirements.txt for dependency management. All dependencies 
 Run tests with pytest:
 
 ```bash
+# Run all tests except those requiring API keys
 pytest
-```
 
-For coverage:
+# Run all tests (including those that make actual API calls)
+pytest -m "all"
 
-```bash
+# Run only tests requiring API keys
+pytest -m "llm_api"
+
+# Run with coverage report
 pytest --cov=llmproc
 ```
+
+Note: Tests marked with `@pytest.mark.llm_api` require actual API keys and make network calls to LLM providers. These are skipped by default to allow running tests in CI environments without API keys.
 
 ## Pull Request Process
 

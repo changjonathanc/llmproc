@@ -36,6 +36,7 @@
 - MCP (Model Context Protocol) support for tool usage
 - Methods: run() [async], get_state(), reset_state(), from_toml(), preload_files()
 - Command-line interface for interactive chat sessions
+- Comprehensive error handling and diagnostics
 
 ## Session Summary (2025-03-12)
 1. Restructured project to src/llmproc layout
@@ -96,3 +97,15 @@
 8. Fixed test imports to work with new module structure
 9. Updated repo-map.txt to reflect the new directory organization
 10. Maintained backward compatibility for existing code
+
+## Session Summary (2025-03-17)
+1. Refactored MCP tools implementation for better organization and maintainability
+2. Improved async handling in tool execution flow
+3. Added proper type annotations throughout MCP code
+4. Separated tool response processing from tool execution logic
+5. Implemented more robust error handling for Anthropic API
+6. Added specific tests for MCP tools functionality
+7. Created mock time server test infrastructure
+8. Updated pytest.ini to properly support async tests
+9. Improved test isolation to avoid requiring API keys
+10. Updated documentation in CONTRIBUTING.md and CLAUDE.md
