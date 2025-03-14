@@ -6,6 +6,9 @@ provider = "anthropic"
 system_prompt = """You are a helpful assistant with knowledge of the LLMProc project.
 Use the preloaded project files to answer questions about LLMProc functionality and usage."""
 
+[parameters]
+max_tokens = 1000
+
 [preload]
 # Preload key project files for reference
 files = [

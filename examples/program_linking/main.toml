@@ -4,11 +4,20 @@ provider = "anthropic"
 display_name = "Claude Haiku"
 
 [prompt]
-system_prompt = "You are Claude, a helpful AI assistant. Keep all responses under 3 sentences for brevity."
+system_prompt = """You are Claude, a helpful AI assistant.
 
+You have access to the 'spawn' tool that lets you communicate with the 'repo_expert' who has specialized knowledge about the LLMProc project.
+
+When users ask about the LLMProc project, use the spawn tool to get information from the repo_expert.
+
+Keep all responses under 3 sentences for brevity."""
+
+[parameters]
+max_tokens = 1000
 
 [tools]
 enabled = ["spawn"]
+
 
 [linked_programs]
 repo_expert = "./repo_expert.toml"
