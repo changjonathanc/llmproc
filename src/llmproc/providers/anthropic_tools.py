@@ -6,16 +6,10 @@ from typing import Any, Dict, List, Optional, Union
 
 
 async def run_anthropic_with_tools(
-    client,
-    model_name: str,
+    llm_process,
     system_prompt: str,
     messages: List[Dict[str, Any]],
-    tools: List[Dict[str, Any]],
-    aggregator,
     max_iterations: int = 10,
-    debug: bool = False,
-    api_params: Dict[str, Any] = None,
-    extra_params: Dict[str, Any] = None,
 ) -> str:
     """Run Anthropic with tool support.
 
@@ -23,27 +17,27 @@ async def run_anthropic_with_tools(
     processing each tool and providing the result back to the model.
 
     Args:
-        client: The Anthropic client
-        model_name: The name of the Anthropic model to use
+        llm_process: The LLMProcess instance
         system_prompt: The system prompt to use
         messages: The conversation messages
-        tools: The list of available tools
-        aggregator: The MCP aggregator for tool execution
         max_iterations: Maximum number of tool-calling iterations
-        debug: Whether to enable debug output
-        api_params: Core API parameters (temperature, max_tokens)
-        extra_params: Additional API parameters
 
     Returns:
         The final model response as a string
     """
+    # Extract needed values from the LLMProcess instance
+    client = llm_process.client
+    model_name = llm_process.model_name
+    tools = llm_process.tools
+    debug = getattr(llm_process, 'debug_tools', False)
+    api_params = getattr(llm_process, 'api_params', {})
+    extra_params = getattr(llm_process, 'extra_params', {})
+    tool_handlers = getattr(llm_process, 'tool_handlers', {})
+    aggregator = getattr(llm_process, 'aggregator', None)
+    
     # Track iterations to prevent infinite loops
     iterations = 0
     final_response = ""
-
-    # Initialize parameters if not provided
-    api_params = api_params or {}
-    extra_params = extra_params or {}
 
     if debug:
         print("\n=== Starting Anthropic Tool Execution ===")
@@ -84,7 +78,7 @@ async def run_anthropic_with_tools(
 
             # Process the response
             has_tool_calls, tool_results, response_text = await process_response_content(
-                response.content, aggregator, debug
+                response.content, aggregator, tool_handlers, debug
             )
             
             # Store any text response
@@ -154,12 +148,13 @@ def prepare_api_params(
     }
 
 
-async def process_response_content(content_list, aggregator, debug: bool = False):
+async def process_response_content(content_list, aggregator, tool_handlers: Dict[str, callable] = None, debug: bool = False):
     """Process the content from an Anthropic response.
     
     Args:
         content_list: The content from the response
         aggregator: The MCP aggregator
+        tool_handlers: Dictionary mapping tool names to handler functions
         debug: Whether to enable debug output
         
     Returns:
@@ -169,6 +164,9 @@ async def process_response_content(content_list, aggregator, debug: bool = False
     tool_results = []
     response_text = ""
     tool_calls = []
+    
+    # Initialize handlers if not provided
+    tool_handlers = tool_handlers or {}
     
     # First, collect all content items
     for content in content_list:
@@ -197,8 +195,21 @@ async def process_response_content(content_list, aggregator, debug: bool = False
             print(f"Calling tool {tool_name} with args {tool_args}")
         
         try:
-            # Execute the tool
-            result = await aggregator.call_tool(tool_name, tool_args)
+            # Check if we have a custom handler for this tool
+            if tool_name in tool_handlers:
+                if debug:
+                    print(f"Using custom handler for tool {tool_name}")
+                # Call the custom handler with the arguments
+                result = await tool_handlers[tool_name](tool_args)
+            # Otherwise try to use the MCP aggregator
+            elif aggregator is not None:
+                if debug:
+                    print(f"Using MCP aggregator for tool {tool_name}")
+                # Execute the tool through the aggregator
+                result = await aggregator.call_tool(tool_name, tool_args)
+            else:
+                # No handler found for this tool
+                raise ValueError(f"No handler found for tool {tool_name}")
             
             # Process and format the result
             formatted_result = format_tool_result(result)
@@ -293,8 +304,8 @@ def dump_api_error(
     model_name: str,
     system_prompt: str,
     messages: List[Dict[str, Any]],
-    temperature: float,
-    max_tokens: int,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
     iteration: int = 0,
 ) -> str:

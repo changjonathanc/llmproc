@@ -137,7 +137,7 @@ class LLMProcess:
             # Initialize MCP registry and tools asynchronously
             asyncio.run(self._initialize_mcp_tools())
             
-            # Check if we need to register the spawn tool
+        # Check if we need to register the spawn tool
         if "spawn" in self.enabled_tools and self.has_linked_programs:
             # Register the spawn tool
             self._register_spawn_tool()
@@ -408,8 +408,8 @@ class LLMProcess:
                                     }
                                     for m in self.state
                                 ],
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
+                                "temperature": self.api_params.get("temperature"),
+                                "max_tokens": self.api_params.get("max_tokens"),
                             },
                         },
                         f,
@@ -422,8 +422,8 @@ class LLMProcess:
                 raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
 
         elif self.provider == "anthropic":
-            # For Anthropic with MCP enabled, handle tool calls
-            if self.mcp_enabled and self.tools:
+            # For Anthropic with tools enabled, handle tool calls
+            if self.tools:
                 # Use the full async implementation for tool calls
                 return await self._run_anthropic_with_tools(max_iterations)
             else:
@@ -477,11 +477,26 @@ class LLMProcess:
                     **self.api_params,
                     **self.extra_params
                 }
+                
+                # Debug: print tools if they exist
+                if hasattr(self, 'tools') and self.tools:
+                    print(f"DEBUG: Passing {len(self.tools)} tools to Anthropic API:")
+                    for tool in self.tools:
+                        print(f"  - {tool['name']}: {tool['description'][:50]}...")
+                    # Add tools to API params
+                    api_params["tools"] = self.tools
 
                 try:
                     # Create the response with system prompt separate from messages
                     response = await self.client.messages.create(**api_params)
-                    output = response.content[0].text
+                    
+                    # Check if the response is a tool use
+                    if response.content[0].type == "tool_use":
+                        # We need to handle tool calls here
+                        print("DEBUG: Model is using a tool, redirecting to tool handling")
+                        return await self._run_anthropic_with_tools(max_iterations=10)
+                    else:
+                        output = response.content[0].text
 
                     # Update state with assistant response
                     self.state.append({"role": "assistant", "content": output})
@@ -512,8 +527,8 @@ class LLMProcess:
                                         }
                                         for m in messages
                                     ],
-                                    "temperature": temperature,
-                                    "max_tokens": max_tokens,
+                                    "temperature": self.api_params.get("temperature"),
+                                    "max_tokens": self.api_params.get("max_tokens"),
                                 },
                             },
                             f,
@@ -576,11 +591,34 @@ class LLMProcess:
                 **self.api_params,
                 **self.extra_params
             }
+            
+            # Debug: print tools if they exist
+            if hasattr(self, 'tools') and self.tools:
+                print(f"DEBUG: Passing {len(self.tools)} tools to Vertex API:")
+                for tool in self.tools:
+                    print(f"  - {tool['name']}: {tool['description'][:50]}...")
+                # Add tools to API params
+                api_params["tools"] = self.tools
 
             try:
                 # Create the response with system prompt separate from messages
-                response = await self.client.messages.create(**api_params)
-                output = response.content[0].text
+                # Create the response with system prompt separate from messages
+                import traceback
+                
+                try:
+                    response = await self.client.messages.create(**api_params)
+                    
+                    # Check if the response is a tool use
+                    if response.content[0].type == "tool_use":
+                        # We need to handle tool calls here
+                        print("DEBUG: Model is using a tool, redirecting to tool handling")
+                        return await self._run_anthropic_with_tools(max_iterations=10)
+                    else:
+                        output = response.content[0].text
+                except Exception as e:
+                    print("FULL ERROR TRACEBACK:")
+                    traceback.print_exc()
+                    raise
 
                 # Update state with assistant response
                 self.state.append({"role": "assistant", "content": output})
@@ -611,8 +649,8 @@ class LLMProcess:
                                     }
                                     for m in messages
                                 ],
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
+                                "temperature": self.api_params.get("temperature"),
+                                "max_tokens": self.api_params.get("max_tokens"),
                             },
                         },
                         f,
@@ -658,17 +696,12 @@ class LLMProcess:
         messages = filter_empty_text_blocks(messages, self.debug_tools)
 
         # Run the tool interaction loop through the specialized module
+        # Just pass the LLMProcess instance and let the function access what it needs
         final_response = await run_anthropic_with_tools(
-            client=self.client,
-            model_name=self.model_name,
+            llm_process=self,
             system_prompt=system_prompt,
             messages=messages,
-            tools=self.tools,
-            aggregator=self.aggregator,
-            max_iterations=max_iterations,
-            debug=self.debug_tools,
-            api_params=self.api_params,
-            extra_params=self.extra_params
+            max_iterations=max_iterations
         )
 
         # Add the final response to the permanent state
@@ -864,27 +897,28 @@ class LLMProcess:
                     "query": {
                         "type": "string",
                         "description": "The query to send to the linked program"
-                    },
-                    "state": {
-                        "type": "object",
-                        "description": "Optional state context to pass to the linked program"
                     }
                 },
                 "required": ["program_name", "query"]
             }
         }
         
-        # Add the custom handler for the spawn tool
-        # We'll store a reference to this LLMProcess instance in the tool's environment
+        # Create a copy of the tool definition for the API
+        api_tool_def = spawn_tool_def.copy()
+        
+        # Add the handler to the internal tool definition
         spawn_tool_def["handler"] = lambda args: spawn_tool(
             program_name=args.get("program_name"),
             query=args.get("query"),
-            state=args.get("state"),
             llm_process=self
         )
         
-        # Add to the tools list
-        self.tools.append(spawn_tool_def)
+        # Keep the handler and tool definition separate
+        self.tool_handlers = getattr(self, "tool_handlers", {})
+        self.tool_handlers["spawn"] = spawn_tool_def["handler"]
+        
+        # Add to the tools list (API-safe version without handler)
+        self.tools.append(api_tool_def)
         print(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
         
     def _format_tool_for_anthropic(self, tool, server_name=None):
