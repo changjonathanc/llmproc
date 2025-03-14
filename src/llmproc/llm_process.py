@@ -932,8 +932,8 @@ class LLMProcess:
             llm_process=self
         )
         
-        # Print brief info about linked programs
-        if self.debug_tools:
+        # Only print linked programs info if explicitly debugging
+        if self.debug_tools and os.environ.get("LLMPROC_DEBUG", "").lower() == "true":
             import sys
             print("\nLinked programs:", file=sys.stderr)
             for prog_name, prog_instance in self.linked_programs.items():

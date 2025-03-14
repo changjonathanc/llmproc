@@ -1,6 +1,8 @@
 """Spawn tool for LLMProcess to interact with linked programs."""
 
 import asyncio
+import os
+import sys
 from typing import Any, Dict, Optional
 
 from llmproc.llm_process import LLMProcess
@@ -28,7 +30,7 @@ async def spawn_tool(
         ValueError: If the program_name is not found in linked programs
     """
     import sys
-    debug = getattr(llm_process, 'debug_tools', False)
+    debug = getattr(llm_process, 'debug_tools', False) and os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
     
     if not llm_process or not hasattr(llm_process, "linked_programs"):
         error_msg = "Spawn tool requires a parent LLMProcess with linked_programs defined"
