@@ -21,3 +21,10 @@ config_path = "../config/mcp_servers.json"
 #codemcp = ["read_file", "write_file", "edit_file", "ls", "grep", "init_project_tool"]
 # we only allow read only access to the file system for demo purposes
 codemcp = ["read_file", "ls", "grep"]
+
+[tools]
+enabled = ["spawn"]
+
+
+[linked_programs]
+enabled = ["./claude_code_dispatch_agent.toml"]

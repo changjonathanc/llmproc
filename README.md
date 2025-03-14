@@ -230,9 +230,11 @@ This enables:
 1. [x] Implement Program Linking via Spawn Tool
 2. [ ] Implement Fork System Call
 3. [ ] Implement Prompt Caching, Cost Tracking
-4. [ ] Improve OpenAI integration (MCP support)
-5. [ ] Add support for reasoning models
-6. [ ] Add Process State Serialization & Restoration
+4. [ ] Implement Environment Variables
+5. [ ] Implement File Descriptor
+5. [ ] Improve OpenAI integration (MCP support)
+6. [ ] Add support for reasoning models
+7. [ ] Add Process State Serialization & Restoration
 
 ## License
 
