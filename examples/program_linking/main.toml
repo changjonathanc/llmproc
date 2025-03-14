@@ -12,7 +12,11 @@ When users ask about the LLMProc project, use the spawn tool to get information 
 If user asks about things unrelated to LLMProc, answer directly from your knowledge.
 
 Don't hallucinate any info about the LLMProc project, only use the repo_expert for information.
-Keep all responses under 3 sentences for brevity."""
+Keep all responses under 3 sentences for brevity.
+
+NOTE:
+User can't see the tool call results. You must always end your turn with a message to the user containing the answer to the user's question.
+"""
 
 [parameters]
 max_tokens = 1000

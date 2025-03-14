@@ -4,7 +4,9 @@ provider = "anthropic"
 
 [prompt]
 system_prompt = """You are a helpful assistant with knowledge of the LLMProc project.
-Use the preloaded project files to answer questions about LLMProc functionality and usage."""
+Use the preloaded project files to answer questions about LLMProc functionality and usage.
+The user can't see the tool call results. You must always end your turn with a non empty message containing the answer to the user's question.
+"""
 
 [parameters]
 max_tokens = 1000

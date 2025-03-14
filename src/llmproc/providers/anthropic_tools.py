@@ -33,10 +33,11 @@ async def run_anthropic_with_tools(
     api_params = getattr(llm_process, 'api_params', {})
     tool_handlers = getattr(llm_process, 'tool_handlers', {})
     aggregator = getattr(llm_process, 'aggregator', None)
-    
+
     # Track iterations to prevent infinite loops
     iterations = 0
     final_response = ""
+
 
     if debug:
         print("\n=== Starting Anthropic Tool Execution ===")
@@ -44,6 +45,7 @@ async def run_anthropic_with_tools(
 
     # Continue the conversation until no more tool calls or max iterations reached
     while iterations < max_iterations:
+        has_tool_calls = False
         iterations += 1
         if debug:
             print(f"\n--- Iteration {iterations}/{max_iterations} ---")
@@ -74,38 +76,25 @@ async def run_anthropic_with_tools(
                 raise RuntimeError(
                     f"Error calling Anthropic API: {str(e)} (see {dump_file} for details)"
                 )
+            messages.append({"role": "assistant", "content": response.content})
 
-            # Process the response
-            has_tool_calls, tool_results, response_text = await process_response_content(
-                response.content, aggregator, tool_handlers, debug
-            )
-            
-            # Store any text response
-            if response_text:
-                final_response = response_text
-
-            # Only add the assistant message to the conversation if it has content
-            # (either text content or tool calls)
-            if response_text or has_tool_calls:
-                # Add the assistant's response with tool calls to messages
-                # This must happen BEFORE tool results are added
-                messages.append({"role": "assistant", "content": response.content})
-            else:
-                # For debugging purposes
-                if debug:
-                    print("WARNING: Skipping empty assistant message")
-            
-            # If no tool calls were made, we're done
-            if not has_tool_calls:
-                if debug:
-                    print(f"Final response (no tool calls): {final_response[:150]}...")
-                # Ensure we return a non-empty string even if response was empty
-                if not final_response:
-                    final_response = "I didn't get a clear response. Please try rephrasing your question."
+            if response.stop_reason == "end_turn":
+#                print("Model completed naturally")
+                if response.content and len(response.content) > 0 and hasattr(response.content[0], "text"):
+                    final_response = response.content[0].text
+                else:
+                    final_response = "model completed naturally but no response content text, try to ask again"
                 return final_response
-
-            # Add tool results to conversation
-            add_tool_results_to_conversation(messages, tool_results, debug)
+            elif response.stop_reason == "max_tokens":
+                return response.content[0].text
+            elif response.stop_reason == "stop_sequence":
+                return response.content[0].text
+            elif response.stop_reason == "tool_use":
+                has_tool_calls, tool_results = await process_response_content(
+                    response.content, aggregator, tool_handlers, debug
+                )
+                # Add tool results to conversation
+                add_tool_results_to_conversation(messages, tool_results, debug)
 
         except Exception as e:
             if debug:
@@ -135,14 +124,14 @@ def prepare_api_params(
     api_params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Prepare API parameters for Anthropic request.
-    
+
     Args:
         model_name: The name of the model to use
         system_prompt: The system prompt
         messages: The conversation messages
         tools: The tools configuration
         api_params: Core API parameters (temperature, max_tokens, etc.)
-        
+
     Returns:
         A dictionary of API parameters
     """
@@ -157,13 +146,13 @@ def prepare_api_params(
 
 async def process_response_content(content_list, aggregator, tool_handlers: Dict[str, callable] = None, debug: bool = False):
     """Process the content from an Anthropic response.
-    
+
     Args:
         content_list: The content from the response
         aggregator: The MCP aggregator
         tool_handlers: Dictionary mapping tool names to handler functions
         debug: Whether to enable debug output
-        
+
     Returns:
         Tuple of (has_tool_calls, tool_results, response_text)
     """
@@ -171,15 +160,13 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
     tool_results = []
     response_text = ""
     tool_calls = []
-    
+
     # Initialize handlers if not provided
     tool_handlers = tool_handlers or {}
-    
+
     # First, collect all content items
     for content in content_list:
-        if content.type == "text":
-            response_text = content.text
-        elif content.type == "tool_use":
+        if content.type == "tool_use":
             has_tool_calls = True
             # Store the tool call data for later processing
             tool_calls.append({
@@ -187,20 +174,20 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
                 "args": content.input,
                 "id": content.id
             })
-    
+
     # If no tool calls, return early
     if not has_tool_calls:
-        return has_tool_calls, tool_results, response_text
-    
+        return has_tool_calls, tool_results
+
     # Now process all tool calls
     for tool_call in tool_calls:
         tool_name = tool_call["name"]
         tool_args = tool_call["args"]
         tool_id = tool_call["id"]
-        
+
         if debug:
             print(f"Calling tool {tool_name} with args {tool_args}")
-        
+
         try:
             # Check if we have a custom handler for this tool
             if tool_name in tool_handlers:
@@ -217,13 +204,13 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
             else:
                 # No handler found for this tool
                 raise ValueError(f"No handler found for tool {tool_name}")
-            
+
             # Process and format the result
             formatted_result = format_tool_result(result)
-            
+
             if debug:
                 print(f"Tool result: {str(formatted_result)[:150]}...")
-                
+
             tool_results.append({
                 "tool_use_id": tool_id,
                 "content": str(formatted_result),
@@ -232,29 +219,29 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
         except Exception as e:
             import sys
             import traceback
-            
+
             error_msg = f"Error processing tool {tool_name}: {str(e)}"
             if debug:
                 print(f"ERROR: {error_msg}", file=sys.stderr)
                 print("Traceback:", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
-                
+
             tool_results.append({
                 "tool_use_id": tool_id,
                 "content": error_msg,
                 "is_error": True,
             })
-            
-    return has_tool_calls, tool_results, response_text
+
+    return has_tool_calls, tool_results
 
 
 def add_tool_results_to_conversation(
-    messages: List[Dict[str, Any]], 
-    tool_results: List[Dict[str, Any]], 
+    messages: List[Dict[str, Any]],
+    tool_results: List[Dict[str, Any]],
     debug: bool = False
 ):
     """Add tool results to the conversation as User messages.
-    
+
     Args:
         messages: The conversation messages
         tool_results: The tool results to add
@@ -292,7 +279,7 @@ def format_tool_result(result: Any) -> str:
     """
     import sys
     debug = False  # Only enable for deep debugging
-    
+
     # Extract content based on result type
     content = None
 
@@ -302,20 +289,20 @@ def format_tool_result(result: Any) -> str:
         is_error = result.is_error
     elif isinstance(result, dict) and "is_error" in result:
         is_error = result["is_error"]
-    
+
     # Check if the result has error message
     error_message = None
     if hasattr(result, "error"):
         error_message = result.error
     elif isinstance(result, dict) and "error" in result:
         error_message = result["error"]
-    
+
     # Handle error case first
     if is_error and error_message:
         if debug:
             print(f"TOOL ERROR: {error_message}", file=sys.stderr)
         return f"ERROR: {error_message}"
-    
+
     # Extract regular content
     if hasattr(result, "response"):
         content = result.response
