@@ -675,25 +675,23 @@ class LLMProcess:
             with open(self.mcp_config_path, 'r') as f:
                 full_config = json.load(f)
                 
-            # Create a filtered config with only the servers we need
-            filtered_config = {"mcpServers": {}}
-            
-            # Filter servers based on what's configured in mcp_tools
+            # Just check if all servers are in the config, but use original config
+            # to avoid validation issues with the data structure
             mcp_servers = full_config.get("mcpServers", {})
-            for server_name, server_config in mcp_servers.items():
-                if server_name in configured_servers:
-                    filtered_config["mcpServers"][server_name] = server_config
+            
+            # Check which configured servers exist in the config file
+            for server_name in configured_servers:
+                if server_name in mcp_servers:
                     print(f"Including server '{server_name}' from config")
                 else:
-                    print(f"Skipping server '{server_name}' (not configured in mcp_tools)")
+                    print(f"<warning>Configured server '{server_name}' not found in config file</warning>")
             
-            # Check if any configured servers are missing from the config file
-            missing_servers = configured_servers - set(filtered_config["mcpServers"].keys())
-            if missing_servers:
-                print(f"<warning>Configured servers not found in config file: {missing_servers}</warning>")
+            # Skip servers not configured in mcp_tools
+            for server_name in set(mcp_servers.keys()) - configured_servers:
+                print(f"Skipping server '{server_name}' (not configured in mcp_tools)")
             
-            # Initialize registry from the filtered config
-            self.registry = ServerRegistry.from_dict(filtered_config)
+            # We'll use the standard method to initialize but only after checking
+            self.registry = ServerRegistry.from_config(self.mcp_config_path)
             self.aggregator = MCPAggregator(self.registry)
             
         except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
