@@ -48,7 +48,7 @@
 - Supports system prompts from strings or files
 - Maintains conversation state
 - Parameters configurable via TOML
-- File preloading for context (via [preload] section in TOML or preload_files() method)
+- File preloading for context via system prompt (using [preload] section in TOML or preload_files() method)
 - Custom display names for models in CLI interfaces
 - Supports OpenAI, Anthropic, and Vertex AI models
 - MCP (Model Context Protocol) support for tool usage
@@ -166,3 +166,14 @@
 10. Updated CLAUDE.md with detailed testing procedures
 11. Added MISC.md with additional documentation and advanced usage
 12. Added LLMPROC_DEBUG environment variable for detailed debugging
+
+## Session Summary (2025-03-21)
+1. Improved preloaded files implementation by appending to system prompt
+2. Changed preloaded content from user/assistant messages to part of system prompt
+3. Added tracking of original system prompt for proper reset handling
+4. Updated reset_state to maintain or remove preloaded content correctly
+5. Fixed bug in MCP tools response content processing
+6. Added comprehensive tests for the new preload implementation
+7. Updated documentation to reflect the new approach
+8. Simplified preload logic to be more direct
+9. Enhanced reference.toml with clearer explanation of preload functionality
