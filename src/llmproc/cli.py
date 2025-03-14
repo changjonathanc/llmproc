@@ -123,7 +123,10 @@ def main(config_path=None) -> None:
             click.echo(f"\n{process.display_name}> {response}")
 
     except Exception as e:
+        import traceback
         click.echo(f"Error: {str(e)}", err=True)
+        click.echo("\nFull traceback:", err=True)
+        traceback.print_exc()
         sys.exit(1)
 
 

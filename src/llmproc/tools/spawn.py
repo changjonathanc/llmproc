@@ -1,8 +1,6 @@
 """Spawn tool for LLMProcess to interact with linked programs."""
 
 import asyncio
-import os
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from llmproc.llm_process import LLMProcess
@@ -11,7 +9,6 @@ from llmproc.llm_process import LLMProcess
 async def spawn_tool(
     program_name: str,
     query: str,
-    state: Optional[Dict[str, Any]] = None,
     llm_process: Optional[LLMProcess] = None,
 ) -> Dict[str, Any]:
     """Execute a query with a linked LLM program.
@@ -22,7 +19,6 @@ async def spawn_tool(
     Args:
         program_name: The name of the linked program to call
         query: The query to send to the linked program
-        state: Optional state context to pass to the linked program
         llm_process: The parent LLMProcess instance with access to linked programs
         
     Returns:
