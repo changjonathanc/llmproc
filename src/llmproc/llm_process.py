@@ -21,7 +21,6 @@ from llmproc.providers import get_provider_client
 try:
     from llmproc.providers.anthropic_tools import (
         dump_api_error,
-        filter_empty_text_blocks,
         run_anthropic_with_tools,
     )
 
