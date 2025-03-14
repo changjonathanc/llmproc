@@ -774,17 +774,9 @@ class LLMProcess:
                     if not found:
                         print(f"<warning>Tool '{tool_name}' not found for server '{server_name}'</warning>")
         
-        # If no tools were registered but "all" was specified for any server,
-        # register all available tools as a last resort
-        if not self.tools and any(config == "all" for config in self.mcp_tools.values()):
-            print("<warning>No tools matched specific criteria. Registering all tools...</warning>")
-            # Use the server mapping to ensure proper namespacing
-            for server_name, server_tools in server_tools_map.items():
-                for tool in server_tools:
-                    namespaced_name = f"{server_name}__{tool.name}"
-                    if namespaced_name not in registered_tools:
-                        self.tools.append(self._format_tool_for_anthropic(tool, server_name))
-                        registered_tools.add(namespaced_name)
+        # If no tools were registered, show a warning
+        if not self.tools:
+            print("<warning>No tools were registered. Check your MCP configuration.</warning>")
         
         # Show summary of registered tools
         print(f"Registered {len(self.tools)} tools from MCP registry:")
