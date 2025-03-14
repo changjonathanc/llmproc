@@ -48,6 +48,7 @@ class LLMProcess:
         linked_programs_instances: dict[str, "LLMProcess"] | None = None,
         config_dir: Path | None = None,
         parameters: dict[str, Any] = None,
+        tools: dict[str, Any] = None,
     ) -> None:
         """Initialize LLMProcess.
 
@@ -63,7 +64,8 @@ class LLMProcess:
             linked_programs: Dictionary mapping program names to TOML configuration paths
             linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
             config_dir: Base directory for resolving relative paths in configurations
-            **kwargs: Additional parameters to pass to the model
+            parameters: Dictionary from the [parameters] section in TOML
+            tools: Dictionary from the [tools] section in TOML
 
         Raises:
             NotImplementedError: If the provider is not implemented
@@ -78,22 +80,25 @@ class LLMProcess:
         self.config_dir = config_dir
         self.preloaded_content = {}
         
-        # Initialize parameters from the provided dict or empty dict
-        parameters = parameters or {}
+        # Initialize parameters from the [parameters] section
+        self.parameters = parameters or {}
         
-        # Separate core API parameters from configuration parameters
+        # Initialize tools configuration from the [tools] section
+        tools_config = tools or {}
+        self.enabled_tools = tools_config.get("enabled", [])
+        
+        # Extract API parameters from [parameters]
         self.api_params = {}
-        if "temperature" in parameters:
-            self.api_params["temperature"] = parameters.pop("temperature")
-        if "max_tokens" in parameters:
-            self.api_params["max_tokens"] = parameters.pop("max_tokens")
+        if "temperature" in self.parameters:
+            self.api_params["temperature"] = self.parameters.pop("temperature")
+        if "max_tokens" in self.parameters:
+            self.api_params["max_tokens"] = self.parameters.pop("max_tokens")
         
-        # Extract configuration parameters
-        self.enabled_tools = parameters.pop("enabled_tools", [])
-        self.debug_tools = parameters.pop("debug_tools", False)
+        # Configuration flags
+        self.debug_tools = self.parameters.pop("debug_tools", False)
         
-        # Store remaining parameters (might be provider-specific API parameters)
-        self.extra_params = parameters
+        # Store remaining parameters as extra params for API calls
+        self.extra_params = self.parameters.copy()
 
         # MCP Configuration
         self.mcp_enabled = False
@@ -133,13 +138,13 @@ class LLMProcess:
             asyncio.run(self._initialize_mcp_tools())
             
             # Check if we need to register the spawn tool
-            if "spawn" in self.enabled_tools and self.has_linked_programs:
-                # Register the spawn tool
-                self._register_spawn_tool()
+        if "spawn" in self.enabled_tools and self.has_linked_programs:
+            # Register the spawn tool
+            self._register_spawn_tool()
 
         # Get project_id and region for Vertex if provided in parameters
-        project_id = kwargs.pop("project_id", None)
-        region = kwargs.pop("region", None)
+        project_id = parameters.pop("project_id", None) if parameters else None
+        region = parameters.pop("region", None) if parameters else None
 
         # Initialize the client
         self.client = get_provider_client(provider, model_name, project_id, region)
@@ -300,10 +305,6 @@ class LLMProcess:
         # Get enabled tools
         enabled_tools = tools_config.get("enabled", [])
         
-        # Add enabled_tools to parameters
-        if enabled_tools:
-            parameters["enabled_tools"] = enabled_tools
-        
         # Create the LLMProcess instance
         return cls(
             model_name=model["name"],
@@ -316,6 +317,7 @@ class LLMProcess:
             linked_programs=linked_programs,
             config_dir=path.parent,
             parameters=parameters,
+            tools=tools_config,
         )
 
     async def run(self, user_input: str, max_iterations: int = 10) -> str:
