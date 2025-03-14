@@ -44,7 +44,10 @@ class LLMProcess:
         display_name: str | None = None,
         mcp_config_path: str | None = None,
         mcp_tools: dict[str, list[str] | str] | None = None,
-        **kwargs: Any,
+        linked_programs: dict[str, Path | str] | None = None,
+        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
+        config_dir: Path | None = None,
+        parameters: dict[str, Any] = None,
     ) -> None:
         """Initialize LLMProcess.
 
@@ -57,6 +60,9 @@ class LLMProcess:
             mcp_config_path: Path to MCP servers configuration file
             mcp_tools: Dictionary mapping server names to tools to enable
                        Value can be a list of tool names or "all" to enable all tools
+            linked_programs: Dictionary mapping program names to TOML configuration paths
+            linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
+            config_dir: Base directory for resolving relative paths in configurations
             **kwargs: Additional parameters to pass to the model
 
         Raises:
@@ -69,13 +75,42 @@ class LLMProcess:
         self.provider = provider
         self.system_prompt = system_prompt
         self.display_name = display_name or f"{provider.title()} {model_name}"
-        self.parameters = kwargs
+        self.config_dir = config_dir
         self.preloaded_content = {}
+        
+        # Initialize parameters from the provided dict or empty dict
+        parameters = parameters or {}
+        
+        # Separate core API parameters from configuration parameters
+        self.api_params = {}
+        if "temperature" in parameters:
+            self.api_params["temperature"] = parameters.pop("temperature")
+        if "max_tokens" in parameters:
+            self.api_params["max_tokens"] = parameters.pop("max_tokens")
+        
+        # Extract configuration parameters
+        self.enabled_tools = parameters.pop("enabled_tools", [])
+        self.debug_tools = parameters.pop("debug_tools", False)
+        
+        # Store remaining parameters (might be provider-specific API parameters)
+        self.extra_params = parameters
 
         # MCP Configuration
         self.mcp_enabled = False
         self.mcp_tools = {}
         self.tools = []
+        
+        # Linked Programs Configuration
+        self.linked_programs = {}
+        self.has_linked_programs = False
+        
+        # Initialize linked programs if provided
+        if linked_programs_instances:
+            self.has_linked_programs = True
+            self.linked_programs = linked_programs_instances
+        elif linked_programs:
+            self.has_linked_programs = True
+            self._initialize_linked_programs(linked_programs)
 
         # Setup MCP if configured
         if mcp_config_path and mcp_tools:
@@ -96,6 +131,11 @@ class LLMProcess:
 
             # Initialize MCP registry and tools asynchronously
             asyncio.run(self._initialize_mcp_tools())
+            
+            # Check if we need to register the spawn tool
+            if "spawn" in self.enabled_tools and self.has_linked_programs:
+                # Register the spawn tool
+                self._register_spawn_tool()
 
         # Get project_id and region for Vertex if provided in parameters
         project_id = kwargs.pop("project_id", None)
@@ -188,6 +228,8 @@ class LLMProcess:
         parameters = config.get("parameters", {})
         preload_config = config.get("preload", {})
         mcp_config = config.get("mcp", {})
+        linked_programs_config = config.get("linked_programs", {})
+        tools_config = config.get("tools", {})
 
         if "system_prompt_file" in prompt_config:
             system_prompt_path = path.parent / prompt_config["system_prompt_file"]
@@ -247,7 +289,22 @@ class LLMProcess:
                         raise ValueError(
                             f"Invalid tool configuration for server '{server_name}'. Expected 'all' or a list of tool names"
                         )
-
+        
+        # Process linked programs configuration
+        linked_programs = None
+        if linked_programs_config:
+            linked_programs = {}
+            for program_name, program_path in linked_programs_config.items():
+                linked_programs[program_name] = program_path
+                
+        # Get enabled tools
+        enabled_tools = tools_config.get("enabled", [])
+        
+        # Add enabled_tools to parameters
+        if enabled_tools:
+            parameters["enabled_tools"] = enabled_tools
+        
+        # Create the LLMProcess instance
         return cls(
             model_name=model["name"],
             provider=model["provider"],
@@ -256,7 +313,9 @@ class LLMProcess:
             display_name=display_name,
             mcp_config_path=mcp_config_path,
             mcp_tools=mcp_tools,
-            **parameters,
+            linked_programs=linked_programs,
+            config_dir=path.parent,
+            parameters=parameters,
         )
 
     async def run(self, user_input: str, max_iterations: int = 10) -> str:
@@ -304,23 +363,14 @@ class LLMProcess:
 
         self.state.append({"role": "user", "content": user_input})
 
-        # Extract common parameters
-        temperature = self.parameters.get("temperature", 0.7)
-        max_tokens = self.parameters.get("max_tokens", 1000)
-
         # Create provider-specific API calls
         if self.provider == "openai":
             # Prepare API parameters
             api_params = {
                 "model": self.model_name,
                 "messages": self.state,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                **{
-                    k: v
-                    for k, v in self.parameters.items()
-                    if k not in ["temperature", "max_tokens"]
-                },
+                **self.api_params,
+                **self.extra_params
             }
 
             try:
@@ -408,8 +458,7 @@ class LLMProcess:
                                 messages.append(msg_copy)
 
                                 # Add debugging info to console if debug is enabled
-                                debug = self.parameters.get("debug_tools", False)
-                                if debug:
+                                if self.debug_tools:
                                     print(
                                         f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
                                     )
@@ -423,13 +472,8 @@ class LLMProcess:
                     "model": self.model_name,
                     "system": system_prompt,
                     "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    **{
-                        k: v
-                        for k, v in self.parameters.items()
-                        if k not in ["temperature", "max_tokens"]
-                    },
+                    **self.api_params,
+                    **self.extra_params
                 }
 
                 try:
@@ -513,8 +557,7 @@ class LLMProcess:
                             messages.append(msg_copy)
 
                             # Add debugging info to console if debug is enabled
-                            debug = self.parameters.get("debug_tools", False)
-                            if debug:
+                            if self.debug_tools:
                                 print(
                                     f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
                                 )
@@ -528,13 +571,8 @@ class LLMProcess:
                 "model": self.model_name,
                 "system": system_prompt,
                 "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                **{
-                    k: v
-                    for k, v in self.parameters.items()
-                    if k not in ["temperature", "max_tokens"]
-                },
+                **self.api_params,
+                **self.extra_params
             }
 
             try:
@@ -604,11 +642,6 @@ class LLMProcess:
                 "Anthropic tools support requires the llmproc.providers.anthropic_tools module."
             )
 
-        # Extract common parameters
-        temperature = self.parameters.get("temperature", 0.7)
-        max_tokens = self.parameters.get("max_tokens", 1000)
-        debug = self.parameters.get("debug_tools", False)
-
         # Extract system prompt and filter messages
         system_prompt = None
         messages = []
@@ -620,7 +653,7 @@ class LLMProcess:
                 messages.append(msg)
 
         # Filter messages to remove empty text blocks
-        messages = filter_empty_text_blocks(messages, debug)
+        messages = filter_empty_text_blocks(messages, self.debug_tools)
 
         # Run the tool interaction loop through the specialized module
         final_response = await run_anthropic_with_tools(
@@ -630,15 +663,10 @@ class LLMProcess:
             messages=messages,
             tools=self.tools,
             aggregator=self.aggregator,
-            temperature=temperature,
-            max_tokens=max_tokens,
             max_iterations=max_iterations,
-            debug=debug,
-            **{
-                k: v
-                for k, v in self.parameters.items()
-                if k not in ["temperature", "max_tokens", "debug_tools"]
-            },
+            debug=self.debug_tools,
+            api_params=self.api_params,
+            extra_params=self.extra_params
         )
 
         # Add the final response to the permanent state
@@ -783,6 +811,80 @@ class LLMProcess:
         for i, tool in enumerate(self.tools, 1):
             print(f"  {i}. {tool['name']} - {tool['description'][:60]}...")
     
+    def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
+        """Initialize linked LLM programs from their TOML configurations.
+        
+        Args:
+            linked_programs: Dictionary mapping program names to TOML configuration paths
+            
+        Raises:
+            FileNotFoundError: If a linked program configuration file cannot be found
+        """
+        for program_name, config_path in linked_programs.items():
+            path = Path(config_path)
+            
+            # If path is relative and we have a config_dir, resolve it
+            if not path.is_absolute() and self.config_dir:
+                path = self.config_dir / path
+                
+            if not path.exists():
+                print(f"<warning>Linked program configuration at {path} does not exist</warning>")
+                continue
+                
+            try:
+                # Initialize the linked program using the same from_toml class method
+                linked_program = LLMProcess.from_toml(path)
+                self.linked_programs[program_name] = linked_program
+                print(f"Initialized linked program '{program_name}' from {path}")
+            except Exception as e:
+                print(f"<warning>Failed to initialize linked program '{program_name}': {str(e)}</warning>")
+    
+    def _register_spawn_tool(self) -> None:
+        """Register the spawn tool for interacting with linked programs."""
+        from llmproc.tools import spawn_tool
+        
+        # Only register if we have linked programs
+        if not self.linked_programs:
+            print("<warning>No linked programs available. Spawn tool not registered.</warning>")
+            return
+            
+        # Create the spawn tool definition for Anthropic API
+        spawn_tool_def = {
+            "name": "spawn",
+            "description": "Execute a query with a linked LLM program that may be specialized for specific tasks.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "program_name": {
+                        "type": "string", 
+                        "description": "Name of the linked program to call"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "The query to send to the linked program"
+                    },
+                    "state": {
+                        "type": "object",
+                        "description": "Optional state context to pass to the linked program"
+                    }
+                },
+                "required": ["program_name", "query"]
+            }
+        }
+        
+        # Add the custom handler for the spawn tool
+        # We'll store a reference to this LLMProcess instance in the tool's environment
+        spawn_tool_def["handler"] = lambda args: spawn_tool(
+            program_name=args.get("program_name"),
+            query=args.get("query"),
+            state=args.get("state"),
+            llm_process=self
+        )
+        
+        # Add to the tools list
+        self.tools.append(spawn_tool_def)
+        print(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
+        
     def _format_tool_for_anthropic(self, tool, server_name=None):
         """Format a tool for Anthropic API.
         
@@ -825,14 +927,13 @@ class LLMProcess:
             List of tool results with standardized format
         """
         tool_results = []
-        debug = self.parameters.get("debug_tools", False)
 
         for tool_call in tool_calls:
             tool_name = tool_call.name
             tool_args = tool_call.input
             tool_id = tool_call.id
 
-            if debug:
+            if self.debug_tools:
                 print(f"\nProcessing tool call: {tool_name}")
                 print(f"  Tool ID: {tool_id}")
                 print(f"  Args: {json.dumps(tool_args, indent=2)[:200]}...")
@@ -846,7 +947,7 @@ class LLMProcess:
 
                 end_time = asyncio.get_event_loop().time()
 
-                if debug:
+                if self.debug_tools:
                     print(f"  Tool execution time: {end_time - start_time:.2f}s")
 
                 # Extract content and error status based on result type
@@ -863,7 +964,7 @@ class LLMProcess:
                         json.dumps(content)
                     except (TypeError, OverflowError, ValueError):
                         # If it can't be serialized, convert to string
-                        if debug:
+                        if self.debug_tools:
                             print(
                                 "  Content is not JSON-serializable, converting to string"
                             )
@@ -876,6 +977,8 @@ class LLMProcess:
                     try:
                         json.dumps(content)
                     except (TypeError, OverflowError, ValueError):
+                        if self.debug_tools:
+                            print("  Content is not JSON-serializable, converting to string")
                         content = str(content)
 
                 # Check error status
@@ -895,7 +998,7 @@ class LLMProcess:
                     "is_error": is_error,
                 }
 
-                if debug:
+                if self.debug_tools:
                     print(f"  Result: {'ERROR' if is_error else 'SUCCESS'}")
                     if isinstance(content, dict):
                         print(
@@ -908,7 +1011,7 @@ class LLMProcess:
                 # For errors in the tool execution itself, create an error result
                 error_message = f"Error calling MCP tool {tool_name}: {str(e)}"
 
-                if debug:
+                if self.debug_tools:
                     print(f"  EXCEPTION: {error_message}")
 
                 tool_result = {

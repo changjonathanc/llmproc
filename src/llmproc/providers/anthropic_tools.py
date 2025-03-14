@@ -12,11 +12,10 @@ async def run_anthropic_with_tools(
     messages: List[Dict[str, Any]],
     tools: List[Dict[str, Any]],
     aggregator,
-    temperature: float = 0.7,
-    max_tokens: int = 1000,
     max_iterations: int = 10,
     debug: bool = False,
-    **kwargs,
+    api_params: Dict[str, Any] = None,
+    extra_params: Dict[str, Any] = None,
 ) -> str:
     """Run Anthropic with tool support.
 
@@ -30,11 +29,10 @@ async def run_anthropic_with_tools(
         messages: The conversation messages
         tools: The list of available tools
         aggregator: The MCP aggregator for tool execution
-        temperature: The temperature for generation
-        max_tokens: The maximum number of tokens to generate
         max_iterations: Maximum number of tool-calling iterations
         debug: Whether to enable debug output
-        **kwargs: Additional parameters to pass to the Anthropic API
+        api_params: Core API parameters (temperature, max_tokens)
+        extra_params: Additional API parameters
 
     Returns:
         The final model response as a string
@@ -42,6 +40,10 @@ async def run_anthropic_with_tools(
     # Track iterations to prevent infinite loops
     iterations = 0
     final_response = ""
+
+    # Initialize parameters if not provided
+    api_params = api_params or {}
+    extra_params = extra_params or {}
 
     if debug:
         print("\n=== Starting Anthropic Tool Execution ===")
@@ -55,15 +57,15 @@ async def run_anthropic_with_tools(
 
         try:
             # Prepare API parameters
-            api_params = prepare_api_params(
-                model_name, system_prompt, messages, temperature, max_tokens, tools, kwargs
+            api_call_params = prepare_api_params(
+                model_name, system_prompt, messages, tools, api_params, extra_params
             )
 
             # Call Claude with current conversation
             try:
                 if debug:
                     print(f"Calling Anthropic API with {len(messages)} messages...")
-                response = await client.messages.create(**api_params)
+                response = await client.messages.create(**api_call_params)
             except Exception as e:
                 dump_file = dump_api_error(
                     e,
@@ -71,8 +73,8 @@ async def run_anthropic_with_tools(
                     model_name,
                     system_prompt,
                     messages,
-                    temperature,
-                    max_tokens,
+                    api_params.get("temperature"),
+                    api_params.get("max_tokens"),
                     tools,
                     iterations,
                 )
@@ -125,9 +127,8 @@ def prepare_api_params(
     model_name: str,
     system_prompt: str,
     messages: List[Dict[str, Any]],
-    temperature: float,
-    max_tokens: int,
     tools: List[Dict[str, Any]],
+    api_params: Dict[str, Any],
     extra_params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Prepare API parameters for Anthropic request.
@@ -136,9 +137,8 @@ def prepare_api_params(
         model_name: The name of the model to use
         system_prompt: The system prompt
         messages: The conversation messages
-        temperature: The temperature parameter
-        max_tokens: The maximum number of tokens
         tools: The tools configuration
+        api_params: Core API parameters (temperature, max_tokens)
         extra_params: Additional parameters
         
     Returns:
@@ -148,14 +148,9 @@ def prepare_api_params(
         "model": model_name,
         "system": system_prompt,
         "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
         "tools": tools,
-        **{
-            k: v
-            for k, v in extra_params.items()
-            if k not in ["temperature", "max_tokens", "debug_tools"]
-        },
+        **api_params,
+        **extra_params,
     }
 
 

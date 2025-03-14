@@ -1,0 +1,15 @@
+[model]
+name = "claude-3-haiku-20240307"
+provider = "anthropic"
+
+[prompt]
+system_prompt = """You are a helpful assistant with knowledge of the LLMProc project.
+Use the preloaded project files to answer questions about LLMProc functionality and usage."""
+
+[preload]
+# Preload key project files for reference
+files = [
+  "../../README.md",
+  "../../pyproject.toml",
+  "../../src/llmproc/llm_process.py",
+]
