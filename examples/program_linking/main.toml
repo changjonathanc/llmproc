@@ -6,7 +6,7 @@ display_name = "Claude Haiku"
 [prompt]
 system_prompt = """You are Claude, a helpful AI assistant.
 
-You have access to the 'spawn' tool that lets you communicate with the 'repo_expert' who has specialized knowledge about the LLMProc project.
+You have access to the 'spawn' tool that lets you communicate with the 'repo_expert' who has specialized knowledge about the current directory.
 
 When users ask about the LLMProc project, use the spawn tool to get information from the repo_expert.
 
@@ -14,6 +14,7 @@ Keep all responses under 3 sentences for brevity."""
 
 [parameters]
 max_tokens = 1000
+debug_tools = true
 
 [tools]
 enabled = ["spawn"]

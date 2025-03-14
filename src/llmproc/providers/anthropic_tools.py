@@ -219,9 +219,14 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
                 "is_error": False,
             })
         except Exception as e:
+            import sys
+            import traceback
+            
             error_msg = f"Error processing tool {tool_name}: {str(e)}"
             if debug:
-                print(f"ERROR: {error_msg}")
+                print(f"ERROR: {error_msg}", file=sys.stderr)
+                print("Traceback:", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
                 
             tool_results.append({
                 "tool_use_id": tool_id,
@@ -274,24 +279,59 @@ def format_tool_result(result: Any) -> str:
     Returns:
         Formatted result as a string
     """
+    import sys
+    
+    # Logging for debugging
+    print(f"Tool raw result type: {type(result).__name__}", file=sys.stderr)
+    print(f"Tool raw result: {str(result)[:100]}...", file=sys.stderr)
+    
     # Extract content based on result type
     content = None
 
-    # Check if the result has content attribute
-    if hasattr(result, "content"):
+    # Check if the result has specific attributes for errors
+    is_error = False
+    if hasattr(result, "is_error"):
+        is_error = result.is_error
+    elif isinstance(result, dict) and "is_error" in result:
+        is_error = result["is_error"]
+    
+    # Check if the result has error message
+    error_message = None
+    if hasattr(result, "error"):
+        error_message = result.error
+    elif isinstance(result, dict) and "error" in result:
+        error_message = result["error"]
+    
+    # Handle error case first
+    if is_error and error_message:
+        print(f"TOOL ERROR: {error_message}", file=sys.stderr)
+        return f"ERROR: {error_message}"
+    
+    # Extract regular content
+    if hasattr(result, "response"):
+        content = result.response
+    elif hasattr(result, "content"):
         content = result.content
+    elif isinstance(result, dict) and "response" in result:
+        content = result["response"]
+    elif isinstance(result, dict) and "content" in result:
+        content = result["content"]
     else:
-        # If no content attribute, use the whole result
+        # If no specific content attribute, use the whole result
         content = result
 
     # Try to make it JSON serializable
     try:
         # This will validate if the content can be serialized to JSON
         json.dumps(content)
+        
+        print(f"Formatted tool result: {str(content)[:100]}...", file=sys.stderr)
         return content
     except (TypeError, OverflowError, ValueError):
         # If it can't be serialized, convert to string
-        return str(content)
+        formatted = str(content)
+        print(f"Formatted tool result (as string): {formatted[:100]}...", file=sys.stderr)
+        return formatted
 
 
 def dump_api_error(

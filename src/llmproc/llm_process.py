@@ -933,6 +933,18 @@ class LLMProcess:
             llm_process=self
         )
         
+        # Print debug info about linked programs
+        if self.debug_tools:
+            import sys
+            print("\nLinked programs details:", file=sys.stderr)
+            for prog_name, prog_instance in self.linked_programs.items():
+                print(f"  - {prog_name}: {type(prog_instance).__name__}", file=sys.stderr)
+                print(f"    Model: {prog_instance.model_name}", file=sys.stderr)
+                print(f"    Provider: {prog_instance.provider}", file=sys.stderr)
+                # Check if preloaded files are present
+                if hasattr(prog_instance, "preloaded_content") and prog_instance.preloaded_content:
+                    print(f"    Preloaded files: {list(prog_instance.preloaded_content.keys())}", file=sys.stderr)
+        
         # Keep the handler and tool definition separate
         self.tool_handlers = getattr(self, "tool_handlers", {})
         self.tool_handlers["spawn"] = spawn_tool_def["handler"]

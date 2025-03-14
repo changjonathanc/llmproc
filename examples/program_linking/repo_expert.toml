@@ -8,6 +8,7 @@ Use the preloaded project files to answer questions about LLMProc functionality 
 
 [parameters]
 max_tokens = 1000
+debug_tools = true
 
 [preload]
 # Preload key project files for reference
