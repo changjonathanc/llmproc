@@ -87,18 +87,30 @@ class LLMProcess:
         tools_config = tools or {}
         self.enabled_tools = tools_config.get("enabled", [])
         
-        # Extract API parameters from [parameters]
+        # Extract known parameters from [parameters]
         self.api_params = {}
+        
+        # Extract commonly used parameters
         if "temperature" in self.parameters:
             self.api_params["temperature"] = self.parameters.pop("temperature")
         if "max_tokens" in self.parameters:
             self.api_params["max_tokens"] = self.parameters.pop("max_tokens")
+        if "top_p" in self.parameters:
+            self.api_params["top_p"] = self.parameters.pop("top_p")
+        if "frequency_penalty" in self.parameters:
+            self.api_params["frequency_penalty"] = self.parameters.pop("frequency_penalty")
+        if "presence_penalty" in self.parameters:
+            self.api_params["presence_penalty"] = self.parameters.pop("presence_penalty")
         
         # Configuration flags
         self.debug_tools = self.parameters.pop("debug_tools", False)
         
-        # Store remaining parameters as extra params for API calls
-        self.extra_params = self.parameters.copy()
+        # Check for and warn about any remaining parameters
+        if self.parameters:
+            remaining_params = list(self.parameters.keys())
+            print(f"<warning>Unknown parameters in config: {remaining_params}</warning>")
+            # We don't use these parameters, so clear them
+            self.parameters.clear()
 
         # MCP Configuration
         self.mcp_enabled = False
@@ -228,6 +240,15 @@ class LLMProcess:
         with path.open("rb") as f:
             config = tomllib.load(f)
 
+        # Check for recognized sections
+        known_sections = {
+            "model", "prompt", "parameters", "preload", 
+            "mcp", "linked_programs", "tools"
+        }
+        unknown_sections = set(config.keys()) - known_sections
+        if unknown_sections:
+            print(f"<warning>Unknown sections in TOML file: {list(unknown_sections)}</warning>")
+            
         model = config["model"]
         prompt_config = config.get("prompt", {})
         parameters = config.get("parameters", {})
@@ -371,8 +392,7 @@ class LLMProcess:
             api_params = {
                 "model": self.model_name,
                 "messages": self.state,
-                **self.api_params,
-                **self.extra_params
+                **self.api_params
             }
 
             try:

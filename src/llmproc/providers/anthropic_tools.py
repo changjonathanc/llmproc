@@ -31,7 +31,6 @@ async def run_anthropic_with_tools(
     tools = llm_process.tools
     debug = getattr(llm_process, 'debug_tools', False)
     api_params = getattr(llm_process, 'api_params', {})
-    extra_params = getattr(llm_process, 'extra_params', {})
     tool_handlers = getattr(llm_process, 'tool_handlers', {})
     aggregator = getattr(llm_process, 'aggregator', None)
     
@@ -52,7 +51,7 @@ async def run_anthropic_with_tools(
         try:
             # Prepare API parameters
             api_call_params = prepare_api_params(
-                model_name, system_prompt, messages, tools, api_params, extra_params
+                model_name, system_prompt, messages, tools, api_params
             )
 
             # Call Claude with current conversation
@@ -123,7 +122,6 @@ def prepare_api_params(
     messages: List[Dict[str, Any]],
     tools: List[Dict[str, Any]],
     api_params: Dict[str, Any],
-    extra_params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Prepare API parameters for Anthropic request.
     
@@ -132,8 +130,7 @@ def prepare_api_params(
         system_prompt: The system prompt
         messages: The conversation messages
         tools: The tools configuration
-        api_params: Core API parameters (temperature, max_tokens)
-        extra_params: Additional parameters
+        api_params: Core API parameters (temperature, max_tokens, etc.)
         
     Returns:
         A dictionary of API parameters
@@ -144,7 +141,6 @@ def prepare_api_params(
         "messages": messages,
         "tools": tools,
         **api_params,
-        **extra_params,
     }
 
 
