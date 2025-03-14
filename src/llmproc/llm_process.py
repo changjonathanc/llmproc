@@ -675,140 +675,111 @@ class LLMProcess:
         for tool in results.tools:
             print(f" - {tool.name}")
 
-        # Organize tools by server name for easier filtering
-        server_tools = {}
-        for tool in results.tools:
-            try:
-                # Extract server name from tool name (prefix before first '.')
-                parts = tool.name.split(".")
-                if len(parts) > 1:
-                    server_name = parts[0]
-                    tool_name = parts[1]  # The actual tool name without server prefix
-                else:
-                    # If no prefix, assume the whole name is both server and tool name
-                    server_name = "unknown"
-                    tool_name = tool.name
-
-                # Add to server_tools dictionary in multiple ways to increase matching chance
-                # 1. By server name
-                if server_name not in server_tools:
-                    server_tools[server_name] = []
-                server_tools[server_name].append(tool)
-
-                # 2. By full name as key
-                if tool.name not in server_tools:
-                    server_tools[tool.name] = []
-                server_tools[tool.name].append(tool)
-
-                # 3. By tool name
-                if tool_name not in server_tools:
-                    server_tools[tool_name] = []
-                server_tools[tool_name].append(tool)
-            except Exception as e:
-                print(f"<warning>Error processing tool {tool.name}: {str(e)}</warning>")
-
-        # Register tools based on user configuration
         print(f"Tool configuration: {self.mcp_tools}")
-        registered_tools = set()  # Track registered tools to avoid duplicates
+        
+        # Create a single-pass lookup for all tools
+        available_tools = {}
+        for tool in results.tools:
+            # Store by full name
+            available_tools[tool.name] = tool
+            
+            # Also store by server.toolname parts if applicable
+            parts = tool.name.split(".", 1)
+            if len(parts) > 1:
+                server_name, tool_name = parts
+                # Add shortcuts for easy finding: servername -> list of tools for that server
+                if server_name not in available_tools:
+                    available_tools[server_name] = []
+                if isinstance(available_tools[server_name], list):
+                    available_tools[server_name].append(tool)
 
-        # First try the traditional filtering approach
+        # Track registered tools to avoid duplicates
+        registered_tools = set()
+        
+        # Process each server and tool configuration
         for server_name, tool_config in self.mcp_tools.items():
-            if server_name in server_tools:
-                server_tool_list = server_tools[server_name]
-                print(f"Found {len(server_tool_list)} tools for server '{server_name}'")
-
-                # Apply the filtering based on configuration
-                if tool_config == "all":
-                    # Enable all tools from this server
-                    for tool in server_tool_list:
+            # Case 1: Register all tools for a server
+            if tool_config == "all":
+                # Find all tools that belong to this server
+                server_tools = []
+                for tool in results.tools:
+                    if tool.name.startswith(f"{server_name}.") or tool.name == server_name:
+                        server_tools.append(tool)
+                
+                if server_tools:
+                    print(f"Registering all tools for server '{server_name}'")
+                    for tool in server_tools:
                         if tool.name not in registered_tools:
-                            self.tools.append(
-                                {
-                                    "name": tool.name,
-                                    "description": tool.description,
-                                    "input_schema": tool.inputSchema,
-                                }
-                            )
+                            self.tools.append(self._format_tool_for_anthropic(tool))
                             registered_tools.add(tool.name)
-                elif isinstance(tool_config, list):
-                    # Enable specific tools
-                    for tool_name in tool_config:
-                        # Try different name patterns
-                        patterns = [
-                            tool_name,  # As provided
-                            f"{server_name}.{tool_name}",  # With server prefix
-                            tool_name.split(".")[-1],  # Just the last part
-                        ]
-
-                        for pattern in patterns:
-                            for tool in server_tool_list:
-                                if (
-                                    pattern in tool.name or tool.name in pattern
-                                ) and tool.name not in registered_tools:
-                                    self.tools.append(
-                                        {
-                                            "name": tool.name,
-                                            "description": tool.description,
-                                            "input_schema": tool.inputSchema,
-                                        }
-                                    )
-                                    registered_tools.add(tool.name)
-            else:
-                print(
-                    f"<warning>Server '{server_name}' not found in MCP registry</warning>"
-                )
-
-                # Fallback approach - try to match by partial name
-                for tool in results.tools:
-                    # Check if server name is substring of tool name
-                    if server_name in tool.name and tool.name not in registered_tools:
-                        self.tools.append(
-                            {
-                                "name": tool.name,
-                                "description": tool.description,
-                                "input_schema": tool.inputSchema,
-                            }
-                        )
-                        registered_tools.add(tool.name)
-
-        # If no tools registered yet, try a more permissive approach
-        if not self.tools:
-            print(
-                "<warning>No tools matched specific criteria, trying more flexible matching...</warning>"
-            )
-
-            # Register all tools as a last resort if "all" was used for any server
-            all_requested = any(config == "all" for config in self.mcp_tools.values())
-            if all_requested:
-                for tool in results.tools:
-                    if tool.name not in registered_tools:
-                        self.tools.append(
-                            {
-                                "name": tool.name,
-                                "description": tool.description,
-                                "input_schema": tool.inputSchema,
-                            }
-                        )
-                        registered_tools.add(tool.name)
-
-        # Ensure the input_schema is properly formatted for Anthropic
-        for tool in self.tools:
-            # Make sure required fields exist
-            if "input_schema" in tool:
-                schema = tool["input_schema"]
-
-                # Ensure required fields
-                if "type" not in schema:
-                    schema["type"] = "object"
-
-                # Ensure properties exist
-                if "properties" not in schema:
-                    schema["properties"] = {}
-
-        # Show final tools
+                else:
+                    print(f"<warning>No tools found for server '{server_name}'</warning>")
+            
+            # Case 2: Register specific tools
+            elif isinstance(tool_config, list):
+                for tool_name in tool_config:
+                    # Try with and without server prefix
+                    full_tool_name = f"{server_name}.{tool_name}"
+                    
+                    # Check for exact match first
+                    if full_tool_name in available_tools:
+                        tool = available_tools[full_tool_name]
+                        if tool.name not in registered_tools:
+                            self.tools.append(self._format_tool_for_anthropic(tool))
+                            registered_tools.add(tool.name)
+                            print(f"Registered tool: {tool.name}")
+                    else:
+                        # Try partial matching as a fallback
+                        found = False
+                        for tool in results.tools:
+                            # Match if either full_tool_name is in tool.name or tool_name is the exact suffix
+                            if (full_tool_name in tool.name or tool.name.endswith(f".{tool_name}")) and tool.name not in registered_tools:
+                                self.tools.append(self._format_tool_for_anthropic(tool))
+                                registered_tools.add(tool.name)
+                                print(f"Registered tool via partial match: {tool.name}")
+                                found = True
+                        
+                        if not found:
+                            print(f"<warning>Tool '{tool_name}' not found for server '{server_name}'</warning>")
+        
+        # If no tools were registered but "all" was specified for any server,
+        # register all available tools as a last resort
+        if not self.tools and any(config == "all" for config in self.mcp_tools.values()):
+            print("<warning>No tools matched specific criteria. Registering all tools...</warning>")
+            for tool in results.tools:
+                if tool.name not in registered_tools:
+                    self.tools.append(self._format_tool_for_anthropic(tool))
+                    registered_tools.add(tool.name)
+        
+        # Show summary of registered tools
         print(f"Registered {len(self.tools)} tools from MCP registry:")
         for i, tool in enumerate(self.tools, 1):
             print(f"  {i}. {tool['name']} - {tool['description'][:60]}...")
+    
+    def _format_tool_for_anthropic(self, tool):
+        """Format a tool for Anthropic API.
+        
+        Args:
+            tool: Tool object from MCP registry
+            
+        Returns:
+            Dictionary with tool information formatted for Anthropic API
+        """
+        # Create the base tool definition
+        tool_def = {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": tool.inputSchema.copy() if tool.inputSchema else {"type": "object", "properties": {}}
+        }
+        
+        # Ensure schema has required fields
+        schema = tool_def["input_schema"]
+        if "type" not in schema:
+            schema["type"] = "object"
+        if "properties" not in schema:
+            schema["properties"] = {}
+            
+        return tool_def
 
     async def _process_tool_calls(self, tool_calls):
         """Process tool calls from Anthropic response.
