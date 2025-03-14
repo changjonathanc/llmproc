@@ -154,11 +154,10 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
         debug: Whether to enable debug output
 
     Returns:
-        Tuple of (has_tool_calls, tool_results, response_text)
+        Tuple of (has_tool_calls, tool_results)
     """
     has_tool_calls = False
     tool_results = []
-    response_text = ""
     tool_calls = []
 
     # Initialize handlers if not provided
@@ -174,13 +173,10 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
                 "args": content.input,
                 "id": content.id
             })
-        elif content.type == "text":
-            # Collect text from text-type content
-            response_text += content.text
 
     # If no tool calls, return early
     if not has_tool_calls:
-        return has_tool_calls, tool_results, response_text
+        return has_tool_calls, tool_results
 
     # Now process all tool calls
     for tool_call in tool_calls:
@@ -235,7 +231,7 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
                 "is_error": True,
             })
 
-    return has_tool_calls, tool_results, response_text
+    return has_tool_calls, tool_results
 
 
 def add_tool_results_to_conversation(
