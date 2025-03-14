@@ -14,9 +14,27 @@
 ## Key Commands
 - Install: `uv pip install -e ".[dev,all]"`
 - Start CLI: `llmproc-demo ./examples/claude_code.toml`
-- Run tests: `pytest -v`
+- Try program linking: `llmproc-demo ./examples/program_linking/main.toml`
 - Manage dependencies: `uv add <package>`, `uv add --dev <package>`, `uv remove <package>`
 - Create worktree: `git worktree add worktrees/feature-name feature/feature-name`
+
+## Testing Procedures
+- Run standard tests: `pytest`
+- Run verbose tests: `pytest -v`
+- Run specific test file: `pytest tests/test_file.py`
+- Run specific test class or function: `pytest tests/test_file.py::TestClass::test_function`
+- Run tests with API access (requires API keys): `pytest -m llm_api`
+- Test program linking: `pytest tests/test_program_linking_robust.py`
+- Test program linking with API access: `pytest tests/test_program_linking_api.py -m llm_api`
+- Debug output: Set `LLMPROC_DEBUG=true` environment variable for detailed logging
+
+### Test Coverage
+- Unit tests: Cover core functionality without API calls (~41% code coverage)
+- Provider tests: Mock API responses to test provider integrations
+- MCP tests: Verify Model Context Protocol tool implementation
+- Program Linking tests: Verify LLM-to-LLM communication features
+- API Integration tests: Verify end-to-end functionality with real API calls
+- All tests are marked appropriately to skip API tests by default
 
 ## Code Style Guidelines
 - Uses absolute imports (`from llmproc import X`)
@@ -134,3 +152,17 @@
 8. Created detailed documentation in docs/program-linking.md
 9. Added comprehensive tests for program linking functionality
 10. Updated reference.toml with documentation for new sections
+
+## Session Summary (2025-03-20)
+1. Fixed critical bug in program linking with Anthropic API error handling
+2. Removed unnecessary filter_empty_text_blocks function in favor of direct filtering
+3. Fixed empty message handling to prevent 400 errors from Anthropic API
+4. Updated LLMProcess to skip empty messages when preparing API requests
+5. Modified run_anthropic_with_tools to only add messages with content
+6. Added fallback message for empty responses
+7. Created comprehensive test cases for empty message handling
+8. Added robust test file for program linking unit tests
+9. Created API integration tests for program linking with real APIs
+10. Updated CLAUDE.md with detailed testing procedures
+11. Added MISC.md with additional documentation and advanced usage
+12. Added LLMPROC_DEBUG environment variable for detailed debugging
