@@ -30,14 +30,10 @@ async def spawn_tool(
     import sys
     debug = getattr(llm_process, 'debug_tools', False)
     
-    if debug:
-        print(f"SPAWN TOOL: Executing with program_name='{program_name}', query='{query[:50]}...'", 
-              file=sys.stderr)
-    
     if not llm_process or not hasattr(llm_process, "linked_programs"):
         error_msg = "Spawn tool requires a parent LLMProcess with linked_programs defined"
         if debug:
-            print(f"SPAWN TOOL ERROR: {error_msg}", file=sys.stderr)
+            print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
         return {
             "error": error_msg,
             "is_error": True,
@@ -48,7 +44,7 @@ async def spawn_tool(
         available_programs = ", ".join(linked_programs.keys())
         error_msg = f"Program '{program_name}' not found. Available programs: {available_programs}"
         if debug:
-            print(f"SPAWN TOOL ERROR: {error_msg}", file=sys.stderr)
+            print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
         return {
             "error": error_msg,
             "is_error": True,
@@ -58,16 +54,8 @@ async def spawn_tool(
         # Get the linked program instance
         linked_program = linked_programs[program_name]
         
-        if debug:
-            print(f"SPAWN TOOL: Calling program '{program_name}' with query: '{query[:50]}...'", 
-                  file=sys.stderr)
-        
         # Execute the query on the linked program
         response = await linked_program.run(query)
-        
-        if debug:
-            print(f"SPAWN TOOL: Got response from '{program_name}': '{response[:50]}...'", 
-                  file=sys.stderr)
         
         result = {
             "program": program_name,
@@ -79,8 +67,7 @@ async def spawn_tool(
         import traceback
         error_msg = f"Error executing query with program '{program_name}': {str(e)}"
         if debug:
-            print(f"SPAWN TOOL ERROR: {error_msg}", file=sys.stderr)
-            print("Full traceback:", file=sys.stderr)
+            print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
         return {
             "error": error_msg,

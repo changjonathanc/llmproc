@@ -494,8 +494,7 @@ class LLMProcess:
                     "model": self.model_name,
                     "system": system_prompt,
                     "messages": messages,
-                    **self.api_params,
-                    **self.extra_params
+                    **self.api_params
                 }
                 
                 # Debug: print tools if they exist
@@ -933,17 +932,16 @@ class LLMProcess:
             llm_process=self
         )
         
-        # Print debug info about linked programs
+        # Print brief info about linked programs
         if self.debug_tools:
             import sys
-            print("\nLinked programs details:", file=sys.stderr)
+            print("\nLinked programs:", file=sys.stderr)
             for prog_name, prog_instance in self.linked_programs.items():
-                print(f"  - {prog_name}: {type(prog_instance).__name__}", file=sys.stderr)
-                print(f"    Model: {prog_instance.model_name}", file=sys.stderr)
-                print(f"    Provider: {prog_instance.provider}", file=sys.stderr)
-                # Check if preloaded files are present
+                prog_files = ""
                 if hasattr(prog_instance, "preloaded_content") and prog_instance.preloaded_content:
-                    print(f"    Preloaded files: {list(prog_instance.preloaded_content.keys())}", file=sys.stderr)
+                    prog_files = f" with {len(prog_instance.preloaded_content)} preloaded files"
+                print(f"  - {prog_name}: {prog_instance.model_name} ({prog_instance.provider}){prog_files}", 
+                      file=sys.stderr)
         
         # Keep the handler and tool definition separate
         self.tool_handlers = getattr(self, "tool_handlers", {})

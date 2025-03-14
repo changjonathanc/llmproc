@@ -280,10 +280,7 @@ def format_tool_result(result: Any) -> str:
         Formatted result as a string
     """
     import sys
-    
-    # Logging for debugging
-    print(f"Tool raw result type: {type(result).__name__}", file=sys.stderr)
-    print(f"Tool raw result: {str(result)[:100]}...", file=sys.stderr)
+    debug = False  # Only enable for deep debugging
     
     # Extract content based on result type
     content = None
@@ -304,7 +301,8 @@ def format_tool_result(result: Any) -> str:
     
     # Handle error case first
     if is_error and error_message:
-        print(f"TOOL ERROR: {error_message}", file=sys.stderr)
+        if debug:
+            print(f"TOOL ERROR: {error_message}", file=sys.stderr)
         return f"ERROR: {error_message}"
     
     # Extract regular content
@@ -324,14 +322,10 @@ def format_tool_result(result: Any) -> str:
     try:
         # This will validate if the content can be serialized to JSON
         json.dumps(content)
-        
-        print(f"Formatted tool result: {str(content)[:100]}...", file=sys.stderr)
         return content
     except (TypeError, OverflowError, ValueError):
         # If it can't be serialized, convert to string
-        formatted = str(content)
-        print(f"Formatted tool result (as string): {formatted[:100]}...", file=sys.stderr)
-        return formatted
+        return str(content)
 
 
 def dump_api_error(
