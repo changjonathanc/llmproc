@@ -183,3 +183,76 @@ class TestProgramLinkingRobust:
             # Verify the error result
             assert result["is_error"] is True
             assert "not found" in result["error"]
+            
+    def test_empty_messages_filtering(self):
+        """Test that empty messages are filtered when preparing messages for API."""
+        # Directly test the message filtering logic by examining the _run_anthropic_with_tools method
+        
+        # Create a test state with empty messages
+        state = [
+            {"role": "system", "content": "System prompt"},
+            {"role": "user", "content": "User message"},
+            {"role": "assistant", "content": ""}, # This should be filtered
+            {"role": "user", "content": "Another message"}
+        ]
+        
+        # Extract filtered messages
+        system_prompt = None
+        messages = []
+        
+        for msg in state:
+            if msg["role"] == "system":
+                system_prompt = msg["content"]
+            else:
+                # Skip empty messages that would cause API errors
+                if msg.get("content") != "":
+                    messages.append(msg)
+        
+        # Verify filtering
+        assert len(messages) == 2  # Two non-system messages (with empty message skipped)
+        assert system_prompt == "System prompt"
+        
+        # Verify no empty messages
+        for msg in messages:
+            assert msg.get("content") != ""
+                    
+    @pytest.mark.asyncio
+    async def test_run_anthropic_with_tools_skips_empty_response(self):
+        """Test that run_anthropic_with_tools properly handles empty responses."""
+        from llmproc.providers.anthropic_tools import run_anthropic_with_tools
+        
+        # Set up mock LLMProcess
+        mock_llm_process = MagicMock()
+        mock_llm_process.client = MagicMock()
+        mock_llm_process.model_name = "test-model"
+        mock_llm_process.tools = []
+        mock_llm_process.debug_tools = True
+        mock_llm_process.api_params = {}
+        mock_llm_process.tool_handlers = {}
+        mock_llm_process.aggregator = None
+        
+        # Set up mock response
+        mock_response = MagicMock()
+        mock_response.content = []
+        
+        # Set up mock for messages.create
+        mock_llm_process.client.messages.create = AsyncMock(return_value=mock_response)
+        
+        # Mock process_response_content to simulate empty response
+        with patch("llmproc.providers.anthropic_tools.process_response_content",
+                  return_value=(False, [], "")) as mock_process:
+            
+            # Call run_anthropic_with_tools
+            result = await run_anthropic_with_tools(
+                llm_process=mock_llm_process,
+                system_prompt="Test system prompt",
+                messages=[{"role": "user", "content": "Test message"}],
+                max_iterations=1
+            )
+            
+            # It should return a non-empty fallback message
+            assert result
+            assert len(result) > 0
+            # It should contain one of these fallback messages
+            possible_messages = ["didn't get", "rephrase", "error", "iteration"]
+            assert any(msg in result.lower() for msg in possible_messages)

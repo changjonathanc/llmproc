@@ -701,7 +701,7 @@ class LLMProcess:
                 "Anthropic tools support requires the llmproc.providers.anthropic_tools module."
             )
 
-        # Extract system prompt and filter messages
+        # Extract system prompt and messages
         system_prompt = None
         messages = []
 
@@ -709,10 +709,9 @@ class LLMProcess:
             if msg["role"] == "system":
                 system_prompt = msg["content"]
             else:
-                messages.append(msg)
-
-        # Filter messages to remove empty text blocks
-        messages = filter_empty_text_blocks(messages, self.debug_tools)
+                # Skip empty messages that would cause API errors
+                if msg.get("content") != "":
+                    messages.append(msg)
 
         # Run the tool interaction loop through the specialized module
         # Just pass the LLMProcess instance and let the function access what it needs

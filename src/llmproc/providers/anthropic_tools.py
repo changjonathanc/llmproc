@@ -84,14 +84,25 @@ async def run_anthropic_with_tools(
             if response_text:
                 final_response = response_text
 
+            # Only add the assistant message to the conversation if it has content
+            # (either text content or tool calls)
+            if response_text or has_tool_calls:
+                # Add the assistant's response with tool calls to messages
+                # This must happen BEFORE tool results are added
+                messages.append({"role": "assistant", "content": response.content})
+            else:
+                # For debugging purposes
+                if debug:
+                    print("WARNING: Skipping empty assistant message")
+            
             # If no tool calls were made, we're done
             if not has_tool_calls:
                 if debug:
                     print(f"Final response (no tool calls): {final_response[:150]}...")
+                # Ensure we return a non-empty string even if response was empty
+                if not final_response:
+                    final_response = "I didn't get a clear response. Please try rephrasing your question."
                 return final_response
-
-            # Add the assistant's response with tool calls to messages
-            messages.append({"role": "assistant", "content": response.content})
 
             # Add tool results to conversation
             add_tool_results_to_conversation(messages, tool_results, debug)
@@ -394,52 +405,3 @@ def dump_api_error(
     return str(dump_file)
 
 
-def filter_empty_text_blocks(
-    messages: List[Dict[str, Any]], debug: bool = False
-) -> List[Dict[str, Any]]:
-    """Filter out empty text blocks from structured content.
-
-    Args:
-        messages: The messages to filter
-        debug: Whether to print debug information
-
-    Returns:
-        Filtered messages
-    """
-    filtered_messages = []
-
-    for msg in messages:
-        if msg["role"] == "system":
-            filtered_messages.append(msg)
-            continue
-
-        # Handle potential structured content (for tools)
-        if isinstance(msg["content"], list):
-            # Filter out empty text blocks
-            empty_blocks = [
-                i
-                for i, block in enumerate(msg["content"])
-                if block.get("type") == "text" and not block.get("text")
-            ]
-
-            if empty_blocks:
-                # Create a safe copy without empty text blocks
-                filtered_content = [
-                    block
-                    for block in msg["content"]
-                    if not (block.get("type") == "text" and not block.get("text"))
-                ]
-                msg_copy = msg.copy()
-                msg_copy["content"] = filtered_content
-                filtered_messages.append(msg_copy)
-
-                if debug:
-                    print(
-                        f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
-                    )
-            else:
-                filtered_messages.append(msg)
-        else:
-            filtered_messages.append(msg)
-
-    return filtered_messages
