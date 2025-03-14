@@ -57,6 +57,7 @@ Always maintain a neutral and professional tone."""
 #----------------------------------------
 [preload]
 # Files to preload as context (relative paths)
+# Content will be added to system prompt with XML tags
 # files = [
 #   "../prompts/example_prompt.md",
 #   "../README.md"

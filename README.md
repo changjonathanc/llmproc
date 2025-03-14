@@ -33,7 +33,7 @@ The LLMProc library functions as a kernel:
 - Simple API for easy integration
 - Command-line interface for interactive chat sessions
 - Comprehensive documentation for all parameters
-- File preloading for context preparation
+- File preloading for context enhancement by adding content to system prompt
 - Model Context Protocol (MCP) support for tool usage
 - Program Linking for LLM-to-LLM communication via spawn tool (like `dispatch_agent` in Claude Code)
 

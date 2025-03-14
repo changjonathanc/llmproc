@@ -8,7 +8,7 @@ When you specify files in the `[preload]` section of your TOML configuration, LL
 
 1. Read all specified files at initialization time
 2. Format the content with XML tags for better context organization
-3. Add the content to the conversation history before any user messages
+3. Add the content to the system prompt as part of the primary context
 4. Maintain this context even after conversation resets (optional)
 
 ## TOML Configuration
@@ -65,9 +65,11 @@ print(response)
 
 ## XML Formatting
 
-Preloaded files are formatted with XML tags for better organization:
+Preloaded files are formatted with XML tags for better organization and added to the system prompt:
 
 ```xml
+You are a helpful assistant...
+
 <preload>
 <file path="file1.txt">
 Content of file1.txt goes here...
@@ -78,7 +80,7 @@ Content of file2.md goes here...
 </preload>
 ```
 
-This format helps the LLM understand the structure and origin of the preloaded content.
+This format helps the LLM understand the structure and origin of the preloaded content while keeping it within the system context rather than as part of the conversation history.
 
 ## Handling Missing Files
 
@@ -91,9 +93,10 @@ If a file specified in the preload section doesn't exist:
 
 When resetting the conversation state:
 
-- `reset_state(keep_preloaded=True)`: Keeps preloaded file content in the conversation history
-- `reset_state(keep_preloaded=False)`: Removes preloaded content (only keeps system prompt)
+- `reset_state(keep_preloaded=True)`: Keeps preloaded file content in the system prompt
+- `reset_state(keep_preloaded=False)`: Removes preloaded content, restoring the original system prompt
 - `reset_state(keep_system_prompt=False, keep_preloaded=False)`: Completely resets the conversation
+- `reset_state(keep_system_prompt=False, keep_preloaded=True)`: Creates a new system prompt with only preloaded content
 
 ## Use Cases
 

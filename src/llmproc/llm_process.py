@@ -160,6 +160,9 @@ class LLMProcess:
         # Initialize the client
         self.client = get_provider_client(provider, model_name, project_id, region)
 
+        # Store the original system prompt before any files are preloaded
+        self.original_system_prompt = self.system_prompt
+        
         # Initialize message state with system prompt
         self.state = [{"role": "system", "content": self.system_prompt}]
 
@@ -207,20 +210,18 @@ class LLMProcess:
 
         preload_content += "</preload>"
 
-        # Add the combined preload content as a single user message
-        if preload_content != "<preload>\n</preload>":  # Only add if there's content
-            self.state.append(
-                {
-                    "role": "user",
-                    "content": f"Please read the following preloaded files:\n{preload_content}",
-                }
-            )
-            self.state.append(
-                {
-                    "role": "assistant",
-                    "content": "I've read all the preloaded files. I'll incorporate this information in our conversation.",
-                }
-            )
+        # Only add if we actually loaded some files
+        if self.preloaded_content:
+            # Update the system prompt to include preloaded files
+            if len(self.state) > 0 and self.state[0]["role"] == "system":
+                # Append to existing system prompt
+                self.state[0]["content"] = f"{self.system_prompt}\n\n{preload_content}"
+            else:
+                # No system message yet, create one
+                self.state.insert(0, {"role": "system", "content": f"{self.system_prompt}\n\n{preload_content}"})
+            
+            # Update the stored system prompt to include the preloaded content
+            self.system_prompt = self.state[0]["content"]
 
     @classmethod
     def from_toml(cls, toml_path: str | Path) -> "LLMProcess":
@@ -1097,34 +1098,35 @@ class LLMProcess:
             keep_system_prompt: Whether to keep the system prompt in the state
             keep_preloaded: Whether to keep preloaded file content in the state
         """
+        # Access the stored original system prompt
+        original_system_prompt = getattr(self, "original_system_prompt", self.system_prompt)
+        
+        # Reset the state
         if keep_system_prompt:
-            self.state = [{"role": "system", "content": self.system_prompt}]
+            if keep_preloaded and hasattr(self, "preloaded_content") and self.preloaded_content:
+                # Keep both system prompt and preloaded content
+                self.state = [{"role": "system", "content": self.system_prompt}]
+            else:
+                # Keep only the original system prompt without preloaded content
+                self.state = [{"role": "system", "content": original_system_prompt}]
+                # Update stored system prompt
+                self.system_prompt = original_system_prompt
         else:
+            # Remove everything
             self.state = []
-
-        # Re-add preloaded content if requested
-        if (
-            keep_preloaded
-            and hasattr(self, "preloaded_content")
-            and self.preloaded_content
-        ):
-            # Rebuild the preload content in the same format
+            
+        # If we're keeping system prompt but not preloaded content, we already handled it above
+        # If we're not keeping system prompt but want to keep preloaded, re-add everything
+        if not keep_system_prompt and keep_preloaded and hasattr(self, "preloaded_content") and self.preloaded_content:
+            # Rebuild the preload content
             preload_content = "<preload>\n"
             for file_path, content in self.preloaded_content.items():
                 filename = Path(file_path).name
                 preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
             preload_content += "</preload>"
-
-            # Add as a single message
-            self.state.append(
-                {
-                    "role": "user",
-                    "content": f"Please read the following preloaded files:\n{preload_content}",
-                }
-            )
-            self.state.append(
-                {
-                    "role": "assistant",
-                    "content": "I've read all the preloaded files. I'll incorporate this information in our conversation.",
-                }
-            )
+            
+            # Create a new system message with original prompt and preloaded content
+            system_content = f"{original_system_prompt}\n\n{preload_content}"
+            self.state = [{"role": "system", "content": system_content}]
+            # Update stored system prompt
+            self.system_prompt = system_content

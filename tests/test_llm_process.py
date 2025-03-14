@@ -154,6 +154,62 @@ def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provid
     process.reset_state(keep_system_prompt=False)
     
     assert len(process.state) == 0
+    
+def test_reset_state_with_preloaded_content(mock_env, mock_get_provider_client):
+    """Test that reset_state works correctly with preloaded content."""
+    # Create a process
+    process = LLMProcess(
+        model_name="test-model",
+        provider="openai",
+        system_prompt="You are a test assistant."
+    )
+    
+    # Create a temporary test file
+    with NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:
+        temp_file.write("This is test content for reset testing.")
+        temp_path = temp_file.name
+    
+    try:
+        # Add preloaded content
+        with patch.object(Path, 'exists', return_value=True):
+            with patch.object(Path, 'read_text', return_value="This is test content for reset testing."):
+                process.preload_files([temp_path])
+        
+        # Verify preloaded content is in system prompt
+        assert "<preload>" in process.state[0]["content"]
+        
+        # Add some conversation
+        process.state.append({"role": "user", "content": "Hello!"})
+        process.state.append({"role": "assistant", "content": "Test response"})
+        
+        # Reset with keep_preloaded=True (default)
+        process.reset_state()
+        
+        # Should still have preloaded content in system prompt
+        assert len(process.state) == 1
+        assert "<preload>" in process.state[0]["content"]
+        
+        # Reset with keep_preloaded=False
+        process.reset_state(keep_preloaded=False)
+        
+        # Should no longer have preloaded content
+        assert len(process.state) == 1
+        assert "<preload>" not in process.state[0]["content"]
+        assert process.state[0]["content"] == "You are a test assistant."
+        
+        # Reset completely
+        process.reset_state(keep_system_prompt=False, keep_preloaded=False)
+        assert len(process.state) == 0
+        
+        # Reset with no system prompt but with preloaded content
+        process.reset_state(keep_system_prompt=False, keep_preloaded=True)
+        assert len(process.state) == 1
+        assert process.state[0]["role"] == "system"
+        assert "<preload>" in process.state[0]["content"]
+        assert "You are a test assistant." in process.state[0]["content"]
+    
+    finally:
+        os.unlink(temp_path)
 
 
 def test_preload_files_method(mock_env, mock_get_provider_client):
@@ -173,23 +229,27 @@ def test_preload_files_method(mock_env, mock_get_provider_client):
     try:
         # Initial state should just have system prompt
         assert len(process.state) == 1
+        original_system_prompt = process.system_prompt
         
         # Use the preload_files method
         with patch.object(Path, 'exists', return_value=True):
             with patch.object(Path, 'read_text', return_value="This is test content for runtime preloading."):
                 process.preload_files([temp_path])
         
-        # Should now have system prompt + 2 messages (user preload and assistant acknowledgment)
-        assert len(process.state) == 3
+        # Should still have only one system message but with updated content
+        assert len(process.state) == 1
         assert process.state[0]["role"] == "system"
-        assert process.state[1]["role"] == "user"
-        assert "<preload>" in process.state[1]["content"]
-        assert process.state[2]["role"] == "assistant"
+        assert "<preload>" in process.state[0]["content"]
+        assert original_system_prompt in process.state[0]["content"]
         
         # Check that preloaded content was stored
         assert len(process.preloaded_content) == 1
         assert temp_path in process.preloaded_content
         assert process.preloaded_content[temp_path] == "This is test content for runtime preloading."
+        
+        # Verify the original_system_prompt was preserved
+        assert hasattr(process, "original_system_prompt")
+        assert process.original_system_prompt == "You are a test assistant."
     
     finally:
         os.unlink(temp_path)
