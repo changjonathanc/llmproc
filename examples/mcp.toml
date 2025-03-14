@@ -14,5 +14,5 @@ system_prompt = "You are a helpful assistant with access to tools. Use tools whe
 config_path = "../config/mcp_servers.json"
 
 [mcp.tools]
-github = ["search_repositories", "get_file_contents"]
-codemcp = ["ReadFile"]
+# Only configure servers that are available in your config/mcp_servers.json
+codemcp = ["read_file"]

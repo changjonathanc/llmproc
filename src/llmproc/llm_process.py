@@ -21,7 +21,6 @@ from llmproc.providers import get_provider_client
 try:
     from llmproc.providers.anthropic_tools import (
         dump_api_error,
-        filter_empty_text_blocks,
         run_anthropic_with_tools,
     )
 
@@ -44,7 +43,11 @@ class LLMProcess:
         display_name: str | None = None,
         mcp_config_path: str | None = None,
         mcp_tools: dict[str, list[str] | str] | None = None,
-        **kwargs: Any,
+        linked_programs: dict[str, Path | str] | None = None,
+        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
+        config_dir: Path | None = None,
+        parameters: dict[str, Any] = None,
+        tools: dict[str, Any] = None,
     ) -> None:
         """Initialize LLMProcess.
 
@@ -57,7 +60,11 @@ class LLMProcess:
             mcp_config_path: Path to MCP servers configuration file
             mcp_tools: Dictionary mapping server names to tools to enable
                        Value can be a list of tool names or "all" to enable all tools
-            **kwargs: Additional parameters to pass to the model
+            linked_programs: Dictionary mapping program names to TOML configuration paths
+            linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
+            config_dir: Base directory for resolving relative paths in configurations
+            parameters: Dictionary from the [parameters] section in TOML
+            tools: Dictionary from the [tools] section in TOML
 
         Raises:
             NotImplementedError: If the provider is not implemented
@@ -69,13 +76,57 @@ class LLMProcess:
         self.provider = provider
         self.system_prompt = system_prompt
         self.display_name = display_name or f"{provider.title()} {model_name}"
-        self.parameters = kwargs
+        self.config_dir = config_dir
         self.preloaded_content = {}
+        
+        # Initialize parameters from the [parameters] section
+        self.parameters = parameters or {}
+        
+        # Initialize tools configuration from the [tools] section
+        tools_config = tools or {}
+        self.enabled_tools = tools_config.get("enabled", [])
+        
+        # Extract known parameters from [parameters]
+        self.api_params = {}
+        
+        # Extract commonly used parameters
+        if "temperature" in self.parameters:
+            self.api_params["temperature"] = self.parameters.pop("temperature")
+        if "max_tokens" in self.parameters:
+            self.api_params["max_tokens"] = self.parameters.pop("max_tokens")
+        if "top_p" in self.parameters:
+            self.api_params["top_p"] = self.parameters.pop("top_p")
+        if "frequency_penalty" in self.parameters:
+            self.api_params["frequency_penalty"] = self.parameters.pop("frequency_penalty")
+        if "presence_penalty" in self.parameters:
+            self.api_params["presence_penalty"] = self.parameters.pop("presence_penalty")
+        
+        # Configuration flags
+        self.debug_tools = self.parameters.pop("debug_tools", False)
+        
+        # Check for and warn about any remaining parameters
+        if self.parameters:
+            remaining_params = list(self.parameters.keys())
+            print(f"<warning>Unknown parameters in config: {remaining_params}</warning>")
+            # We don't use these parameters, so clear them
+            self.parameters.clear()
 
         # MCP Configuration
         self.mcp_enabled = False
         self.mcp_tools = {}
         self.tools = []
+        
+        # Linked Programs Configuration
+        self.linked_programs = {}
+        self.has_linked_programs = False
+        
+        # Initialize linked programs if provided
+        if linked_programs_instances:
+            self.has_linked_programs = True
+            self.linked_programs = linked_programs_instances
+        elif linked_programs:
+            self.has_linked_programs = True
+            self._initialize_linked_programs(linked_programs)
 
         # Setup MCP if configured
         if mcp_config_path and mcp_tools:
@@ -96,14 +147,22 @@ class LLMProcess:
 
             # Initialize MCP registry and tools asynchronously
             asyncio.run(self._initialize_mcp_tools())
+            
+        # Check if we need to register the spawn tool
+        if "spawn" in self.enabled_tools and self.has_linked_programs:
+            # Register the spawn tool
+            self._register_spawn_tool()
 
         # Get project_id and region for Vertex if provided in parameters
-        project_id = kwargs.pop("project_id", None)
-        region = kwargs.pop("region", None)
+        project_id = parameters.pop("project_id", None) if parameters else None
+        region = parameters.pop("region", None) if parameters else None
 
         # Initialize the client
         self.client = get_provider_client(provider, model_name, project_id, region)
 
+        # Store the original system prompt before any files are preloaded
+        self.original_system_prompt = self.system_prompt
+        
         # Initialize message state with system prompt
         self.state = [{"role": "system", "content": self.system_prompt}]
 
@@ -151,20 +210,18 @@ class LLMProcess:
 
         preload_content += "</preload>"
 
-        # Add the combined preload content as a single user message
-        if preload_content != "<preload>\n</preload>":  # Only add if there's content
-            self.state.append(
-                {
-                    "role": "user",
-                    "content": f"Please read the following preloaded files:\n{preload_content}",
-                }
-            )
-            self.state.append(
-                {
-                    "role": "assistant",
-                    "content": "I've read all the preloaded files. I'll incorporate this information in our conversation.",
-                }
-            )
+        # Only add if we actually loaded some files
+        if self.preloaded_content:
+            # Update the system prompt to include preloaded files
+            if len(self.state) > 0 and self.state[0]["role"] == "system":
+                # Append to existing system prompt
+                self.state[0]["content"] = f"{self.system_prompt}\n\n{preload_content}"
+            else:
+                # No system message yet, create one
+                self.state.insert(0, {"role": "system", "content": f"{self.system_prompt}\n\n{preload_content}"})
+            
+            # Update the stored system prompt to include the preloaded content
+            self.system_prompt = self.state[0]["content"]
 
     @classmethod
     def from_toml(cls, toml_path: str | Path) -> "LLMProcess":
@@ -183,11 +240,22 @@ class LLMProcess:
         with path.open("rb") as f:
             config = tomllib.load(f)
 
+        # Check for recognized sections
+        known_sections = {
+            "model", "prompt", "parameters", "preload", 
+            "mcp", "linked_programs", "tools"
+        }
+        unknown_sections = set(config.keys()) - known_sections
+        if unknown_sections:
+            print(f"<warning>Unknown sections in TOML file: {list(unknown_sections)}</warning>")
+            
         model = config["model"]
         prompt_config = config.get("prompt", {})
         parameters = config.get("parameters", {})
         preload_config = config.get("preload", {})
         mcp_config = config.get("mcp", {})
+        linked_programs_config = config.get("linked_programs", {})
+        tools_config = config.get("tools", {})
 
         if "system_prompt_file" in prompt_config:
             system_prompt_path = path.parent / prompt_config["system_prompt_file"]
@@ -247,7 +315,18 @@ class LLMProcess:
                         raise ValueError(
                             f"Invalid tool configuration for server '{server_name}'. Expected 'all' or a list of tool names"
                         )
-
+        
+        # Process linked programs configuration
+        linked_programs = None
+        if linked_programs_config:
+            linked_programs = {}
+            for program_name, program_path in linked_programs_config.items():
+                linked_programs[program_name] = program_path
+                
+        # Get enabled tools
+        enabled_tools = tools_config.get("enabled", [])
+        
+        # Create the LLMProcess instance
         return cls(
             model_name=model["name"],
             provider=model["provider"],
@@ -256,7 +335,10 @@ class LLMProcess:
             display_name=display_name,
             mcp_config_path=mcp_config_path,
             mcp_tools=mcp_tools,
-            **parameters,
+            linked_programs=linked_programs,
+            config_dir=path.parent,
+            parameters=parameters,
+            tools=tools_config,
         )
 
     async def run(self, user_input: str, max_iterations: int = 10) -> str:
@@ -304,23 +386,13 @@ class LLMProcess:
 
         self.state.append({"role": "user", "content": user_input})
 
-        # Extract common parameters
-        temperature = self.parameters.get("temperature", 0.7)
-        max_tokens = self.parameters.get("max_tokens", 1000)
-
         # Create provider-specific API calls
         if self.provider == "openai":
             # Prepare API parameters
             api_params = {
                 "model": self.model_name,
                 "messages": self.state,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                **{
-                    k: v
-                    for k, v in self.parameters.items()
-                    if k not in ["temperature", "max_tokens"]
-                },
+                **self.api_params
             }
 
             try:
@@ -356,8 +428,8 @@ class LLMProcess:
                                     }
                                     for m in self.state
                                 ],
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
+                                "temperature": self.api_params.get("temperature"),
+                                "max_tokens": self.api_params.get("max_tokens"),
                             },
                         },
                         f,
@@ -370,8 +442,8 @@ class LLMProcess:
                 raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
 
         elif self.provider == "anthropic":
-            # For Anthropic with MCP enabled, handle tool calls
-            if self.mcp_enabled and self.tools:
+            # For Anthropic with tools enabled, handle tool calls
+            if self.tools:
                 # Use the full async implementation for tool calls
                 return await self._run_anthropic_with_tools(max_iterations)
             else:
@@ -408,8 +480,7 @@ class LLMProcess:
                                 messages.append(msg_copy)
 
                                 # Add debugging info to console if debug is enabled
-                                debug = self.parameters.get("debug_tools", False)
-                                if debug:
+                                if self.debug_tools:
                                     print(
                                         f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
                                     )
@@ -423,19 +494,28 @@ class LLMProcess:
                     "model": self.model_name,
                     "system": system_prompt,
                     "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    **{
-                        k: v
-                        for k, v in self.parameters.items()
-                        if k not in ["temperature", "max_tokens"]
-                    },
+                    **self.api_params
                 }
+                
+                # Debug: print tools if they exist
+                if hasattr(self, 'tools') and self.tools:
+                    print(f"DEBUG: Passing {len(self.tools)} tools to Anthropic API:")
+                    for tool in self.tools:
+                        print(f"  - {tool['name']}: {tool['description'][:50]}...")
+                    # Add tools to API params
+                    api_params["tools"] = self.tools
 
                 try:
                     # Create the response with system prompt separate from messages
                     response = await self.client.messages.create(**api_params)
-                    output = response.content[0].text
+                    
+                    # Check if the response is a tool use
+                    if response.content[0].type == "tool_use":
+                        # We need to handle tool calls here
+                        print("DEBUG: Model is using a tool, redirecting to tool handling")
+                        return await self._run_anthropic_with_tools(max_iterations=10)
+                    else:
+                        output = response.content[0].text
 
                     # Update state with assistant response
                     self.state.append({"role": "assistant", "content": output})
@@ -466,8 +546,8 @@ class LLMProcess:
                                         }
                                         for m in messages
                                     ],
-                                    "temperature": temperature,
-                                    "max_tokens": max_tokens,
+                                    "temperature": self.api_params.get("temperature"),
+                                    "max_tokens": self.api_params.get("max_tokens"),
                                 },
                             },
                             f,
@@ -513,8 +593,7 @@ class LLMProcess:
                             messages.append(msg_copy)
 
                             # Add debugging info to console if debug is enabled
-                            debug = self.parameters.get("debug_tools", False)
-                            if debug:
+                            if self.debug_tools:
                                 print(
                                     f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
                                 )
@@ -528,19 +607,37 @@ class LLMProcess:
                 "model": self.model_name,
                 "system": system_prompt,
                 "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                **{
-                    k: v
-                    for k, v in self.parameters.items()
-                    if k not in ["temperature", "max_tokens"]
-                },
+                **self.api_params,
+                **self.extra_params
             }
+            
+            # Debug: print tools if they exist
+            if hasattr(self, 'tools') and self.tools:
+                print(f"DEBUG: Passing {len(self.tools)} tools to Vertex API:")
+                for tool in self.tools:
+                    print(f"  - {tool['name']}: {tool['description'][:50]}...")
+                # Add tools to API params
+                api_params["tools"] = self.tools
 
             try:
                 # Create the response with system prompt separate from messages
-                response = await self.client.messages.create(**api_params)
-                output = response.content[0].text
+                # Create the response with system prompt separate from messages
+                import traceback
+                
+                try:
+                    response = await self.client.messages.create(**api_params)
+                    
+                    # Check if the response is a tool use
+                    if response.content[0].type == "tool_use":
+                        # We need to handle tool calls here
+                        print("DEBUG: Model is using a tool, redirecting to tool handling")
+                        return await self._run_anthropic_with_tools(max_iterations=10)
+                    else:
+                        output = response.content[0].text
+                except Exception as e:
+                    print("FULL ERROR TRACEBACK:")
+                    traceback.print_exc()
+                    raise
 
                 # Update state with assistant response
                 self.state.append({"role": "assistant", "content": output})
@@ -571,8 +668,8 @@ class LLMProcess:
                                     }
                                     for m in messages
                                 ],
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
+                                "temperature": self.api_params.get("temperature"),
+                                "max_tokens": self.api_params.get("max_tokens"),
                             },
                         },
                         f,
@@ -604,12 +701,7 @@ class LLMProcess:
                 "Anthropic tools support requires the llmproc.providers.anthropic_tools module."
             )
 
-        # Extract common parameters
-        temperature = self.parameters.get("temperature", 0.7)
-        max_tokens = self.parameters.get("max_tokens", 1000)
-        debug = self.parameters.get("debug_tools", False)
-
-        # Extract system prompt and filter messages
+        # Extract system prompt and messages
         system_prompt = None
         messages = []
 
@@ -617,28 +709,17 @@ class LLMProcess:
             if msg["role"] == "system":
                 system_prompt = msg["content"]
             else:
-                messages.append(msg)
-
-        # Filter messages to remove empty text blocks
-        messages = filter_empty_text_blocks(messages, debug)
+                # Skip empty messages that would cause API errors
+                if msg.get("content") != "":
+                    messages.append(msg)
 
         # Run the tool interaction loop through the specialized module
+        # Just pass the LLMProcess instance and let the function access what it needs
         final_response = await run_anthropic_with_tools(
-            client=self.client,
-            model_name=self.model_name,
+            llm_process=self,
             system_prompt=system_prompt,
             messages=messages,
-            tools=self.tools,
-            aggregator=self.aggregator,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            max_iterations=max_iterations,
-            debug=debug,
-            **{
-                k: v
-                for k, v in self.parameters.items()
-                if k not in ["temperature", "max_tokens", "debug_tools"]
-            },
+            max_iterations=max_iterations
         )
 
         # Add the final response to the permanent state
@@ -659,156 +740,247 @@ class LLMProcess:
 
         This sets up the MCP registry and filters tools based on user configuration.
         Only tools explicitly specified in the mcp_tools configuration will be enabled.
+        Only servers that have tools configured will be initialized.
         """
         if not self.mcp_enabled:
             return
 
-        # Initialize MCP registry and aggregator
-        self.registry = ServerRegistry.from_config(self.mcp_config_path)
-        self.aggregator = MCPAggregator(self.registry)
+        print(f"Tool configuration: {self.mcp_tools}")
+        
+        # Get the set of server names that are configured in mcp_tools
+        configured_servers = set(self.mcp_tools.keys())
+        
+        # Read the MCP config file into a dictionary
+        import json
+        try:
+            with open(self.mcp_config_path, 'r') as f:
+                full_config = json.load(f)
+                
+            # Just check if all servers are in the config, but use original config
+            # to avoid validation issues with the data structure
+            mcp_servers = full_config.get("mcpServers", {})
+            
+            # Check which configured servers exist in the config file
+            for server_name in configured_servers:
+                if server_name in mcp_servers:
+                    print(f"Including server '{server_name}' from config")
+                else:
+                    print(f"<warning>Configured server '{server_name}' not found in config file</warning>")
+            
+            # Skip servers not configured in mcp_tools
+            for server_name in set(mcp_servers.keys()) - configured_servers:
+                print(f"Skipping server '{server_name}' (not configured in mcp_tools)")
+            
+            # We'll use the standard method to initialize but only after checking
+            self.registry = ServerRegistry.from_config(self.mcp_config_path)
+            self.aggregator = MCPAggregator(self.registry)
+            
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            print(f"<warning>Error reading MCP config: {str(e)}</warning>")
+            # Fall back to the standard method in case of errors
+            self.registry = ServerRegistry.from_config(self.mcp_config_path)
+            self.aggregator = MCPAggregator(self.registry)
 
         # Get all available tools from the MCP registry
-        results = await self.aggregator.list_tools()
+        # Use the server_mapping option to get tools grouped by server
+        server_tools_map = await self.aggregator.list_tools(return_server_mapping=True)
+
+        # Get standard list for displaying all tools
+        all_tools_results = await self.aggregator.list_tools()
 
         # Print available tools for debugging
         print("\nAvailable MCP tools:")
-        for tool in results.tools:
+        for tool in all_tools_results.tools:
             print(f" - {tool.name}")
-
-        # Organize tools by server name for easier filtering
-        server_tools = {}
-        for tool in results.tools:
-            try:
-                # Extract server name from tool name (prefix before first '.')
-                parts = tool.name.split(".")
-                if len(parts) > 1:
-                    server_name = parts[0]
-                    tool_name = parts[1]  # The actual tool name without server prefix
-                else:
-                    # If no prefix, assume the whole name is both server and tool name
-                    server_name = "unknown"
-                    tool_name = tool.name
-
-                # Add to server_tools dictionary in multiple ways to increase matching chance
-                # 1. By server name
-                if server_name not in server_tools:
-                    server_tools[server_name] = []
-                server_tools[server_name].append(tool)
-
-                # 2. By full name as key
-                if tool.name not in server_tools:
-                    server_tools[tool.name] = []
-                server_tools[tool.name].append(tool)
-
-                # 3. By tool name
-                if tool_name not in server_tools:
-                    server_tools[tool_name] = []
-                server_tools[tool_name].append(tool)
-            except Exception as e:
-                print(f"<warning>Error processing tool {tool.name}: {str(e)}</warning>")
-
-        # Register tools based on user configuration
-        print(f"Tool configuration: {self.mcp_tools}")
-        registered_tools = set()  # Track registered tools to avoid duplicates
-
-        # First try the traditional filtering approach
+        
+        # Track registered tools to avoid duplicates
+        registered_tools = set()
+        
+        # Process each server and tool configuration
         for server_name, tool_config in self.mcp_tools.items():
-            if server_name in server_tools:
-                server_tool_list = server_tools[server_name]
-                print(f"Found {len(server_tool_list)} tools for server '{server_name}'")
-
-                # Apply the filtering based on configuration
-                if tool_config == "all":
-                    # Enable all tools from this server
-                    for tool in server_tool_list:
-                        if tool.name not in registered_tools:
-                            self.tools.append(
-                                {
-                                    "name": tool.name,
-                                    "description": tool.description,
-                                    "input_schema": tool.inputSchema,
-                                }
-                            )
-                            registered_tools.add(tool.name)
-                elif isinstance(tool_config, list):
-                    # Enable specific tools
-                    for tool_name in tool_config:
-                        # Try different name patterns
-                        patterns = [
-                            tool_name,  # As provided
-                            f"{server_name}.{tool_name}",  # With server prefix
-                            tool_name.split(".")[-1],  # Just the last part
-                        ]
-
-                        for pattern in patterns:
-                            for tool in server_tool_list:
-                                if (
-                                    pattern in tool.name or tool.name in pattern
-                                ) and tool.name not in registered_tools:
-                                    self.tools.append(
-                                        {
-                                            "name": tool.name,
-                                            "description": tool.description,
-                                            "input_schema": tool.inputSchema,
-                                        }
-                                    )
-                                    registered_tools.add(tool.name)
-            else:
-                print(
-                    f"<warning>Server '{server_name}' not found in MCP registry</warning>"
-                )
-
-                # Fallback approach - try to match by partial name
-                for tool in results.tools:
-                    # Check if server name is substring of tool name
-                    if server_name in tool.name and tool.name not in registered_tools:
-                        self.tools.append(
-                            {
-                                "name": tool.name,
-                                "description": tool.description,
-                                "input_schema": tool.inputSchema,
-                            }
-                        )
-                        registered_tools.add(tool.name)
-
-        # If no tools registered yet, try a more permissive approach
+            # Check if this server exists in the tools map
+            if server_name not in server_tools_map:
+                print(f"<warning>Server '{server_name}' not found in available tools</warning>")
+                continue
+                
+            server_tools = server_tools_map[server_name]
+            
+            # Create a mapping of tool names to tools for this server (both original and lowercase)
+            server_tool_map = {}
+            for tool in server_tools:
+                server_tool_map[tool.name] = tool
+                # Also index by lowercase name for case-insensitive matching
+                server_tool_map[tool.name.lower()] = tool
+                # And index by snake_case -> camelCase conversion
+                if "_" in tool.name:
+                    camel_case = "".join(x.capitalize() if i > 0 else x for i, x in enumerate(tool.name.split("_")))
+                    server_tool_map[camel_case] = tool
+                    server_tool_map[camel_case.lower()] = tool
+            
+            # Case 1: Register all tools for a server
+            if tool_config == "all":
+                if server_tools:
+                    print(f"Registering all tools for server '{server_name}'")
+                    for tool in server_tools:
+                        namespaced_name = f"{server_name}__{tool.name}"
+                        if namespaced_name not in registered_tools:
+                            self.tools.append(self._format_tool_for_anthropic(tool, server_name))
+                            registered_tools.add(namespaced_name)
+                else:
+                    print(f"<warning>No tools found for server '{server_name}'</warning>")
+            
+            # Case 2: Register specific tools
+            elif isinstance(tool_config, list):
+                for tool_name in tool_config:
+                    # Try multiple variations for flexible matching
+                    variations = [
+                        tool_name,                    # As provided
+                        tool_name.lower(),            # Lowercase
+                        tool_name.replace("_", ""),   # No underscores
+                        tool_name.lower().replace("_", "")  # Lowercase, no underscores
+                    ]
+                    
+                    found = False
+                    for variant in variations:
+                        if variant in server_tool_map:
+                            tool = server_tool_map[variant]
+                            namespaced_name = f"{server_name}__{tool.name}"
+                            if namespaced_name not in registered_tools:
+                                self.tools.append(self._format_tool_for_anthropic(tool, server_name))
+                                registered_tools.add(namespaced_name)
+                                print(f"Registered tool: {namespaced_name}")
+                                found = True
+                            break
+                    
+                    if not found:
+                        print(f"<warning>Tool '{tool_name}' not found for server '{server_name}'</warning>")
+        
+        # If no tools were registered, show a warning
         if not self.tools:
-            print(
-                "<warning>No tools matched specific criteria, trying more flexible matching...</warning>"
-            )
-
-            # Register all tools as a last resort if "all" was used for any server
-            all_requested = any(config == "all" for config in self.mcp_tools.values())
-            if all_requested:
-                for tool in results.tools:
-                    if tool.name not in registered_tools:
-                        self.tools.append(
-                            {
-                                "name": tool.name,
-                                "description": tool.description,
-                                "input_schema": tool.inputSchema,
-                            }
-                        )
-                        registered_tools.add(tool.name)
-
-        # Ensure the input_schema is properly formatted for Anthropic
-        for tool in self.tools:
-            # Make sure required fields exist
-            if "input_schema" in tool:
-                schema = tool["input_schema"]
-
-                # Ensure required fields
-                if "type" not in schema:
-                    schema["type"] = "object"
-
-                # Ensure properties exist
-                if "properties" not in schema:
-                    schema["properties"] = {}
-
-        # Show final tools
+            print("<warning>No tools were registered. Check your MCP configuration.</warning>")
+        
+        # Show summary of registered tools
         print(f"Registered {len(self.tools)} tools from MCP registry:")
         for i, tool in enumerate(self.tools, 1):
             print(f"  {i}. {tool['name']} - {tool['description'][:60]}...")
+    
+    def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
+        """Initialize linked LLM programs from their TOML configurations.
+        
+        Args:
+            linked_programs: Dictionary mapping program names to TOML configuration paths
+            
+        Raises:
+            FileNotFoundError: If a linked program configuration file cannot be found
+        """
+        for program_name, config_path in linked_programs.items():
+            path = Path(config_path)
+            
+            # If path is relative and we have a config_dir, resolve it
+            if not path.is_absolute() and self.config_dir:
+                path = self.config_dir / path
+                
+            if not path.exists():
+                print(f"<warning>Linked program configuration at {path} does not exist</warning>")
+                continue
+                
+            try:
+                # Initialize the linked program using the same from_toml class method
+                linked_program = LLMProcess.from_toml(path)
+                self.linked_programs[program_name] = linked_program
+                print(f"Initialized linked program '{program_name}' from {path}")
+            except Exception as e:
+                print(f"<warning>Failed to initialize linked program '{program_name}': {str(e)}</warning>")
+    
+    def _register_spawn_tool(self) -> None:
+        """Register the spawn tool for interacting with linked programs."""
+        from llmproc.tools import spawn_tool
+        
+        # Only register if we have linked programs
+        if not self.linked_programs:
+            print("<warning>No linked programs available. Spawn tool not registered.</warning>")
+            return
+            
+        # Create the spawn tool definition for Anthropic API
+        spawn_tool_def = {
+            "name": "spawn",
+            "description": "Execute a query with a linked LLM program that may be specialized for specific tasks.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "program_name": {
+                        "type": "string", 
+                        "description": "Name of the linked program to call"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "The query to send to the linked program"
+                    }
+                },
+                "required": ["program_name", "query"]
+            }
+        }
+        
+        # Create a copy of the tool definition for the API
+        api_tool_def = spawn_tool_def.copy()
+        
+        # Add the handler to the internal tool definition
+        spawn_tool_def["handler"] = lambda args: spawn_tool(
+            program_name=args.get("program_name"),
+            query=args.get("query"),
+            llm_process=self
+        )
+        
+        # Only print linked programs info if explicitly debugging
+        if self.debug_tools and os.environ.get("LLMPROC_DEBUG", "").lower() == "true":
+            import sys
+            print("\nLinked programs:", file=sys.stderr)
+            for prog_name, prog_instance in self.linked_programs.items():
+                prog_files = ""
+                if hasattr(prog_instance, "preloaded_content") and prog_instance.preloaded_content:
+                    prog_files = f" with {len(prog_instance.preloaded_content)} preloaded files"
+                print(f"  - {prog_name}: {prog_instance.model_name} ({prog_instance.provider}){prog_files}", 
+                      file=sys.stderr)
+        
+        # Keep the handler and tool definition separate
+        self.tool_handlers = getattr(self, "tool_handlers", {})
+        self.tool_handlers["spawn"] = spawn_tool_def["handler"]
+        
+        # Add to the tools list (API-safe version without handler)
+        self.tools.append(api_tool_def)
+        print(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
+        
+    def _format_tool_for_anthropic(self, tool, server_name=None):
+        """Format a tool for Anthropic API.
+        
+        Args:
+            tool: Tool object from MCP registry
+            server_name: Optional server name for proper namespacing
+            
+        Returns:
+            Dictionary with tool information formatted for Anthropic API
+        """
+        # Create the base tool definition with properly namespaced name
+        if server_name:
+            namespaced_name = f"{server_name}__{tool.name}"
+        else:
+            # If no server name is provided, use the tool name as is (likely already namespaced)
+            namespaced_name = tool.name
+            
+        tool_def = {
+            "name": namespaced_name,
+            "description": tool.description,
+            "input_schema": tool.inputSchema.copy() if tool.inputSchema else {"type": "object", "properties": {}}
+        }
+        
+        # Ensure schema has required fields
+        schema = tool_def["input_schema"]
+        if "type" not in schema:
+            schema["type"] = "object"
+        if "properties" not in schema:
+            schema["properties"] = {}
+            
+        return tool_def
 
     async def _process_tool_calls(self, tool_calls):
         """Process tool calls from Anthropic response.
@@ -820,14 +992,13 @@ class LLMProcess:
             List of tool results with standardized format
         """
         tool_results = []
-        debug = self.parameters.get("debug_tools", False)
 
         for tool_call in tool_calls:
             tool_name = tool_call.name
             tool_args = tool_call.input
             tool_id = tool_call.id
 
-            if debug:
+            if self.debug_tools:
                 print(f"\nProcessing tool call: {tool_name}")
                 print(f"  Tool ID: {tool_id}")
                 print(f"  Args: {json.dumps(tool_args, indent=2)[:200]}...")
@@ -841,7 +1012,7 @@ class LLMProcess:
 
                 end_time = asyncio.get_event_loop().time()
 
-                if debug:
+                if self.debug_tools:
                     print(f"  Tool execution time: {end_time - start_time:.2f}s")
 
                 # Extract content and error status based on result type
@@ -858,7 +1029,7 @@ class LLMProcess:
                         json.dumps(content)
                     except (TypeError, OverflowError, ValueError):
                         # If it can't be serialized, convert to string
-                        if debug:
+                        if self.debug_tools:
                             print(
                                 "  Content is not JSON-serializable, converting to string"
                             )
@@ -871,6 +1042,8 @@ class LLMProcess:
                     try:
                         json.dumps(content)
                     except (TypeError, OverflowError, ValueError):
+                        if self.debug_tools:
+                            print("  Content is not JSON-serializable, converting to string")
                         content = str(content)
 
                 # Check error status
@@ -890,7 +1063,7 @@ class LLMProcess:
                     "is_error": is_error,
                 }
 
-                if debug:
+                if self.debug_tools:
                     print(f"  Result: {'ERROR' if is_error else 'SUCCESS'}")
                     if isinstance(content, dict):
                         print(
@@ -903,7 +1076,7 @@ class LLMProcess:
                 # For errors in the tool execution itself, create an error result
                 error_message = f"Error calling MCP tool {tool_name}: {str(e)}"
 
-                if debug:
+                if self.debug_tools:
                     print(f"  EXCEPTION: {error_message}")
 
                 tool_result = {
@@ -925,34 +1098,35 @@ class LLMProcess:
             keep_system_prompt: Whether to keep the system prompt in the state
             keep_preloaded: Whether to keep preloaded file content in the state
         """
+        # Access the stored original system prompt
+        original_system_prompt = getattr(self, "original_system_prompt", self.system_prompt)
+        
+        # Reset the state
         if keep_system_prompt:
-            self.state = [{"role": "system", "content": self.system_prompt}]
+            if keep_preloaded and hasattr(self, "preloaded_content") and self.preloaded_content:
+                # Keep both system prompt and preloaded content
+                self.state = [{"role": "system", "content": self.system_prompt}]
+            else:
+                # Keep only the original system prompt without preloaded content
+                self.state = [{"role": "system", "content": original_system_prompt}]
+                # Update stored system prompt
+                self.system_prompt = original_system_prompt
         else:
+            # Remove everything
             self.state = []
-
-        # Re-add preloaded content if requested
-        if (
-            keep_preloaded
-            and hasattr(self, "preloaded_content")
-            and self.preloaded_content
-        ):
-            # Rebuild the preload content in the same format
+            
+        # If we're keeping system prompt but not preloaded content, we already handled it above
+        # If we're not keeping system prompt but want to keep preloaded, re-add everything
+        if not keep_system_prompt and keep_preloaded and hasattr(self, "preloaded_content") and self.preloaded_content:
+            # Rebuild the preload content
             preload_content = "<preload>\n"
             for file_path, content in self.preloaded_content.items():
                 filename = Path(file_path).name
                 preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
             preload_content += "</preload>"
-
-            # Add as a single message
-            self.state.append(
-                {
-                    "role": "user",
-                    "content": f"Please read the following preloaded files:\n{preload_content}",
-                }
-            )
-            self.state.append(
-                {
-                    "role": "assistant",
-                    "content": "I've read all the preloaded files. I'll incorporate this information in our conversation.",
-                }
-            )
+            
+            # Create a new system message with original prompt and preloaded content
+            system_content = f"{original_system_prompt}\n\n{preload_content}"
+            self.state = [{"role": "system", "content": system_content}]
+            # Update stored system prompt
+            self.system_prompt = system_content

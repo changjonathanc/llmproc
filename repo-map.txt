@@ -17,7 +17,8 @@ llmproc/
 │   ├── api_parameters.md            # Documentation of OpenAI and Anthropic API parameters
 │   ├── mcp-feature.md               # Documentation for Model Context Protocol (MCP) feature
 │   ├── mcp-feature-status.md        # Status and implementation progress of MCP feature
-│   └── preload-feature.md           # Documentation for file preloading feature
+│   ├── preload-feature.md           # Documentation for file preloading feature
+│   └── program-linking.md           # Documentation for program linking feature
 ├── examples/                        # Example TOML configuration files
 │   ├── anthropic.toml               # Anthropic model configuration example
 │   ├── claude_code.toml             # Claude Code assistant with MCP tools configuration
@@ -26,6 +27,9 @@ llmproc/
 │   ├── mcp.toml                     # Model Context Protocol (MCP) configuration example
 │   ├── openai.toml                  # OpenAI model configuration example
 │   ├── preload.toml                 # Example showing file preloading functionality
+│   ├── program_linking/             # Examples for program linking feature
+│   │   ├── main.toml                # Primary LLM configuration with spawn tool
+│   │   └── repo_expert.toml         # Specialized LLM with repository knowledge
 │   ├── reference.toml               # Comprehensive reference with all supported parameters
 │   └── vertex.toml                  # Google Vertex AI model configuration
 ├── prompts/                         # Prompt templates for LLMs
@@ -45,26 +49,31 @@ llmproc/
 │       ├── __init__.py              # Package initialization, exports LLMProcess
 │       ├── cli.py                   # Command-line interface for interactive chat
 │       ├── llm_process.py           # Core LLMProcess class implementation
-│       └── providers/               # LLM provider implementations directory
-│           ├── __init__.py          # Provider package initialization
-│           ├── anthropic_tools.py   # Anthropic-specific tool implementations
-│           └── providers.py         # Core provider implementations
+│       ├── providers/               # LLM provider implementations directory
+│       │   ├── __init__.py          # Provider package initialization
+│       │   ├── anthropic_tools.py   # Anthropic-specific tool implementations
+│       │   └── providers.py         # Core provider implementations
+│       └── tools/                   # Built-in tool implementations
+│           ├── __init__.py          # Tools package initialization
+│           └── spawn.py             # Spawn tool for program linking
 └── tests/                           # Test directory
     ├── __init__.py                  # Test package initialization
     ├── test_from_toml.py            # Tests for TOML configuration loading
     ├── test_llm_process.py          # Tests for core LLMProcess functionality
     ├── test_llm_process_providers.py # Tests for LLMProcess provider integration
     ├── test_mcp_features.py         # Tests for Model Context Protocol features
+    ├── test_program_linking.py      # Tests for program linking functionality
     └── test_providers.py            # Tests for provider implementations
 ```
 
 ## Main Components
 
 ### Core Implementation
-- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, supports file preloading for context, and provides MCP tool integration.
+- `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, supports file preloading for context, and provides tool integration.
 - `src/llmproc/providers/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI) with asynchronous API support.
-- `src/llmproc/providers/anthropic_tools.py`: Anthropic-specific tool implementations for MCP functionality.
-- `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations, including support for MCP tools.
+- `src/llmproc/providers/anthropic_tools.py`: Anthropic-specific tool implementations for functional tools support.
+- `src/llmproc/tools/spawn.py`: Implementation of the spawn tool for program linking functionality.
+- `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations, including support for tools and program linking.
 
 ### Configuration
 - `examples/*.toml`: TOML configuration files for LLMProcess.

@@ -1,17 +1,16 @@
 [model]
 name = "claude-3-7-sonnet-20250219"
 provider = "anthropic"
-display_name = "Claude Code"
+display_name = "Claude Code Dispatch Agent"
 
 [prompt]
-system_prompt_file = "../prompts/claude-code-system-prompt.md"
+system_prompt_file = "../prompts/claude-code-dispatch-agent-system-prompt.md"
 
 [parameters]
 temperature = 1
 max_tokens = 20000
 
 [preload]
-files = ["CLAUDE.md"]
 
 [mcp]
 config_path = "../config/mcp_servers.json"
@@ -21,10 +20,3 @@ config_path = "../config/mcp_servers.json"
 #codemcp = ["read_file", "write_file", "edit_file", "ls", "grep", "init_project_tool"]
 # we only allow read only access to the file system for demo purposes
 codemcp = ["read_file", "ls", "grep"]
-
-[tools]
-enabled = ["spawn"]
-
-
-[linked_programs]
-enabled = ["./claude_code_dispatch_agent.toml"]

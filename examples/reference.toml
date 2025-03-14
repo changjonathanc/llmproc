@@ -45,7 +45,7 @@ presence_penalty = 0.0
 #----------------------------------------
 [prompt]
 # System prompt as a string
-system_prompt = """You are a helpful assistant. 
+system_prompt = """You are a helpful assistant.
 Provide clear, accurate, and concise responses to user queries.
 Always maintain a neutral and professional tone."""
 
@@ -57,10 +57,26 @@ Always maintain a neutral and professional tone."""
 #----------------------------------------
 [preload]
 # Files to preload as context (relative paths)
+# Content will be added to system prompt with XML tags
 # files = [
 #   "../prompts/example_prompt.md",
 #   "../README.md"
 # ]
+
+#----------------------------------------
+# Tools Configuration
+#----------------------------------------
+[tools]
+# List of enabled tools
+# enabled = ["spawn"]  # Enable the spawn tool for program linking
+
+#----------------------------------------
+# Program Linking Configuration
+#----------------------------------------
+[linked_programs]
+# Map program names to their TOML configuration files
+# repo_expert = "./repo_expert.toml"
+# code_helper = "./code_helper.toml"
 
 #----------------------------------------
 # MCP (Model Context Protocol) Configuration

@@ -85,13 +85,13 @@ presence_penalty = 0.1
         assert process.model_name == "gpt-4o"
         assert process.system_prompt == "You are a complex test assistant."
         assert process.state == [{"role": "system", "content": "You are a complex test assistant."}]
-        assert process.parameters == {
-            "temperature": 0.8,
-            "max_tokens": 2000,
-            "top_p": 0.95,
-            "frequency_penalty": 0.2,
-            "presence_penalty": 0.1
-        }
+        # Check that parameters are in api_params instead of parameters
+        assert hasattr(process, "api_params")
+        assert process.api_params.get("top_p") == 0.95
+        assert process.api_params.get("frequency_penalty") == 0.2
+        assert process.api_params.get("presence_penalty") == 0.1
+        assert process.api_params.get("temperature") == 0.8
+        assert process.api_params.get("max_tokens") == 2000
 
 
 # Skipping this test for now
