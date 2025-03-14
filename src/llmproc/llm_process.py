@@ -659,13 +659,48 @@ class LLMProcess:
 
         This sets up the MCP registry and filters tools based on user configuration.
         Only tools explicitly specified in the mcp_tools configuration will be enabled.
+        Only servers that have tools configured will be initialized.
         """
         if not self.mcp_enabled:
             return
 
-        # Initialize MCP registry and aggregator
-        self.registry = ServerRegistry.from_config(self.mcp_config_path)
-        self.aggregator = MCPAggregator(self.registry)
+        print(f"Tool configuration: {self.mcp_tools}")
+        
+        # Get the set of server names that are configured in mcp_tools
+        configured_servers = set(self.mcp_tools.keys())
+        
+        # Read the MCP config file into a dictionary
+        import json
+        try:
+            with open(self.mcp_config_path, 'r') as f:
+                full_config = json.load(f)
+                
+            # Create a filtered config with only the servers we need
+            filtered_config = {"mcpServers": {}}
+            
+            # Filter servers based on what's configured in mcp_tools
+            mcp_servers = full_config.get("mcpServers", {})
+            for server_name, server_config in mcp_servers.items():
+                if server_name in configured_servers:
+                    filtered_config["mcpServers"][server_name] = server_config
+                    print(f"Including server '{server_name}' from config")
+                else:
+                    print(f"Skipping server '{server_name}' (not configured in mcp_tools)")
+            
+            # Check if any configured servers are missing from the config file
+            missing_servers = configured_servers - set(filtered_config["mcpServers"].keys())
+            if missing_servers:
+                print(f"<warning>Configured servers not found in config file: {missing_servers}</warning>")
+            
+            # Initialize registry from the filtered config
+            self.registry = ServerRegistry.from_dict(filtered_config)
+            self.aggregator = MCPAggregator(self.registry)
+            
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            print(f"<warning>Error reading MCP config: {str(e)}</warning>")
+            # Fall back to the standard method in case of errors
+            self.registry = ServerRegistry.from_config(self.mcp_config_path)
+            self.aggregator = MCPAggregator(self.registry)
 
         # Get all available tools from the MCP registry
         results = await self.aggregator.list_tools()
@@ -674,8 +709,6 @@ class LLMProcess:
         print("\nAvailable MCP tools:")
         for tool in results.tools:
             print(f" - {tool.name}")
-
-        print(f"Tool configuration: {self.mcp_tools}")
         
         # Create a single-pass lookup for all tools
         available_tools = {}
