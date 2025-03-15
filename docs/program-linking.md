@@ -2,15 +2,15 @@
 
 ## Overview
 
-The Program Linking feature allows LLMProcess instances to communicate with each other through a specialized "spawn" tool. This enables primary LLMs to delegate queries to specialized LLMs that have different configurations, system prompts, and preloaded content.
+The Program Linking feature allows LLM processes to communicate with each other through the "spawn" system call. This enables primary processes to delegate queries to specialized processes that have different system prompts, preloaded files, and parameters.
 
 ## Use Cases
 
-1. **Knowledge Specialization**: Create expert models with specialized knowledge by preloading different files for each model.
+1. **Knowledge Specialization**: Create specialized processes with domain-specific knowledge by preloading different files for each process.
    
-2. **Task Distribution**: Split complex tasks among multiple LLMs, each optimized for a specific subtask.
+2. **Task Distribution**: Split complex tasks among multiple processes, each optimized for a specific subtask.
    
-3. **Context Separation**: Keep large reference documents in separate LLMs to maintain clean context spaces.
+3. **Context Separation**: Keep large reference documents in separate processes to maintain clean context spaces.
 
 ## Configuration
 
@@ -24,7 +24,7 @@ repo_expert = "./repo_expert.toml"
 code_helper = "./code_helper.toml"
 ```
 
-2. The `[tools]` section must include "spawn" in the enabled tools:
+2. The `[tools]` section must include "spawn" in the enabled system calls:
 
 ```toml
 [tools]

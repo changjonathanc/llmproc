@@ -4,15 +4,37 @@ This document contains additional information, tips, and implementation details 
 
 ## Terminology
 
-The LLMProc project uses specific terminology to describe its components:
+The LLMProc project uses specific terminology to describe its components, built around the Unix-like process metaphor:
 
-- **Program**: A TOML file that defines an LLM agent with its configuration (model, provider, parameters, etc.). Programs are the fundamental unit of definition in LLMProc.
-- **Process**: A running instance of an LLM agent, created from a program file.
-- **Linked Program**: A reference to another TOML program file that can be spawned by a main process.
-- **Tool**: A function that an LLM agent can use to perform operations.
+> **Note on "Agent" terminology**: We deliberately avoid using the term "agent" in LLMProc as it has varied definitions in the AI community. Some view agents as the underlying technology where LLMs have agency to decide what tools to call (in which case agents would power LLM processes). Others view agents as user-facing programs that users interact with (placing agents on top of LLM processes). To maintain clarity, we focus on the Unix-like "process" metaphor throughout LLMProc.
+
+### Core Concepts
+
+- **LLM**: The underlying large language model technology (like GPT-4, Claude, etc.).
+- **Model**: A specific LLM configuration from a provider (e.g., "gpt-4o-mini" or "claude-3-haiku").
+- **Program**: A TOML file that defines an LLM's configuration (model, provider, parameters, etc.). Programs are the fundamental unit of definition in LLMProc, analogous to a program executable file.
+- **Process**: A running instance of an LLM, created from a program file. This represents the active, stateful execution environment.
+- **State**: The conversation history maintained by a process across interactions.
+
+### Communication and Tools
+
+- **System Prompt**: The initial instructions provided to the LLM that define its behavior and capabilities.
+- **Tool**: A function that an LLM process can use to perform operations outside its context.
 - **MCP (Model Context Protocol)**: A portable protocol for tool communication with LLMs, providing "userspace" tools.
 - **System Call**: A kernel-level tool implemented by LLMProc, defined in the `[tools]` section (e.g., `spawn`).
 - **Provider**: The API service providing the LLM (OpenAI, Anthropic, Vertex).
+
+### Relationships and Connections
+
+- **Linked Program**: A reference to another TOML program file that can be spawned by a main process.
+- **Spawn**: A system call that creates a new process from a linked program to handle a specific query.
+- **Preloaded Content**: Files loaded into the system prompt to provide additional context to an LLM process.
+
+### Implementation Details
+
+- **Parameters**: Settings that control the behavior of the LLM (temperature, max_tokens, etc.).
+- **TOML Section**: A configuration group in a program file (e.g., `[model]`, `[prompt]`, `[parameters]`).
+- **Display Name**: A user-friendly name shown in CLI interfaces for a process.
 
 ## Environment Variables
 

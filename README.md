@@ -8,10 +8,10 @@ A simple, flexible framework for building LLM-powered applications with a standa
 
 ## Core Principles
 
-### LLM Agent as Process
+### LLM as Process
 
-We view LLM Agents as processes in a computing environment:
-- It's defined by a program (TOML file)
+We view LLMs as processes in a computing environment:
+- Each process is defined by a program (TOML file)
 - It receives input, executes, and returns output
 - It maintains state between executions
 - It interacts with the system through defined interfaces
@@ -19,10 +19,10 @@ We view LLM Agents as processes in a computing environment:
 ### LLMProc as Kernel
 
 The LLMProc library functions as a kernel:
-- Implements system calls for LLM agents
-- Manages resources across agent processes
-- Provides privileged operations agents cannot perform themselves
-- Creates a standardized interface between agents and their environment
+- Implements system calls for LLM processes
+- Manages resources across processes
+- Provides privileged operations processes cannot perform themselves
+- Creates a standardized interface between processes and their environment
 
 ## Features
 
@@ -129,7 +129,7 @@ async def main():
     response = await main_process.run("What is the current version of LLMProc?")
     print(f"Response: {response}")
 
-    # This will internally use the 'spawn' tool to delegate to repo_expert
+    # This will internally use the 'spawn' system call to delegate to repo_expert
     response = await main_process.run("Explain how program linking works in this library")
     print(f"Response: {response}")
 
@@ -176,7 +176,7 @@ The demo will:
 
 ### Program Linking Example
 
-The program linking example in `./examples/program_linking/main.toml` demonstrates how to create a main LLM that can delegate queries to a specialized "repo_expert" LLM. The repo_expert has access to preloaded files about the LLMProc repository and can answer specific questions about the codebase.
+The program linking example in `./examples/program_linking/main.toml` demonstrates how to create a main process that can delegate queries to a specialized "repo_expert" process. The repo_expert process has access to preloaded files about the LLMProc repository and can answer specific questions about the codebase.
 
 ### Interactive Commands
 
@@ -189,24 +189,24 @@ In the interactive session, you can use the following commands:
 
 ### Program Definition via TOML
 
-- Enables agent self-modification (similar to Claude Code updating CLAUDE.md)
-- Makes programs portable across implementations
-- Human-readable and LLM-friendly
+- Makes process definitions portable across implementations
+- Enables program modification (similar to Claude Code updating CLAUDE.md)
+- Human-readable and LLM-friendly format
 
 ### System Calls
 
 LLMProc implements Unix-like process system calls:
-- **Spawn**: Create new agent processes (analogous to exec()) - ✅ Implemented
-- **Fork**: Duplicate an existing agent with its state (analogous to fork()) - 🚧 Planned
+- **spawn**: Create new processes from linked programs (analogous to exec()) - ✅ Implemented
+- **fork**: Duplicate an existing process with its state (analogous to fork()) - 🚧 Planned
 
 Reference: [forking-an-agent](https://github.com/cccntu/forking-an-agent)
 
 ### Program Linking
 
-Program linking allows one LLM process to communicate with another specialized LLM process:
+Program linking allows one LLM process to communicate with other specialized LLM processes:
 
 ```toml
-# Main.toml - Configure main assistant with spawn tool
+# Main.toml - Configure main process with spawn system call
 [tools]
 enabled = ["spawn"]
 
@@ -215,8 +215,8 @@ expert = "path/to/expert.toml"
 ```
 
 This enables:
-- Creating specialized expert LLMs for specific domains
-- Delegating queries to the most appropriate LLM
+- Creating specialized processes with domain-specific knowledge
+- Delegating queries to the most appropriate process
 - Centralized knowledge repository with distributed querying
 
 ### MCP Integration
