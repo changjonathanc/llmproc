@@ -1,4 +1,4 @@
-"""Spawn tool for LLMProcess to interact with linked programs."""
+"""Spawn system call for LLMProcess to create new processes from linked programs."""
 
 import asyncio
 import os
@@ -13,10 +13,10 @@ async def spawn_tool(
     query: str,
     llm_process: Optional[LLMProcess] = None,
 ) -> Dict[str, Any]:
-    """Execute a query with a linked LLM program.
+    """Create a new process from a linked program to handle a specific query.
     
-    This tool allows one LLM process to spawn a query to another linked LLM process
-    that may be specialized for specific tasks.
+    This system call allows one LLM process to create a new process from a linked program
+    to handle specialized tasks.
     
     Args:
         program_name: The name of the linked program to call
@@ -33,7 +33,7 @@ async def spawn_tool(
     debug = getattr(llm_process, 'debug_tools', False) and os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
     
     if not llm_process or not hasattr(llm_process, "linked_programs"):
-        error_msg = "Spawn tool requires a parent LLMProcess with linked_programs defined"
+        error_msg = "Spawn system call requires a parent LLMProcess with linked_programs defined"
         if debug:
             print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
         return {
@@ -53,10 +53,10 @@ async def spawn_tool(
         }
     
     try:
-        # Get the linked program instance
+        # Get the linked program instance to create a new process
         linked_program = linked_programs[program_name]
         
-        # Execute the query on the linked program
+        # Execute the query on the new process
         response = await linked_program.run(query)
         
         result = {
@@ -67,7 +67,7 @@ async def spawn_tool(
         return result
     except Exception as e:
         import traceback
-        error_msg = f"Error executing query with program '{program_name}': {str(e)}"
+        error_msg = f"Error creating process from program '{program_name}': {str(e)}"
         if debug:
             print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)

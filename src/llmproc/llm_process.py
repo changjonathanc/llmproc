@@ -32,7 +32,7 @@ load_dotenv()
 
 
 class LLMProcess:
-    """Process for interacting with LLMs using standardized configuration."""
+    """Process for interacting with LLMs using standardized program definitions."""
 
     def __init__(
         self,
@@ -54,17 +54,17 @@ class LLMProcess:
         Args:
             model_name: Name of the model to use
             provider: Provider of the model (openai, anthropic, or vertex)
-            system_prompt: System message to provide to the model
-            preload_files: List of file paths to preload as context
-            display_name: User-facing name for the model in CLI interfaces
+            system_prompt: System prompt that defines the behavior of the process
+            preload_files: List of file paths to preload into the system prompt as context
+            display_name: User-facing name for the process in CLI interfaces
             mcp_config_path: Path to MCP servers configuration file
             mcp_tools: Dictionary mapping server names to tools to enable
                        Value can be a list of tool names or "all" to enable all tools
             linked_programs: Dictionary mapping program names to TOML program paths
             linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
             config_dir: Base directory for resolving relative paths in programs
-            parameters: Dictionary from the [parameters] section in TOML
-            tools: Dictionary from the [tools] section in TOML
+            parameters: Dictionary from the [parameters] section in the TOML program
+            tools: Dictionary from the [tools] section in the TOML program
 
         Raises:
             NotImplementedError: If the provider is not implemented
@@ -893,18 +893,18 @@ class LLMProcess:
                 print(f"<warning>Failed to initialize linked program '{program_name}': {str(e)}</warning>")
     
     def _register_spawn_tool(self) -> None:
-        """Register the spawn tool for interacting with linked programs."""
+        """Register the spawn system call for creating new processes from linked programs."""
         from llmproc.tools import spawn_tool
         
         # Only register if we have linked programs
         if not self.linked_programs:
-            print("<warning>No linked programs available. Spawn tool not registered.</warning>")
+            print("<warning>No linked programs available. Spawn system call not registered.</warning>")
             return
             
-        # Create the spawn tool definition for Anthropic API
+        # Create the spawn system call definition for Anthropic API
         spawn_tool_def = {
             "name": "spawn",
-            "description": "Execute a query with a linked LLM program that may be specialized for specific tasks.",
+            "description": "Create a new process from a linked program to handle a specific query.",
             "input_schema": {
                 "type": "object",
                 "properties": {
