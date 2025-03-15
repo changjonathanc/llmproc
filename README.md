@@ -193,6 +193,15 @@ In the interactive session, you can use the following commands:
 - Enables program modification (similar to Claude Code updating CLAUDE.md)
 - Human-readable and LLM-friendly format
 
+### Testing
+
+LLMProc has a comprehensive test suite for all components:
+- Unit tests for core functionality without requiring API keys
+- Integration tests for program features
+- API tests for verifying actual LLM integration (requires API keys)
+
+See [Testing Guide](docs/testing.md) for details on running and writing tests.
+
 ### System Calls
 
 LLMProc implements Unix-like process system calls:
