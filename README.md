@@ -170,8 +170,8 @@ llmproc-demo ./examples/program_linking/main.toml
 ```
 
 The demo will:
-1. If no config is specified, show a list of available TOML configurations from the examples directory
-2. Let you select a configuration by number, or use the specified config file
+1. If no config is specified, show a list of available TOML programs from the examples directory
+2. Let you select a program by number, or use the specified program file
 3. Start an interactive chat session with the selected model
 
 ### Program Linking Example

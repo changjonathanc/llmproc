@@ -24,6 +24,7 @@
 - Run specific test file: `pytest tests/test_file.py`
 - Run specific test class or function: `pytest tests/test_file.py::TestClass::test_function`
 - Run tests with API access (requires API keys): `pytest -m llm_api`
+- Test example programs with API: `pytest tests/test_example_programs.py -m llm_api`
 - Test program linking: `pytest tests/test_program_linking_robust.py`
 - Test program linking with API access: `pytest tests/test_program_linking_api.py -m llm_api`
 - Debug output: Set `LLMPROC_DEBUG=true` environment variable for detailed logging
@@ -33,6 +34,8 @@
 - Provider tests: Mock API responses to test provider integrations
 - MCP tests: Verify Model Context Protocol tool implementation
 - Program Linking tests: Verify LLM-to-LLM communication features
+- Example configurations tests: Verify all example TOML files work with actual APIs
+- CLI tests: Verify command-line interface functionality with actual APIs
 - API Integration tests: Verify end-to-end functionality with real API calls
 - All tests are marked appropriately to skip API tests by default
 
@@ -177,3 +180,15 @@
 7. Updated documentation to reflect the new approach
 8. Simplified preload logic to be more direct
 9. Enhanced reference.toml with clearer explanation of preload functionality
+
+## Session Summary (2025-03-15)
+1. Added comprehensive API tests for all example configurations
+2. Created tests for CLI interface with real API calls
+3. Implemented test for unique message echo verification
+4. Added tests for program linking through CLI
+5. Created tests for error handling and recovery
+6. Improved test skip behavior when API keys aren't available
+7. Added API testing documentation in docs/api_testing.md
+8. Updated README and CLAUDE.md with testing information
+9. Added basic validation for TOML configuration files
+10. Enhanced test coverage for all example configurations
