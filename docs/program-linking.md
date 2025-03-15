@@ -16,7 +16,7 @@ The Program Linking feature allows LLMProcess instances to communicate with each
 
 Program linking is configured in two places:
 
-1. The main TOML configuration's `[linked_programs]` section specifies which programs to link:
+1. The main TOML program's `[linked_programs]` section specifies which programs to link:
 
 ```toml
 [linked_programs]
@@ -34,7 +34,7 @@ enabled = ["spawn"]
 ## Example
 
 ```toml
-# main.toml - Primary LLM configuration
+# main.toml - Primary LLM program
 [model]
 name = "claude-3-haiku-20240307"
 provider = "anthropic"
@@ -55,7 +55,7 @@ repo_expert = "./repo_expert.toml"
 ```
 
 ```toml
-# repo_expert.toml - Expert LLM configuration
+# repo_expert.toml - Expert LLM program
 [model]
 name = "claude-3-haiku-20240307"
 provider = "anthropic"

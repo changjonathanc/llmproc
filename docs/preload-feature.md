@@ -4,16 +4,16 @@ The preload feature allows you to provide files as context to the LLM at initial
 
 ## How Preloading Works
 
-When you specify files in the `[preload]` section of your TOML configuration, LLMProc will:
+When you specify files in the `[preload]` section of your TOML program, LLMProc will:
 
 1. Read all specified files at initialization time
 2. Format the content with XML tags for better context organization
 3. Add the content to the system prompt as part of the primary context
 4. Maintain this context even after conversation resets (optional)
 
-## TOML Configuration
+## TOML Program Configuration
 
-Add a `[preload]` section to your TOML configuration file:
+Add a `[preload]` section to your TOML program file:
 
 ```toml
 [preload]
@@ -28,12 +28,12 @@ File paths are relative to the location of the TOML file.
 
 ## Examples
 
-### Configuration-based Preloading
+### Program-based Preloading
 
 ```python
 from llmproc import LLMProcess
 
-# Load configuration with preloaded files
+# Load program with preloaded files
 process = LLMProcess.from_toml("examples/preload.toml")
 
 # The model already has context from preloaded files
@@ -49,7 +49,7 @@ process.reset_state(keep_preloaded=True)
 ```python
 from llmproc import LLMProcess
 
-# Start with basic configuration
+# Start with basic program
 process = LLMProcess.from_toml("examples/minimal.toml")
 
 # Add files to the conversation context at runtime

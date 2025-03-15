@@ -60,9 +60,9 @@ class LLMProcess:
             mcp_config_path: Path to MCP servers configuration file
             mcp_tools: Dictionary mapping server names to tools to enable
                        Value can be a list of tool names or "all" to enable all tools
-            linked_programs: Dictionary mapping program names to TOML configuration paths
+            linked_programs: Dictionary mapping program names to TOML program paths
             linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
-            config_dir: Base directory for resolving relative paths in configurations
+            config_dir: Base directory for resolving relative paths in programs
             parameters: Dictionary from the [parameters] section in TOML
             tools: Dictionary from the [tools] section in TOML
 
@@ -225,10 +225,10 @@ class LLMProcess:
 
     @classmethod
     def from_toml(cls, toml_path: str | Path) -> "LLMProcess":
-        """Create an LLMProcess from a TOML configuration file.
+        """Create an LLMProcess from a TOML program file.
 
         Args:
-            toml_path: Path to the TOML configuration file
+            toml_path: Path to the TOML program file
 
         Returns:
             An initialized LLMProcess instance
@@ -238,24 +238,24 @@ class LLMProcess:
         """
         path = Path(toml_path)
         with path.open("rb") as f:
-            config = tomllib.load(f)
+            program = tomllib.load(f)
 
         # Check for recognized sections
         known_sections = {
             "model", "prompt", "parameters", "preload", 
             "mcp", "linked_programs", "tools"
         }
-        unknown_sections = set(config.keys()) - known_sections
+        unknown_sections = set(program.keys()) - known_sections
         if unknown_sections:
-            print(f"<warning>Unknown sections in TOML file: {list(unknown_sections)}</warning>")
+            print(f"<warning>Unknown sections in TOML program: {list(unknown_sections)}</warning>")
             
-        model = config["model"]
-        prompt_config = config.get("prompt", {})
-        parameters = config.get("parameters", {})
-        preload_config = config.get("preload", {})
-        mcp_config = config.get("mcp", {})
-        linked_programs_config = config.get("linked_programs", {})
-        tools_config = config.get("tools", {})
+        model = program["model"]
+        prompt_config = program.get("prompt", {})
+        parameters = program.get("parameters", {})
+        preload_config = program.get("preload", {})
+        mcp_config = program.get("mcp", {})
+        linked_programs_config = program.get("linked_programs", {})
+        tools_config = program.get("tools", {})
 
         if "system_prompt_file" in prompt_config:
             system_prompt_path = path.parent / prompt_config["system_prompt_file"]
@@ -865,23 +865,23 @@ class LLMProcess:
             print(f"  {i}. {tool['name']} - {tool['description'][:60]}...")
     
     def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
-        """Initialize linked LLM programs from their TOML configurations.
+        """Initialize linked LLM programs from their TOML program files.
         
         Args:
-            linked_programs: Dictionary mapping program names to TOML configuration paths
+            linked_programs: Dictionary mapping program names to TOML program paths
             
         Raises:
-            FileNotFoundError: If a linked program configuration file cannot be found
+            FileNotFoundError: If a linked program file cannot be found
         """
-        for program_name, config_path in linked_programs.items():
-            path = Path(config_path)
+        for program_name, program_path in linked_programs.items():
+            path = Path(program_path)
             
             # If path is relative and we have a config_dir, resolve it
             if not path.is_absolute() and self.config_dir:
                 path = self.config_dir / path
                 
             if not path.exists():
-                print(f"<warning>Linked program configuration at {path} does not exist</warning>")
+                print(f"<warning>Linked program file at {path} does not exist</warning>")
                 continue
                 
             try:

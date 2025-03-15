@@ -11,7 +11,7 @@ A simple, flexible framework for building LLM-powered applications with a standa
 ### LLM Agent as Process
 
 We view LLM Agents as processes in a computing environment:
-- It's defined by a program (TOML configuration)
+- It's defined by a program (TOML file)
 - It receives input, executes, and returns output
 - It maintains state between executions
 - It interacts with the system through defined interfaces
@@ -26,7 +26,7 @@ The LLMProc library functions as a kernel:
 
 ## Features
 
-- Load configurations from TOML files
+- Load programs from TOML files
 - Maintain conversation state
 - Support for different LLM providers (OpenAI, Anthropic, Vertex)
 - Extensive parameter customization
@@ -59,7 +59,7 @@ import asyncio
 from llmproc import LLMProcess
 
 async def main():
-    # Load configuration from TOML
+    # Load program from TOML
     process = LLMProcess.from_toml('examples/minimal.toml')
 
     # Run the process with user input
@@ -84,7 +84,7 @@ import asyncio
 from llmproc import LLMProcess
 
 async def main():
-    # Load configuration with MCP tools
+    # Load program with MCP tools
     process = LLMProcess.from_toml('examples/minimal.toml')
 
     # Run the process with user input
@@ -104,7 +104,7 @@ While `run()` is an async method, it automatically handles event loops when call
 ```python
 from llmproc import LLMProcess
 
-# Load configuration from TOML
+# Load program from TOML
 process = LLMProcess.from_toml('examples/minimal.toml')
 
 # This works in synchronous code too (creates event loop internally)
@@ -136,7 +136,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### TOML Configuration
+### TOML Program Format
 
 Minimal example:
 
