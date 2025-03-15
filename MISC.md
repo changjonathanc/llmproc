@@ -2,6 +2,17 @@
 
 This document contains additional information, tips, and implementation details that supplement the main README but aren't essential for getting started.
 
+## Terminology
+
+The LLMProc project uses specific terminology to describe its components:
+
+- **Program**: A TOML file that defines an LLM agent with its configuration (model, provider, parameters, etc.). Programs are the fundamental unit of definition in LLMProc.
+- **Process**: A running instance of an LLM agent, created from a program file.
+- **Linked Program**: A reference to another TOML program file that can be spawned by a main process.
+- **Tool**: A function that an LLM agent can use to perform operations, such as spawning another process.
+- **Provider**: The API service providing the LLM (OpenAI, Anthropic, Vertex).
+- **MCP (Model Context Protocol)**: The protocol used for tool communication with LLMs.
+
 ## Environment Variables
 
 LLMProc supports the following environment variables:
@@ -19,9 +30,9 @@ You can set these in your environment or include them in a `.env` file.
 
 The program linking feature (via the spawn tool) is conceptually similar to the `dispatch_agent` tool in Claude Code. Both allow delegating specific tasks to specialized agents/processes. However, LLMProc's implementation gives you more control over configuration and enables fully custom, specialized LLMs.
 
-### Example TOML Configurations
+### Example TOML Programs
 
-A complete program linking setup involves at least two TOML files:
+A complete program linking setup involves at least two TOML program files:
 
 **Main Process (main.toml):**
 ```toml
@@ -100,7 +111,7 @@ async def run_with_expert(query):
 - No automatic batching of related queries to the same expert
 - Limited debugging information for tool execution
 
-## Advanced Configurations
+## Advanced Program Setups
 
 ### Enabling Debug Mode
 
