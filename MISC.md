@@ -9,9 +9,10 @@ The LLMProc project uses specific terminology to describe its components:
 - **Program**: A TOML file that defines an LLM agent with its configuration (model, provider, parameters, etc.). Programs are the fundamental unit of definition in LLMProc.
 - **Process**: A running instance of an LLM agent, created from a program file.
 - **Linked Program**: A reference to another TOML program file that can be spawned by a main process.
-- **Tool**: A function that an LLM agent can use to perform operations, such as spawning another process.
+- **Tool**: A function that an LLM agent can use to perform operations.
+- **MCP (Model Context Protocol)**: A portable protocol for tool communication with LLMs, providing "userspace" tools.
+- **System Call**: A kernel-level tool implemented by LLMProc, defined in the `[tools]` section (e.g., `spawn`).
 - **Provider**: The API service providing the LLM (OpenAI, Anthropic, Vertex).
-- **MCP (Model Context Protocol)**: The protocol used for tool communication with LLMs.
 
 ## Environment Variables
 
