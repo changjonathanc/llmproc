@@ -182,7 +182,7 @@
 9. Enhanced reference.toml with clearer explanation of preload functionality
 
 ## Session Summary (2025-03-15)
-1. Added comprehensive API tests for all example configurations
+1. Added comprehensive API tests for all example programs
 2. Created tests for CLI interface with real API calls
 3. Implemented test for unique message echo verification
 4. Added tests for program linking through CLI
@@ -190,5 +190,22 @@
 6. Improved test skip behavior when API keys aren't available
 7. Added API testing documentation in docs/api_testing.md
 8. Updated README and CLAUDE.md with testing information
-9. Added basic validation for TOML configuration files
-10. Enhanced test coverage for all example configurations
+9. Added basic validation for TOML program files
+10. Enhanced test coverage for all example programs
+
+## Session Summary (2025-03-22)
+1. Standardized terminology across codebase: "configuration" → "program"
+2. Added Terminology section to MISC.md defining key terms
+3. Updated docstrings, function parameters, and variable names in llm_process.py
+4. Renamed CLI parameters from config_* to program_*
+5. Fixed documentation in README, program-linking.md, and preload-feature.md
+6. Fixed test_mcp_tools.py test to match function return signature 
+7. Created test_example_programs.py to test all example programs with real APIs
+8. Used echo verification to ensure models respond correctly
+9. Enhanced error handling in tests for invalid programs
+10. Added detailed API testing guide in docs/api_testing.md
+11. Identified additional terminology inconsistencies for future improvement:
+    - "LLM" vs "model" vs "agent" usage
+    - "prompt" vs "system prompt" vs "system message"
+    - "process" vs "instance" usage
+    - Inconsistent capitalization of system calls
