@@ -382,6 +382,7 @@ def dump_api_error(
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "tools_count": len(tools) if tools else 0,
+                    "tools": [{"name": tool["name"], "description": tool["description"]} for tool in tools] if tools else None,
                 },
             },
             f,
