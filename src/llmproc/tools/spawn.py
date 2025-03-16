@@ -3,10 +3,59 @@
 import asyncio
 import os
 import sys
+import json
 from typing import Any, Dict, Optional
 
 from llmproc.llm_process import LLMProcess
 
+# Detailed spawn tool description explaining the Unix metaphor and usage patterns
+spawn_tool_description = """
+You can use this tool to spawn a specialized process from a linked program to handle specific tasks.
+This is analogous to the spawn/exec system calls in Unix where a new process is created to run a different program.
+
+Unlike fork (which creates a copy of the current process), spawn creates a completely new process with:
+1. A different system prompt optimized for specific tasks
+2. Its own separate conversation history
+3. Potentially different tools or capabilities
+
+spawn(program_name, query)
+- program_name: The name of the linked program to call (must be one of the available linked programs)
+- query: The query to send to the linked program
+
+The spawn system call will:
+1. Create a new process from the specified linked program
+2. Send your query to that process
+3. Return the process's response to you
+
+When to use this tool:
+- When you need specialized expertise that a different system prompt provides
+- When you need to delegate a task to a more specialized assistant
+- When you need different tools or capabilities than what you currently have
+- When you want to keep the current conversation focused on the main task while delegating subtasks
+
+Available programs:
+The list of available programs depends on your configuration and will be shown to you when the tool is registered.
+"""
+
+# Definition of the spawn tool for Anthropic API
+spawn_tool_def = {
+    "name": "spawn",
+    "description": spawn_tool_description,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "program_name": {
+                "type": "string", 
+                "description": "Name of the linked program to call"
+            },
+            "query": {
+                "type": "string",
+                "description": "The query to send to the linked program"
+            }
+        },
+        "required": ["program_name", "query"]
+    }
+}
 
 async def spawn_tool(
     program_name: str,

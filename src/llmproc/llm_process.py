@@ -810,37 +810,24 @@ class LLMProcess:
     def _register_spawn_tool(self) -> None:
         """Register the spawn system call for creating new processes from linked programs."""
         from llmproc.tools import spawn_tool
+        from llmproc.tools.spawn import spawn_tool_def
         
         # Only register if we have linked programs
         if not self.linked_programs:
             print("<warning>No linked programs available. Spawn system call not registered.</warning>")
             return
             
-        # Create the spawn system call definition for Anthropic API
-        spawn_tool_def = {
-            "name": "spawn",
-            "description": "Create a new process from a linked program to handle a specific query.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "program_name": {
-                        "type": "string", 
-                        "description": "Name of the linked program to call"
-                    },
-                    "query": {
-                        "type": "string",
-                        "description": "The query to send to the linked program"
-                    }
-                },
-                "required": ["program_name", "query"]
-            }
-        }
+        # Create a copy of the tool definition with dynamic available programs info
+        spawn_def = spawn_tool_def.copy()
+        available_programs = ", ".join(self.linked_programs.keys())
+        spawn_def["description"] = spawn_tool_def["description"] + f"\n\nAvailable programs: {available_programs}"
         
         # Create a copy of the tool definition for the API
-        api_tool_def = spawn_tool_def.copy()
+        api_tool_def = spawn_def.copy()
         
-        # Add the handler to the internal tool definition
-        spawn_tool_def["handler"] = lambda args: spawn_tool(
+        # Create an extended tool definition with the handler
+        extended_tool_def = spawn_def.copy()
+        extended_tool_def["handler"] = lambda args: spawn_tool(
             program_name=args.get("program_name"),
             query=args.get("query"),
             llm_process=self
@@ -866,7 +853,7 @@ class LLMProcess:
         
         # Keep the handler and tool definition separate
         self.tool_handlers = getattr(self, "tool_handlers", {})
-        self.tool_handlers["spawn"] = spawn_tool_def["handler"]
+        self.tool_handlers["spawn"] = extended_tool_def["handler"]
         
         # Add to the tools list (API-safe version without handler)
         self.tools.append(api_tool_def)
