@@ -129,12 +129,10 @@ async def test_process_response_content(mock_mcp_registry, mock_time_response):
     mock_mcp_registry.call_tool = AsyncMock(return_value=mock_time_response)
     
     # Call the function
-    has_tool_calls, tool_results = await process_response_content(
+    tool_results = await process_response_content(
         content_list, mock_mcp_registry, debug=True)
     
     # Assertions
-    assert has_tool_calls is True
-    # We don't check response_text as it's no longer returned
     assert len(tool_results) == 1
     assert tool_results[0]["tool_use_id"] == "tool1"
     assert "unix_timestamp" in tool_results[0]["content"]

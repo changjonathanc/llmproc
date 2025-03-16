@@ -45,7 +45,6 @@ async def run_anthropic_with_tools(
 
     # Continue the conversation until no more tool calls or max iterations reached
     while iterations < max_iterations:
-        has_tool_calls = False
         iterations += 1
         if debug:
             print(f"\n--- Iteration {iterations}/{max_iterations} ---")
@@ -55,12 +54,18 @@ async def run_anthropic_with_tools(
             api_call_params = prepare_api_params(
                 model_name, system_prompt, messages, tools, api_params
             )
+            #print(f"API call params: {api_call_params}")
+            import rich
+            rich.print(f"{messages=}")
+            rich.print(f"{tools=}")
+
 
             # Call Claude with current conversation
             try:
                 if debug:
                     print(f"Calling Anthropic API with {len(messages)} messages...")
                 response = await client.messages.create(**api_call_params)
+                print(f"Response: {response}")
             except Exception as e:
                 dump_file = dump_api_error(
                     e,
@@ -77,6 +82,7 @@ async def run_anthropic_with_tools(
                     f"Error calling Anthropic API: {str(e)} (see {dump_file} for details)"
                 )
             messages.append({"role": "assistant", "content": response.content})
+            print(f"Response content: {response.content}")
 
             if response.stop_reason == "end_turn":
 #                print("Model completed naturally")
@@ -90,7 +96,7 @@ async def run_anthropic_with_tools(
             elif response.stop_reason == "stop_sequence":
                 return response.content[0].text
             elif response.stop_reason == "tool_use":
-                has_tool_calls, tool_results = await process_response_content(
+                tool_results = await process_response_content(
                     response.content, aggregator, tool_handlers, debug
                 )
                 # Add tool results to conversation
@@ -154,9 +160,8 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
         debug: Whether to enable debug output
 
     Returns:
-        Tuple of (has_tool_calls, tool_results)
+        List of tool results
     """
-    has_tool_calls = False
     tool_results = []
     tool_calls = []
 
@@ -166,7 +171,6 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
     # First, collect all content items
     for content in content_list:
         if content.type == "tool_use":
-            has_tool_calls = True
             # Store the tool call data for later processing
             tool_calls.append({
                 "name": content.name,
@@ -175,8 +179,8 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
             })
 
     # If no tool calls, return early
-    if not has_tool_calls:
-        return has_tool_calls, tool_results
+    if not tool_calls:
+        return tool_results
 
     # Now process all tool calls
     for tool_call in tool_calls:
@@ -189,6 +193,7 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
 
         try:
             # Check if we have a custom handler for this tool
+            print(f"Tool handlers: {tool_handlers}, tool_name: {tool_name}")
             if tool_name in tool_handlers:
                 if debug:
                     print(f"Using custom handler for tool {tool_name}")
@@ -231,7 +236,7 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
                 "is_error": True,
             })
 
-    return has_tool_calls, tool_results
+    return tool_results
 
 
 def add_tool_results_to_conversation(
