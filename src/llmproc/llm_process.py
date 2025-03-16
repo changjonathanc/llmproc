@@ -236,7 +236,7 @@ class LLMProcess:
                     linked_process = cls(program=linked_program)
                     linked_processes[program_name] = linked_process
                 else:
-                    warnings.warn(f"Linked program '{program_name}' at '{linked_path}' was not compiled")
+                    raise FileNotFoundError(f"Linked program '{program_name}' at '{linked_path}' was not compiled")
             
             # Set linked processes on the main process
             main_process.linked_programs = linked_processes
@@ -806,8 +806,7 @@ class LLMProcess:
                 path = self.config_dir / path
                 
             if not path.exists():
-                warnings.warn(f"Linked program file not found - Specified: '{original_path}', Resolved: '{path}'")
-                continue
+                raise FileNotFoundError(f"Linked program file not found - Specified: '{original_path}', Resolved: '{path}'")
                 
             try:
                 # Recursively compile the linked program and all its linked programs
@@ -815,7 +814,7 @@ class LLMProcess:
                 # Merge into our compiled programs dictionary
                 compiled_programs.update(compiled)
             except Exception as e:
-                warnings.warn(f"Failed to compile linked program '{program_name}': {str(e)}")
+                raise RuntimeError(f"Failed to compile linked program '{program_name}': {str(e)}") from e
         
         # Second pass: create LLMProcess instances for each linked program
         created_processes = {}  # Maps absolute paths to LLMProcess instances

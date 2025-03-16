@@ -130,17 +130,14 @@ def test_compile_all_with_missing_file():
             missing = "non_existent.toml"
             """)
         
-        # Should raise a warning but still compile the main program
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            compiled_programs = LLMProgram.compile_all(main_program_path)
-            assert len(w) >= 1
-            assert "Linked program file not found" in str(w[0].message)
+        # Should raise a FileNotFoundError
+        with pytest.raises(FileNotFoundError) as excinfo:
+            LLMProgram.compile_all(main_program_path)
         
-        # Only the main program should be compiled
-        assert len(compiled_programs) == 1
-        main_abs_path = main_program_path.resolve()
-        assert str(main_abs_path) in compiled_programs
+        # Verify error message contains path information
+        error_message = str(excinfo.value)
+        assert "Linked program file not found" in error_message
+        assert "non_existent.toml" in error_message
 
 
 def test_circular_dependency():

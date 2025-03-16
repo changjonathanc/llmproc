@@ -20,7 +20,7 @@ The enhanced system ensures that each program file is compiled exactly once, eve
 The system correctly handles complex program dependencies:
 
 - **Circular References**: Programs can reference each other without causing infinite recursion
-- **Missing Files**: Missing program files generate warnings but don't break the entire graph
+- **Required Dependencies**: Missing linked program files raise exceptions, ensuring all required dependencies are present
 - **Deep Hierarchies**: A maximum depth parameter prevents excessive recursion
 
 **Before**: Circular dependencies could cause issues, and there was no depth control.

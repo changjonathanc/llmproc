@@ -94,8 +94,8 @@ Each entry maps a logical name to a file path. The path can be:
 The compilation and linking system handles several types of errors:
 
 1. **Missing Files**:
-   - Required files (system prompt files, MCP config files) raise exceptions
-   - Optional files (preload files, linked program files) generate warnings
+   - Required files (system prompt files, MCP config files, linked program files) raise exceptions
+   - Optional files (preload files) generate warnings
 
 2. **Validation Errors**:
    - TOML parsing errors

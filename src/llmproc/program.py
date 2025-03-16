@@ -305,12 +305,13 @@ class LLMProgram:
                         if linked_path.exists():
                             to_compile.append((linked_abs_path, depth + 1))
                         else:
-                            warnings.warn(f"Linked program file not found - From '{path}', "
-                                        f"looking for '{linked_path_str}' (resolved to '{linked_path}')")
+                            # Raise error for missing linked program files
+                            raise FileNotFoundError(f"Linked program file not found - From '{path}', "
+                                                  f"looking for '{linked_path_str}' (resolved to '{linked_path}')")
             
             except Exception as e:
-                warnings.warn(f"Error compiling {path}: {str(e)}")
-                # Continue with other programs even if one fails
+                # Re-raise the exception
+                raise
         
         return compiled_programs
     
