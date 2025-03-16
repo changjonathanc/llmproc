@@ -127,15 +127,20 @@ class LLMProcess:
             
             # Check if we're in an event loop
             try:
+                # Try to get the current event loop
                 loop = asyncio.get_running_loop()
                 in_event_loop = True
+                # If we're in an event loop, don't initialize now - it will be done lazily
+                # when needed during the first call to run()
             except RuntimeError:
-                in_event_loop = False
-                
-            # Initialize MCP registry and tools asynchronously - only if we're not in an event loop
-            if not in_event_loop:
-                asyncio.run(self._initialize_mcp_tools_if_needed())
-            # If we're in an event loop, the initialization will be done lazily when needed
+                # No event loop running, create one temporarily
+                try:
+                    # Use run() to create a new event loop for initialization
+                    asyncio.run(self._initialize_mcp_tools_if_needed())
+                except Exception as e:
+                    print(f"Warning: Failed to initialize MCP tools: {e}")
+                    # Mark as initialized to avoid further attempts
+                    self._mcp_initialized = True
 
         # Initialize tools - we start with an empty tools list
         self.tools = []
