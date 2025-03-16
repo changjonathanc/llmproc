@@ -270,6 +270,33 @@
    - Added directory existence checks
    - Note: We maintain backward compatibility by still using config_dir in LLMProcess but it now maps to program.base_dir
 
+## Session Summary (2025-03-28)
+1. Improved Program Compilation Semantics
+   - Added global Program Registry singleton to avoid redundant compilation
+   - Unified compile() and compile_all() into a single, more powerful method
+   - Implemented non-recursive BFS for safer traversal of program graphs
+   - Made linked programs directly reference compiled Program objects
+   - Fixed duplicate tool registration issue in linked programs
+   - Added test script to verify tool registration behavior
+   - Refactored code for better separation of compilation and instantiation
+
+2. Enhanced Memory Efficiency
+   - Implemented lazy instantiation of LLMProcess objects
+   - Programs are now stored once in registry and reused
+   - Processes are only created when needed (via spawn tool)
+   - Reduced memory footprint for applications with many linked programs
+
+3. Improved Error Handling
+   - Better path resolution for linked programs
+   - Enhanced error messages for missing files
+   - More robust circular dependency detection
+   - Fixed edge cases in tool registration
+
+4. Updated Documentation and Tests
+   - Updated CLAUDE.md with latest changes
+   - Fixed all tests to work with the new compilation semantics
+   - Updated test assertions to check for program objects instead of paths
+
 ## Session Summary (2025-03-27)
 1. Enhanced Program Compilation and Linking System
    - Implemented recursive compilation for program graphs with `compile_all` method
@@ -327,17 +354,24 @@
    - Created comprehensive tests for different environment inclusion scenarios
    - Fixed program linking demo example that was failing due to this issue
 
-## Pending System Prompt & Environment Info Tasks (Next Session)
+## Completed Tasks
 
-To continue the improvements in the next session:
+1. **Improved Program Compilation Semantics**:
+   - Added global singleton Program Registry to avoid redundant compilation
+   - Unified the compile() method with non-recursive BFS approach
+   - Enhanced linked programs to reference compiled Program objects directly
+   - Fixed duplicate tool registration when spawning linked programs
+   - Added test script to verify tool registration
+
+## Pending Tasks (Next Session)
 
 1. **Testing for Environment Information**:
    - Add dedicated tests for environment information
    - Test error cases for file not found errors
    - Test all environment variable configurations
 
-2. **More Path Improvements**:
-   - Consider factoring out path resolution logic to a dedicated helper
+2. **Path Resolution Improvements**:
+   - Factor out path resolution logic to a dedicated helper
    - Make handling of linked program paths more consistent
 
 3. **Documentation Updates**:
