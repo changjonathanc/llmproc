@@ -121,9 +121,21 @@ class LLMProcess:
                 )
 
             self.mcp_enabled = True
-
-            # Initialize MCP registry and tools asynchronously
-            asyncio.run(self._initialize_mcp_tools())
+            
+            # Setup for async initialization
+            self._mcp_initialized = False
+            
+            # Check if we're in an event loop
+            try:
+                loop = asyncio.get_running_loop()
+                in_event_loop = True
+            except RuntimeError:
+                in_event_loop = False
+                
+            # Initialize MCP registry and tools asynchronously - only if we're not in an event loop
+            if not in_event_loop:
+                asyncio.run(self._initialize_mcp_tools_if_needed())
+            # If we're in an event loop, the initialization will be done lazily when needed
 
         # Initialize tools - we start with an empty tools list
         self.tools = []
@@ -624,6 +636,22 @@ class LLMProcess:
         """
         return self.state.copy()
 
+    async def _initialize_mcp_tools_if_needed(self) -> None:
+        """Initialize MCP registry and tools if they haven't been initialized yet.
+        
+        This method safely handles initialization in both synchronous and asynchronous contexts.
+        It's designed to work correctly when called from both __init__ and async methods like fork_process.
+        """
+        # If already initialized, no need to do it again
+        if hasattr(self, '_mcp_initialized') and self._mcp_initialized:
+            return
+            
+        # Actually initialize the MCP tools
+        await self._initialize_mcp_tools()
+        
+        # Mark as initialized
+        self._mcp_initialized = True
+        
     async def _initialize_mcp_tools(self) -> None:
         """Initialize MCP registry and tools.
 
@@ -1048,7 +1076,7 @@ class LLMProcess:
 
         # Create a new instance of LLMProcess with the same program
         forked_process = LLMProcess(program=self.program)
-
+        
         # Copy the enriched system prompt if it exists
         if hasattr(self, 'enriched_system_prompt') and self.enriched_system_prompt:
             forked_process.enriched_system_prompt = self.enriched_system_prompt
@@ -1059,6 +1087,10 @@ class LLMProcess:
         # Copy any preloaded content
         if hasattr(self, 'preloaded_content') and self.preloaded_content:
             forked_process.preloaded_content = copy.deepcopy(self.preloaded_content)
+
+        # If the forked process has MCP enabled, make sure it's initialized properly
+        if forked_process.mcp_enabled and hasattr(forked_process, '_mcp_initialized') and not forked_process._mcp_initialized:
+            await forked_process._initialize_mcp_tools_if_needed()
 
         # Preserve any other state we need
         # Note: We don't copy tool handlers as they're already set up in the constructor
