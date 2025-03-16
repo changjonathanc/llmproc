@@ -47,7 +47,8 @@ system_prompt = "You are a test assistant."
         
         assert process.model_name == "gpt-4o-mini"
         assert process.system_prompt == "You are a test assistant."
-        assert process.state == [{"role": "system", "content": "You are a test assistant."}]
+        assert process.state == []  # Empty until first run
+        assert process.enriched_system_prompt is None  # Not generated yet
         assert process.parameters == {}
     finally:
         os.unlink(temp_path)
@@ -84,7 +85,8 @@ presence_penalty = 0.1
         
         assert process.model_name == "gpt-4o"
         assert process.system_prompt == "You are a complex test assistant."
-        assert process.state == [{"role": "system", "content": "You are a complex test assistant."}]
+        assert process.state == []  # Empty until first run
+        assert process.enriched_system_prompt is None  # Not generated yet
         # Check that parameters are in api_params instead of parameters
         assert hasattr(process, "api_params")
         assert process.api_params.get("top_p") == 0.95

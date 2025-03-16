@@ -151,14 +151,16 @@ def test_llm_process_with_time_tool(mock_asyncio_run, mock_anthropic, mock_mcp_r
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
     
-    # Create LLMProcess with MCP configuration
-    process = LLMProcess(
+    # Create program and process with MCP configuration
+    from llmproc.program import LLMProgram
+    program = LLMProgram(
         model_name="claude-3-haiku-20240307",
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
         mcp_config_path=time_mcp_config,
         mcp_tools={"time": ["current"]}
     )
+    process = LLMProcess(program=program)
     
     # Check that MCP was initialized
     assert process.mcp_enabled is True
@@ -182,13 +184,16 @@ async def test_run_with_time_tool(mock_anthropic, mock_mcp_registry, mock_env, t
     # Mock run method directly to bypass internal implementation details
     # This is simpler than trying to mock the internal _run_anthropic_with_tools method
     with patch("llmproc.llm_process.asyncio.run"):
-        process = LLMProcess(
+        # Create program and process with MCP configuration
+        from llmproc.program import LLMProgram
+        program = LLMProgram(
             model_name="claude-3-haiku-20240307",
             provider="anthropic",
             system_prompt="You are an assistant with access to tools.",
             mcp_config_path=time_mcp_config,
             mcp_tools={"time": ["current"]}
         )
+        process = LLMProcess(program=program)
     
     # Patch the _async_run method directly
     process._async_run = AsyncMock(return_value="The current time is 2022-03-10T00:00:00Z")

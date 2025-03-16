@@ -76,7 +76,8 @@ def test_initialization(mock_env, mock_get_provider_client):
     assert process.model_name == "test-model"
     assert process.provider == "openai"
     assert process.system_prompt == "You are a test assistant."
-    assert process.state == [{"role": "system", "content": "You are a test assistant."}]
+    assert process.enriched_system_prompt is None  # Not generated yet
+    assert process.state == []  # Empty until first run
     assert process.parameters == {}
 
 
@@ -123,7 +124,11 @@ def test_reset_state(mock_env, mock_get_provider_client):
     )
     process = LLMProcess(program=program)
     
-    # Manually add messages to the state instead of calling run() to avoid making API calls
+    # Simulate first run by setting enriched system prompt
+    process.enriched_system_prompt = "You are a test assistant."
+    process.state = [{"role": "system", "content": process.enriched_system_prompt}]
+    
+    # Add messages to the state
     process.state.append({"role": "user", "content": "Hello!"})
     process.state.append({"role": "assistant", "content": "Test response"})
     process.state.append({"role": "user", "content": "How are you?"})
@@ -134,17 +139,26 @@ def test_reset_state(mock_env, mock_get_provider_client):
     # Reset the state
     process.reset_state()
     
-    assert len(process.state) == 1
-    assert process.state[0] == {"role": "system", "content": "You are a test assistant."}
-    
-    # Reset without system prompt
-    process.reset_state(keep_system_prompt=False)
-    
+    # Should be empty (gets filled on next run)
     assert len(process.state) == 0
+    # Enriched system prompt should be reset
+    assert process.enriched_system_prompt is None
+    
+    # Reset without keeping preloaded content
+    process.preloaded_content = {"test": "content"}
+    process.reset_state(keep_preloaded=False)
+    
+    # Should clear preloaded content
+    assert process.preloaded_content == {}
 
 
 def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provider_client):
-    """Test that LLMProcess.reset_state works correctly with the keep_system_prompt parameter."""
+    """Test that LLMProcess.reset_state works correctly with the keep_system_prompt parameter.
+    
+    Note: With the new design, keep_system_prompt is still a parameter but doesn't affect
+    the immediate state - it's just for backward compatibility. The system prompt is always
+    kept in the program and included on next run.
+    """
     # Create a process with our mocked provider client using the new API
     from llmproc.program import LLMProgram
     program = LLMProgram(
@@ -154,22 +168,26 @@ def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provid
     )
     process = LLMProcess(program=program)
     
-    # Manually add messages to the state
+    # Simulate first run
+    process.enriched_system_prompt = "You are a test assistant."
+    process.state = [{"role": "system", "content": process.enriched_system_prompt}]
+    
+    # Add messages to the state
     process.state.append({"role": "user", "content": "Hello!"})
     process.state.append({"role": "assistant", "content": "Test response"})
     
     assert len(process.state) == 3
     
     # Reset with keep_system_prompt=True (default)
+    # In the new design, this resets the state completely to be regenerated on next run
     process.reset_state()
     
-    assert len(process.state) == 1
-    assert process.state[0] == {"role": "system", "content": "You are a test assistant."}
-    
-    # Reset with keep_system_prompt=False
-    process.reset_state(keep_system_prompt=False)
-    
+    # State should be empty, enriched_system_prompt should be None
     assert len(process.state) == 0
+    assert process.enriched_system_prompt is None
+    
+    # Verify original system prompt is still preserved in the program
+    assert process.system_prompt == "You are a test assistant."
     
 def test_reset_state_with_preloaded_content(mock_env, mock_get_provider_client):
     """Test that reset_state works correctly with preloaded content."""
@@ -193,8 +211,16 @@ def test_reset_state_with_preloaded_content(mock_env, mock_get_provider_client):
             with patch.object(Path, 'read_text', return_value="This is test content for reset testing."):
                 process.preload_files([temp_path])
         
-        # Verify preloaded content is in system prompt
-        assert "<preload>" in process.state[0]["content"]
+        # Verify content is in preloaded_content dict
+        assert temp_path in process.preloaded_content
+        assert process.preloaded_content[temp_path] == "This is test content for reset testing."
+        
+        # Generate enriched system prompt for testing
+        process.enriched_system_prompt = process.program.get_enriched_system_prompt(process_instance=process)
+        process.state = [{"role": "system", "content": process.enriched_system_prompt}]
+        
+        # Verify preloaded content is in enriched system prompt
+        assert "<preload>" in process.enriched_system_prompt
         
         # Add some conversation
         process.state.append({"role": "user", "content": "Hello!"})
@@ -203,28 +229,18 @@ def test_reset_state_with_preloaded_content(mock_env, mock_get_provider_client):
         # Reset with keep_preloaded=True (default)
         process.reset_state()
         
-        # Should still have preloaded content in system prompt
-        assert len(process.state) == 1
-        assert "<preload>" in process.state[0]["content"]
+        # State should be empty
+        assert len(process.state) == 0
+        # Enriched system prompt should be reset
+        assert process.enriched_system_prompt is None
+        # Preloaded content should still be there
+        assert len(process.preloaded_content) == 1
         
         # Reset with keep_preloaded=False
         process.reset_state(keep_preloaded=False)
         
-        # Should no longer have preloaded content
-        assert len(process.state) == 1
-        assert "<preload>" not in process.state[0]["content"]
-        assert process.state[0]["content"] == "You are a test assistant."
-        
-        # Reset completely
-        process.reset_state(keep_system_prompt=False, keep_preloaded=False)
-        assert len(process.state) == 0
-        
-        # Reset with no system prompt but with preloaded content
-        process.reset_state(keep_system_prompt=False, keep_preloaded=True)
-        assert len(process.state) == 1
-        assert process.state[0]["role"] == "system"
-        assert "<preload>" in process.state[0]["content"]
-        assert "You are a test assistant." in process.state[0]["content"]
+        # Preloaded content should be cleared
+        assert len(process.preloaded_content) == 0
     
     finally:
         os.unlink(temp_path)
@@ -247,29 +263,36 @@ def test_preload_files_method(mock_env, mock_get_provider_client):
         temp_path = temp_file.name
     
     try:
-        # Initial state should just have system prompt
-        assert len(process.state) == 1
+        # Initial state should be empty (gets populated on first run)
+        assert len(process.state) == 0
         original_system_prompt = process.system_prompt
+        
+        # Set enriched system prompt to test reset
+        process.enriched_system_prompt = "Test enriched prompt"
         
         # Use the preload_files method
         with patch.object(Path, 'exists', return_value=True):
             with patch.object(Path, 'read_text', return_value="This is test content for runtime preloading."):
                 process.preload_files([temp_path])
         
-        # Should still have only one system message but with updated content
-        assert len(process.state) == 1
-        assert process.state[0]["role"] == "system"
-        assert "<preload>" in process.state[0]["content"]
-        assert original_system_prompt in process.state[0]["content"]
-        
         # Check that preloaded content was stored
         assert len(process.preloaded_content) == 1
         assert temp_path in process.preloaded_content
         assert process.preloaded_content[temp_path] == "This is test content for runtime preloading."
         
+        # Verify enriched system prompt was reset
+        assert process.enriched_system_prompt is None
+        
         # Verify the original_system_prompt was preserved
         assert hasattr(process, "original_system_prompt")
         assert process.original_system_prompt == "You are a test assistant."
+        
+        # Generate enriched system prompt for testing
+        process.enriched_system_prompt = process.program.get_enriched_system_prompt(process_instance=process)
+        
+        # Verify preloaded content is included
+        assert "<preload>" in process.enriched_system_prompt
+        assert "This is test content for runtime preloading." in process.enriched_system_prompt
     
     finally:
         os.unlink(temp_path)

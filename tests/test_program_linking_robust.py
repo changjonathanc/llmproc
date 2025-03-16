@@ -31,6 +31,8 @@ class TestProgramLinkingRobust:
                 
                 [parameters]
                 max_tokens = 1000
+                
+                [debug]
                 debug_tools = true
                 
                 [tools]
@@ -68,21 +70,26 @@ class TestProgramLinkingRobust:
             # Mock the API client
             mock_client.return_value = MagicMock()
             
-            # Create expert process
-            expert_process = LLMProcess(
-                model_name="expert-model",
+            # Create expert process 
+            from llmproc.program import LLMProgram
+            expert_program = LLMProgram(
+                model_name="expert-model", 
                 provider="anthropic",
                 system_prompt="You are an expert model."
             )
+            expert_process = LLMProcess(program=expert_program)
             
             # Mock the run method of the expert
             expert_process.run = AsyncMock(return_value="I am the expert's response")
             
             # Create main process with linked program
-            main_process = LLMProcess(
+            main_program = LLMProgram(
                 model_name="main-model",
                 provider="anthropic",
-                system_prompt="You are the main model.",
+                system_prompt="You are the main model."
+            )
+            main_process = LLMProcess(
+                program=main_program,
                 linked_programs_instances={"expert": expert_process}
             )
             
@@ -153,10 +160,14 @@ class TestProgramLinkingRobust:
             mock_expert = MagicMock()
             mock_expert.run = AsyncMock(side_effect=ValueError("Test error"))
             
-            main_process = LLMProcess(
+            from llmproc.program import LLMProgram
+            main_program = LLMProgram(
                 model_name="main-model",
                 provider="anthropic",
-                system_prompt="You are the main model.",
+                system_prompt="You are the main model."
+            )
+            main_process = LLMProcess(
+                program=main_program,
                 linked_programs_instances={"error_expert": mock_expert}
             )
             

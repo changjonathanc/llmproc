@@ -38,11 +38,13 @@ class TestProgramLinking:
                 mock_get_client.return_value = mock_client
                 
                 # Initialize the base process without linked programs
-                process = LLMProcess(
+                from llmproc.program import LLMProgram
+                program = LLMProgram(
                     model_name="test-model",
                     provider="anthropic",
                     system_prompt="Test prompt"
                 )
+                process = LLMProcess(program=program)
                 
                 # Test with direct method call with mock
                 with patch("llmproc.llm_process.LLMProcess.from_toml") as mock_from_toml:
@@ -72,12 +74,16 @@ class TestProgramLinking:
             mock_get_client.return_value = mock_client
             
             # Create a process with linked programs
-            process = LLMProcess(
+            from llmproc.program import LLMProgram
+            program = LLMProgram(
                 model_name="test-model",
                 provider="anthropic",
                 system_prompt="Test prompt",
-                linked_programs_instances={"expert": MagicMock()},
                 tools={"enabled": ["spawn"]}
+            )
+            process = LLMProcess(
+                program=program,
+                linked_programs_instances={"expert": MagicMock()}
             )
             
             # Set mcp_enabled manually for testing
@@ -106,10 +112,14 @@ class TestProgramLinking:
             mock_get_client.return_value = mock_client
             
             # Create a process with linked programs
-            process = LLMProcess(
+            from llmproc.program import LLMProgram
+            program = LLMProgram(
                 model_name="test-model",
                 provider="anthropic",
-                system_prompt="Test prompt",
+                system_prompt="Test prompt"
+            )
+            process = LLMProcess(
+                program=program,
                 linked_programs_instances={"expert": mock_expert}
             )
         
@@ -135,11 +145,13 @@ class TestProgramLinking:
             mock_get_client.return_value = mock_client
             
             # Create a process without linked programs
-            process = LLMProcess(
+            from llmproc.program import LLMProgram
+            program = LLMProgram(
                 model_name="test-model",
                 provider="anthropic",
                 system_prompt="Test prompt"
             )
+            process = LLMProcess(program=program)
         
         # Test with missing linked program
         result = await spawn_tool(
