@@ -329,7 +329,7 @@ class LLMProgram:
         
         return program
     
-    def get_enriched_system_prompt(self, process_instance=None):
+    def get_enriched_system_prompt(self, process_instance=None, include_env=True):
         """Get enhanced system prompt with preloaded files and environment info.
         
         This combines the basic system prompt with preloaded files and optional
@@ -337,6 +337,7 @@ class LLMProgram:
         
         Args:
             process_instance: Optional LLMProcess instance for accessing preloaded content
+            include_env: Whether to include environment information (default: True)
             
         Returns:
             Complete system prompt ready for API calls
@@ -349,48 +350,49 @@ class LLMProgram:
         # Start with the base system prompt
         enriched_prompt = self.system_prompt
         
-        # Add environment info if variables are specified
+        # Add environment info if variables are specified and include_env is True
         env_info = ""
-        variables = self.env_info.get("variables", [])
-        
-        # If variables is specified and not empty
-        if variables:
-            # Start the env section
-            env_info = "<env>\n"
+        if include_env:
+            variables = self.env_info.get("variables", [])
             
-            # Handle standard variables based on the requested list or "all"
-            all_variables = variables == "all"
-            var_list = ["working_directory", "platform", "date", "python_version", "hostname", "username"] if all_variables else variables
-            
-            # Add standard environment information if requested
-            if "working_directory" in var_list:
-                env_info += f"working_directory: {os.getcwd()}\n"
+            # If variables is specified and not empty
+            if variables:
+                # Start the env section
+                env_info = "<env>\n"
                 
-            if "platform" in var_list:
-                env_info += f"platform: {platform.system().lower()}\n"
+                # Handle standard variables based on the requested list or "all"
+                all_variables = variables == "all"
+                var_list = ["working_directory", "platform", "date", "python_version", "hostname", "username"] if all_variables else variables
                 
-            if "date" in var_list:
-                env_info += f"date: {datetime.datetime.now().strftime('%Y-%m-%d')}\n"
+                # Add standard environment information if requested
+                if "working_directory" in var_list:
+                    env_info += f"working_directory: {os.getcwd()}\n"
+                    
+                if "platform" in var_list:
+                    env_info += f"platform: {platform.system().lower()}\n"
+                    
+                if "date" in var_list:
+                    env_info += f"date: {datetime.datetime.now().strftime('%Y-%m-%d')}\n"
+                    
+                if "python_version" in var_list:
+                    env_info += f"python_version: {platform.python_version()}\n"
+                    
+                if "hostname" in var_list:
+                    env_info += f"hostname: {platform.node()}\n"
+                    
+                if "username" in var_list:
+                    import getpass
+                    env_info += f"username: {getpass.getuser()}\n"
                 
-            if "python_version" in var_list:
-                env_info += f"python_version: {platform.python_version()}\n"
+                # Add any custom environment variables
+                for key, value in self.env_info.items():
+                    # Skip the variables key and any non-string values
+                    if key == "variables" or not isinstance(value, str):
+                        continue
+                    env_info += f"{key}: {value}\n"
                 
-            if "hostname" in var_list:
-                env_info += f"hostname: {platform.node()}\n"
-                
-            if "username" in var_list:
-                import getpass
-                env_info += f"username: {getpass.getuser()}\n"
-            
-            # Add any custom environment variables
-            for key, value in self.env_info.items():
-                # Skip the variables key and any non-string values
-                if key == "variables" or not isinstance(value, str):
-                    continue
-                env_info += f"{key}: {value}\n"
-            
-            # Close the env section
-            env_info += "</env>"
+                # Close the env section
+                env_info += "</env>"
         
         # Add preloaded content if available
         preload_content = ""

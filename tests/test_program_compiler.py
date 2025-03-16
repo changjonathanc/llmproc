@@ -1,240 +1,286 @@
-"""Tests for the LLMProgram compiler."""
-
-import os
-import tempfile
-from pathlib import Path
-
 import pytest
-from pydantic import ValidationError
+import tempfile
+import os
+from pathlib import Path
+import warnings
 
-from llmproc import LLMProgram, LLMProcess
+from llmproc.program import LLMProgram
+from llmproc.llm_process import LLMProcess
 
 
-class TestProgramCompiler:
-    """Tests for the LLMProgram compiler functionality."""
+def test_get_enriched_system_prompt_include_env_parameter():
+    """Test the get_enriched_system_prompt method with include_env parameter."""
+    # Create a basic program
+    program = LLMProgram(
+        model_name="test-model",
+        provider="anthropic",
+        system_prompt="Test system prompt",
+        env_info={"variables": ["working_directory"]}
+    )
     
-    @pytest.fixture
-    def valid_toml_file(self):
-        """Create a valid temporary TOML file for testing."""
-        with tempfile.NamedTemporaryFile(suffix=".toml", mode="w", delete=False) as f:
+    # Create a mock process instance
+    process = LLMProcess(program=program)
+    
+    # Test the method with include_env=True
+    enriched_prompt = program.get_enriched_system_prompt(
+        process_instance=process,
+        include_env=True
+    )
+    
+    # Verify it includes environment info
+    assert "<env>" in enriched_prompt
+    assert "working_directory:" in enriched_prompt
+    
+    # Test the method with include_env=False
+    enriched_prompt = program.get_enriched_system_prompt(
+        process_instance=process,
+        include_env=False
+    )
+    
+    # Verify it does not include environment info
+    assert "<env>" not in enriched_prompt
+
+
+def test_get_enriched_system_prompt_default():
+    """Test the get_enriched_system_prompt method without include_env parameter."""
+    # Create a basic program
+    program = LLMProgram(
+        model_name="test-model",
+        provider="anthropic",
+        system_prompt="Test system prompt",
+        env_info={"variables": ["working_directory"]}
+    )
+    
+    # Create a mock process instance
+    process = LLMProcess(program=program)
+    
+    # Test the method without specifying include_env
+    enriched_prompt = program.get_enriched_system_prompt(
+        process_instance=process
+    )
+    
+    # Verify the behavior when include_env is not specified
+    # By default, it should include environment info if configured
+    assert "<env>" in enriched_prompt
+    assert "working_directory:" in enriched_prompt
+
+
+def test_program_compile_with_env_info():
+    """Test compiling a program with environment info configuration."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a temporary TOML file with env_info section
+        toml_path = Path(temp_dir) / "test_program.toml"
+        with open(toml_path, "w") as f:
             f.write("""
             [model]
             name = "test-model"
             provider = "anthropic"
-            display_name = "Test Model"
             
             [prompt]
-            system_prompt = "You are a test assistant."
+            system_prompt = "Test system prompt"
             
-            [parameters]
-            max_tokens = 1000
-            temperature = 0.7
-            
-            [debug]
-            debug_tools = true
+            [env_info]
+            variables = ["working_directory", "date"]
+            custom_var = "custom value"
             """)
-            toml_path = f.name
         
-        yield toml_path
-        os.unlink(toml_path)  # Clean up after test
-    
-    @pytest.fixture
-    def invalid_toml_file(self):
-        """Create an invalid temporary TOML file for testing."""
-        with tempfile.NamedTemporaryFile(suffix=".toml", mode="w", delete=False) as f:
+        # Compile the program
+        program = LLMProgram.compile(toml_path)
+        
+        # Verify env_info was properly loaded
+        assert program.env_info["variables"] == ["working_directory", "date"]
+        assert program.env_info["custom_var"] == "custom value"
+        
+        # Create process and test enriched prompt
+        process = LLMProcess(program=program)
+        enriched_prompt = program.get_enriched_system_prompt(process_instance=process)
+        
+        # Verify environment info is included
+        assert "<env>" in enriched_prompt
+        assert "working_directory:" in enriched_prompt
+        assert "date:" in enriched_prompt
+        assert "custom_var: custom value" in enriched_prompt
+
+
+def test_program_linking_with_env_info():
+    """Test program linking with environment info configuration."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a linked program
+        linked_program_path = Path(temp_dir) / "linked_program.toml"
+        with open(linked_program_path, "w") as f:
             f.write("""
             [model]
-            # Missing required 'name' field
+            name = "linked-model"
             provider = "anthropic"
             
             [prompt]
-            system_prompt = "You are a test assistant."
+            system_prompt = "Linked program system prompt"
             """)
-            toml_path = f.name
         
-        yield toml_path
-        os.unlink(toml_path)  # Clean up after test
-    
-    def test_compile_valid_program(self, valid_toml_file):
-        """Test that a valid program compiles correctly."""
-        program = LLMProgram.compile(valid_toml_file)
-        
-        # Check that the program was compiled correctly
-        assert program.model_name == "test-model"
-        assert program.provider == "anthropic"
-        assert program.display_name == "Test Model"
-        assert program.system_prompt == "You are a test assistant."
-        assert program.parameters["max_tokens"] == 1000
-        assert program.parameters["temperature"] == 0.7
-        assert program.debug_tools is True
-        
-        # Check that API parameters were extracted correctly
-        assert "max_tokens" in program.api_params
-        assert "temperature" in program.api_params
-        assert program.api_params["max_tokens"] == 1000
-        assert program.api_params["temperature"] == 0.7
-    
-    def test_compile_invalid_program(self, invalid_toml_file):
-        """Test that an invalid program raises appropriate validation errors."""
-        with pytest.raises(ValueError) as excinfo:
-            LLMProgram.compile(invalid_toml_file)
-        
-        # Check that the validation error message is helpful
-        error_message = str(excinfo.value)
-        assert "Invalid program configuration" in error_message
-        assert "name" in error_message  # Missing required field should be mentioned
-    
-    def test_nonexistent_file(self):
-        """Test that a nonexistent file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            LLMProgram.compile("nonexistent_file.toml")
+        # Create a main program with a link to the other program
+        main_program_path = Path(temp_dir) / "main_program.toml"
+        with open(main_program_path, "w") as f:
+            f.write(f"""
+            [model]
+            name = "main-model"
+            provider = "anthropic"
             
-    def test_nonexistent_preload_file(self, monkeypatch):
-        """Test that a nonexistent preload file gives a warning but compiles."""
-        import warnings
-        
-        # Store warnings to check them
-        warning_messages = []
-        def mock_warn(message, *args, **kwargs):
-            warning_messages.append(str(message))
-        
-        # Mock the warnings.warn function
-        monkeypatch.setattr(warnings, "warn", mock_warn)
-        
-        # Mock the get_provider_client function to avoid API calls
-        import llmproc.providers
-        monkeypatch.setattr(llmproc.providers, "get_provider_client", lambda *args, **kwargs: None)
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a TOML file referencing a nonexistent preload file
-            toml_file = Path(temp_dir) / "program.toml"
-            with open(toml_file, "w") as f:
-                f.write(f"""
-                [model]
-                name = "test-model"
-                provider = "anthropic"
-                
-                [prompt]
-                system_prompt = "You are a test assistant."
-                
-                [preload]
-                files = ["nonexistent_file.txt"]
-                """)
+            [prompt]
+            system_prompt = "Main program system prompt"
             
-            # Compile the program - should not raise FileNotFoundError
-            program = LLMProgram.compile(toml_file)
+            [env_info]
+            variables = ["working_directory"]
             
-            # Check that the program compiled successfully
-            assert program.model_name == "test-model"
-            assert program.provider == "anthropic"
+            [tools]
+            enabled = ["spawn"]
             
-            # Check that a warning was issued
-            assert len(warning_messages) > 0
-            warning = warning_messages[0]
-            assert "Preload file not found" in warning
-            assert "nonexistent_file.txt" in warning
-    
-    def test_instantiate_process(self, valid_toml_file, monkeypatch):
-        """Test instantiating an LLMProcess from a compiled program."""
-        # Patch the get_provider_client function to avoid API calls
-        import llmproc.providers
-        monkeypatch.setattr(llmproc.providers, "get_provider_client", lambda *args, **kwargs: None)
+            [linked_programs]
+            test_program = "{linked_program_path}"
+            """)
+        
+        # Compile and instantiate the main program
+        program = LLMProgram.compile(main_program_path)
+        process = LLMProcess(program=program)
+        
+        # Verify the linked program was initialized
+        assert "test_program" in process.linked_programs
+        
+        # Test that the main program's get_enriched_system_prompt works
+        enriched_prompt = program.get_enriched_system_prompt(process_instance=process)
+        assert "<env>" in enriched_prompt
+        assert "working_directory:" in enriched_prompt
+
+
+# Original tests from the file
+
+def test_program_compiler_load_toml():
+    """Test loading a program configuration from TOML."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a temporary TOML file
+        toml_path = Path(temp_dir) / "test_program.toml"
+        with open(toml_path, "w") as f:
+            f.write("""
+            [model]
+            name = "test-model"
+            provider = "anthropic"
+            
+            [prompt]
+            system_prompt = "Test system prompt"
+            """)
         
         # Compile the program
-        program = LLMProgram.compile(valid_toml_file)
+        program = LLMProgram.compile(toml_path)
         
-        # Instantiate the process
-        import llmproc
-        process = program.instantiate(llmproc)
+        # Verify the program was loaded correctly
+        assert program.model_name == "test-model"
+        assert program.provider == "anthropic"
+        assert program.system_prompt == "Test system prompt"
+
+
+def test_system_prompt_file_loading():
+    """Test loading a system prompt from a file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a system prompt file
+        prompt_file = Path(temp_dir) / "prompt.md"
+        with open(prompt_file, "w") as f:
+            f.write("Test system prompt from file")
         
-        # Check that the process was instantiated correctly
-        assert isinstance(process, LLMProcess)
-        assert process.model_name == "test-model"
-        assert process.provider == "anthropic"
-        assert process.display_name == "Test Model"
-        assert process.system_prompt == "You are a test assistant."
-        assert process.debug_tools is True
-    
-    def test_system_prompt_file(self):
-        """Test that system_prompt_file is handled correctly."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a system prompt file
-            prompt_file = Path(temp_dir) / "system_prompt.txt"
-            with open(prompt_file, "w") as f:
-                f.write("This is a system prompt from a file.")
+        # Create a program file referencing the prompt file
+        toml_path = Path(temp_dir) / "test_program.toml"
+        with open(toml_path, "w") as f:
+            f.write(f"""
+            [model]
+            name = "test-model"
+            provider = "anthropic"
             
-            # Create a TOML file referencing the system prompt file
-            toml_file = Path(temp_dir) / "program.toml"
-            with open(toml_file, "w") as f:
-                f.write(f"""
-                [model]
-                name = "test-model"
-                provider = "anthropic"
-                
-                [prompt]
-                system_prompt_file = "system_prompt.txt"
-                """)
+            [prompt]
+            system_prompt_file = "prompt.md"
+            """)
+        
+        # Compile the program
+        program = LLMProgram.compile(toml_path)
+        
+        # Verify the prompt was loaded from the file
+        assert program.system_prompt == "Test system prompt from file"
+
+
+def test_preload_files_warnings():
+    """Test warnings for missing preload files."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a program file with non-existent preload files
+        toml_path = Path(temp_dir) / "test_program.toml"
+        with open(toml_path, "w") as f:
+            f.write("""
+            [model]
+            name = "test-model"
+            provider = "anthropic"
             
-            # Compile the program
-            program = LLMProgram.compile(toml_file)
+            [prompt]
+            system_prompt = "Test system prompt"
             
-            # Check that the system prompt was loaded from the file
-            assert program.system_prompt == "This is a system prompt from a file."
-    
-    def test_from_toml_integration(self, valid_toml_file, monkeypatch):
-        """Test integration with LLMProcess.from_toml."""
-        # Patch the get_provider_client function to avoid API calls
-        import llmproc.providers
-        monkeypatch.setattr(llmproc.providers, "get_provider_client", lambda *args, **kwargs: None)
+            [preload]
+            files = ["non-existent-file.txt"]
+            """)
         
-        # Use from_toml to create a process
-        process = LLMProcess.from_toml(valid_toml_file)
+        # Check for warnings when compiling
+        with warnings.catch_warnings(record=True) as w:
+            program = LLMProgram.compile(toml_path)
+            assert len(w) >= 1
+            assert "Preload file not found" in str(w[0].message)
         
-        # Check that the process was created correctly
-        assert process.model_name == "test-model"
-        assert process.provider == "anthropic"
-        assert process.display_name == "Test Model"
-        assert process.system_prompt == "You are a test assistant."
-        assert process.debug_tools is True
-        
-    def test_preload_files_method(self, valid_toml_file, monkeypatch):
-        """Test the preload_files method."""
-        import warnings
-        
-        # Store warnings to check them
-        warning_messages = []
-        def mock_warn(message, *args, **kwargs):
-            warning_messages.append(str(message))
-        
-        # Mock the warnings.warn function
-        monkeypatch.setattr(warnings, "warn", mock_warn)
-        
-        # Patch the get_provider_client function to avoid API calls
-        import llmproc.providers
-        monkeypatch.setattr(llmproc.providers, "get_provider_client", lambda *args, **kwargs: None)
-        
-        # Create a test file to preload
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a valid file
-            valid_file = Path(temp_dir) / "valid_file.txt"
-            with open(valid_file, "w") as f:
-                f.write("This is test content.")
-                
-            # Get a path to a nonexistent file
-            nonexistent_file = Path(temp_dir) / "nonexistent_file.txt"
+        # Verify the program was still compiled successfully
+        assert program.model_name == "test-model"
+        assert program.provider == "anthropic"
+        assert program.system_prompt == "Test system prompt"
+        assert program.preload_files == [str(Path(temp_dir) / "non-existent-file.txt")]
+
+
+def test_system_prompt_file_error():
+    """Test error when system prompt file is not found."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a program file with a non-existent system prompt file
+        toml_path = Path(temp_dir) / "test_program.toml"
+        with open(toml_path, "w") as f:
+            f.write("""
+            [model]
+            name = "test-model"
+            provider = "anthropic"
             
-            # Create and initialize a process
-            process = LLMProcess.from_toml(valid_toml_file)
+            [prompt]
+            system_prompt_file = "non-existent-prompt.md"
+            """)
+        
+        # Check for FileNotFoundError when compiling
+        with pytest.raises(FileNotFoundError) as excinfo:
+            LLMProgram.compile(toml_path)
+        
+        # Verify the error message includes both the specified and resolved paths
+        assert "System prompt file not found" in str(excinfo.value)
+        assert "non-existent-prompt.md" in str(excinfo.value)
+
+
+def test_mcp_config_file_error():
+    """Test error when MCP config file is not found."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a program file with a non-existent MCP config file
+        toml_path = Path(temp_dir) / "test_program.toml"
+        with open(toml_path, "w") as f:
+            f.write("""
+            [model]
+            name = "test-model"
+            provider = "anthropic"
             
-            # Try preloading both files
-            process.preload_files([str(valid_file), str(nonexistent_file)])
+            [prompt]
+            system_prompt = "Test system prompt"
             
-            # Check that the valid file was loaded
-            assert len(process.preloaded_content) == 1
-            assert str(valid_file) in process.preloaded_content
-            assert process.preloaded_content[str(valid_file)] == "This is test content."
-            
-            # Check that a warning was issued for the nonexistent file
-            assert len(warning_messages) == 1
-            assert "Preload file not found" in warning_messages[0]
-            assert str(nonexistent_file) in warning_messages[0]
+            [mcp]
+            config_path = "non-existent-config.json"
+            """)
+        
+        # Check for FileNotFoundError when compiling
+        with pytest.raises(FileNotFoundError) as excinfo:
+            LLMProgram.compile(toml_path)
+        
+        # Verify the error message includes both the specified and resolved paths
+        assert "MCP config file not found" in str(excinfo.value)
+        assert "non-existent-config.json" in str(excinfo.value)

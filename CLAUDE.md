@@ -292,6 +292,12 @@
    - Added better error handling and more informative logging
    - Updated tests to reflect the new implementation
 
+4. Fixed environment information handling in program linking
+   - Added missing include_env parameter to LLMProgram.get_enriched_system_prompt() method
+   - Made environment info inclusion optional with include_env parameter (default: True)
+   - Created comprehensive tests for different environment inclusion scenarios
+   - Fixed program linking demo example that was failing due to this issue
+
 ## Pending System Prompt & Environment Info Tasks (Next Session)
 
 To continue the improvements in the next session:
