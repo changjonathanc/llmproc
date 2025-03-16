@@ -279,6 +279,19 @@
    - Improved docstrings to clarify behavior with missing files
    - Ensured compiler issues warnings but doesn't fail for missing preload files
 
+2. Refactored tests to consistently use program-based API
+   - Updated all test files to use LLMProgram + LLMProcess pattern
+   - Replaced direct constructor calls with two-step initialization
+   - Updated assertions to match the lazy system prompt initialization
+   - Improved test readability with clear initialization steps
+
+3. Improved linked program initialization with compilation semantics
+   - Updated _initialize_linked_programs to use LLMProgram.compile()
+   - Applied consistent two-step initialization to linked programs
+   - Used warnings module for consistent warning messages
+   - Added better error handling and more informative logging
+   - Updated tests to reflect the new implementation
+
 ## Pending System Prompt & Environment Info Tasks (Next Session)
 
 To continue the improvements in the next session:
