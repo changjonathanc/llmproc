@@ -84,12 +84,14 @@ def test_run(mock_env, mock_get_provider_client):
     """Test that LLMProcess.run works correctly."""
     # Completely mock out the OpenAI client creation
     with patch("openai.OpenAI"):
-        # Create a process with our mocked provider client
-        process = LLMProcess.create_for_testing(
+        # Create a program and process with the new API
+        from llmproc.program import LLMProgram
+        program = LLMProgram(
             model_name="test-model",
             provider="openai",
             system_prompt="You are a test assistant."
         )
+        process = LLMProcess(program=program)
         
         # Mock the _async_run method to avoid dealing with async complexities
         with patch.object(process, '_async_run', return_value="Test response"):
@@ -112,12 +114,14 @@ def test_run(mock_env, mock_get_provider_client):
 
 def test_reset_state(mock_env, mock_get_provider_client):
     """Test that LLMProcess.reset_state works correctly."""
-    # Create a process with our mocked provider client
-    process = LLMProcess.create_for_testing(
+    # Create a process with our mocked provider client using the new API
+    from llmproc.program import LLMProgram
+    program = LLMProgram(
         model_name="test-model",
         provider="openai",
         system_prompt="You are a test assistant."
     )
+    process = LLMProcess(program=program)
     
     # Manually add messages to the state instead of calling run() to avoid making API calls
     process.state.append({"role": "user", "content": "Hello!"})
@@ -141,12 +145,14 @@ def test_reset_state(mock_env, mock_get_provider_client):
 
 def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provider_client):
     """Test that LLMProcess.reset_state works correctly with the keep_system_prompt parameter."""
-    # Create a process with our mocked provider client
-    process = LLMProcess.create_for_testing(
+    # Create a process with our mocked provider client using the new API
+    from llmproc.program import LLMProgram
+    program = LLMProgram(
         model_name="test-model",
         provider="openai",
         system_prompt="You are a test assistant."
     )
+    process = LLMProcess(program=program)
     
     # Manually add messages to the state
     process.state.append({"role": "user", "content": "Hello!"})
@@ -167,12 +173,14 @@ def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provid
     
 def test_reset_state_with_preloaded_content(mock_env, mock_get_provider_client):
     """Test that reset_state works correctly with preloaded content."""
-    # Create a process
-    process = LLMProcess(
+    # Create a program and process with the new API
+    from llmproc.program import LLMProgram
+    program = LLMProgram(
         model_name="test-model",
         provider="openai",
         system_prompt="You are a test assistant."
     )
+    process = LLMProcess(program=program)
     
     # Create a temporary test file
     with NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:
@@ -224,12 +232,14 @@ def test_reset_state_with_preloaded_content(mock_env, mock_get_provider_client):
 
 def test_preload_files_method(mock_env, mock_get_provider_client):
     """Test that the preload_files method works correctly."""
-    # Create a process
-    process = LLMProcess(
+    # Create a program and process with the new API
+    from llmproc.program import LLMProgram
+    program = LLMProgram(
         model_name="test-model",
         provider="openai",
         system_prompt="You are a test assistant."
     )
+    process = LLMProcess(program=program)
     
     # Create a temporary test file
     with NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:
