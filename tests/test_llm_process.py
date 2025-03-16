@@ -57,14 +57,24 @@ def mock_env():
 
 
 def test_initialization(mock_env, mock_get_provider_client):
-    """Test that LLMProcess initializes correctly."""
-    process = LLMProcess(
+    """Test that LLMProcess initializes correctly using the new API."""
+    # Create a program directly
+    from llmproc.program import LLMProgram
+    
+    program = LLMProgram(
         model_name="test-model",
         provider="openai",
-        system_prompt="You are a test assistant."
+        system_prompt="You are a test assistant.",
+        parameters={},
+        display_name="Test Model",
     )
     
+    # Create process from the program
+    process = LLMProcess(program=program)
+    
+    # Verify process initialization
     assert process.model_name == "test-model"
+    assert process.provider == "openai"
     assert process.system_prompt == "You are a test assistant."
     assert process.state == [{"role": "system", "content": "You are a test assistant."}]
     assert process.parameters == {}
@@ -75,7 +85,7 @@ def test_run(mock_env, mock_get_provider_client):
     # Completely mock out the OpenAI client creation
     with patch("openai.OpenAI"):
         # Create a process with our mocked provider client
-        process = LLMProcess(
+        process = LLMProcess.create_for_testing(
             model_name="test-model",
             provider="openai",
             system_prompt="You are a test assistant."
@@ -103,7 +113,7 @@ def test_run(mock_env, mock_get_provider_client):
 def test_reset_state(mock_env, mock_get_provider_client):
     """Test that LLMProcess.reset_state works correctly."""
     # Create a process with our mocked provider client
-    process = LLMProcess(
+    process = LLMProcess.create_for_testing(
         model_name="test-model",
         provider="openai",
         system_prompt="You are a test assistant."
@@ -132,7 +142,7 @@ def test_reset_state(mock_env, mock_get_provider_client):
 def test_reset_state_with_keep_system_prompt_parameter(mock_env, mock_get_provider_client):
     """Test that LLMProcess.reset_state works correctly with the keep_system_prompt parameter."""
     # Create a process with our mocked provider client
-    process = LLMProcess(
+    process = LLMProcess.create_for_testing(
         model_name="test-model",
         provider="openai",
         system_prompt="You are a test assistant."

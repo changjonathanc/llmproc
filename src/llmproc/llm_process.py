@@ -5,9 +5,12 @@ import json
 import os
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from llmproc.program import LLMProgram
 
 try:
     from mcp_registry import MCPAggregator, ServerRegistry, get_config_path
@@ -36,35 +39,14 @@ class LLMProcess:
 
     def __init__(
         self,
-        model_name: str,
-        provider: str,
-        system_prompt: str,
-        preload_files: list[str] | None = None,
-        display_name: str | None = None,
-        mcp_config_path: str | None = None,
-        mcp_tools: dict[str, list[str] | str] | None = None,
-        linked_programs: dict[str, Path | str] | None = None,
+        program: "LLMProgram",
         linked_programs_instances: dict[str, "LLMProcess"] | None = None,
-        config_dir: Path | None = None,
-        parameters: dict[str, Any] = None,
-        tools: dict[str, Any] = None,
     ) -> None:
-        """Initialize LLMProcess.
+        """Initialize LLMProcess from a compiled program.
 
         Args:
-            model_name: Name of the model to use
-            provider: Provider of the model (openai, anthropic, or vertex)
-            system_prompt: System prompt that defines the behavior of the process
-            preload_files: List of file paths to preload into the system prompt as context
-            display_name: User-facing name for the process in CLI interfaces
-            mcp_config_path: Path to MCP servers configuration file
-            mcp_tools: Dictionary mapping server names to tools to enable
-                       Value can be a list of tool names or "all" to enable all tools
-            linked_programs: Dictionary mapping program names to TOML program paths
+            program: A compiled LLMProgram instance
             linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
-            config_dir: Base directory for resolving relative paths in programs
-            parameters: Dictionary from the [parameters] section in the TOML program
-            tools: Dictionary from the [tools] section in the TOML program
 
         Raises:
             NotImplementedError: If the provider is not implemented
@@ -72,79 +54,65 @@ class LLMProcess:
             FileNotFoundError: If any of the preload files cannot be found
             ValueError: If MCP is enabled but provider is not anthropic
         """
-        self.model_name = model_name
-        self.provider = provider
-        self.system_prompt = system_prompt
-        self.display_name = display_name or f"{provider.title()} {model_name}"
-        self.config_dir = config_dir
+        # Store the program reference
+        self.program = program
+        
+        # Extract core attributes from program
+        self.model_name = program.model_name
+        self.provider = program.provider
+        self.system_prompt = program.system_prompt
+        self.display_name = program.display_name
+        self.config_dir = program.config_dir
+        self.api_params = program.api_params
+        self.debug_tools = program.debug_tools
+        self.parameters = {} # Keep empty - parameters are already processed in program
+        
+        # Initialize state for preloaded content
         self.preloaded_content = {}
         
-        # Initialize parameters from the [parameters] section
-        self.parameters = parameters or {}
+        # Extract tool configuration
+        self.enabled_tools = []
+        if hasattr(program, 'tools') and program.tools:
+            # Get enabled tools from the program
+            self.enabled_tools = program.tools.get("enabled", [])
         
-        # Initialize tools configuration from the [tools] section
-        tools_config = tools or {}
-        self.enabled_tools = tools_config.get("enabled", [])
-        
-        # Extract known parameters from [parameters]
-        self.api_params = {}
-        
-        # Extract commonly used parameters
-        if "temperature" in self.parameters:
-            self.api_params["temperature"] = self.parameters.pop("temperature")
-        if "max_tokens" in self.parameters:
-            self.api_params["max_tokens"] = self.parameters.pop("max_tokens")
-        if "top_p" in self.parameters:
-            self.api_params["top_p"] = self.parameters.pop("top_p")
-        if "frequency_penalty" in self.parameters:
-            self.api_params["frequency_penalty"] = self.parameters.pop("frequency_penalty")
-        if "presence_penalty" in self.parameters:
-            self.api_params["presence_penalty"] = self.parameters.pop("presence_penalty")
-        
-        # Configuration flags
-        self.debug_tools = self.parameters.pop("debug_tools", False)
-        
-        # Check for and warn about any remaining parameters
-        if self.parameters:
-            remaining_params = list(self.parameters.keys())
-            print(f"<warning>Unknown parameters in config: {remaining_params}</warning>")
-            # We don't use these parameters, so clear them
-            self.parameters.clear()
-
         # MCP Configuration
         self.mcp_enabled = False
         self.mcp_tools = {}
         self.tools = []
         
+        # Extract MCP configuration if present
+        self.mcp_config_path = getattr(program, "mcp_config_path", None)
+        self.mcp_tools = getattr(program, "mcp_tools", {})
+        
         # Linked Programs Configuration
         self.linked_programs = {}
         self.has_linked_programs = False
         
-        # Initialize linked programs if provided
+        # Initialize linked programs if provided in constructor
         if linked_programs_instances:
             self.has_linked_programs = True
             self.linked_programs = linked_programs_instances
-        elif linked_programs:
+        # Otherwise use linked programs from the program
+        elif hasattr(program, "linked_programs") and program.linked_programs:
             self.has_linked_programs = True
-            self._initialize_linked_programs(linked_programs)
+            self._initialize_linked_programs(program.linked_programs)
 
         # Setup MCP if configured
-        if mcp_config_path and mcp_tools:
+        if self.mcp_config_path and self.mcp_tools:
             if not HAS_MCP:
                 raise ImportError(
                     "MCP features require the mcp-registry package. Install it with 'pip install mcp-registry'."
                 )
 
             # Currently only support Anthropic with MCP
-            if provider != "anthropic":
+            if self.provider != "anthropic":
                 raise ValueError(
                     "MCP features are currently only supported with the Anthropic provider"
                 )
 
             self.mcp_enabled = True
-            self.mcp_config_path = mcp_config_path
-            self.mcp_tools = mcp_tools
-
+            
             # Initialize MCP registry and tools asynchronously
             asyncio.run(self._initialize_mcp_tools())
             
@@ -154,11 +122,11 @@ class LLMProcess:
             self._register_spawn_tool()
 
         # Get project_id and region for Vertex if provided in parameters
-        project_id = parameters.pop("project_id", None) if parameters else None
-        region = parameters.pop("region", None) if parameters else None
+        project_id = getattr(program, "project_id", None)
+        region = getattr(program, "region", None)
 
         # Initialize the client
-        self.client = get_provider_client(provider, model_name, project_id, region)
+        self.client = get_provider_client(self.provider, self.model_name, project_id, region)
 
         # Store the original system prompt before any files are preloaded
         self.original_system_prompt = self.system_prompt
@@ -167,8 +135,8 @@ class LLMProcess:
         self.state = [{"role": "system", "content": self.system_prompt}]
 
         # Preload files if specified
-        if preload_files:
-            self._preload_files(preload_files)
+        if hasattr(program, "preload_files") and program.preload_files:
+            self._preload_files(program.preload_files)
 
     def preload_files(self, file_paths: list[str]) -> None:
         """Add additional files to the conversation context.
@@ -234,112 +202,94 @@ class LLMProcess:
             An initialized LLMProcess instance
 
         Raises:
-            ValueError: If MCP configuration is invalid
+            ValueError: If program configuration is invalid
         """
-        path = Path(toml_path)
-        with path.open("rb") as f:
-            program = tomllib.load(f)
-
-        # Check for recognized sections
-        known_sections = {
-            "model", "prompt", "parameters", "preload", 
-            "mcp", "linked_programs", "tools"
-        }
-        unknown_sections = set(program.keys()) - known_sections
-        if unknown_sections:
-            print(f"<warning>Unknown sections in TOML program: {list(unknown_sections)}</warning>")
+        # Use the LLMProgram compiler directly
+        from llmproc.program import LLMProgram
+        
+        # Compile the program
+        program = LLMProgram.compile(toml_path)
+        
+        # Create the LLMProcess instance from the compiled program
+        return cls(program=program)
+        
+    @classmethod
+    def create_for_testing(
+        cls, 
+        model_name: str,
+        provider: str,
+        system_prompt: str,
+        preload_files: list[str] | None = None,
+        display_name: str | None = None,
+        mcp_config_path: str | None = None,
+        mcp_tools: dict[str, list[str] | str] | None = None,
+        linked_programs: dict[str, Path | str] | None = None,
+        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
+        config_dir: Path | None = None,
+        parameters: dict[str, Any] = None,
+        tools: dict[str, Any] = None,
+        debug_tools: bool = False,
+    ) -> "LLMProcess":
+        """Create an LLMProcess for testing purposes.
+        
+        This provides a backwards compatible API for tests.
+        
+        Args:
+            model_name: Name of the model to use
+            provider: Provider of the model (openai, anthropic, or vertex)
+            system_prompt: System prompt that defines the behavior of the process
+            preload_files: List of file paths to preload into the system prompt as context
+            display_name: User-facing name for the process in CLI interfaces
+            mcp_config_path: Path to MCP servers configuration file
+            mcp_tools: Dictionary mapping server names to tools to enable
+            linked_programs: Dictionary mapping program names to TOML program paths
+            linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
+            config_dir: Base directory for resolving relative paths in programs
+            parameters: Dictionary from the [parameters] section in the TOML program
+            tools: Dictionary from the [tools] section in the TOML program
+            debug_tools: Enable detailed debugging output for tool execution
             
-        model = program["model"]
-        prompt_config = program.get("prompt", {})
-        parameters = program.get("parameters", {})
-        preload_config = program.get("preload", {})
-        mcp_config = program.get("mcp", {})
-        linked_programs_config = program.get("linked_programs", {})
-        tools_config = program.get("tools", {})
-
-        if "system_prompt_file" in prompt_config:
-            system_prompt_path = path.parent / prompt_config["system_prompt_file"]
-            system_prompt = system_prompt_path.read_text()
-        else:
-            system_prompt = prompt_config.get("system_prompt", "")
-
-        # Handle preload files if specified
-        preload_files = None
-        if "files" in preload_config:
-            # Convert all paths to be relative to the TOML file's directory
-            preload_files = [
-                str(path.parent / file_path) for file_path in preload_config["files"]
+        Returns:
+            An initialized LLMProcess instance
+        """
+        from llmproc.program import LLMProgram
+        
+        # Create a program with the given parameters
+        display_name = display_name or f"{provider.title()} {model_name}"
+        
+        # Process API parameters
+        api_params = {}
+        if parameters:
+            api_param_keys = [
+                "temperature", "max_tokens", "top_p", 
+                "frequency_penalty", "presence_penalty"
             ]
-            # Check if all preloaded files exist
-            for file_path in preload_files:
-                if not Path(file_path).exists():
-                    print(
-                        f"<warning>{os.path.abspath(file_path)} does not exist.</warning>"
-                    )
-
-        # Get display name if present
-        display_name = model.get("display_name", None)
-
-        # Handle MCP configuration if specified
-        mcp_config_path = None
-        mcp_tools = None
-
-        if mcp_config:
-            if "config_path" in mcp_config:
-                # Convert path to be relative to the TOML file's directory
-                config_path = path.parent / mcp_config["config_path"]
-                if not config_path.exists():
-                    print(
-                        f"<warning>MCP config file {os.path.abspath(config_path)} does not exist.</warning>"
-                    )
-                else:
-                    mcp_config_path = str(config_path)
-
-            # Get tool configuration
-            if "tools" in mcp_config:
-                tools_config = mcp_config["tools"]
-                if not isinstance(tools_config, dict):
-                    raise ValueError(
-                        "MCP tools configuration must be a dictionary mapping server names to tool lists"
-                    )
-
-                # Process the tools configuration
-                mcp_tools = {}
-                for server_name, tool_config in tools_config.items():
-                    # Accept either "all" or a list of tool names
-                    if tool_config == "all":
-                        mcp_tools[server_name] = "all"
-                    elif isinstance(tool_config, list):
-                        mcp_tools[server_name] = tool_config
-                    else:
-                        raise ValueError(
-                            f"Invalid tool configuration for server '{server_name}'. Expected 'all' or a list of tool names"
-                        )
+            
+            for key in api_param_keys:
+                if key in parameters:
+                    api_params[key] = parameters[key]
         
-        # Process linked programs configuration
-        linked_programs = None
-        if linked_programs_config:
-            linked_programs = {}
-            for program_name, program_path in linked_programs_config.items():
-                linked_programs[program_name] = program_path
-                
-        # Get enabled tools
-        enabled_tools = tools_config.get("enabled", [])
-        
-        # Create the LLMProcess instance
-        return cls(
-            model_name=model["name"],
-            provider=model["provider"],
+        # Create a program with the given parameters
+        program = LLMProgram(
+            model_name=model_name,
+            provider=provider,
             system_prompt=system_prompt,
-            preload_files=preload_files,
+            parameters=parameters or {},
             display_name=display_name,
+            preload_files=preload_files,
             mcp_config_path=mcp_config_path,
             mcp_tools=mcp_tools,
+            tools=tools,
             linked_programs=linked_programs,
-            config_dir=path.parent,
-            parameters=parameters,
-            tools=tools_config,
+            debug_tools=debug_tools,
+            config_dir=config_dir
         )
+        
+        # Set the API parameters
+        program.api_params = api_params
+        
+        # Create the process from the program
+        return cls(program=program, linked_programs_instances=linked_programs_instances)
 
     async def run(self, user_input: str, max_iterations: int = 10) -> str:
         """Run the LLM process with user input asynchronously.

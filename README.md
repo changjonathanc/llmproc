@@ -26,7 +26,7 @@ The LLMProc library functions as a kernel:
 
 ## Features
 
-- Load programs from TOML files
+- Load programs from TOML files with validation and error checking
 - Maintain conversation state
 - Support for different LLM providers (OpenAI, Anthropic, Vertex)
 - Extensive parameter customization
@@ -36,6 +36,7 @@ The LLMProc library functions as a kernel:
 - File preloading for context enhancement by adding content to system prompt
 - Model Context Protocol (MCP) support for tool usage
 - Program Linking for LLM-to-LLM communication via spawn tool (like `dispatch_agent` in Claude Code)
+- Program Compiler for robust validation and preprocessing of configurations
 
 ## Installation
 
@@ -59,7 +60,7 @@ import asyncio
 from llmproc import LLMProcess
 
 async def main():
-    # Load program from TOML
+    # Load program from TOML (recommended approach)
     process = LLMProcess.from_toml('examples/minimal.toml')
 
     # Run the process with user input
@@ -74,6 +75,33 @@ async def main():
     process.reset_state()
 
 # Run the async example
+asyncio.run(main())
+```
+
+You can also create a process from a manually constructed program:
+
+```python
+import asyncio
+from llmproc import LLMProcess, LLMProgram
+
+async def main():
+    # Compile a program
+    program = LLMProgram(
+        model_name="claude-3-haiku-20240307",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant.",
+        display_name="My Assistant",
+        parameters={"temperature": 0.7}
+    )
+
+    # Create process from program
+    process = LLMProcess(program=program)
+
+    # Use the process
+    response = await process.run("Hello, how can you help me?")
+    print(response)
+
+# Run the example
 asyncio.run(main())
 ```
 
@@ -112,6 +140,30 @@ output = process.run('Hello, what can you tell me about Python?')
 print(output)
 ```
 
+
+### Program Compiler Example
+
+The program compiler provides robust validation and preprocessing of TOML configurations:
+
+```python
+from llmproc import LLMProgram, LLMProcess
+
+# Compile a program with validation
+program = LLMProgram.compile('examples/minimal.toml')
+
+# Access program properties
+print(f"Model: {program.model_name}")
+print(f"Provider: {program.provider}")
+print(f"API Parameters: {program.api_params}")
+
+# Instantiate an LLMProcess from the compiled program
+import llmproc
+process = program.instantiate(llmproc)
+
+# Use the process
+response = process.run("Hello, how are you?")
+print(response)
+```
 
 ### Program Linking Example
 
