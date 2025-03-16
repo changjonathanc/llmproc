@@ -47,7 +47,7 @@
 - PEP8 compliant with Ruff enforcement
 
 ## LLMProcess Features
-- Configurable via TOML files
+- Configurable via TOML files with validation
 - Supports system prompts from strings or files
 - Maintains conversation state
 - Parameters configurable via TOML
@@ -56,6 +56,7 @@
 - Supports OpenAI, Anthropic, and Vertex AI models
 - MCP (Model Context Protocol) support for tool usage
 - Program linking for LLM-to-LLM communication via spawn tool
+- Program compiler for validation and preprocessing of configurations
 - Methods: run() [async], get_state(), reset_state(), from_toml(), preload_files()
 - Command-line interface for interactive chat sessions
 - Comprehensive error handling and diagnostics
@@ -209,3 +210,75 @@
     - "prompt" vs "system prompt" vs "system message"
     - "process" vs "instance" usage
     - Inconsistent capitalization of system calls
+
+## Session Summary (2025-03-23)
+1. Implemented program compiler for robust validation and preprocessing
+2. Created LLMProgram class to separate configuration parsing from LLMProcess
+3. Added Pydantic models for comprehensive configuration validation
+4. Simplified API parameter extraction with cleaner loop-based approach
+5. Created new [debug] section in TOML for debug-related configuration
+6. Moved debug_tools from parameters to dedicated debug section
+7. Updated from_toml method to use the new compiler
+8. Added comprehensive documentation in docs/program-compiler.md
+9. Created program_compiler_example.py to demonstrate usage
+10. Added test_program_compiler.py with validation tests
+11. Added clear error messages for configuration issues
+12. Updated all documentation to reflect the new features
+
+## Session Summary (2025-03-24)
+1. Refactored LLMProcess to accept a program parameter instead of individual fields
+2. Removed create_for_testing helper to enforce the new Program API
+3. Updated core tests in test_llm_process.py to use the Program-based API
+4. Updated provider tests in test_llm_process_providers.py with the new pattern
+5. Fixed docstrings and comments to reflect the new API patterns
+6. Added clearer examples of creating processes from programs in README.md
+7. Improved type annotations and imports for better static analysis
+
+## Pending Refactoring Tasks (Next Session)
+The refactoring to program-based API is partially complete. To continue this work in future sessions, follow these steps:
+
+1. Start by reading these files to understand the current implementation:
+   - src/llmproc/llm_process.py
+   - src/llmproc/program.py
+   - HUMAN.md (especially the compilation semantics section)
+   - README.md (for examples of current usage)
+   - Any failing test files
+
+2. Update these remaining test files to use the new Program API:
+   - tests/test_mcp_features.py
+   - tests/test_mcp_tools.py
+   - tests/test_program_compiler.py
+   - tests/test_program_linking.py
+   - tests/test_program_linking_robust.py
+   
+3. Instead of direct construction like:
+   ```python
+   process = LLMProcess(
+       model_name="model-name",
+       provider="provider-name",
+       system_prompt="System prompt",
+       # Additional parameters
+   )
+   ```
+   
+   Tests should use:
+   ```python
+   from llmproc.program import LLMProgram
+   
+   program = LLMProgram(
+       model_name="model-name",
+       provider="provider-name",
+       system_prompt="System prompt",
+       # Additional parameters
+   )
+   process = LLMProcess(program=program)
+   ```
+
+4. Consider future encapsulation improvements by:
+   - Keeping nested fields in the process encapsulated rather than flattened
+   - Adding property access methods in LLMProcess to transparently access program fields
+   - Optimizing the memory footprint of attribute storage
+   
+5. Update CLI and example scripts to reflect the new API patterns
+
+6. Look for opportunities to further separate concerns between compilation and execution
