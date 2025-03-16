@@ -234,51 +234,98 @@
 6. Added clearer examples of creating processes from programs in README.md
 7. Improved type annotations and imports for better static analysis
 
-## Pending Refactoring Tasks (Next Session)
-The refactoring to program-based API is partially complete. To continue this work in future sessions, follow these steps:
+## Session Summary (2025-03-25)
+1. Completed Program API refactoring for all test modules
+   - Updated all tests to use the program-based API rather than direct parameter construction
+   - Maintained test coverage while transitioning to new interface
+   - Fixed instantiate() method in LLMProgram to use the updated API pattern
 
-1. Start by reading these files to understand the current implementation:
-   - src/llmproc/llm_process.py
-   - src/llmproc/program.py
-   - HUMAN.md (especially the compilation semantics section)
-   - README.md (for examples of current usage)
-   - Any failing test files
+2. Implemented System Prompt & Enriched System Prompt separation
+   - Added clear distinction between base system_prompt and enriched_system_prompt
+   - Made enriched_system_prompt lazily initialized on first message
+   - Empty initial state until first run (more efficient)
+   - Preserved original system prompt for reset operations
 
-2. Update these remaining test files to use the new Program API:
-   - tests/test_mcp_features.py
-   - tests/test_mcp_tools.py
-   - tests/test_program_compiler.py
-   - tests/test_program_linking.py
-   - tests/test_program_linking_robust.py
+3. Added Environment Information Framework
+   - Created new [env_info] section in TOML with variables list
+   - Added support for standard environment variables:
+     - working_directory, platform, date, python_version, hostname, username
+   - Implemented custom variables as key-value pairs in TOML
+   - Made environment information disabled by default (opt-in model)
+   - Added variables="all" option for comprehensive environment details
+   - Created examples/env_info.toml demonstration example
+   - Standardized format with <env> XML tags
+
+4. Improved System Prompt Loading & Error Handling
+   - Added PromptConfig.resolve() method to replace _load_system_prompt
+   - Made system prompt file errors throw proper FileNotFoundError instead of warnings
+   - Same for MCP config files - failing fast with proper errors
+   - Enhanced error messages to show both specified path and resolved path
+   - Improved documentation with clearer exception descriptions
+   - Updated docstrings to document exceptions that might be raised
+
+5. Renamed and Standardized Path Handling
+   - Changed config_dir to base_dir throughout codebase
+   - Improved handling of relative vs absolute paths
+   - Added directory existence checks
+   - Note: We maintain backward compatibility by still using config_dir in LLMProcess but it now maps to program.base_dir
+
+## Session Summary (2025-03-26)
+1. Improved preload file error handling with consistent warnings
+   - Updated preload file warnings to use Python warnings module instead of print()
+   - Added both specified and resolved paths to warning messages for clarity
+   - Maintained non-breaking behavior for missing preload files (warnings vs exceptions)
+   - Added comprehensive tests for preload file warnings in test_program_compiler.py
+   - Improved docstrings to clarify behavior with missing files
+   - Ensured compiler issues warnings but doesn't fail for missing preload files
+
+## Pending System Prompt & Environment Info Tasks (Next Session)
+
+To continue the improvements in the next session:
+
+1. **Testing for Environment Information**:
+   - Add dedicated tests for environment information
+   - Test error cases for file not found errors
+   - Test all environment variable configurations
+
+2. **More Path Improvements**:
+   - Consider factoring out path resolution logic to a dedicated helper
+   - Make handling of linked program paths more consistent
+
+3. **Documentation Updates**:
+   - Add environment info section documentation to README.md
+   - Create examples showing common environment variable uses
+   - Document security implications of environment info
+
+## Implementation Notes
+
+Important details about our changes:
+
+1. **Terminology**:
+   - system_prompt: Original base system prompt from user
+   - enriched_system_prompt: Final prompt with environment info and preloaded files
+   - This distinction ensures resets can preserve the original prompt while regenerating enhanced version as needed
+
+2. **Environment Info Format**:
+   ```toml
+   [env_info]
+   # List form for specific variables
+   variables = ["working_directory", "platform", "date"]
    
-3. Instead of direct construction like:
-   ```python
-   process = LLMProcess(
-       model_name="model-name",
-       provider="provider-name",
-       system_prompt="System prompt",
-       # Additional parameters
-   )
+   # Or enable all standard variables
+   # variables = "all"
+   
+   # Custom environment variables
+   project_name = "My Project"
+   git_branch = "main"
    ```
-   
-   Tests should use:
-   ```python
-   from llmproc.program import LLMProgram
-   
-   program = LLMProgram(
-       model_name="model-name",
-       provider="provider-name",
-       system_prompt="System prompt",
-       # Additional parameters
-   )
-   process = LLMProcess(program=program)
-   ```
 
-4. Consider future encapsulation improvements by:
-   - Keeping nested fields in the process encapsulated rather than flattened
-   - Adding property access methods in LLMProcess to transparently access program fields
-   - Optimizing the memory footprint of attribute storage
-   
-5. Update CLI and example scripts to reflect the new API patterns
+3. **Error Messages**:
+   - Show both specified and resolved paths:
+   - "System prompt file not found - Specified: 'prompt.md', Resolved: '/path/to/prompt.md'"
+   - "MCP config file not found - Specified: 'config.json', Resolved: '/path/to/config.json'"
 
-6. Look for opportunities to further separate concerns between compilation and execution
+4. **API Changes**:
+   - We've maintained backward compatibility across test classes
+   - All tests now use the program-based construction API
+   - We've simplified the internals with methods like PromptConfig.resolve()
