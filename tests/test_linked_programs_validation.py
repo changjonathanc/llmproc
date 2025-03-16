@@ -53,10 +53,23 @@ def test_valid_linked_programs_format():
             [linked_programs]
             program1 = "./other_program.toml"
             """)
+            
+        # Create the linked program file too
+        other_toml_path = Path(temp_dir) / "other_program.toml"
+        with open(other_toml_path, "w") as f:
+            f.write("""
+            [model]
+            name = "other-model"
+            provider = "anthropic"
+
+            [prompt]
+            system_prompt = "Other system prompt"
+            """)
         
-        # Compile the program - should not raise any errors
+        # Compile the program - now we have the file created
         program = LLMProgram.compile(toml_path)
         
-        # Verify linked_programs was properly loaded
+        # Verify linked_programs was properly loaded with the compiled program object
         assert "program1" in program.linked_programs
-        assert program.linked_programs["program1"] == "./other_program.toml"
+        assert program.linked_programs["program1"].model_name == "other-model"
+        assert program.linked_programs["program1"].provider == "anthropic"

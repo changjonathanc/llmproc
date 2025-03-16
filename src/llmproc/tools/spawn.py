@@ -53,11 +53,20 @@ async def spawn_tool(
         }
     
     try:
-        # Get the linked program instance to create a new process
+        # Get the linked program object
         linked_program = linked_programs[program_name]
         
-        # Execute the query on the new process
-        response = await linked_program.run(query)
+        # Check if linked_program is already an LLMProcess or needs instantiation
+        if hasattr(linked_program, 'run'):
+            # It's already a process instance, use it directly
+            linked_process = linked_program
+        else:
+            # It's a Program object, instantiate it as a process
+            from llmproc.llm_process import LLMProcess
+            linked_process = LLMProcess(program=linked_program)
+            
+        # Execute the query on the process
+        response = await linked_process.run(query)
         
         result = {
             "program": program_name,

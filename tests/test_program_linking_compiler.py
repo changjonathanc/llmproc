@@ -68,8 +68,8 @@ def test_compile_all_programs():
             system_prompt = "Utility program"
             """)
         
-        # Use the compile_all method
-        compiled_programs = LLMProgram.compile_all(main_program_path)
+        # Use the compile method with return_all=True
+        compiled_programs = LLMProgram.compile(main_program_path, include_linked=True, return_all=True)
         
         # Check that all programs were compiled
         assert len(compiled_programs) == 4
@@ -88,17 +88,18 @@ def test_compile_all_programs():
         main_program = compiled_programs[str(main_abs_path)]
         assert main_program.model_name == "main-model"
         assert main_program.provider == "anthropic"
-        assert main_program.linked_programs == {
-            "helper": "helper.toml",
-            "math": "math.toml"
-        }
+        # Linked programs should now be references to compiled program objects, not strings
+        assert "helper" in main_program.linked_programs
+        assert "math" in main_program.linked_programs
+        assert main_program.linked_programs["helper"].model_name == "helper-model"
+        assert main_program.linked_programs["math"].model_name == "math-model"
         
         helper_program = compiled_programs[str(helper_abs_path)]
         assert helper_program.model_name == "helper-model"
         assert helper_program.provider == "anthropic"
-        assert helper_program.linked_programs == {
-            "utility": "utility.toml"
-        }
+        # Check that helper program has utility as a linked program object
+        assert "utility" in helper_program.linked_programs
+        assert helper_program.linked_programs["utility"].model_name == "utility-model"
         
         math_program = compiled_programs[str(math_abs_path)]
         assert math_program.model_name == "math-model"
@@ -132,7 +133,7 @@ def test_compile_all_with_missing_file():
         
         # Should raise a FileNotFoundError
         with pytest.raises(FileNotFoundError) as excinfo:
-            LLMProgram.compile_all(main_program_path)
+            LLMProgram.compile(main_program_path, include_linked=True, return_all=True)
         
         # Verify error message contains path information
         error_message = str(excinfo.value)
@@ -173,7 +174,7 @@ def test_circular_dependency():
             """)
         
         # Should compile both programs without infinite recursion
-        compiled_programs = LLMProgram.compile_all(program_a_path)
+        compiled_programs = LLMProgram.compile(program_a_path, include_linked=True, return_all=True)
         
         # Both programs should be compiled
         assert len(compiled_programs) == 2

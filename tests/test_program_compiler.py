@@ -232,7 +232,13 @@ def test_preload_files_warnings():
         assert program.model_name == "test-model"
         assert program.provider == "anthropic"
         assert program.system_prompt == "Test system prompt"
-        assert program.preload_files == [str(Path(temp_dir) / "non-existent-file.txt")]
+        
+        # Don't do a strict path comparison since resolution can be inconsistent (/private/var vs /var)
+        # Instead check that the filename component is correct
+        assert len(program.preload_files) == 1
+        preload_path = Path(program.preload_files[0])
+        assert preload_path.name == "non-existent-file.txt"
+        assert Path(temp_dir).name in str(preload_path)
 
 
 def test_system_prompt_file_error():

@@ -80,27 +80,26 @@ def test_documentation_example():
             assert process.provider == "anthropic"
             assert "spawn" in process.enabled_tools
             
-            # Check linked programs
+            # Check linked programs exist (as Program objects, not LLMProcess instances)
             assert len(process.linked_programs) == 2
             assert "helper" in process.linked_programs
             assert "math" in process.linked_programs
             
-            # Check helper program
-            helper = process.linked_programs["helper"]
-            assert helper.model_name == "helper-model"
-            assert helper.provider == "anthropic"
-            assert len(helper.linked_programs) == 1
-            assert "utility" in helper.linked_programs
+            # With our new implementation, linked programs are stored as Program objects,
+            # not automatically instantiated as LLMProcess instances
             
-            # Check utility program (linked from helper)
-            utility = helper.linked_programs["utility"]
-            assert utility.model_name == "utility-model"
-            assert utility.provider == "anthropic"
+            # Manually instantiate helper to check it
+            helper_program = process.linked_programs["helper"]
+            helper_process = LLMProcess(program=helper_program)
+            assert helper_process.model_name == "helper-model"
+            assert helper_process.provider == "anthropic"
+            assert "utility" in helper_process.linked_programs
             
             # Check math program
-            math = process.linked_programs["math"]
-            assert math.model_name == "math-model"
-            assert math.provider == "anthropic"
+            math_program = process.linked_programs["math"]
+            math_process = LLMProcess(program=math_program)
+            assert math_process.model_name == "math-model"
+            assert math_process.provider == "anthropic"
             
             # Check that the spawn tool is set up
             assert hasattr(process, "tools")
