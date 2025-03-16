@@ -250,6 +250,69 @@ class LLMProgram:
         program.source_path = path
         
         return program
+        
+    @classmethod
+    def compile_all(cls, main_toml_path: Union[str, Path], max_depth: int = 10) -> Dict[str, 'LLMProgram']:
+        """Compile a main program and all its linked programs recursively.
+        
+        This method traverses the entire graph of linked programs starting from the
+        main program, compiling each program only once. It handles circular dependencies
+        by avoiding recompilation of already compiled programs.
+        
+        Args:
+            main_toml_path: Path to the main program TOML file
+            max_depth: Maximum depth for traversing linked programs
+            
+        Returns:
+            Dictionary mapping absolute program paths to compiled programs
+            
+        Raises:
+            FileNotFoundError: If the main program file cannot be found
+        """
+        compiled_programs = {}  # Maps absolute paths to compiled programs
+        to_compile = [(Path(main_toml_path).resolve(), 0)]  # (path, depth)
+        
+        while to_compile:
+            path, depth = to_compile.pop(0)
+            abs_path = str(path)
+            
+            # Skip already compiled programs
+            if abs_path in compiled_programs:
+                continue
+                
+            # Skip if max depth exceeded
+            if depth > max_depth:
+                warnings.warn(f"Maximum linked program depth ({max_depth}) exceeded at {path}")
+                continue
+            
+            try:
+                # Compile the program
+                program = cls.compile(path)
+                compiled_programs[abs_path] = program
+                
+                # Find linked programs and add them to the compilation queue
+                if hasattr(program, 'linked_programs') and program.linked_programs:
+                    base_dir = path.parent
+                    for linked_name, linked_path_str in program.linked_programs.items():
+                        linked_path = Path(linked_path_str)
+                        if not linked_path.is_absolute():
+                            linked_path = base_dir / linked_path
+                        
+                        # Resolve to absolute path
+                        linked_abs_path = linked_path.resolve()
+                        
+                        # If the linked path exists and hasn't been compiled yet, add to queue
+                        if linked_path.exists():
+                            to_compile.append((linked_abs_path, depth + 1))
+                        else:
+                            warnings.warn(f"Linked program file not found - From '{path}', "
+                                        f"looking for '{linked_path_str}' (resolved to '{linked_path}')")
+            
+            except Exception as e:
+                warnings.warn(f"Error compiling {path}: {str(e)}")
+                # Continue with other programs even if one fails
+        
+        return compiled_programs
     
     # Removed _load_system_prompt in favor of PromptConfig.resolve() method
         
