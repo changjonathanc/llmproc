@@ -47,17 +47,27 @@ class TestProgramLinking:
                 process = LLMProcess(program=program)
                 
                 # Test with direct method call with mock
-                with patch("llmproc.llm_process.LLMProcess.from_toml") as mock_from_toml:
-                    mock_expert = MagicMock()
-                    mock_from_toml.return_value = mock_expert
+                with patch("llmproc.program.LLMProgram.compile") as mock_compile:
+                    mock_program = MagicMock()
+                    mock_program.provider = "anthropic"
+                    mock_program.model_name = "expert-model"
+                    mock_compile.return_value = mock_program
                     
-                    # Call the method directly
-                    process._initialize_linked_programs({"expert": str(expert_toml)})
-                    
-                    # Verify the method worked
-                    assert "expert" in process.linked_programs
-                    assert process.linked_programs["expert"] == mock_expert
-                    mock_from_toml.assert_called_once_with(expert_toml)
+                    # We also need to patch the LLMProcess constructor
+                    with patch("llmproc.llm_process.LLMProcess") as mock_process_class:
+                        mock_expert = MagicMock()
+                        mock_process_class.return_value = mock_expert
+                        
+                        # Call the method directly
+                        process._initialize_linked_programs({"expert": str(expert_toml)})
+                        
+                        # Verify the method worked
+                        assert "expert" in process.linked_programs
+                        assert process.linked_programs["expert"] == mock_expert
+                        # Verify the LLMProcess was created with the compiled program
+                        mock_process_class.assert_called_once_with(program=mock_program)
+                    # Verify compile was called with the right path
+                    mock_compile.assert_called_once_with(expert_toml)
         
         finally:
             # Clean up test files

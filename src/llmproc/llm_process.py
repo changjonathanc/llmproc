@@ -737,30 +737,41 @@ class LLMProcess:
     def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
         """Initialize linked LLM programs from their TOML program files.
         
+        This method properly compiles each linked program first using LLMProgram.compile()
+        and then instantiates an LLMProcess from the compiled program.
+        
         Args:
             linked_programs: Dictionary mapping program names to TOML program paths
             
         Raises:
             FileNotFoundError: If a linked program file cannot be found
         """
+        from llmproc.program import LLMProgram
+        
         for program_name, program_path in linked_programs.items():
             path = Path(program_path)
+            original_path = program_path
             
             # If path is relative and we have a config_dir, resolve it
             if not path.is_absolute() and self.config_dir:
                 path = self.config_dir / path
                 
             if not path.exists():
-                print(f"<warning>Linked program file at {path} does not exist</warning>")
+                warnings.warn(f"Linked program file not found - Specified: '{original_path}', Resolved: '{path}'")
                 continue
                 
             try:
-                # Initialize the linked program using the same from_toml class method
-                linked_program = LLMProcess.from_toml(path)
+                # First compile the linked program
+                compiled_program = LLMProgram.compile(path)
+                
+                # Then instantiate an LLMProcess from the compiled program
+                linked_program = LLMProcess(program=compiled_program)
                 self.linked_programs[program_name] = linked_program
-                print(f"Initialized linked program '{program_name}' from {path}")
+                
+                # Log successful initialization
+                print(f"Initialized linked program '{program_name}' ({compiled_program.provider} {compiled_program.model_name})")
             except Exception as e:
-                print(f"<warning>Failed to initialize linked program '{program_name}': {str(e)}</warning>")
+                warnings.warn(f"Failed to initialize linked program '{program_name}': {str(e)}")
     
     def _register_spawn_tool(self) -> None:
         """Register the spawn system call for creating new processes from linked programs."""
