@@ -31,7 +31,7 @@ max_tokens = 150
 # Nucleus sampling parameter (0.0-1.0)
 top_p = 0.95
 
-# Top-K sampling (Anthropic and Vertex AI only)
+# Top-K sampling (Anthropic only)
 # top_k = 40
 
 # Frequency penalty (OpenAI only, -2.0 to 2.0)
@@ -45,6 +45,7 @@ presence_penalty = 0.0
 #----------------------------------------
 [prompt]
 # System prompt as a string
+# This is the base system prompt without any enhancements
 system_prompt = """You are a helpful assistant.
 Provide clear, accurate, and concise responses to user queries.
 Always maintain a neutral and professional tone."""
@@ -52,16 +53,49 @@ Always maintain a neutral and professional tone."""
 # OR use a file (relative path, takes precedence over system_prompt)
 # system_prompt_file = "../prompts/my_system_prompt.md"
 
+# Notes on system prompts:
+# - The system_prompt here is the base instruction set
+# - The actual prompt sent to the API is an "enriched system prompt"
+#   that includes environment info and preloaded file content
+# - The enriched prompt is generated on first run and preserved for the session
+
 #----------------------------------------
 # Preload Configuration
 #----------------------------------------
 [preload]
 # Files to preload as context (relative paths)
-# Content will be added to system prompt with XML tags
+# Content will be added to the enriched system prompt with XML tags
 # files = [
 #   "../prompts/example_prompt.md",
 #   "../README.md"
 # ]
+#
+# When files are preloaded:
+# - On first message, they're added to the enriched system prompt and stay fixed even if file changed during the conversation
+# - Format: <preload><file path="filename">content</file></preload>
+# - The combined system prompt + preload is used for all messages in the session
+
+#----------------------------------------
+# Environment Info Configuration
+#----------------------------------------
+[env_info]
+# Control environment information included in the enriched system prompt
+# By default, no environment information is included
+# Use a list of variables to include or "all" to include all available variables
+variables = ["working_directory", "platform", "date"]  # Include specific variables
+# variables = "all"  # Include all available environment variables
+
+# Custom environment variables can be added as string key-value pairs
+# git_branch = "main"  # Custom git branch info
+# project_name = "My Project"  # Custom project name
+
+# Available standard variables:
+# - working_directory: Current working directory
+# - platform: Operating system (linux, darwin, windows)
+# - date: Current date (YYYY-MM-DD)
+# - python_version: Python version
+# - hostname: Name of the machine
+# - username: Current user
 
 #----------------------------------------
 # Tools Configuration
@@ -92,3 +126,10 @@ Always maintain a neutral and professional tone."""
 # github = ["search_repositories", "get_file_contents"]
 # codemcp = ["ReadFile"]
 # github = "all"  # Import all tools from GitHub server
+
+#----------------------------------------
+# Debug Configuration
+#----------------------------------------
+[debug]
+# Enable detailed debugging output for tool execution
+# debug_tools = true  # Set to true for verbose tool execution logging
