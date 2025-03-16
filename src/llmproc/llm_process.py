@@ -130,9 +130,12 @@ class LLMProcess:
         
         # Handle MCP tools (already set up above if enabled)
         
-        # Handle system tools (like spawn)
+        # Handle system tools (like spawn and fork)
         if "spawn" in self.enabled_tools and self.has_linked_programs:
             self._register_spawn_tool()
+            
+        if "fork" in self.enabled_tools:
+            self._register_fork_tool()
 
         # Get project_id and region for Vertex if provided in parameters
         project_id = getattr(program, "project_id", None)
@@ -869,6 +872,47 @@ class LLMProcess:
         self.tools.append(api_tool_def)
         print(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
         
+    def _register_fork_tool(self) -> None:
+        """Register the fork system call for creating copies of the current process."""
+        from llmproc.tools import fork_tool
+        
+        # Create the fork system call definition for Anthropic API
+        fork_tool_def = {
+            "name": "fork",
+            "description": "Create copies of the current process to handle multiple tasks in parallel. Each copy has the full conversation history.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "prompts": {
+                        "type": "array",
+                        "description": "List of prompts/instructions for each forked process",
+                        "items": {
+                            "type": "string",
+                            "description": "A specific task or query to be handled by a forked process"
+                        }
+                    }
+                },
+                "required": ["prompts"]
+            }
+        }
+        
+        # Create a copy of the tool definition for the API
+        api_tool_def = fork_tool_def.copy()
+        
+        # Add the handler to the internal tool definition
+        fork_tool_def["handler"] = lambda args: fork_tool(
+            prompts=args.get("prompts", []),
+            llm_process=self
+        )
+        
+        # Keep the handler and tool definition separate
+        self.tool_handlers = getattr(self, "tool_handlers", {})
+        self.tool_handlers["fork"] = fork_tool_def["handler"]
+        
+        # Add to the tools list (API-safe version without handler)
+        self.tools.append(api_tool_def)
+        print(f"Registered fork tool for process {self.model_name}")
+        
     def _format_tool_for_anthropic(self, tool, server_name=None):
         """Format a tool for Anthropic API.
         
@@ -1028,3 +1072,34 @@ class LLMProcess:
         # Always reset the enriched system prompt - it will be regenerated on next run
         # with the correct combination of system prompt and preloaded content
         self.enriched_system_prompt = None
+        
+    def fork_process(self) -> "LLMProcess":
+        """Create a deep copy of this process with preserved state.
+        
+        This implements the fork system call semantics where a copy of the
+        process is created with the same state and configuration. The forked
+        process is completely independent and can run separate tasks.
+        
+        Returns:
+            A new LLMProcess instance that is a deep copy of this one
+        """
+        import copy
+        
+        # Create a new instance of LLMProcess with the same program
+        forked_process = LLMProcess(program=self.program)
+        
+        # Copy the enriched system prompt if it exists
+        if hasattr(self, 'enriched_system_prompt') and self.enriched_system_prompt:
+            forked_process.enriched_system_prompt = self.enriched_system_prompt
+            
+        # Deep copy the conversation state
+        forked_process.state = copy.deepcopy(self.state)
+        
+        # Copy any preloaded content
+        if hasattr(self, 'preloaded_content') and self.preloaded_content:
+            forked_process.preloaded_content = copy.deepcopy(self.preloaded_content)
+        
+        # Preserve any other state we need
+        # Note: We don't copy tool handlers as they're already set up in the constructor
+        
+        return forked_process

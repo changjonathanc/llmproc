@@ -103,6 +103,8 @@ variables = ["working_directory", "platform", "date"]  # Include specific variab
 [tools]
 # List of enabled tools
 # enabled = ["spawn"]  # Enable the spawn tool for program linking
+# enabled = ["fork"]   # Enable the fork tool for creating copies of the current process
+# enabled = ["spawn", "fork"]  # Enable multiple tools
 
 #----------------------------------------
 # Program Linking Configuration
