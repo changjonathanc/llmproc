@@ -54,13 +54,13 @@ class LLMProcess:
             ImportError: If the required package for a provider is not installed
             FileNotFoundError: If required files (system prompt file, MCP config file) cannot be found
             ValueError: If MCP is enabled but provider is not anthropic
-            
+
         Notes:
             Missing preload files will generate warnings but won't cause the initialization to fail
         """
         # Store the program reference
         self.program = program
-        
+
         # Extract core attributes from program
         self.model_name = program.model_name
         self.provider = program.provider
@@ -70,34 +70,34 @@ class LLMProcess:
         self.api_params = program.api_params
         self.debug_tools = program.debug_tools
         self.parameters = {} # Keep empty - parameters are already processed in program
-        
+
         # Initialize state for preloaded content
         self.preloaded_content = {}
-        
+
         # Track the enriched system prompt (will be set on first run)
         self.enriched_system_prompt = None
-        
+
         # Extract tool configuration
         self.enabled_tools = []
         if hasattr(program, 'tools') and program.tools:
             # Get enabled tools from the program
             self.enabled_tools = program.tools.get("enabled", [])
-        
+
         # MCP Configuration
         self.mcp_enabled = False
         self.mcp_tools = {}
-        
+
         # Extract MCP configuration if present
         self.mcp_config_path = getattr(program, "mcp_config_path", None)
         self.mcp_tools = getattr(program, "mcp_tools", {})
-        
+
         # Will be initialized later - after MCP setup but before spawn tool registration
         self.tools = []
-        
+
         # Linked Programs Configuration
         self.linked_programs = {}
         self.has_linked_programs = False
-        
+
         # Initialize linked programs if provided in constructor
         if linked_programs_instances:
             self.has_linked_programs = True
@@ -106,7 +106,7 @@ class LLMProcess:
         elif hasattr(program, "linked_programs") and program.linked_programs:
             self.has_linked_programs = True
             self.linked_programs = program.linked_programs
-        
+
         # Setup MCP if configured
         if self.mcp_config_path and self.mcp_tools:
             if not HAS_MCP:
@@ -121,19 +121,19 @@ class LLMProcess:
                 )
 
             self.mcp_enabled = True
-            
+
             # Initialize MCP registry and tools asynchronously
             asyncio.run(self._initialize_mcp_tools())
-            
+
         # Initialize tools - we start with an empty tools list
         self.tools = []
-        
+
         # Handle MCP tools (already set up above if enabled)
-        
+
         # Handle system tools (like spawn and fork)
         if "spawn" in self.enabled_tools and self.has_linked_programs:
             self._register_spawn_tool()
-            
+
         if "fork" in self.enabled_tools:
             self._register_fork_tool()
 
@@ -146,23 +146,15 @@ class LLMProcess:
 
         # Store the original system prompt before any files are preloaded
         self.original_system_prompt = self.system_prompt
-        
+
         # Initialize message state (will set system message on first run)
         self.state = []
 
         # Preload files if specified
         if hasattr(program, "preload_files") and program.preload_files:
-            self._preload_files(program.preload_files)
+            self.preload_files(program.preload_files)
 
     def preload_files(self, file_paths: list[str]) -> None:
-        """Add additional files to the conversation context.
-
-        Args:
-            file_paths: List of file paths to preload
-        """
-        self._preload_files(file_paths)
-
-    def _preload_files(self, file_paths: list[str]) -> None:
         """Preload files and add their content to the preloaded_content dictionary.
 
         This method loads file content into memory but does not modify the state.
@@ -178,10 +170,10 @@ class LLMProcess:
                 # Issue a clear warning with both specified and resolved paths
                 warnings.warn(f"Preload file not found - Specified: '{file_path}', Resolved: '{os.path.abspath(file_path)}'")
                 continue
-                
+
             content = path.read_text()
             self.preloaded_content[str(path)] = content
-            
+
         # Reset the enriched system prompt if it was already generated
         # so it will be regenerated with the new preloaded content
         if self.enriched_system_prompt is not None:
@@ -207,26 +199,26 @@ class LLMProcess:
         """
         # Import the compiler
         from llmproc.program import LLMProgram
-        
+
         # Compile the main program and all linked programs
         # This will create a properly linked object graph with Program objects
         main_path = Path(toml_path).resolve()
         main_program = LLMProgram.compile(main_path, include_linked=True, check_linked_files=True)
-        
+
         if not main_program:
             raise ValueError(f"Failed to compile program from {toml_path}")
-        
+
         # Create the main process
         main_process = cls(program=main_program)
-        
-        # The linked_programs attribute of main_program should now contain references to 
+
+        # The linked_programs attribute of main_program should now contain references to
         # compiled Program objects instead of path strings
         if hasattr(main_program, 'linked_programs') and main_program.linked_programs:
             main_process.has_linked_programs = bool(main_program.linked_programs)
-            
+
         # No need to initialize spawn tool here - it's already done in the constructor
         return main_process
-        
+
 
     async def run(self, user_input: str, max_iterations: int = 10) -> str:
         """Run the LLM process with user input asynchronously.
@@ -270,7 +262,7 @@ class LLMProcess:
         # Verify user input isn't empty
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
-            
+
         # Generate enriched system prompt on first run
         if self.enriched_system_prompt is None:
             self.enriched_system_prompt = self.program.get_enriched_system_prompt(
@@ -393,7 +385,7 @@ class LLMProcess:
                     "messages": messages,
                     **self.api_params
                 }
-                
+
                 # Debug: print tools if they exist
                 if hasattr(self, 'tools') and self.tools:
                     print(f"DEBUG: Passing {len(self.tools)} tools to Anthropic API:")
@@ -405,7 +397,7 @@ class LLMProcess:
                 try:
                     # Create the response with system prompt separate from messages
                     response = await self.client.messages.create(**api_params)
-                    
+
                     # Check if the response is a tool use
                     if response.content[0].type == "tool_use":
                         # We need to handle tool calls here
@@ -507,7 +499,7 @@ class LLMProcess:
                 **self.api_params,
                 **self.extra_params
             }
-            
+
             # Debug: print tools if they exist
             if hasattr(self, 'tools') and self.tools:
                 print(f"DEBUG: Passing {len(self.tools)} tools to Vertex API:")
@@ -520,10 +512,10 @@ class LLMProcess:
                 # Create the response with system prompt separate from messages
                 # Create the response with system prompt separate from messages
                 import traceback
-                
+
                 try:
                     response = await self.client.messages.create(**api_params)
-                    
+
                     # Check if the response is a tool use
                     if response.content[0].type == "tool_use":
                         # We need to handle tool calls here
@@ -643,39 +635,39 @@ class LLMProcess:
             return
 
         print(f"Tool configuration: {self.mcp_tools}")
-        
+
         # Ensure tools list is initialized
         if not hasattr(self, 'tools') or self.tools is None:
             self.tools = []
-        
+
         # Get the set of server names that are configured in mcp_tools
         configured_servers = set(self.mcp_tools.keys())
-        
+
         # Read the MCP config file into a dictionary
         import json
         try:
             with open(self.mcp_config_path, 'r') as f:
                 full_config = json.load(f)
-                
+
             # Just check if all servers are in the config, but use original config
             # to avoid validation issues with the data structure
             mcp_servers = full_config.get("mcpServers", {})
-            
+
             # Check which configured servers exist in the config file
             for server_name in configured_servers:
                 if server_name in mcp_servers:
                     print(f"Including server '{server_name}' from config")
                 else:
                     print(f"<warning>Configured server '{server_name}' not found in config file</warning>")
-            
+
             # Skip servers not configured in mcp_tools
             for server_name in set(mcp_servers.keys()) - configured_servers:
                 print(f"Skipping server '{server_name}' (not configured in mcp_tools)")
-            
+
             # We'll use the standard method to initialize but only after checking
             self.registry = ServerRegistry.from_config(self.mcp_config_path)
             self.aggregator = MCPAggregator(self.registry)
-            
+
         except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
             print(f"<warning>Error reading MCP config: {str(e)}</warning>")
             # Fall back to the standard method in case of errors
@@ -693,19 +685,19 @@ class LLMProcess:
         print("\nAvailable MCP tools:")
         for tool in all_tools_results.tools:
             print(f" - {tool.name}")
-        
+
         # Track registered tools to avoid duplicates
         registered_tools = set()
-        
+
         # Process each server and tool configuration
         for server_name, tool_config in self.mcp_tools.items():
             # Check if this server exists in the tools map
             if server_name not in server_tools_map:
                 print(f"<warning>Server '{server_name}' not found in available tools</warning>")
                 continue
-                
+
             server_tools = server_tools_map[server_name]
-            
+
             # Create a mapping of tool names to tools for this server (both original and lowercase)
             server_tool_map = {}
             for tool in server_tools:
@@ -717,7 +709,7 @@ class LLMProcess:
                     camel_case = "".join(x.capitalize() if i > 0 else x for i, x in enumerate(tool.name.split("_")))
                     server_tool_map[camel_case] = tool
                     server_tool_map[camel_case.lower()] = tool
-            
+
             # Case 1: Register all tools for a server
             if tool_config == "all":
                 if server_tools:
@@ -729,7 +721,7 @@ class LLMProcess:
                             registered_tools.add(namespaced_name)
                 else:
                     print(f"<warning>No tools found for server '{server_name}'</warning>")
-            
+
             # Case 2: Register specific tools
             elif isinstance(tool_config, list):
                 for tool_name in tool_config:
@@ -740,7 +732,7 @@ class LLMProcess:
                         tool_name.replace("_", ""),   # No underscores
                         tool_name.lower().replace("_", "")  # Lowercase, no underscores
                     ]
-                    
+
                     found = False
                     for variant in variations:
                         if variant in server_tool_map:
@@ -752,79 +744,79 @@ class LLMProcess:
                                 print(f"Registered tool: {namespaced_name}")
                                 found = True
                             break
-                    
+
                     if not found:
                         print(f"<warning>Tool '{tool_name}' not found for server '{server_name}'</warning>")
-        
+
         # If no tools were registered, show a warning
         if not self.tools:
             print("<warning>No tools were registered. Check your MCP configuration.</warning>")
-        
+
         # Show summary of registered tools
         print(f"Registered {len(self.tools)} tools from MCP registry:")
         for i, tool in enumerate(self.tools, 1):
             print(f"  {i}. {tool['name']} - {tool['description'][:60]}...")
-    
+
     def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
         """Initialize linked LLM programs from their TOML program files.
-        
+
         This method compiles all linked programs recursively and stores them as Program objects
         that can be instantiated as processes when needed. This is more memory efficient and
         follows compilation semantics where programs are validated first before instantiation.
-        
+
         Args:
             linked_programs: Dictionary mapping program names to TOML program paths
         """
         from llmproc.program import LLMProgram
-        
+
         # Dictionary to store compiled program objects
-        compiled_program_objects = {}  
-        
+        compiled_program_objects = {}
+
         # Resolve paths and compile all programs
         for program_name, program_path in linked_programs.items():
             path = Path(program_path)
             original_path = program_path
-            
+
             # If path is relative and we have a config_dir, resolve it
             if not path.is_absolute() and self.config_dir:
                 path = self.config_dir / path
-                
+
             if not path.exists():
                 raise FileNotFoundError(f"Linked program file not found - Specified: '{original_path}', Resolved: '{path}'")
-                
+
             try:
                 # Compile this linked program and its sub-linked programs
                 # But store the programs as objects, don't instantiate them as processes yet
                 compiled_program = LLMProgram.compile(path, include_linked=False)
                 compiled_program_objects[program_name] = compiled_program
-                
+
                 # Log successful compilation
                 print(f"Compiled linked program '{program_name}' ({compiled_program.provider} {compiled_program.model_name})")
             except Exception as e:
                 raise RuntimeError(f"Failed to compile linked program '{program_name}': {str(e)}") from e
-        
+
         # Store the compiled program objects
         self.linked_programs = compiled_program_objects
         self.has_linked_programs = bool(compiled_program_objects)
-    
+
     def _register_spawn_tool(self) -> None:
         """Register the spawn system call for creating new processes from linked programs."""
         from llmproc.tools import spawn_tool
         from llmproc.tools.spawn import spawn_tool_def
-        
+
         # Only register if we have linked programs
         if not self.linked_programs:
             print("<warning>No linked programs available. Spawn system call not registered.</warning>")
             return
-            
+
         # Create a copy of the tool definition with dynamic available programs info
         spawn_def = spawn_tool_def.copy()
         available_programs = ", ".join(self.linked_programs.keys())
         spawn_def["description"] = spawn_tool_def["description"] + f"\n\nAvailable programs: {available_programs}"
-        
+
         # Create a copy of the tool definition for the API
         api_tool_def = spawn_def.copy()
-        
+
         # Create an extended tool definition with the handler
         extended_tool_def = spawn_def.copy()
         extended_tool_def["handler"] = lambda args: spawn_tool(
@@ -832,7 +824,7 @@ class LLMProcess:
             query=args.get("query"),
             llm_process=self
         )
-        
+
         # Only print linked programs info if explicitly debugging
         if self.debug_tools and os.environ.get("LLMPROC_DEBUG", "").lower() == "true":
             import sys
@@ -842,53 +834,53 @@ class LLMProcess:
                 if hasattr(program_obj, "model_name"):
                     model_name = program_obj.model_name
                     provider = program_obj.provider
-                    
+
                     # Check for preloaded files (if it's a process instance)
                     prog_files = ""
                     if hasattr(program_obj, "preloaded_content") and program_obj.preloaded_content:
                         prog_files = f" with {len(program_obj.preloaded_content)} preloaded files"
-                        
-                    print(f"  - {prog_name}: {model_name} ({provider}){prog_files}", 
+
+                    print(f"  - {prog_name}: {model_name} ({provider}){prog_files}",
                           file=sys.stderr)
-        
+
         # Keep the handler and tool definition separate
         self.tool_handlers = getattr(self, "tool_handlers", {})
         self.tool_handlers["spawn"] = extended_tool_def["handler"]
-        
+
         # Add to the tools list (API-safe version without handler)
         self.tools.append(api_tool_def)
         print(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
-        
+
     def _register_fork_tool(self) -> None:
         """Register the fork system call for creating copies of the current process."""
         from llmproc.tools import fork_tool
         from llmproc.tools.fork import fork_tool_def
-        
+
         # Create a copy of the tool definition for the API
         api_tool_def = fork_tool_def.copy()
-        
+
         # Create an extended tool definition with the handler
         extended_tool_def = fork_tool_def.copy()
         extended_tool_def["handler"] = lambda args: fork_tool(
             prompts=args.get("prompts", []),
             llm_process=self
         )
-        
+
         # Keep the handler and tool definition separate
         self.tool_handlers = getattr(self, "tool_handlers", {})
         self.tool_handlers["fork"] = extended_tool_def["handler"]
-        
+
         # Add to the tools list (API-safe version without handler)
         self.tools.append(api_tool_def)
         print(f"Registered fork tool for process {self.model_name}")
-        
+
     def _format_tool_for_anthropic(self, tool, server_name=None):
         """Format a tool for Anthropic API.
-        
+
         Args:
             tool: Tool object from MCP registry
             server_name: Optional server name for proper namespacing
-            
+
         Returns:
             Dictionary with tool information formatted for Anthropic API
         """
@@ -898,20 +890,20 @@ class LLMProcess:
         else:
             # If no server name is provided, use the tool name as is (likely already namespaced)
             namespaced_name = tool.name
-            
+
         tool_def = {
             "name": namespaced_name,
             "description": tool.description,
             "input_schema": tool.inputSchema.copy() if tool.inputSchema else {"type": "object", "properties": {}}
         }
-        
+
         # Ensure schema has required fields
         schema = tool_def["input_schema"]
         if "type" not in schema:
             schema["type"] = "object"
         if "properties" not in schema:
             schema["properties"] = {}
-            
+
         return tool_def
 
     async def _process_tool_calls(self, tool_calls):
@@ -1032,43 +1024,43 @@ class LLMProcess:
         """
         # Clear the state
         self.state = []
-        
+
         # Handle preloaded content
         if not keep_preloaded:
             # Clear preloaded content
             self.preloaded_content = {}
-        
+
         # Always reset the enriched system prompt - it will be regenerated on next run
         # with the correct combination of system prompt and preloaded content
         self.enriched_system_prompt = None
-        
-    def fork_process(self) -> "LLMProcess":
+
+    async def fork_process(self) -> "LLMProcess":
         """Create a deep copy of this process with preserved state.
-        
+
         This implements the fork system call semantics where a copy of the
         process is created with the same state and configuration. The forked
         process is completely independent and can run separate tasks.
-        
+
         Returns:
             A new LLMProcess instance that is a deep copy of this one
         """
         import copy
-        
+
         # Create a new instance of LLMProcess with the same program
         forked_process = LLMProcess(program=self.program)
-        
+
         # Copy the enriched system prompt if it exists
         if hasattr(self, 'enriched_system_prompt') and self.enriched_system_prompt:
             forked_process.enriched_system_prompt = self.enriched_system_prompt
-            
+
         # Deep copy the conversation state
         forked_process.state = copy.deepcopy(self.state)
-        
+
         # Copy any preloaded content
         if hasattr(self, 'preloaded_content') and self.preloaded_content:
             forked_process.preloaded_content = copy.deepcopy(self.preloaded_content)
-        
+
         # Preserve any other state we need
         # Note: We don't copy tool handlers as they're already set up in the constructor
-        
+
         return forked_process

@@ -49,7 +49,7 @@ class TestForkTool:
         process.enriched_system_prompt = "Enriched prompt with content"
         
         # Fork the process
-        forked = process.fork_process()
+        forked = await process.fork_process()
         
         # Check that it's a new instance
         assert forked is not process
@@ -74,8 +74,10 @@ class TestForkTool:
         """Test the fork_tool function itself."""
         # Create a mock process
         mock_process = MagicMock()
-        mock_process.fork_process.return_value = MagicMock()
-        mock_process.fork_process.return_value.run = AsyncMock(return_value="Forked response")
+        mock_process.fork_process = AsyncMock()
+        mock_forked_process = MagicMock()
+        mock_forked_process.run = AsyncMock(return_value="Forked response")
+        mock_process.fork_process.return_value = mock_forked_process
         
         # Call the fork tool
         result = await fork_tool(
@@ -87,7 +89,7 @@ class TestForkTool:
         assert mock_process.fork_process.call_count == 2
         
         # Check that run was called on each forked process
-        assert mock_process.fork_process.return_value.run.call_count == 2
+        assert mock_forked_process.run.call_count == 2
         
         # Check the result format
         assert "results" in result
@@ -107,7 +109,7 @@ class TestForkTool:
         
         # Call with a process that raises an exception
         mock_process = MagicMock()
-        mock_process.fork_process.side_effect = Exception("Test error")
+        mock_process.fork_process = AsyncMock(side_effect=Exception("Test error"))
         
         result = await fork_tool(prompts=["Test"], llm_process=mock_process)
         assert "error" in result

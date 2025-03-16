@@ -100,7 +100,7 @@ async def fork_tool(
                 
             # Create a deep copy of the parent process
             # We'll use a new method to ensure a proper deep copy
-            forked_process = llm_process.fork_process()
+            forked_process = await llm_process.fork_process()
             
             if debug:
                 print(f"FORK: Successfully created fork {i+1}", file=sys.stderr)
