@@ -875,39 +875,21 @@ class LLMProcess:
     def _register_fork_tool(self) -> None:
         """Register the fork system call for creating copies of the current process."""
         from llmproc.tools import fork_tool
-        
-        # Create the fork system call definition for Anthropic API
-        fork_tool_def = {
-            "name": "fork",
-            "description": "Create copies of the current process to handle multiple tasks in parallel. Each copy has the full conversation history.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "prompts": {
-                        "type": "array",
-                        "description": "List of prompts/instructions for each forked process",
-                        "items": {
-                            "type": "string",
-                            "description": "A specific task or query to be handled by a forked process"
-                        }
-                    }
-                },
-                "required": ["prompts"]
-            }
-        }
+        from llmproc.tools.fork import fork_tool_def
         
         # Create a copy of the tool definition for the API
         api_tool_def = fork_tool_def.copy()
         
-        # Add the handler to the internal tool definition
-        fork_tool_def["handler"] = lambda args: fork_tool(
+        # Create an extended tool definition with the handler
+        extended_tool_def = fork_tool_def.copy()
+        extended_tool_def["handler"] = lambda args: fork_tool(
             prompts=args.get("prompts", []),
             llm_process=self
         )
         
         # Keep the handler and tool definition separate
         self.tool_handlers = getattr(self, "tool_handlers", {})
-        self.tool_handlers["fork"] = fork_tool_def["handler"]
+        self.tool_handlers["fork"] = extended_tool_def["handler"]
         
         # Add to the tools list (API-safe version without handler)
         self.tools.append(api_tool_def)
