@@ -1,6 +1,7 @@
 """LLMProgram compiler for validating and loading LLM program configurations."""
 
 import os
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
@@ -37,6 +38,33 @@ class PromptConfig(BaseModel):
             self.system_prompt = ""
         
         return self
+        
+    def resolve(self, base_dir: Optional[Path] = None) -> str:
+        """Resolve the system prompt, loading from file if specified.
+        
+        Args:
+            base_dir: Base directory for resolving relative file paths
+            
+        Returns:
+            Resolved system prompt string
+            
+        Raises:
+            FileNotFoundError: If system_prompt_file is specified but doesn't exist
+        """
+        # First check for system_prompt_file (takes precedence)
+        if self.system_prompt_file:
+            # Determine file path, using base_dir for relative paths if provided
+            file_path = Path(self.system_prompt_file)
+            if not file_path.is_absolute() and base_dir:
+                file_path = base_dir / file_path
+                
+            if file_path.exists():
+                return file_path.read_text()
+            else:
+                raise FileNotFoundError(f"System prompt file not found - Specified: '{self.system_prompt_file}', Resolved: '{file_path}'")
+                
+        # Return system_prompt (or empty string if neither is specified)
+        return self.system_prompt or ""
 
 
 class PreloadConfig(BaseModel):
@@ -68,6 +96,15 @@ class ToolsConfig(BaseModel):
     enabled: List[str] = []
 
 
+class EnvInfoConfig(BaseModel):
+    """Environment information configuration section."""
+    variables: Union[List[str], str] = []  # Empty list by default (disabled)
+    # Allow additional custom environment variables as strings
+    model_config = {
+        "extra": "allow"
+    }
+
+
 class DebugConfig(BaseModel):
     """Debug configuration section."""
     debug_tools: bool = False
@@ -86,6 +123,7 @@ class LLMProgramConfig(BaseModel):
     preload: Optional[PreloadConfig] = PreloadConfig()
     mcp: Optional[MCPConfig] = None
     tools: Optional[ToolsConfig] = ToolsConfig()
+    env_info: Optional[EnvInfoConfig] = EnvInfoConfig()
     debug: Optional[DebugConfig] = DebugConfig()
     linked_programs: Optional[LinkedProgramsConfig] = LinkedProgramsConfig()
 
@@ -113,7 +151,8 @@ class LLMProgram:
                  tools: Optional[Dict[str, Any]] = None,
                  linked_programs: Optional[Dict[str, str]] = None,
                  debug_tools: bool = False,
-                 config_dir: Optional[Path] = None):
+                 env_info: Optional[Dict[str, Any]] = None,  # Add environment info configuration
+                 base_dir: Optional[Path] = None):
         """Initialize a program directly from parameters.
         
         This is a convenience constructor, but most users should use the
@@ -131,7 +170,7 @@ class LLMProgram:
             tools: Dictionary from the [tools] section in the TOML program
             linked_programs: Dictionary mapping program names to TOML program paths
             debug_tools: Enable detailed debugging output for tool execution
-            config_dir: Base directory for resolving relative paths in programs
+            base_dir: Base directory for resolving relative paths in files
         """
         self.model_name = model_name
         self.provider = provider
@@ -144,7 +183,8 @@ class LLMProgram:
         self.tools = tools or {}
         self.linked_programs = linked_programs or {}
         self.debug_tools = debug_tools
-        self.config_dir = config_dir
+        self.env_info = env_info or {"variables": []}  # Default to empty list (disabled)
+        self.base_dir = base_dir
         
         # Extract API parameters from parameters for convenience
         self.api_params = self._extract_api_parameters()
@@ -182,9 +222,9 @@ class LLMProgram:
             Compiled LLMProgram instance
             
         Raises:
-            FileNotFoundError: If the TOML file cannot be found
+            FileNotFoundError: If the TOML file or referenced files (system prompt, MCP config) cannot be found
             ValidationError: If the configuration is invalid
-            ValueError: If there are issues with file paths or configuration values
+            ValueError: If there are issues with configuration values
         """
         path = Path(toml_path)
         if not path.exists():
@@ -211,39 +251,46 @@ class LLMProgram:
         
         return program
     
+    # Removed _load_system_prompt in favor of PromptConfig.resolve() method
+        
     @classmethod
-    def _build_from_config(cls, config: LLMProgramConfig, config_dir: Path) -> 'LLMProgram':
+    def _build_from_config(cls, config: LLMProgramConfig, base_dir: Path) -> 'LLMProgram':
         """Build an LLMProgram from a validated configuration.
         
         Args:
             config: Validated program configuration
-            config_dir: Directory containing the program file for resolving paths
+            base_dir: Base directory for resolving relative file paths
             
         Returns:
             Constructed LLMProgram instance
+            
+        Raises:
+            FileNotFoundError: If required files cannot be found
         """
-        # Resolve system prompt
-        system_prompt = config.prompt.system_prompt
-        if config.prompt.system_prompt_file:
-            system_prompt_path = config_dir / config.prompt.system_prompt_file
-            if not system_prompt_path.exists():
-                print(f"<warning>System prompt file {system_prompt_path} does not exist.</warning>")
-            else:
-                system_prompt = system_prompt_path.read_text()
+        # Resolve system prompt using the PromptConfig's resolve method
+        # This will raise FileNotFoundError if the system prompt file is specified but not found
+        system_prompt = config.prompt.resolve(base_dir)
         
         # Resolve preload files
         preload_files = None
         if config.preload and config.preload.files:
-            preload_files = [str(config_dir / file_path) for file_path in config.preload.files]
+            preload_files = []
+            for file_path in config.preload.files:
+                # Determine file path, using base_dir for relative paths
+                resolved_path = base_dir / file_path
+                if not resolved_path.exists():
+                    # Only issue a warning at compile time, don't fail
+                    warnings.warn(f"Preload file not found - Specified: '{file_path}', Resolved: '{resolved_path}'")
+                # Include the file path regardless - it will be checked at runtime when actually loaded
+                preload_files.append(str(resolved_path))
         
         # Resolve MCP configuration
         mcp_config_path = None
         if config.mcp and config.mcp.config_path:
-            mcp_path = config_dir / config.mcp.config_path
+            mcp_path = base_dir / config.mcp.config_path
             if not mcp_path.exists():
-                print(f"<warning>MCP config file {mcp_path} does not exist.</warning>")
-            else:
-                mcp_config_path = str(mcp_path)
+                raise FileNotFoundError(f"MCP config file not found - Specified: '{config.mcp.config_path}', Resolved: '{mcp_path}'")
+            mcp_config_path = str(mcp_path)
         
         # Extract MCP tools configuration
         mcp_tools = None
@@ -260,6 +307,9 @@ class LLMProgram:
         # Get debug settings
         debug_tools = config.debug.debug_tools if config.debug else False
         
+        # Extract environment info configuration
+        env_info = config.env_info.model_dump() if config.env_info else {"variables": []}
+        
         # Create the program instance
         program = cls(
             model_name=config.model.name,
@@ -273,10 +323,93 @@ class LLMProgram:
             tools=config.tools.model_dump() if config.tools else None,
             linked_programs=linked_programs,
             debug_tools=debug_tools,
-            config_dir=config_dir
+            env_info=env_info,
+            base_dir=base_dir
         )
         
         return program
+    
+    def get_enriched_system_prompt(self, process_instance=None):
+        """Get enhanced system prompt with preloaded files and environment info.
+        
+        This combines the basic system prompt with preloaded files and optional
+        environment information based on the env_info configuration.
+        
+        Args:
+            process_instance: Optional LLMProcess instance for accessing preloaded content
+            
+        Returns:
+            Complete system prompt ready for API calls
+        """
+        import os
+        import datetime
+        import platform
+        from pathlib import Path
+        
+        # Start with the base system prompt
+        enriched_prompt = self.system_prompt
+        
+        # Add environment info if variables are specified
+        env_info = ""
+        variables = self.env_info.get("variables", [])
+        
+        # If variables is specified and not empty
+        if variables:
+            # Start the env section
+            env_info = "<env>\n"
+            
+            # Handle standard variables based on the requested list or "all"
+            all_variables = variables == "all"
+            var_list = ["working_directory", "platform", "date", "python_version", "hostname", "username"] if all_variables else variables
+            
+            # Add standard environment information if requested
+            if "working_directory" in var_list:
+                env_info += f"working_directory: {os.getcwd()}\n"
+                
+            if "platform" in var_list:
+                env_info += f"platform: {platform.system().lower()}\n"
+                
+            if "date" in var_list:
+                env_info += f"date: {datetime.datetime.now().strftime('%Y-%m-%d')}\n"
+                
+            if "python_version" in var_list:
+                env_info += f"python_version: {platform.python_version()}\n"
+                
+            if "hostname" in var_list:
+                env_info += f"hostname: {platform.node()}\n"
+                
+            if "username" in var_list:
+                import getpass
+                env_info += f"username: {getpass.getuser()}\n"
+            
+            # Add any custom environment variables
+            for key, value in self.env_info.items():
+                # Skip the variables key and any non-string values
+                if key == "variables" or not isinstance(value, str):
+                    continue
+                env_info += f"{key}: {value}\n"
+            
+            # Close the env section
+            env_info += "</env>"
+        
+        # Add preloaded content if available
+        preload_content = ""
+        if process_instance and hasattr(process_instance, "preloaded_content"):
+            if process_instance.preloaded_content:
+                preload_content += "<preload>\n"
+                for file_path, content in process_instance.preloaded_content.items():
+                    filename = Path(file_path).name
+                    preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
+                preload_content += "</preload>"
+        
+        # Combine all parts with proper spacing
+        parts = [enriched_prompt]
+        if env_info:
+            parts.append(env_info)
+        if preload_content:
+            parts.append(preload_content)
+            
+        return "\n\n".join(parts)
     
     def instantiate(self, from_llmproc):
         """Instantiate an LLMProcess from this program.
@@ -290,18 +423,5 @@ class LLMProgram:
         # Import dynamically to avoid circular imports
         LLMProcess = from_llmproc.LLMProcess
         
-        # Create the LLMProcess instance
-        return LLMProcess(
-            model_name=self.model_name,
-            provider=self.provider,
-            system_prompt=self.system_prompt,
-            preload_files=self.preload_files,
-            display_name=self.display_name,
-            mcp_config_path=self.mcp_config_path,
-            mcp_tools=self.mcp_tools,
-            linked_programs=self.linked_programs,
-            config_dir=self.config_dir,
-            parameters=self.parameters,
-            tools=self.tools,
-            debug_tools=self.debug_tools
-        )
+        # Create the LLMProcess instance using the new API
+        return LLMProcess(program=self)

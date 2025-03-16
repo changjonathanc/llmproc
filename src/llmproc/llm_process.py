@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import tomllib
+import warnings
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -51,8 +52,11 @@ class LLMProcess:
         Raises:
             NotImplementedError: If the provider is not implemented
             ImportError: If the required package for a provider is not installed
-            FileNotFoundError: If any of the preload files cannot be found
+            FileNotFoundError: If required files (system prompt file, MCP config file) cannot be found
             ValueError: If MCP is enabled but provider is not anthropic
+            
+        Notes:
+            Missing preload files will generate warnings but won't cause the initialization to fail
         """
         # Store the program reference
         self.program = program
@@ -60,15 +64,18 @@ class LLMProcess:
         # Extract core attributes from program
         self.model_name = program.model_name
         self.provider = program.provider
-        self.system_prompt = program.system_prompt
+        self.system_prompt = program.system_prompt  # Basic system prompt without enhancements
         self.display_name = program.display_name
-        self.config_dir = program.config_dir
+        self.config_dir = program.base_dir  # Use base_dir from program
         self.api_params = program.api_params
         self.debug_tools = program.debug_tools
         self.parameters = {} # Keep empty - parameters are already processed in program
         
         # Initialize state for preloaded content
         self.preloaded_content = {}
+        
+        # Track the enriched system prompt (will be set on first run)
+        self.enriched_system_prompt = None
         
         # Extract tool configuration
         self.enabled_tools = []
@@ -131,8 +138,8 @@ class LLMProcess:
         # Store the original system prompt before any files are preloaded
         self.original_system_prompt = self.system_prompt
         
-        # Initialize message state with system prompt
-        self.state = [{"role": "system", "content": self.system_prompt}]
+        # Initialize message state (will set system message on first run)
+        self.state = []
 
         # Preload files if specified
         if hasattr(program, "preload_files") and program.preload_files:
@@ -143,53 +150,33 @@ class LLMProcess:
 
         Args:
             file_paths: List of file paths to preload
-
-        Raises:
-            FileNotFoundError: If any of the files cannot be found
         """
         self._preload_files(file_paths)
 
     def _preload_files(self, file_paths: list[str]) -> None:
-        """Preload files and add their content to the initial conversation state.
+        """Preload files and add their content to the preloaded_content dictionary.
+
+        This method loads file content into memory but does not modify the state.
+        The enriched system prompt with preloaded content will be generated on first run.
+        Missing files will generate warnings but won't cause errors.
 
         Args:
             file_paths: List of file paths to preload
-
-        Raises:
-            FileNotFoundError: If any of the files cannot be found
         """
-        # Build a single preload content string with XML tags
-        preload_content = "<preload>\n"
-
         for file_path in file_paths:
             path = Path(file_path)
             if not path.exists():
-                print(
-                    f"<warning>{os.path.abspath(file_path)} does not exist.</warning>"
-                )
+                # Issue a clear warning with both specified and resolved paths
+                warnings.warn(f"Preload file not found - Specified: '{file_path}', Resolved: '{os.path.abspath(file_path)}'")
                 continue
-
+                
             content = path.read_text()
             self.preloaded_content[str(path)] = content
-
-            # Add file content with filename to the preload content
-            filename = path.name
-            preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
-
-        preload_content += "</preload>"
-
-        # Only add if we actually loaded some files
-        if self.preloaded_content:
-            # Update the system prompt to include preloaded files
-            if len(self.state) > 0 and self.state[0]["role"] == "system":
-                # Append to existing system prompt
-                self.state[0]["content"] = f"{self.system_prompt}\n\n{preload_content}"
-            else:
-                # No system message yet, create one
-                self.state.insert(0, {"role": "system", "content": f"{self.system_prompt}\n\n{preload_content}"})
             
-            # Update the stored system prompt to include the preloaded content
-            self.system_prompt = self.state[0]["content"]
+        # Reset the enriched system prompt if it was already generated
+        # so it will be regenerated with the new preloaded content
+        if self.enriched_system_prompt is not None:
+            self.enriched_system_prompt = None
 
     @classmethod
     def from_toml(cls, toml_path: str | Path) -> "LLMProcess":
@@ -256,7 +243,17 @@ class LLMProcess:
         # Verify user input isn't empty
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
+            
+        # Generate enriched system prompt on first run
+        if self.enriched_system_prompt is None:
+            self.enriched_system_prompt = self.program.get_enriched_system_prompt(
+                process_instance=self,
+                include_env=True
+            )
+            # Set the system message with enriched prompt
+            self.state = [{"role": "system", "content": self.enriched_system_prompt}]
 
+        # Add user input to state
         self.state.append({"role": "user", "content": user_input})
 
         # Create provider-specific API calls
@@ -971,35 +968,14 @@ class LLMProcess:
             keep_system_prompt: Whether to keep the system prompt in the state
             keep_preloaded: Whether to keep preloaded file content in the state
         """
-        # Access the stored original system prompt
-        original_system_prompt = getattr(self, "original_system_prompt", self.system_prompt)
+        # Clear the state
+        self.state = []
         
-        # Reset the state
-        if keep_system_prompt:
-            if keep_preloaded and hasattr(self, "preloaded_content") and self.preloaded_content:
-                # Keep both system prompt and preloaded content
-                self.state = [{"role": "system", "content": self.system_prompt}]
-            else:
-                # Keep only the original system prompt without preloaded content
-                self.state = [{"role": "system", "content": original_system_prompt}]
-                # Update stored system prompt
-                self.system_prompt = original_system_prompt
-        else:
-            # Remove everything
-            self.state = []
-            
-        # If we're keeping system prompt but not preloaded content, we already handled it above
-        # If we're not keeping system prompt but want to keep preloaded, re-add everything
-        if not keep_system_prompt and keep_preloaded and hasattr(self, "preloaded_content") and self.preloaded_content:
-            # Rebuild the preload content
-            preload_content = "<preload>\n"
-            for file_path, content in self.preloaded_content.items():
-                filename = Path(file_path).name
-                preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
-            preload_content += "</preload>"
-            
-            # Create a new system message with original prompt and preloaded content
-            system_content = f"{original_system_prompt}\n\n{preload_content}"
-            self.state = [{"role": "system", "content": system_content}]
-            # Update stored system prompt
-            self.system_prompt = system_content
+        # Handle preloaded content
+        if not keep_preloaded:
+            # Clear preloaded content
+            self.preloaded_content = {}
+        
+        # Always reset the enriched system prompt - it will be regenerated on next run
+        # with the correct combination of system prompt and preloaded content
+        self.enriched_system_prompt = None
