@@ -4,9 +4,39 @@ import os
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
+from collections import deque
 
 import tomllib
 from pydantic import BaseModel, Field, RootModel, ValidationError, field_validator, model_validator
+
+
+# Global singleton registry for compiled programs
+class ProgramRegistry:
+    """Global registry for compiled programs to avoid duplicate compilation."""
+    
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ProgramRegistry, cls).__new__(cls)
+            cls._instance._compiled_programs = {}
+        return cls._instance
+    
+    def register(self, path: Path, program: 'LLMProgram') -> None:
+        """Register a compiled program."""
+        self._compiled_programs[str(path.resolve())] = program
+        
+    def get(self, path: Path) -> Optional['LLMProgram']:
+        """Get a compiled program if it exists."""
+        return self._compiled_programs.get(str(path.resolve()))
+        
+    def contains(self, path: Path) -> bool:
+        """Check if a program has been compiled."""
+        return str(path.resolve()) in self._compiled_programs
+        
+    def clear(self) -> None:
+        """Clear all compiled programs (mainly for testing)."""
+        self._compiled_programs.clear()
 
 
 # Pydantic models for program validation
@@ -149,14 +179,11 @@ class LLMProgram:
                  mcp_config_path: Optional[str] = None,
                  mcp_tools: Optional[Dict[str, List[str]]] = None,
                  tools: Optional[Dict[str, Any]] = None,
-                 linked_programs: Optional[Dict[str, str]] = None,
+                 linked_programs: Optional[Dict[str, Union[str, 'LLMProgram']]] = None,
                  debug_tools: bool = False,
                  env_info: Optional[Dict[str, Any]] = None,  # Add environment info configuration
                  base_dir: Optional[Path] = None):
-        """Initialize a program directly from parameters.
-        
-        This is a convenience constructor, but most users should use the
-        compile() class method instead.
+        """Initialize a program.
         
         Args:
             model_name: Name of the model to use
@@ -168,10 +195,15 @@ class LLMProgram:
             mcp_config_path: Path to MCP servers configuration file
             mcp_tools: Dictionary mapping server names to tools to enable
             tools: Dictionary from the [tools] section in the TOML program
-            linked_programs: Dictionary mapping program names to TOML program paths
+            linked_programs: Dictionary mapping program names to TOML program paths or compiled LLMProgram objects
             debug_tools: Enable detailed debugging output for tool execution
+            env_info: Environment information configuration
             base_dir: Base directory for resolving relative paths in files
         """
+        # Flag to track if this program has been fully compiled (including linked programs)
+        self.compiled = False
+        
+        # Initialize core attributes
         self.model_name = model_name
         self.provider = provider
         self.system_prompt = system_prompt
@@ -208,28 +240,157 @@ class LLMProgram:
         return api_params
     
     @classmethod
-    def compile(cls, toml_path: Union[str, Path]) -> 'LLMProgram':
+    def compile(cls, toml_path: Union[str, Path], include_linked: bool = True, 
+                check_linked_files: bool = True, return_all: bool = False) -> Union['LLMProgram', Dict[str, 'LLMProgram']]:
         """Compile an LLM program from a TOML file.
         
-        This method loads a TOML file, validates the configuration, resolves
-        file paths, and returns a compiled LLMProgram ready for instantiation
-        of an LLMProcess.
+        This method loads a TOML file, validates the configuration, resolves file paths,
+        and returns a compiled LLMProgram ready for instantiation of an LLMProcess.
+        
+        If include_linked=True, it will also compile all linked programs recursively
+        and update the linked_programs attribute of each program to reference the 
+        compiled program objects directly.
         
         Args:
             toml_path: Path to the TOML program file
+            include_linked: Whether to compile linked programs recursively
+            check_linked_files: Whether to verify linked program files exist
+            return_all: Whether to return all compiled programs as a dictionary
             
         Returns:
-            Compiled LLMProgram instance
+            By default: A single compiled LLMProgram instance for the main program
+            If return_all=True: Dictionary mapping absolute paths to compiled programs
             
         Raises:
-            FileNotFoundError: If the TOML file or referenced files (system prompt, MCP config) cannot be found
+            FileNotFoundError: If the TOML file or referenced files cannot be found
             ValidationError: If the configuration is invalid
             ValueError: If there are issues with configuration values
         """
-        path = Path(toml_path)
+        # Convert to Path object and resolve it
+        path = Path(toml_path).resolve()
         if not path.exists():
             raise FileNotFoundError(f"Program file not found: {toml_path}")
         
+        # Get the global registry
+        registry = ProgramRegistry()
+        
+        # Handle single program compilation (no linked programs)
+        if not include_linked:
+            # If already compiled, return from registry
+            if registry.contains(path):
+                return registry.get(path)
+                
+            # Otherwise compile and register it
+            program = cls._compile_single_program(path)
+            program.compiled = True
+            registry.register(path, program)
+            return program
+        
+        # Handle BFS compilation of the program graph
+        abs_path = str(path)
+        
+        # If main program is already compiled and we're not returning all, just return it
+        if registry.contains(path) and not return_all:
+            return registry.get(path)
+            
+        # Stage 1: Compile all programs without resolving linked programs
+        # This builds a complete set of all programs in the graph
+        to_compile = deque([path])
+        compiled_paths = set()  # Track what we've queued to avoid duplicates
+        compiled_paths.add(abs_path)
+        
+        while to_compile:
+            current_path = to_compile.popleft()
+            
+            # Skip if already compiled - just continue to queue its linked programs
+            if not registry.contains(current_path):
+                # Compile the current program
+                program = cls._compile_single_program(current_path)
+                registry.register(current_path, program)
+            else:
+                program = registry.get(current_path)
+            
+            # Find linked programs and add them to the compilation queue
+            if hasattr(program, 'linked_programs') and program.linked_programs:
+                base_dir = current_path.parent
+                
+                # At this stage, linked_programs contains string paths 
+                for linked_name, linked_path_str in list(program.linked_programs.items()):
+                    # Skip any non-string items (already processed linked programs)
+                    if not isinstance(linked_path_str, str):
+                        continue
+                        
+                    linked_path = Path(linked_path_str)
+                    if not linked_path.is_absolute():
+                        linked_path = base_dir / linked_path
+                    
+                    # Resolve to absolute path
+                    linked_abs_path = linked_path.resolve()
+                    
+                    # Check if linked file exists (if checking is enabled)
+                    if not check_linked_files or linked_path.exists():
+                        # Only add to queue if we haven't seen it before
+                        if str(linked_abs_path) not in compiled_paths:
+                            to_compile.append(linked_path)
+                            compiled_paths.add(str(linked_abs_path))
+                    else:
+                        # Raise error for missing linked program files
+                        raise FileNotFoundError(f"Linked program file not found - From '{current_path}', "
+                                              f"looking for '{linked_path_str}' (resolved to '{linked_path}')")
+        
+        # Stage 2: Update linked_programs to reference compiled program objects
+        for compiled_path in compiled_paths:
+            program = registry.get(Path(compiled_path))
+            
+            # Update any string paths to refer to compiled program objects
+            if hasattr(program, 'linked_programs') and program.linked_programs:
+                base_dir = Path(compiled_path).parent
+                
+                # Create a new dict for the updated references
+                updated_links = {}
+                
+                for linked_name, linked_path_str in program.linked_programs.items():
+                    # Skip if it's already a program object not a string
+                    if not isinstance(linked_path_str, str):
+                        updated_links[linked_name] = linked_path_str
+                        continue
+                        
+                    # Resolve the path
+                    linked_path = Path(linked_path_str)
+                    if not linked_path.is_absolute():
+                        linked_path = base_dir / linked_path
+                        
+                    # Get the compiled program from the registry
+                    linked_program = registry.get(linked_path)
+                    if linked_program:
+                        updated_links[linked_name] = linked_program
+                    else:
+                        # Should never happen if Stage 1 completed successfully
+                        warnings.warn(f"Could not find compiled program for {linked_path}")
+                        updated_links[linked_name] = linked_path_str
+                
+                # Replace the linked_programs dict with the updated version
+                program.linked_programs = updated_links
+            
+            # Mark the program as fully compiled
+            program.compiled = True
+        
+        # Return either the main program or all compiled programs
+        if return_all:
+            return {path: registry.get(Path(path)) for path in compiled_paths}
+        else:
+            return registry.get(path)
+    
+    @classmethod
+    def _compile_single_program(cls, path: Path) -> 'LLMProgram':
+        """Compile a single program without recursively compiling linked programs.
+        
+        Args:
+            path: Path to the TOML program file
+            
+        Returns:
+            Compiled LLMProgram instance
+        """
         # Load and parse the TOML file
         with path.open("rb") as f:
             raw_config = tomllib.load(f)
@@ -239,8 +400,7 @@ class LLMProgram:
             config = LLMProgramConfig(**raw_config)
         except ValidationError as e:
             # Enhance the validation error with file information
-            # Just wrap the error with additional context
-            error_msg = f"Invalid program configuration in {toml_path}:\n{str(e)}"
+            error_msg = f"Invalid program configuration in {path}:\n{str(e)}"
             raise ValueError(error_msg)
         
         # Build the LLMProgram from the validated configuration
@@ -250,73 +410,11 @@ class LLMProgram:
         program.source_path = path
         
         return program
-        
-    @classmethod
-    def compile_all(cls, main_toml_path: Union[str, Path], max_depth: int = 10) -> Dict[str, 'LLMProgram']:
-        """Compile a main program and all its linked programs recursively.
-        
-        This method traverses the entire graph of linked programs starting from the
-        main program, compiling each program only once. It handles circular dependencies
-        by avoiding recompilation of already compiled programs.
-        
-        Args:
-            main_toml_path: Path to the main program TOML file
-            max_depth: Maximum depth for traversing linked programs
-            
-        Returns:
-            Dictionary mapping absolute program paths to compiled programs
-            
-        Raises:
-            FileNotFoundError: If the main program file cannot be found
-        """
-        compiled_programs = {}  # Maps absolute paths to compiled programs
-        to_compile = [(Path(main_toml_path).resolve(), 0)]  # (path, depth)
-        
-        while to_compile:
-            path, depth = to_compile.pop(0)
-            abs_path = str(path)
-            
-            # Skip already compiled programs
-            if abs_path in compiled_programs:
-                continue
-                
-            # Skip if max depth exceeded
-            if depth > max_depth:
-                warnings.warn(f"Maximum linked program depth ({max_depth}) exceeded at {path}")
-                continue
-            
-            try:
-                # Compile the program
-                program = cls.compile(path)
-                compiled_programs[abs_path] = program
-                
-                # Find linked programs and add them to the compilation queue
-                if hasattr(program, 'linked_programs') and program.linked_programs:
-                    base_dir = path.parent
-                    for linked_name, linked_path_str in program.linked_programs.items():
-                        linked_path = Path(linked_path_str)
-                        if not linked_path.is_absolute():
-                            linked_path = base_dir / linked_path
-                        
-                        # Resolve to absolute path
-                        linked_abs_path = linked_path.resolve()
-                        
-                        # If the linked path exists and hasn't been compiled yet, add to queue
-                        if linked_path.exists():
-                            to_compile.append((linked_abs_path, depth + 1))
-                        else:
-                            # Raise error for missing linked program files
-                            raise FileNotFoundError(f"Linked program file not found - From '{path}', "
-                                                  f"looking for '{linked_path_str}' (resolved to '{linked_path}')")
-            
-            except Exception as e:
-                # Re-raise the exception
-                raise
-        
-        return compiled_programs
     
     # Removed _load_system_prompt in favor of PromptConfig.resolve() method
         
+    # Removed compile_all method in favor of the unified compile method
+    
     @classmethod
     def _build_from_config(cls, config: LLMProgramConfig, base_dir: Path) -> 'LLMProgram':
         """Build an LLMProgram from a validated configuration.

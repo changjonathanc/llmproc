@@ -6,7 +6,7 @@ import os
 import tomllib
 import warnings
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 
 from dotenv import load_dotenv
 
@@ -86,11 +86,13 @@ class LLMProcess:
         # MCP Configuration
         self.mcp_enabled = False
         self.mcp_tools = {}
-        self.tools = []
         
         # Extract MCP configuration if present
         self.mcp_config_path = getattr(program, "mcp_config_path", None)
         self.mcp_tools = getattr(program, "mcp_tools", {})
+        
+        # Will be initialized later - after MCP setup but before spawn tool registration
+        self.tools = []
         
         # Linked Programs Configuration
         self.linked_programs = {}
@@ -100,11 +102,11 @@ class LLMProcess:
         if linked_programs_instances:
             self.has_linked_programs = True
             self.linked_programs = linked_programs_instances
-        # Otherwise use linked programs from the program
+        # Otherwise use linked programs from the program - store as program objects
         elif hasattr(program, "linked_programs") and program.linked_programs:
             self.has_linked_programs = True
-            self._initialize_linked_programs(program.linked_programs)
-
+            self.linked_programs = program.linked_programs
+        
         # Setup MCP if configured
         if self.mcp_config_path and self.mcp_tools:
             if not HAS_MCP:
@@ -123,9 +125,13 @@ class LLMProcess:
             # Initialize MCP registry and tools asynchronously
             asyncio.run(self._initialize_mcp_tools())
             
-        # Check if we need to register the spawn tool
+        # Initialize tools - we start with an empty tools list
+        self.tools = []
+        
+        # Handle MCP tools (already set up above if enabled)
+        
+        # Handle system tools (like spawn)
         if "spawn" in self.enabled_tools and self.has_linked_programs:
-            # Register the spawn tool
             self._register_spawn_tool()
 
         # Get project_id and region for Vertex if provided in parameters
@@ -183,13 +189,14 @@ class LLMProcess:
         """Create an LLMProcess from a TOML program file.
 
         This method compiles the main program and all linked programs recursively,
-        then instantiates an LLMProcess with all the linked programs properly connected.
+        then instantiates an LLMProcess with access to all linked programs as Program objects.
+        Linked programs are only compiled, not instantiated as processes, until they are needed.
 
         Args:
             toml_path: Path to the TOML program file
 
         Returns:
-            An initialized LLMProcess instance with linked programs
+            An initialized LLMProcess instance with access to linked programs
 
         Raises:
             ValueError: If program configuration is invalid
@@ -199,53 +206,22 @@ class LLMProcess:
         from llmproc.program import LLMProgram
         
         # Compile the main program and all linked programs
+        # This will create a properly linked object graph with Program objects
         main_path = Path(toml_path).resolve()
-        compiled_programs = LLMProgram.compile_all(main_path)
+        main_program = LLMProgram.compile(main_path, include_linked=True, check_linked_files=True)
         
-        if not compiled_programs:
-            raise ValueError(f"Failed to compile any programs from {toml_path}")
-            
-        # Get the main program
-        main_program = compiled_programs.get(str(main_path))
         if not main_program:
-            raise ValueError(f"Main program at {main_path} was not compiled correctly")
+            raise ValueError(f"Failed to compile program from {toml_path}")
         
-        # Create the main process first without linked programs
+        # Create the main process
         main_process = cls(program=main_program)
         
-        # Now create and connect all linked programs
+        # The linked_programs attribute of main_program should now contain references to 
+        # compiled Program objects instead of path strings
         if hasattr(main_program, 'linked_programs') and main_program.linked_programs:
-            linked_processes = {}
-            base_dir = main_path.parent
+            main_process.has_linked_programs = bool(main_program.linked_programs)
             
-            for program_name, program_path_str in main_program.linked_programs.items():
-                # Resolve the linked program path
-                linked_path = Path(program_path_str)
-                if not linked_path.is_absolute():
-                    linked_path = base_dir / linked_path
-                    
-                linked_abs_path = str(linked_path.resolve())
-                
-                # Find the compiled linked program
-                if linked_abs_path in compiled_programs:
-                    linked_program = compiled_programs[linked_abs_path]
-                    
-                    # Create an LLMProcess for the linked program
-                    # We could recursively connect its sub-linked programs, but that's 
-                    # usually unnecessary since they're rarely accessed directly
-                    linked_process = cls(program=linked_program)
-                    linked_processes[program_name] = linked_process
-                else:
-                    raise FileNotFoundError(f"Linked program '{program_name}' at '{linked_path}' was not compiled")
-            
-            # Set linked processes on the main process
-            main_process.linked_programs = linked_processes
-            main_process.has_linked_programs = bool(linked_processes)
-            
-        # Initialize the spawn tool if needed
-        if main_process.has_linked_programs and "spawn" in main_process.enabled_tools:
-            main_process._register_spawn_tool()
-            
+        # No need to initialize spawn tool here - it's already done in the constructor
         return main_process
         
 
@@ -665,6 +641,10 @@ class LLMProcess:
 
         print(f"Tool configuration: {self.mcp_tools}")
         
+        # Ensure tools list is initialized
+        if not hasattr(self, 'tools') or self.tools is None:
+            self.tools = []
+        
         # Get the set of server names that are configured in mcp_tools
         configured_servers = set(self.mcp_tools.keys())
         
@@ -785,18 +765,19 @@ class LLMProcess:
     def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
         """Initialize linked LLM programs from their TOML program files.
         
-        This method compiles all linked programs recursively and establishes the connections
-        between them. It ensures that each linked program is compiled only once.
+        This method compiles all linked programs recursively and stores them as Program objects
+        that can be instantiated as processes when needed. This is more memory efficient and
+        follows compilation semantics where programs are validated first before instantiation.
         
         Args:
             linked_programs: Dictionary mapping program names to TOML program paths
         """
         from llmproc.program import LLMProgram
         
-        # Compile all programs in a single pass
-        compiled_programs = {}  # Maps absolute paths to compiled programs
+        # Dictionary to store compiled program objects
+        compiled_program_objects = {}  
         
-        # First pass: resolve paths and compile all programs
+        # Resolve paths and compile all programs
         for program_name, program_path in linked_programs.items():
             path = Path(program_path)
             original_path = program_path
@@ -809,67 +790,19 @@ class LLMProcess:
                 raise FileNotFoundError(f"Linked program file not found - Specified: '{original_path}', Resolved: '{path}'")
                 
             try:
-                # Recursively compile the linked program and all its linked programs
-                compiled = LLMProgram.compile_all(path)
-                # Merge into our compiled programs dictionary
-                compiled_programs.update(compiled)
+                # Compile this linked program and its sub-linked programs
+                # But store the programs as objects, don't instantiate them as processes yet
+                compiled_program = LLMProgram.compile(path, include_linked=False)
+                compiled_program_objects[program_name] = compiled_program
+                
+                # Log successful compilation
+                print(f"Compiled linked program '{program_name}' ({compiled_program.provider} {compiled_program.model_name})")
             except Exception as e:
                 raise RuntimeError(f"Failed to compile linked program '{program_name}': {str(e)}") from e
         
-        # Second pass: create LLMProcess instances for each linked program
-        created_processes = {}  # Maps absolute paths to LLMProcess instances
-        
-        for program_name, program_path in linked_programs.items():
-            path = Path(program_path)
-            
-            # If path is relative and we have a config_dir, resolve it
-            if not path.is_absolute() and self.config_dir:
-                path = self.config_dir / path
-                
-            if not path.exists():
-                continue  # Already warned in first pass
-                
-            abs_path = str(path.resolve())
-            
-            if abs_path in compiled_programs:
-                compiled_program = compiled_programs[abs_path]
-                
-                # Create an LLMProcess for this program
-                linked_process = type(self)(program=compiled_program)
-                self.linked_programs[program_name] = linked_process
-                created_processes[abs_path] = linked_process
-                
-                # Log successful initialization
-                print(f"Initialized linked program '{program_name}' ({compiled_program.provider} {compiled_program.model_name})")
-        
-        # Third pass: connect sub-linked programs
-        for abs_path, process in created_processes.items():
-            program = compiled_programs[abs_path]
-            
-            if hasattr(program, 'linked_programs') and program.linked_programs:
-                sub_linked_processes = {}
-                base_dir = Path(abs_path).parent
-                
-                for sub_name, sub_path_str in program.linked_programs.items():
-                    # Resolve the sub-linked program path
-                    sub_path = Path(sub_path_str)
-                    if not sub_path.is_absolute():
-                        sub_path = base_dir / sub_path
-                        
-                    sub_abs_path = str(sub_path.resolve())
-                    
-                    # If we've created a process for this sub-linked program, connect it
-                    if sub_abs_path in created_processes:
-                        sub_linked_processes[sub_name] = created_processes[sub_abs_path]
-                
-                # Set sub-linked processes on this process
-                if sub_linked_processes:
-                    process.linked_programs = sub_linked_processes
-                    process.has_linked_programs = True
-                    
-                    # Initialize spawn tool for this process if needed
-                    if "spawn" in getattr(process, "enabled_tools", []):
-                        process._register_spawn_tool()
+        # Store the compiled program objects
+        self.linked_programs = compiled_program_objects
+        self.has_linked_programs = bool(compiled_program_objects)
     
     def _register_spawn_tool(self) -> None:
         """Register the spawn system call for creating new processes from linked programs."""
@@ -914,12 +847,19 @@ class LLMProcess:
         if self.debug_tools and os.environ.get("LLMPROC_DEBUG", "").lower() == "true":
             import sys
             print("\nLinked programs:", file=sys.stderr)
-            for prog_name, prog_instance in self.linked_programs.items():
-                prog_files = ""
-                if hasattr(prog_instance, "preloaded_content") and prog_instance.preloaded_content:
-                    prog_files = f" with {len(prog_instance.preloaded_content)} preloaded files"
-                print(f"  - {prog_name}: {prog_instance.model_name} ({prog_instance.provider}){prog_files}", 
-                      file=sys.stderr)
+            for prog_name, program_obj in self.linked_programs.items():
+                # Handle both Program objects and LLMProcess instances
+                if hasattr(program_obj, "model_name"):
+                    model_name = program_obj.model_name
+                    provider = program_obj.provider
+                    
+                    # Check for preloaded files (if it's a process instance)
+                    prog_files = ""
+                    if hasattr(program_obj, "preloaded_content") and program_obj.preloaded_content:
+                        prog_files = f" with {len(program_obj.preloaded_content)} preloaded files"
+                        
+                    print(f"  - {prog_name}: {model_name} ({provider}){prog_files}", 
+                          file=sys.stderr)
         
         # Keep the handler and tool definition separate
         self.tool_handlers = getattr(self, "tool_handlers", {})
