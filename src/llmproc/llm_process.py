@@ -1,13 +1,11 @@
 """LLMProcess class for handling LLM interactions."""
 
 import asyncio
-import json
 import logging
 import os
-import tomllib
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
 
@@ -24,18 +22,7 @@ except ImportError:
 from llmproc.providers import get_provider_client
 
 from llmproc.tools import spawn_tool, fork_tool, spawn_tool_def, fork_tool_def
-# New
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
-
-try:
-    from llmproc.providers.anthropic_tools import (
-        dump_api_error,
-        run_anthropic_with_tools,
-    )
-
-    HAS_ANTHROPIC_TOOLS = True
-except ImportError:
-    HAS_ANTHROPIC_TOOLS = False
 
 load_dotenv()
 
@@ -199,7 +186,7 @@ class LLMProcess:
         return main_process
 
 
-    async def run(self, user_input: str, max_iterations: int = 10) -> str:
+    async def run(self, user_input: str, max_iterations: int = 10) -> int:
         """Run the LLM process with user input asynchronously.
 
         This method supports full tool execution with proper async handling.
@@ -210,7 +197,7 @@ class LLMProcess:
             max_iterations: Maximum number of tool-calling iterations
 
         Returns:
-            The model's response as a string
+            The number of API calls used during processing
         """
         # Check if we're in an event loop
         try:
@@ -225,7 +212,7 @@ class LLMProcess:
         else:
             return await self._async_run(user_input, max_iterations)
 
-    async def _async_run(self, user_input: str, max_iterations: int = 10) -> str:
+    async def _async_run(self, user_input: str, max_iterations: int = 10) -> int:
         """Internal async implementation of run.
 
         Args:
@@ -233,7 +220,7 @@ class LLMProcess:
             max_iterations: Maximum number of tool-calling iterations
 
         Returns:
-            The model's response as a string
+            The number of API calls used during processing
 
         Raises:
             ValueError: If user_input is empty
@@ -256,60 +243,17 @@ class LLMProcess:
 
         self.messages = self.state # TODO; deprecate state in favor of messages, it's more descriptive
 
-        # Create provider-specific API calls
+        # Create provider-specific process executors
         if self.provider == "openai":
             raise NotImplementedError("OpenAI is not yet implemented")
-            pass
         elif self.provider == "anthropic":
-            return await self._run_anthropic_with_tools(max_iterations)
+            # Use the stateless AnthropicProcessExecutor
+            executor = AnthropicProcessExecutor()
+            return await executor.run(self, user_input, max_iterations)
         elif self.provider == "vertex":
-            return NotImplementedError("OpenAI is not yet implemented")
-
+            raise NotImplementedError("Vertex is not yet implemented")
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
-
-    async def _run_anthropic_with_tools(self, max_iterations: int = 10) -> str:
-        """Run Anthropic with tool support.
-
-        Handles multiple iterations of tool calls and responses in an asynchronous context,
-        processing each tool and providing the result back to the model.
-
-        Args:
-            max_iterations: Maximum number of tool-calling iterations
-
-        Returns:
-            The final model response as a string
-        """
-        if not HAS_ANTHROPIC_TOOLS:
-            raise ImportError(
-                "Anthropic tools support requires the llmproc.providers.anthropic_tools module."
-            )
-
-        # Extract system prompt and messages
-        system_prompt = None
-        messages = []
-
-        for msg in self.state:
-            if msg["role"] == "system":
-                system_prompt = msg["content"]
-            else:
-                # Skip empty messages that would cause API errors
-                if msg.get("content") != "":
-                    messages.append(msg)
-
-        # Run the tool interaction loop through the specialized module
-        # Just pass the LLMProcess instance and let the function access what it needs
-        final_response = await run_anthropic_with_tools(
-            llm_process=self,
-            system_prompt=system_prompt,
-            messages=messages,
-            max_iterations=max_iterations
-        )
-
-        # Add the final response to the permanent state
-        self.state.append({"role": "assistant", "content": final_response})
-
-        return final_response
 
     def get_state(self) -> list[dict[str, str]]:
         """Return the current conversation state.
@@ -328,7 +272,7 @@ class LLMProcess:
         # Return immediately if already initialized or MCP not enabled
         if (hasattr(self, '_mcp_initialized') and self._mcp_initialized) or not self.mcp_enabled:
             return
-            
+
         try:
             # Initialize MCP tools
             await self._initialize_mcp_tools()
@@ -371,7 +315,7 @@ class LLMProcess:
 
         # Track registered tools to avoid duplicates
         registered_tools = set()
-        
+
         # Initialize tool_handlers if not already present
         if not hasattr(self, 'tool_handlers'):
             self.tool_handlers = {}
@@ -384,7 +328,7 @@ class LLMProcess:
                 continue
 
             server_tools = server_tools_map[server_name]
-            
+
             # Create a mapping of tool names to tools for this server
             server_tool_map = {tool.name: tool for tool in server_tools}
 
@@ -395,12 +339,12 @@ class LLMProcess:
                     if namespaced_name not in registered_tools:
                         # Add to schema list for API
                         self.tools.append(self._format_tool_for_anthropic(tool, server_name))
-                        
+
                         # Create handler function for this tool that calls the MCP aggregator
                         self.tool_handlers[namespaced_name] = self._create_mcp_tool_handler(namespaced_name)
-                        
+
                         registered_tools.add(namespaced_name)
-                
+
                 logger.info(f"Registered all tools ({len(server_tools)}) from server '{server_name}'")
 
             # Case 2: Register specific tools
@@ -412,28 +356,28 @@ class LLMProcess:
                         if namespaced_name not in registered_tools:
                             # Add to schema list for API
                             self.tools.append(self._format_tool_for_anthropic(tool, server_name))
-                            
+
                             # Create handler function for this tool that calls the MCP aggregator
                             self.tool_handlers[namespaced_name] = self._create_mcp_tool_handler(namespaced_name)
-                            
+
                             registered_tools.add(namespaced_name)
                     else:
                         logger.warning(f"Tool '{tool_name}' not found for server '{server_name}'")
-                
+
                 logger.info(f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'")
-        
+
         # Summarize registered tools
         if not self.tools:
             logger.warning("No MCP tools were registered. Check your configuration.")
         else:
             logger.info(f"Total MCP tools registered: {len(self.tools)}")
-                
+
     def _create_mcp_tool_handler(self, tool_name: str):
         """Create a handler function for an MCP tool.
-        
+
         Args:
             tool_name: The namespaced tool name (server__tool)
-            
+
         Returns:
             A callable that takes tool arguments and returns the result
         """
@@ -441,17 +385,17 @@ class LLMProcess:
         async def handler(args):
             if not self.aggregator:
                 raise RuntimeError(f"MCP aggregator not initialized. Cannot call tool: {tool_name}")
-                
+
             try:
                 # Call the tool through the aggregator
                 result = await self.aggregator.call_tool(tool_name, args)
-                    
+
                 return result
             except Exception as e:
                 error_msg = f"Error executing MCP tool {tool_name}: {str(e)}"
                 logger.error(error_msg)
                 return {"error": error_msg, "is_error": True}
-                
+
         return handler
 
     def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
@@ -522,23 +466,23 @@ class LLMProcess:
 
         # Add the tool definition to the tools list for API
         self.tools.append(api_tool_def)
-        
+
         logger.info(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
 
     def _register_fork_tool(self) -> None:
         """Register the fork system call for creating copies of the current process."""
         # Create a copy of the tool definition for the API
         api_tool_def = fork_tool_def.copy()
-        
+
         # Create the handler function for the fork tool
         async def fork_handler(args):
             # The actual fork implementation is in anthropic_tools.py
             # This is just a placeholder for the handler interface
             return f"Fork command received with args: {args}"
-            
+
         # Register the handler in the unified tool_handlers dictionary
         self.tool_handlers["fork"] = fork_handler
-        
+
         # Add to the tools list for API
         self.tools.append(api_tool_def)
         logger.info(f"Registered fork tool for process {self.model_name}")
@@ -555,14 +499,14 @@ class LLMProcess:
         """
         # Create namespaced name with server prefix
         namespaced_name = f"{server_name}__{tool.name}" if server_name else tool.name
-        
+
         # Ensure input schema has required fields
         input_schema = tool.inputSchema.copy() if tool.inputSchema else {}
         if "type" not in input_schema:
             input_schema["type"] = "object"
         if "properties" not in input_schema:
             input_schema["properties"] = {}
-            
+
         # Create the tool definition
         return {
             "name": namespaced_name,
@@ -594,7 +538,7 @@ class LLMProcess:
 
     def _initialize_tools(self) -> None:
         """Initialize all tools - both MCP and system tools.
-        
+
         This method handles the setup of tool schemas and handlers in a unified way,
         regardless of whether they are MCP tools or system tools.
         """
@@ -612,7 +556,7 @@ class LLMProcess:
                 )
 
             self.mcp_enabled = True
-            
+
             # Check if we're already in an event loop
             try:
                 asyncio.get_running_loop()
@@ -621,7 +565,7 @@ class LLMProcess:
             except RuntimeError:
                 # No event loop, create one for initialization
                 asyncio.run(self._initialize_mcp_tools_if_needed())
-        
+
         # Register system tools
         if "spawn" in self.enabled_tools and self.has_linked_programs:
             self._register_spawn_tool()
@@ -631,33 +575,33 @@ class LLMProcess:
 
     async def call_tool(self, tool_name: str, args: dict) -> Any:
         """Call a tool by name with the given arguments.
-        
+
         This method provides a unified interface for calling any registered tool,
         whether it's an MCP tool or a system tool like spawn or fork.
-        
+
         Args:
             tool_name: The name of the tool to call
             args: The arguments to pass to the tool
-            
+
         Returns:
             The result of the tool execution
-            
+
         Raises:
             ValueError: If the tool is not found
             RuntimeError: If the tool execution fails
         """
         if not hasattr(self, 'tool_handlers') or not self.tool_handlers:
             raise ValueError("No tool handlers registered")
-            
+
         if tool_name not in self.tool_handlers:
             raise ValueError(f"Tool '{tool_name}' not found. Available tools: {', '.join(self.tool_handlers.keys())}")
-            
+
         try:
             handler = self.tool_handlers[tool_name]
             return await handler(args)
         except Exception as e:
             raise RuntimeError(f"Error executing tool '{tool_name}': {str(e)}")
-    
+
     async def fork_process(self) -> "LLMProcess":
         """Create a deep copy of this process with preserved state.
 
