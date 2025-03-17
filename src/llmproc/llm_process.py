@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import tomllib
 import warnings
@@ -37,6 +38,9 @@ except ImportError:
     HAS_ANTHROPIC_TOOLS = False
 
 load_dotenv()
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 class LLMProcess:
@@ -332,7 +336,7 @@ class LLMProcess:
             self._mcp_initialized = True
         except Exception as e:
             # Log the error but mark as initialized to avoid repeated attempts
-            print(f"<warning>Failed to initialize MCP tools: {str(e)}</warning>")
+            logger.warning(f"Failed to initialize MCP tools: {str(e)}")
             self._mcp_initialized = True
             # Re-raise if this is a critical error
             if isinstance(e, (ImportError, FileNotFoundError)):
@@ -376,7 +380,7 @@ class LLMProcess:
         for server_name, tool_config in self.mcp_tools.items():
             # Skip servers that don't exist in the available tools
             if server_name not in server_tools_map:
-                print(f"<warning>Server '{server_name}' not found in available tools</warning>")
+                logger.warning(f"Server '{server_name}' not found in available tools")
                 continue
 
             server_tools = server_tools_map[server_name]
@@ -397,7 +401,7 @@ class LLMProcess:
                         
                         registered_tools.add(namespaced_name)
                 
-                print(f"Registered all tools ({len(server_tools)}) from server '{server_name}'")
+                logger.info(f"Registered all tools ({len(server_tools)}) from server '{server_name}'")
 
             # Case 2: Register specific tools
             elif isinstance(tool_config, list):
@@ -414,15 +418,15 @@ class LLMProcess:
                             
                             registered_tools.add(namespaced_name)
                     else:
-                        print(f"<warning>Tool '{tool_name}' not found for server '{server_name}'</warning>")
+                        logger.warning(f"Tool '{tool_name}' not found for server '{server_name}'")
                 
-                print(f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'")
+                logger.info(f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'")
         
         # Summarize registered tools
         if not self.tools:
-            print("<warning>No MCP tools were registered. Check your configuration.</warning>")
+            logger.warning("No MCP tools were registered. Check your configuration.")
         else:
-            print(f"Total MCP tools registered: {len(self.tools)}")
+            logger.info(f"Total MCP tools registered: {len(self.tools)}")
                 
     def _create_mcp_tool_handler(self, tool_name: str):
         """Create a handler function for an MCP tool.
@@ -445,7 +449,7 @@ class LLMProcess:
                 return result
             except Exception as e:
                 error_msg = f"Error executing MCP tool {tool_name}: {str(e)}"
-                print(f"<warning>{error_msg}</warning>")
+                logger.error(error_msg)
                 return {"error": error_msg, "is_error": True}
                 
         return handler
@@ -484,7 +488,7 @@ class LLMProcess:
                 compiled_program_objects[program_name] = compiled_program
 
                 # Log successful compilation
-                print(f"Compiled linked program '{program_name}' ({compiled_program.provider} {compiled_program.model_name})")
+                logger.info(f"Compiled linked program '{program_name}' ({compiled_program.provider} {compiled_program.model_name})")
             except Exception as e:
                 raise RuntimeError(f"Failed to compile linked program '{program_name}': {str(e)}") from e
 
@@ -497,7 +501,7 @@ class LLMProcess:
 
         # Only register if we have linked programs
         if not self.linked_programs:
-            print("<warning>No linked programs available. Spawn system call not registered.</warning>")
+            logger.warning("No linked programs available. Spawn system call not registered.")
             return
 
         # Create a copy of the tool definition with dynamic available programs info
@@ -519,7 +523,7 @@ class LLMProcess:
         # Add the tool definition to the tools list for API
         self.tools.append(api_tool_def)
         
-        print(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
+        logger.info(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
 
     def _register_fork_tool(self) -> None:
         """Register the fork system call for creating copies of the current process."""
@@ -537,7 +541,7 @@ class LLMProcess:
         
         # Add to the tools list for API
         self.tools.append(api_tool_def)
-        print(f"Registered fork tool for process {self.model_name}")
+        logger.info(f"Registered fork tool for process {self.model_name}")
 
     def _format_tool_for_anthropic(self, tool, server_name=None):
         """Format a tool for Anthropic API.
