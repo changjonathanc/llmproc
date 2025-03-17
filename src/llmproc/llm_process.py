@@ -22,6 +22,10 @@ except ImportError:
 
 from llmproc.providers import get_provider_client
 
+from llmproc.tools import spawn_tool, fork_tool, spawn_tool_def, fork_tool_def
+# New
+from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+
 try:
     from llmproc.providers.anthropic_tools import (
         dump_api_error,
@@ -68,7 +72,6 @@ class LLMProcess:
         self.display_name = program.display_name
         self.config_dir = program.base_dir  # Use base_dir from program
         self.api_params = program.api_params
-        self.debug_tools = program.debug_tools
         self.parameters = {} # Keep empty - parameters are already processed in program
 
         # Initialize state for preloaded content
@@ -83,16 +86,15 @@ class LLMProcess:
             # Get enabled tools from the program
             self.enabled_tools = program.tools.get("enabled", [])
 
+        # Initialize tool-related attributes
+        self.tools = []
+        self.tool_handlers = {}
+
         # MCP Configuration
         self.mcp_enabled = False
-        self.mcp_tools = {}
-
-        # Extract MCP configuration if present
         self.mcp_config_path = getattr(program, "mcp_config_path", None)
         self.mcp_tools = getattr(program, "mcp_tools", {})
-
-        # Will be initialized later - after MCP setup but before spawn tool registration
-        self.tools = []
+        self._mcp_initialized = False
 
         # Linked Programs Configuration
         self.linked_programs = {}
@@ -107,52 +109,8 @@ class LLMProcess:
             self.has_linked_programs = True
             self.linked_programs = program.linked_programs
 
-        # Setup MCP if configured
-        if self.mcp_config_path and self.mcp_tools:
-            if not HAS_MCP:
-                raise ImportError(
-                    "MCP features require the mcp-registry package. Install it with 'pip install mcp-registry'."
-                )
-
-            # Currently only support Anthropic with MCP
-            if self.provider != "anthropic":
-                raise ValueError(
-                    "MCP features are currently only supported with the Anthropic provider"
-                )
-
-            self.mcp_enabled = True
-            
-            # Setup for async initialization
-            self._mcp_initialized = False
-            
-            # Check if we're in an event loop
-            try:
-                # Try to get the current event loop
-                loop = asyncio.get_running_loop()
-                in_event_loop = True
-                # If we're in an event loop, don't initialize now - it will be done lazily
-                # when needed during the first call to run()
-            except RuntimeError:
-                # No event loop running, create one temporarily
-                try:
-                    # Use run() to create a new event loop for initialization
-                    asyncio.run(self._initialize_mcp_tools_if_needed())
-                except Exception as e:
-                    print(f"Warning: Failed to initialize MCP tools: {e}")
-                    # Mark as initialized to avoid further attempts
-                    self._mcp_initialized = True
-
-        # Initialize tools - we start with an empty tools list
-        self.tools = []
-
-        # Handle MCP tools (already set up above if enabled)
-
-        # Handle system tools (like spawn and fork)
-        if "spawn" in self.enabled_tools and self.has_linked_programs:
-            self._register_spawn_tool()
-
-        if "fork" in self.enabled_tools:
-            self._register_fork_tool()
+        # Call the method to initialize all tools (both MCP and system tools)
+        self._initialize_tools()
 
         # Get project_id and region for Vertex if provided in parameters
         project_id = getattr(program, "project_id", None)
@@ -292,300 +250,16 @@ class LLMProcess:
         # Add user input to state
         self.state.append({"role": "user", "content": user_input})
 
+        self.messages = self.state # TODO; deprecate state in favor of messages, it's more descriptive
+
         # Create provider-specific API calls
         if self.provider == "openai":
-            # Prepare API parameters
-            api_params = {
-                "model": self.model_name,
-                "messages": self.state,
-                **self.api_params
-            }
-
-            try:
-                # Use the async client for OpenAI
-                response = await self.client.chat.completions.create(**api_params)
-                output = response.choices[0].message.content.strip()
-
-                # Update state with assistant response
-                self.state.append({"role": "assistant", "content": output})
-                return output
-            except Exception as e:
-                # Create debug dump directory if it doesn't exist
-                dump_dir = Path("debug_dumps")
-                dump_dir.mkdir(exist_ok=True)
-
-                # Dump message content to file for debugging
-                dump_file = dump_dir / f"openai_api_error_{id(self)}.json"
-                with open(dump_file, "w") as f:
-                    json.dump(
-                        {
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "api_params": {
-                                "model": self.model_name,
-                                "messages": [
-                                    {
-                                        "role": m["role"],
-                                        "content": (
-                                            m["content"][:500] + "..."
-                                            if len(m["content"]) > 500
-                                            else m["content"]
-                                        ),
-                                    }
-                                    for m in self.state
-                                ],
-                                "temperature": self.api_params.get("temperature"),
-                                "max_tokens": self.api_params.get("max_tokens"),
-                            },
-                        },
-                        f,
-                        indent=2,
-                    )
-
-                error_msg = f"Error calling OpenAI API: {str(e)}"
-                print(f"ERROR: {error_msg}")
-                print(f"Debug information dumped to {dump_file}")
-                raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
-
+            raise NotImplementedError("OpenAI is not yet implemented")
+            pass
         elif self.provider == "anthropic":
-            # For Anthropic with tools enabled, handle tool calls
-            if self.tools:
-                # Use the full async implementation for tool calls
-                return await self._run_anthropic_with_tools(max_iterations)
-            else:
-                # Standard Anthropic call without tools
-                # Extract system prompt and user/assistant messages
-                system_prompt = None
-                messages = []
-
-                for msg in self.state:
-                    if msg["role"] == "system":
-                        system_prompt = msg["content"]
-                    else:
-                        # Handle potential structured content (for tools)
-                        if isinstance(msg["content"], list):
-                            # Filter out empty text blocks
-                            empty_blocks = [
-                                i
-                                for i, block in enumerate(msg["content"])
-                                if block.get("type") == "text" and not block.get("text")
-                            ]
-
-                            if empty_blocks:
-                                # Create a safe copy without empty text blocks
-                                filtered_content = [
-                                    block
-                                    for block in msg["content"]
-                                    if not (
-                                        block.get("type") == "text"
-                                        and not block.get("text")
-                                    )
-                                ]
-                                msg_copy = msg.copy()
-                                msg_copy["content"] = filtered_content
-                                messages.append(msg_copy)
-
-                                # Add debugging info to console if debug is enabled
-                                if self.debug_tools:
-                                    print(
-                                        f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
-                                    )
-                            else:
-                                messages.append(msg)
-                        else:
-                            messages.append(msg)
-
-                # Prepare API parameters
-                api_params = {
-                    "model": self.model_name,
-                    "system": system_prompt,
-                    "messages": messages,
-                    **self.api_params
-                }
-
-                # Debug: print tools if they exist
-                if hasattr(self, 'tools') and self.tools:
-                    print(f"DEBUG: Passing {len(self.tools)} tools to Anthropic API:")
-                    for tool in self.tools:
-                        print(f"  - {tool['name']}: {tool['description'][:50]}...")
-                    # Add tools to API params
-                    api_params["tools"] = self.tools
-
-                try:
-                    # Create the response with system prompt separate from messages
-                    response = await self.client.messages.create(**api_params)
-
-                    # Check if the response is a tool use
-                    if response.content[0].type == "tool_use":
-                        # We need to handle tool calls here
-                        print("DEBUG: Model is using a tool, redirecting to tool handling")
-                        return await self._run_anthropic_with_tools(max_iterations=10)
-                    else:
-                        output = response.content[0].text
-
-                    # Update state with assistant response
-                    self.state.append({"role": "assistant", "content": output})
-                    return output
-                except Exception as e:
-                    # Create debug dump directory if it doesn't exist
-                    dump_dir = Path("debug_dumps")
-                    dump_dir.mkdir(exist_ok=True)
-
-                    # Dump message content to file for debugging
-                    dump_file = dump_dir / f"anthropic_api_error_{id(self)}.json"
-                    with open(dump_file, "w") as f:
-                        json.dump(
-                            {
-                                "error": str(e),
-                                "error_type": type(e).__name__,
-                                "api_params": {
-                                    "model": self.model_name,
-                                    "system": system_prompt,
-                                    "messages": [
-                                        {
-                                            "role": m["role"],
-                                            "content": (
-                                                m["content"][:500] + "..."
-                                                if len(m["content"]) > 500
-                                                else m["content"]
-                                            ),
-                                        }
-                                        for m in messages
-                                    ],
-                                    "temperature": self.api_params.get("temperature"),
-                                    "max_tokens": self.api_params.get("max_tokens"),
-                                },
-                            },
-                            f,
-                            indent=2,
-                        )
-
-                    error_msg = f"Error calling Anthropic API: {str(e)}"
-                    print(f"ERROR: {error_msg}")
-                    print(f"Debug information dumped to {dump_file}")
-                    raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
-
+            return await self._run_anthropic_with_tools(max_iterations)
         elif self.provider == "vertex":
-            # AnthropicVertex uses the same API signature as Anthropic
-            # Extract system prompt and user/assistant messages
-            system_prompt = None
-            messages = []
-
-            for msg in self.state:
-                if msg["role"] == "system":
-                    system_prompt = msg["content"]
-                else:
-                    # Handle potential structured content (for tools)
-                    if isinstance(msg["content"], list):
-                        # Filter out empty text blocks
-                        empty_blocks = [
-                            i
-                            for i, block in enumerate(msg["content"])
-                            if block.get("type") == "text" and not block.get("text")
-                        ]
-
-                        if empty_blocks:
-                            # Create a safe copy without empty text blocks
-                            filtered_content = [
-                                block
-                                for block in msg["content"]
-                                if not (
-                                    block.get("type") == "text"
-                                    and not block.get("text")
-                                )
-                            ]
-                            msg_copy = msg.copy()
-                            msg_copy["content"] = filtered_content
-                            messages.append(msg_copy)
-
-                            # Add debugging info to console if debug is enabled
-                            if self.debug_tools:
-                                print(
-                                    f"WARNING: Filtered out {len(empty_blocks)} empty text blocks from message with role {msg['role']}"
-                                )
-                        else:
-                            messages.append(msg)
-                    else:
-                        messages.append(msg)
-
-            # Prepare API parameters
-            api_params = {
-                "model": self.model_name,
-                "system": system_prompt,
-                "messages": messages,
-                **self.api_params,
-                **self.extra_params
-            }
-
-            # Debug: print tools if they exist
-            if hasattr(self, 'tools') and self.tools:
-                print(f"DEBUG: Passing {len(self.tools)} tools to Vertex API:")
-                for tool in self.tools:
-                    print(f"  - {tool['name']}: {tool['description'][:50]}...")
-                # Add tools to API params
-                api_params["tools"] = self.tools
-
-            try:
-                # Create the response with system prompt separate from messages
-                # Create the response with system prompt separate from messages
-                import traceback
-
-                try:
-                    response = await self.client.messages.create(**api_params)
-
-                    # Check if the response is a tool use
-                    if response.content[0].type == "tool_use":
-                        # We need to handle tool calls here
-                        print("DEBUG: Model is using a tool, redirecting to tool handling")
-                        return await self._run_anthropic_with_tools(max_iterations=10)
-                    else:
-                        output = response.content[0].text
-                except Exception as e:
-                    print("FULL ERROR TRACEBACK:")
-                    traceback.print_exc()
-                    raise
-
-                # Update state with assistant response
-                self.state.append({"role": "assistant", "content": output})
-                return output
-            except Exception as e:
-                # Create debug dump directory if it doesn't exist
-                dump_dir = Path("debug_dumps")
-                dump_dir.mkdir(exist_ok=True)
-
-                # Dump message content to file for debugging
-                dump_file = dump_dir / f"vertex_api_error_{id(self)}.json"
-                with open(dump_file, "w") as f:
-                    json.dump(
-                        {
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "api_params": {
-                                "model": self.model_name,
-                                "system": system_prompt,
-                                "messages": [
-                                    {
-                                        "role": m["role"],
-                                        "content": (
-                                            m["content"][:500] + "..."
-                                            if len(m["content"]) > 500
-                                            else m["content"]
-                                        ),
-                                    }
-                                    for m in messages
-                                ],
-                                "temperature": self.api_params.get("temperature"),
-                                "max_tokens": self.api_params.get("max_tokens"),
-                            },
-                        },
-                        f,
-                        indent=2,
-                    )
-
-                error_msg = f"Error calling Vertex AI API: {str(e)}"
-                print(f"ERROR: {error_msg}")
-                print(f"Debug information dumped to {dump_file}")
-                raise RuntimeError(f"{error_msg} (see {dump_file} for details)")
+            return NotImplementedError("OpenAI is not yet implemented")
 
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
@@ -643,20 +317,27 @@ class LLMProcess:
 
     async def _initialize_mcp_tools_if_needed(self) -> None:
         """Initialize MCP registry and tools if they haven't been initialized yet.
-        
+
         This method safely handles initialization in both synchronous and asynchronous contexts.
         It's designed to work correctly when called from both __init__ and async methods like fork_process.
         """
-        # If already initialized, no need to do it again
-        if hasattr(self, '_mcp_initialized') and self._mcp_initialized:
+        # Return immediately if already initialized or MCP not enabled
+        if (hasattr(self, '_mcp_initialized') and self._mcp_initialized) or not self.mcp_enabled:
             return
             
-        # Actually initialize the MCP tools
-        await self._initialize_mcp_tools()
-        
-        # Mark as initialized
-        self._mcp_initialized = True
-        
+        try:
+            # Initialize MCP tools
+            await self._initialize_mcp_tools()
+            # Mark as successfully initialized
+            self._mcp_initialized = True
+        except Exception as e:
+            # Log the error but mark as initialized to avoid repeated attempts
+            print(f"<warning>Failed to initialize MCP tools: {str(e)}</warning>")
+            self._mcp_initialized = True
+            # Re-raise if this is a critical error
+            if isinstance(e, (ImportError, FileNotFoundError)):
+                raise
+
     async def _initialize_mcp_tools(self) -> None:
         """Initialize MCP registry and tools.
 
@@ -667,128 +348,107 @@ class LLMProcess:
         if not self.mcp_enabled:
             return
 
-        print(f"Tool configuration: {self.mcp_tools}")
-
         # Ensure tools list is initialized
         if not hasattr(self, 'tools') or self.tools is None:
             self.tools = []
 
-        # Get the set of server names that are configured in mcp_tools
-        configured_servers = set(self.mcp_tools.keys())
-
-        # Read the MCP config file into a dictionary
-        import json
+        # Initialize registry and aggregator
         try:
-            with open(self.mcp_config_path, 'r') as f:
-                full_config = json.load(f)
-
-            # Just check if all servers are in the config, but use original config
-            # to avoid validation issues with the data structure
-            mcp_servers = full_config.get("mcpServers", {})
-
-            # Check which configured servers exist in the config file
-            for server_name in configured_servers:
-                if server_name in mcp_servers:
-                    print(f"Including server '{server_name}' from config")
-                else:
-                    print(f"<warning>Configured server '{server_name}' not found in config file</warning>")
-
-            # Skip servers not configured in mcp_tools
-            for server_name in set(mcp_servers.keys()) - configured_servers:
-                print(f"Skipping server '{server_name}' (not configured in mcp_tools)")
-
-            # We'll use the standard method to initialize but only after checking
             self.registry = ServerRegistry.from_config(self.mcp_config_path)
             self.aggregator = MCPAggregator(self.registry)
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize MCP registry: {str(e)}")
 
-        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-            print(f"<warning>Error reading MCP config: {str(e)}</warning>")
-            # Fall back to the standard method in case of errors
-            self.registry = ServerRegistry.from_config(self.mcp_config_path)
-            self.aggregator = MCPAggregator(self.registry)
-
-        # Get all available tools from the MCP registry
-        # Use the server_mapping option to get tools grouped by server
-        server_tools_map = await self.aggregator.list_tools(return_server_mapping=True)
-
-        # Get standard list for displaying all tools
-        all_tools_results = await self.aggregator.list_tools()
-
-        # Print available tools for debugging
-        print("\nAvailable MCP tools:")
-        for tool in all_tools_results.tools:
-            print(f" - {tool.name}")
+        # Get tools grouped by server
+        try:
+            server_tools_map = await self.aggregator.list_tools(return_server_mapping=True)
+        except Exception as e:
+            raise RuntimeError(f"Failed to list MCP tools: {str(e)}")
 
         # Track registered tools to avoid duplicates
         registered_tools = set()
+        
+        # Initialize tool_handlers if not already present
+        if not hasattr(self, 'tool_handlers'):
+            self.tool_handlers = {}
 
         # Process each server and tool configuration
         for server_name, tool_config in self.mcp_tools.items():
-            # Check if this server exists in the tools map
+            # Skip servers that don't exist in the available tools
             if server_name not in server_tools_map:
                 print(f"<warning>Server '{server_name}' not found in available tools</warning>")
                 continue
 
             server_tools = server_tools_map[server_name]
-
-            # Create a mapping of tool names to tools for this server (both original and lowercase)
-            server_tool_map = {}
-            for tool in server_tools:
-                server_tool_map[tool.name] = tool
-                # Also index by lowercase name for case-insensitive matching
-                server_tool_map[tool.name.lower()] = tool
-                # And index by snake_case -> camelCase conversion
-                if "_" in tool.name:
-                    camel_case = "".join(x.capitalize() if i > 0 else x for i, x in enumerate(tool.name.split("_")))
-                    server_tool_map[camel_case] = tool
-                    server_tool_map[camel_case.lower()] = tool
+            
+            # Create a mapping of tool names to tools for this server
+            server_tool_map = {tool.name: tool for tool in server_tools}
 
             # Case 1: Register all tools for a server
             if tool_config == "all":
-                if server_tools:
-                    print(f"Registering all tools for server '{server_name}'")
-                    for tool in server_tools:
-                        namespaced_name = f"{server_name}__{tool.name}"
-                        if namespaced_name not in registered_tools:
-                            self.tools.append(self._format_tool_for_anthropic(tool, server_name))
-                            registered_tools.add(namespaced_name)
-                else:
-                    print(f"<warning>No tools found for server '{server_name}'</warning>")
+                for tool in server_tools:
+                    namespaced_name = f"{server_name}__{tool.name}"
+                    if namespaced_name not in registered_tools:
+                        # Add to schema list for API
+                        self.tools.append(self._format_tool_for_anthropic(tool, server_name))
+                        
+                        # Create handler function for this tool that calls the MCP aggregator
+                        self.tool_handlers[namespaced_name] = self._create_mcp_tool_handler(namespaced_name)
+                        
+                        registered_tools.add(namespaced_name)
+                
+                print(f"Registered all tools ({len(server_tools)}) from server '{server_name}'")
 
             # Case 2: Register specific tools
             elif isinstance(tool_config, list):
                 for tool_name in tool_config:
-                    # Try multiple variations for flexible matching
-                    variations = [
-                        tool_name,                    # As provided
-                        tool_name.lower(),            # Lowercase
-                        tool_name.replace("_", ""),   # No underscores
-                        tool_name.lower().replace("_", "")  # Lowercase, no underscores
-                    ]
-
-                    found = False
-                    for variant in variations:
-                        if variant in server_tool_map:
-                            tool = server_tool_map[variant]
-                            namespaced_name = f"{server_name}__{tool.name}"
-                            if namespaced_name not in registered_tools:
-                                self.tools.append(self._format_tool_for_anthropic(tool, server_name))
-                                registered_tools.add(namespaced_name)
-                                print(f"Registered tool: {namespaced_name}")
-                                found = True
-                            break
-
-                    if not found:
+                    if tool_name in server_tool_map:
+                        tool = server_tool_map[tool_name]
+                        namespaced_name = f"{server_name}__{tool.name}"
+                        if namespaced_name not in registered_tools:
+                            # Add to schema list for API
+                            self.tools.append(self._format_tool_for_anthropic(tool, server_name))
+                            
+                            # Create handler function for this tool that calls the MCP aggregator
+                            self.tool_handlers[namespaced_name] = self._create_mcp_tool_handler(namespaced_name)
+                            
+                            registered_tools.add(namespaced_name)
+                    else:
                         print(f"<warning>Tool '{tool_name}' not found for server '{server_name}'</warning>")
-
-        # If no tools were registered, show a warning
+                
+                print(f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'")
+        
+        # Summarize registered tools
         if not self.tools:
-            print("<warning>No tools were registered. Check your MCP configuration.</warning>")
-
-        # Show summary of registered tools
-        print(f"Registered {len(self.tools)} tools from MCP registry:")
-        for i, tool in enumerate(self.tools, 1):
-            print(f"  {i}. {tool['name']} - {tool['description'][:60]}...")
+            print("<warning>No MCP tools were registered. Check your configuration.</warning>")
+        else:
+            print(f"Total MCP tools registered: {len(self.tools)}")
+                
+    def _create_mcp_tool_handler(self, tool_name: str):
+        """Create a handler function for an MCP tool.
+        
+        Args:
+            tool_name: The namespaced tool name (server__tool)
+            
+        Returns:
+            A callable that takes tool arguments and returns the result
+        """
+        # Return a handler function that closes over the tool_name and self reference
+        async def handler(args):
+            if not self.aggregator:
+                raise RuntimeError(f"MCP aggregator not initialized. Cannot call tool: {tool_name}")
+                
+            try:
+                # Call the tool through the aggregator
+                result = await self.aggregator.call_tool(tool_name, args)
+                    
+                return result
+            except Exception as e:
+                error_msg = f"Error executing MCP tool {tool_name}: {str(e)}"
+                print(f"<warning>{error_msg}</warning>")
+                return {"error": error_msg, "is_error": True}
+                
+        return handler
 
     def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
         """Initialize linked LLM programs from their TOML program files.
@@ -834,8 +494,6 @@ class LLMProcess:
 
     def _register_spawn_tool(self) -> None:
         """Register the spawn system call for creating new processes from linked programs."""
-        from llmproc.tools import spawn_tool
-        from llmproc.tools.spawn import spawn_tool_def
 
         # Only register if we have linked programs
         if not self.linked_programs:
@@ -843,67 +501,41 @@ class LLMProcess:
             return
 
         # Create a copy of the tool definition with dynamic available programs info
-        spawn_def = spawn_tool_def.copy()
+        api_tool_def = spawn_tool_def.copy()
         available_programs = ", ".join(self.linked_programs.keys())
-        spawn_def["description"] = spawn_tool_def["description"] + f"\n\nAvailable programs: {available_programs}"
+        api_tool_def["description"] = spawn_tool_def["description"] + f"\n\nAvailable programs: {available_programs}"
 
-        # Create a copy of the tool definition for the API
-        api_tool_def = spawn_def.copy()
+        # Create the handler function for the spawn tool
+        async def spawn_handler(args):
+            return spawn_tool(
+                program_name=args.get("program_name"),
+                query=args.get("query"),
+                llm_process=self
+            )
 
-        # Create an extended tool definition with the handler
-        extended_tool_def = spawn_def.copy()
-        extended_tool_def["handler"] = lambda args: spawn_tool(
-            program_name=args.get("program_name"),
-            query=args.get("query"),
-            llm_process=self
-        )
+        # Register the handler in the unified tool_handlers dictionary
+        self.tool_handlers["spawn"] = spawn_handler
 
-        # Only print linked programs info if explicitly debugging
-        if self.debug_tools and os.environ.get("LLMPROC_DEBUG", "").lower() == "true":
-            import sys
-            print("\nLinked programs:", file=sys.stderr)
-            for prog_name, program_obj in self.linked_programs.items():
-                # Handle both Program objects and LLMProcess instances
-                if hasattr(program_obj, "model_name"):
-                    model_name = program_obj.model_name
-                    provider = program_obj.provider
-
-                    # Check for preloaded files (if it's a process instance)
-                    prog_files = ""
-                    if hasattr(program_obj, "preloaded_content") and program_obj.preloaded_content:
-                        prog_files = f" with {len(program_obj.preloaded_content)} preloaded files"
-
-                    print(f"  - {prog_name}: {model_name} ({provider}){prog_files}",
-                          file=sys.stderr)
-
-        # Keep the handler and tool definition separate
-        self.tool_handlers = getattr(self, "tool_handlers", {})
-        self.tool_handlers["spawn"] = extended_tool_def["handler"]
-
-        # Add to the tools list (API-safe version without handler)
+        # Add the tool definition to the tools list for API
         self.tools.append(api_tool_def)
+        
         print(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
 
     def _register_fork_tool(self) -> None:
         """Register the fork system call for creating copies of the current process."""
-        from llmproc.tools import fork_tool
-        from llmproc.tools.fork import fork_tool_def
-
         # Create a copy of the tool definition for the API
         api_tool_def = fork_tool_def.copy()
-
-        # Create an extended tool definition with the handler
-        extended_tool_def = fork_tool_def.copy()
-        extended_tool_def["handler"] = lambda args: fork_tool(
-            prompts=args.get("prompts", []),
-            llm_process=self
-        )
-
-        # Keep the handler and tool definition separate
-        self.tool_handlers = getattr(self, "tool_handlers", {})
-        self.tool_handlers["fork"] = extended_tool_def["handler"]
-
-        # Add to the tools list (API-safe version without handler)
+        
+        # Create the handler function for the fork tool
+        async def fork_handler(args):
+            # The actual fork implementation is in anthropic_tools.py
+            # This is just a placeholder for the handler interface
+            return f"Fork command received with args: {args}"
+            
+        # Register the handler in the unified tool_handlers dictionary
+        self.tool_handlers["fork"] = fork_handler
+        
+        # Add to the tools list for API
         self.tools.append(api_tool_def)
         print(f"Registered fork tool for process {self.model_name}")
 
@@ -917,134 +549,23 @@ class LLMProcess:
         Returns:
             Dictionary with tool information formatted for Anthropic API
         """
-        # Create the base tool definition with properly namespaced name
-        if server_name:
-            namespaced_name = f"{server_name}__{tool.name}"
-        else:
-            # If no server name is provided, use the tool name as is (likely already namespaced)
-            namespaced_name = tool.name
-
-        tool_def = {
+        # Create namespaced name with server prefix
+        namespaced_name = f"{server_name}__{tool.name}" if server_name else tool.name
+        
+        # Ensure input schema has required fields
+        input_schema = tool.inputSchema.copy() if tool.inputSchema else {}
+        if "type" not in input_schema:
+            input_schema["type"] = "object"
+        if "properties" not in input_schema:
+            input_schema["properties"] = {}
+            
+        # Create the tool definition
+        return {
             "name": namespaced_name,
             "description": tool.description,
-            "input_schema": tool.inputSchema.copy() if tool.inputSchema else {"type": "object", "properties": {}}
+            "input_schema": input_schema
         }
 
-        # Ensure schema has required fields
-        schema = tool_def["input_schema"]
-        if "type" not in schema:
-            schema["type"] = "object"
-        if "properties" not in schema:
-            schema["properties"] = {}
-
-        return tool_def
-
-    async def _process_tool_calls(self, tool_calls):
-        """Process tool calls from Anthropic response.
-
-        Args:
-            tool_calls: List of tool call objects from Anthropic response
-
-        Returns:
-            List of tool results with standardized format
-        """
-        tool_results = []
-
-        for tool_call in tool_calls:
-            tool_name = tool_call.name
-            tool_args = tool_call.input
-            tool_id = tool_call.id
-
-            if self.debug_tools:
-                print(f"\nProcessing tool call: {tool_name}")
-                print(f"  Tool ID: {tool_id}")
-                print(f"  Args: {json.dumps(tool_args, indent=2)[:200]}...")
-
-            try:
-                # Call the tool through the aggregator
-                start_time = asyncio.get_event_loop().time()
-
-                # Use the async aggregator call
-                result = await self.aggregator.call_tool(tool_name, tool_args)
-
-                end_time = asyncio.get_event_loop().time()
-
-                if self.debug_tools:
-                    print(f"  Tool execution time: {end_time - start_time:.2f}s")
-
-                # Extract content and error status based on result type
-                content = None
-                is_error = False
-
-                # Check if the result has content attribute
-                if hasattr(result, "content"):
-                    content = result.content
-
-                    # Try to determine if it's JSON-serializable
-                    try:
-                        # This will validate if the content can be serialized to JSON
-                        json.dumps(content)
-                    except (TypeError, OverflowError, ValueError):
-                        # If it can't be serialized, convert to string
-                        if self.debug_tools:
-                            print(
-                                "  Content is not JSON-serializable, converting to string"
-                            )
-                        content = str(content)
-                else:
-                    # If no content attribute, use the whole result
-                    content = result
-
-                    # Same serialization check
-                    try:
-                        json.dumps(content)
-                    except (TypeError, OverflowError, ValueError):
-                        if self.debug_tools:
-                            print("  Content is not JSON-serializable, converting to string")
-                        content = str(content)
-
-                # Check error status
-                if hasattr(result, "isError"):
-                    is_error = result.isError
-                elif hasattr(result, "is_error"):
-                    is_error = result.is_error
-                # For some tools, error might be indicated in the content
-                elif isinstance(content, dict) and (
-                    "error" in content or "errors" in content
-                ):
-                    is_error = True
-
-                tool_result = {
-                    "tool_use_id": tool_id,
-                    "content": content,
-                    "is_error": is_error,
-                }
-
-                if self.debug_tools:
-                    print(f"  Result: {'ERROR' if is_error else 'SUCCESS'}")
-                    if isinstance(content, dict):
-                        print(
-                            f"  Content (truncated): {json.dumps(content, indent=2)[:200]}..."
-                        )
-                    else:
-                        print(f"  Content (truncated): {str(content)[:200]}...")
-
-            except Exception as e:
-                # For errors in the tool execution itself, create an error result
-                error_message = f"Error calling MCP tool {tool_name}: {str(e)}"
-
-                if self.debug_tools:
-                    print(f"  EXCEPTION: {error_message}")
-
-                tool_result = {
-                    "tool_use_id": tool_id,
-                    "content": {"error": error_message},
-                    "is_error": True,
-                }
-
-            tool_results.append(tool_result)
-
-        return tool_results
 
     def reset_state(
         self, keep_system_prompt: bool = True, keep_preloaded: bool = True
@@ -1067,6 +588,72 @@ class LLMProcess:
         # with the correct combination of system prompt and preloaded content
         self.enriched_system_prompt = None
 
+    def _initialize_tools(self) -> None:
+        """Initialize all tools - both MCP and system tools.
+        
+        This method handles the setup of tool schemas and handlers in a unified way,
+        regardless of whether they are MCP tools or system tools.
+        """
+        # Initialize MCP if configured
+        if self.mcp_config_path and self.mcp_tools:
+            if not HAS_MCP:
+                raise ImportError(
+                    "MCP features require the mcp-registry package. Install it with 'pip install mcp-registry'."
+                )
+
+            # Currently only support Anthropic with MCP
+            if self.provider != "anthropic":
+                raise ValueError(
+                    "MCP features are currently only supported with the Anthropic provider"
+                )
+
+            self.mcp_enabled = True
+            
+            # Check if we're already in an event loop
+            try:
+                asyncio.get_running_loop()
+                # If in event loop, don't initialize now - will be done lazily
+                # during the first call to run()
+            except RuntimeError:
+                # No event loop, create one for initialization
+                asyncio.run(self._initialize_mcp_tools_if_needed())
+        
+        # Register system tools
+        if "spawn" in self.enabled_tools and self.has_linked_programs:
+            self._register_spawn_tool()
+
+        if "fork" in self.enabled_tools:
+            self._register_fork_tool()
+
+    async def call_tool(self, tool_name: str, args: dict) -> Any:
+        """Call a tool by name with the given arguments.
+        
+        This method provides a unified interface for calling any registered tool,
+        whether it's an MCP tool or a system tool like spawn or fork.
+        
+        Args:
+            tool_name: The name of the tool to call
+            args: The arguments to pass to the tool
+            
+        Returns:
+            The result of the tool execution
+            
+        Raises:
+            ValueError: If the tool is not found
+            RuntimeError: If the tool execution fails
+        """
+        if not hasattr(self, 'tool_handlers') or not self.tool_handlers:
+            raise ValueError("No tool handlers registered")
+            
+        if tool_name not in self.tool_handlers:
+            raise ValueError(f"Tool '{tool_name}' not found. Available tools: {', '.join(self.tool_handlers.keys())}")
+            
+        try:
+            handler = self.tool_handlers[tool_name]
+            return await handler(args)
+        except Exception as e:
+            raise RuntimeError(f"Error executing tool '{tool_name}': {str(e)}")
+    
     async def fork_process(self) -> "LLMProcess":
         """Create a deep copy of this process with preserved state.
 
@@ -1081,7 +668,7 @@ class LLMProcess:
 
         # Create a new instance of LLMProcess with the same program
         forked_process = LLMProcess(program=self.program)
-        
+
         # Copy the enriched system prompt if it exists
         if hasattr(self, 'enriched_system_prompt') and self.enriched_system_prompt:
             forked_process.enriched_system_prompt = self.enriched_system_prompt
