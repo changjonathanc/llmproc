@@ -1,12 +1,13 @@
 """Anthropic provider tools implementation for LLMProc."""
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 import asyncio
 import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 from llmproc.results import RunResult
+from llmproc.tools.tool_result import ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -141,41 +142,27 @@ class AnthropicProcessExecutor:
                             except Exception as e:
                                 logger.warning(f"Error in on_tool_end callback: {str(e)}")
 
-                        # Check if the result is a ToolResult instance
-                        from llmproc.tools.tool_result import ToolResult
-
-                        if isinstance(result, ToolResult):
-                            # Get the dictionary representation
-                            result_dict = result.to_dict()
+                        # Require a ToolResult instance
+                        if not isinstance(result, ToolResult):
+                            # This is a programming error - tools must return ToolResult
+                            error_msg = f"Tool '{tool_name}' did not return a ToolResult instance. Got {type(result).__name__} instead."
+                            logger.error(error_msg)
+                            # Create an error ToolResult to avoid breaking the conversation
+                            tool_result = ToolResult.from_error(error_msg)
                         else:
-                            # Legacy support for non-ToolResult results
-                            # Format the result for Anthropic API
-                            if isinstance(result, dict):
-                                # Check if it's already in the expected format with content and is_error
-                                if "content" in result and "is_error" in result:
-                                    result_dict = result
-                                else:
-                                    # Convert to ToolResult and then to dict
-                                    tool_result = ToolResult(content=json.dumps(result), is_error=False)
-                                    result_dict = tool_result.to_dict()
-                            elif isinstance(result, str):
-                                result_dict = {"content": result, "is_error": False}
-                            else:
-                                # Convert any other type to string via JSON
-                                try:
-                                    content_str = json.dumps(result)
-                                except TypeError:
-                                    # If JSON serialization fails, use str()
-                                    content_str = str(result)
-                                result_dict = {"content": content_str, "is_error": False}
-
+                            tool_result = result
+                            
+                        # Only convert to dict at the last moment when building the response
+                        tool_result_dict = tool_result.to_dict()
+                        
+                        # Append to tool results
                         tool_results.append({
                             "role": "user",
                             "content": [
                                 {
                                     "type": "tool_result",
                                     "tool_use_id": tool_id,
-                                    **result_dict
+                                    **tool_result_dict
                                 }
                             ],
                         })
@@ -261,13 +248,12 @@ class AnthropicProcessExecutor:
     @staticmethod
     async def _fork(process, params, tool_id, last_assistant_response):
         """Fork a conversation"""
-        from llmproc.tools.tool_result import ToolResult
 
         if not process.allow_fork:
             return ToolResult.from_error("Forking is not allowed for this agent, possible reason: You are already a forked instance")
 
         prompts = params["prompts"]
-        print(f"Forking conversation with {len(prompts)} prompts: {prompts}")
+        logger.info(f"Forking conversation with {len(prompts)} prompts: {prompts}")
 
         async def process_fork(i, prompt):
             child = process.deepcopy() # TODO: need to implement deepcopy for Process class
@@ -313,7 +299,6 @@ class AnthropicProcessExecutor:
         )
 
         # Return results as a ToolResult object
-        from llmproc.tools.tool_result import ToolResult
         return ToolResult.from_success(json.dumps(responses))
 
 
