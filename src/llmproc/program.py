@@ -10,6 +10,7 @@ from typing import Any, Optional, Union
 from pydantic import ValidationError
 
 from llmproc.config.schema import LLMProgramConfig
+from llmproc.config.utils import resolve_path
 from llmproc.env_info import EnvInfoBuilder
 
 
@@ -163,10 +164,8 @@ class LLMProgram:
             ValidationError: If the configuration is invalid
             ValueError: If there are issues with configuration values
         """
-        # Convert to Path object and resolve it
-        path = Path(toml_path).resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"Program file not found: {toml_path}")
+        # Use the utility function to resolve the path
+        path = resolve_path(toml_path, must_exist=True, error_prefix="Program file")
 
         # Get the global registry
         registry = ProgramRegistry()
@@ -218,26 +217,24 @@ class LLMProgram:
                     # Skip any non-string items (already processed linked programs)
                     if not isinstance(linked_path_str, str):
                         continue
-
-                    linked_path = Path(linked_path_str)
-                    if not linked_path.is_absolute():
-                        linked_path = base_dir / linked_path
-
-                    # Resolve to absolute path
-                    linked_abs_path = linked_path.resolve()
-
-                    # Check if linked file exists (if checking is enabled)
-                    if not check_linked_files or linked_path.exists():
-                        # Only add to queue if we haven't seen it before
-                        if str(linked_abs_path) not in compiled_paths:
-                            to_compile.append(linked_path)
-                            compiled_paths.add(str(linked_abs_path))
-                    else:
-                        # Raise error for missing linked program files
-                        raise FileNotFoundError(
-                            f"Linked program file not found - From '{current_path}', "
-                            f"looking for '{linked_path_str}' (resolved to '{linked_path}')"
+                    
+                    # Only validate existence if check_linked_files is True
+                    try:
+                        linked_path = resolve_path(
+                            linked_path_str, 
+                            base_dir, 
+                            must_exist=check_linked_files,
+                            error_prefix=f"Linked program file (from '{current_path}')"
                         )
+                    except FileNotFoundError as e:
+                        # Re-raise with the original error message
+                        raise FileNotFoundError(str(e))
+                        
+                    # Only add to queue if we haven't seen it before
+                    linked_abs_path = str(linked_path)
+                    if linked_abs_path not in compiled_paths:
+                        to_compile.append(linked_path)
+                        compiled_paths.add(linked_abs_path)
 
         # Stage 2: Update linked_programs to reference compiled program objects
         for compiled_path in compiled_paths:
@@ -256,11 +253,9 @@ class LLMProgram:
                         updated_links[linked_name] = linked_path_str
                         continue
 
-                    # Resolve the path
-                    linked_path = Path(linked_path_str)
-                    if not linked_path.is_absolute():
-                        linked_path = base_dir / linked_path
-
+                    # Resolve the path using our utility
+                    linked_path = resolve_path(linked_path_str, base_dir, must_exist=False)
+                    
                     # Get the compiled program from the registry
                     linked_program = registry.get(linked_path)
                     if linked_program:
@@ -339,25 +334,38 @@ class LLMProgram:
         if config.preload and config.preload.files:
             preload_files = []
             for file_path in config.preload.files:
-                # Determine file path, using base_dir for relative paths
-                resolved_path = base_dir / file_path
-                if not resolved_path.exists():
-                    # Only issue a warning at compile time, don't fail
+                try:
+                    # Try to resolve the path but don't require existence
+                    resolved_path = resolve_path(file_path, base_dir, must_exist=False)
+                    if not resolved_path.exists():
+                        # Issue a warning if the file doesn't exist
+                        warnings.warn(
+                            f"Preload file not found - Specified: '{file_path}', Resolved: '{resolved_path}'",
+                            stacklevel=2
+                        )
+                    # Include the file path regardless - it will be checked at runtime when actually loaded
+                    preload_files.append(str(resolved_path))
+                except Exception as e:
+                    # If there's any other error in path resolution, issue a warning
                     warnings.warn(
-                        f"Preload file not found - Specified: '{file_path}', Resolved: '{resolved_path}'"
+                        f"Error resolving preload file path '{file_path}': {str(e)}",
+                        stacklevel=2
                     )
-                # Include the file path regardless - it will be checked at runtime when actually loaded
-                preload_files.append(str(resolved_path))
 
         # Resolve MCP configuration
         mcp_config_path = None
         if config.mcp and config.mcp.config_path:
-            mcp_path = base_dir / config.mcp.config_path
-            if not mcp_path.exists():
-                raise FileNotFoundError(
-                    f"MCP config file not found - Specified: '{config.mcp.config_path}', Resolved: '{mcp_path}'"
+            try:
+                mcp_path = resolve_path(
+                    config.mcp.config_path, 
+                    base_dir, 
+                    must_exist=True,
+                    error_prefix="MCP config file"
                 )
-            mcp_config_path = str(mcp_path)
+                mcp_config_path = str(mcp_path)
+            except FileNotFoundError as e:
+                # Re-raise with the original error message
+                raise FileNotFoundError(str(e))
 
         # Extract MCP tools configuration
         mcp_tools = None

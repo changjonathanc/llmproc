@@ -1,4 +1,4 @@
-"""Configuration schema package."""
+"""Configuration schema and utilities package."""
 
 from llmproc.config.schema import (
     DebugConfig,
@@ -12,3 +12,4 @@ from llmproc.config.schema import (
     PromptConfig,
     ToolsConfig,
 )
+from llmproc.config.utils import resolve_path

@@ -58,22 +58,21 @@ class PromptConfig(BaseModel):
         Raises:
             FileNotFoundError: If system_prompt_file is specified but doesn't exist
         """
-        import os
-        from pathlib import Path
+        from llmproc.config.utils import resolve_path
 
         # First check for system_prompt_file (takes precedence)
         if self.system_prompt_file:
-            # Determine file path, using base_dir for relative paths if provided
-            file_path = Path(self.system_prompt_file)
-            if not file_path.is_absolute() and base_dir:
-                file_path = base_dir / file_path
-
-            if file_path.exists():
-                return file_path.read_text()
-            else:
-                raise FileNotFoundError(
-                    f"System prompt file not found - Specified: '{self.system_prompt_file}', Resolved: '{file_path}'"
+            try:
+                file_path = resolve_path(
+                    self.system_prompt_file, 
+                    base_dir, 
+                    must_exist=True,
+                    error_prefix="System prompt file"
                 )
+                return file_path.read_text()
+            except FileNotFoundError as e:
+                # Re-raise the error with the same message
+                raise FileNotFoundError(str(e))
 
         # Return system_prompt (or empty string if neither is specified)
         return self.system_prompt or ""
