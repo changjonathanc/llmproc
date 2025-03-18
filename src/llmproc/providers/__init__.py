@@ -15,11 +15,14 @@ try:
         filter_empty_text_blocks,
         run_anthropic_with_tools,
     )
+    from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 except ImportError:
     # Provide placeholders if the module is not available
     run_anthropic_with_tools = None
     filter_empty_text_blocks = None
     dump_api_error = None
+    AnthropicProcessExecutor = None
+
 
 __all__ = [
     "get_provider_client",
@@ -29,4 +32,5 @@ __all__ = [
     "run_anthropic_with_tools",
     "filter_empty_text_blocks",
     "dump_api_error",
+    "AnthropicProcessExecutor",
 ]

@@ -29,10 +29,13 @@ async def run_anthropic_with_tools(
     client = llm_process.client
     model_name = llm_process.model_name
     tools = llm_process.tools
-    debug = getattr(llm_process, 'debug_tools', False)
     api_params = getattr(llm_process, 'api_params', {})
     tool_handlers = getattr(llm_process, 'tool_handlers', {})
     aggregator = getattr(llm_process, 'aggregator', None)
+    
+    # Check for debug environment variable
+    import os
+    debug = os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
 
     # Track iterations to prevent infinite loops
     iterations = 0

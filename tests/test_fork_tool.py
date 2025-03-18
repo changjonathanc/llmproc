@@ -72,12 +72,11 @@ class TestForkTool:
     @pytest.mark.asyncio
     async def test_fork_tool_function(self):
         """Test the fork_tool function itself."""
+        # Since fork_tool is now a placeholder that will be handled by the process executor,
+        # we just verify it returns the expected error message
+        
         # Create a mock process
         mock_process = MagicMock()
-        mock_process.fork_process = AsyncMock()
-        mock_forked_process = MagicMock()
-        mock_forked_process.run = AsyncMock(return_value="Forked response")
-        mock_process.fork_process.return_value = mock_forked_process
         
         # Call the fork tool
         result = await fork_tool(
@@ -85,36 +84,29 @@ class TestForkTool:
             llm_process=mock_process
         )
         
-        # Check that fork_process was called twice
-        assert mock_process.fork_process.call_count == 2
-        
-        # Check that run was called on each forked process
-        assert mock_forked_process.run.call_count == 2
-        
-        # Check the result format
-        assert "results" in result
-        assert len(result["results"]) == 2
-        assert result["results"][0]["id"] == 0
-        assert result["results"][0]["message"] == "Forked response"
-        assert result["results"][1]["id"] == 1
-        assert result["results"][1]["message"] == "Forked response"
+        # Check that the result contains the expected error
+        assert "error" in result
+        assert result["is_error"] is True
+        assert "process executor" in result["error"]
 
     @pytest.mark.asyncio
     async def test_fork_tool_error_handling(self):
         """Test error handling in the fork tool."""
+        # Since fork_tool is now a placeholder, we just check it returns
+        # the expected error message in all cases
+        
         # Call without a process
         result = await fork_tool(prompts=["Test"], llm_process=None)
         assert "error" in result
         assert result["is_error"] is True
+        assert "process executor" in result["error"]
         
-        # Call with a process that raises an exception
+        # Call with a process
         mock_process = MagicMock()
-        mock_process.fork_process = AsyncMock(side_effect=Exception("Test error"))
-        
         result = await fork_tool(prompts=["Test"], llm_process=mock_process)
         assert "error" in result
         assert result["is_error"] is True
-        assert "Test error" in result["error"]
+        assert "process executor" in result["error"]
 
 
 # API tests that require real API keys

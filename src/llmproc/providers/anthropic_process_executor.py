@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-j
-from typing import List, Dict, Any
 import asyncio
 import logging
 
@@ -27,15 +25,15 @@ class AnthropicProcessExecutor:
 
         process.run_stop_reason = None
         iterations = 0
-        while iterations < self.max_iterations:
+        while iterations < max_iterations:
 
             iterations += 1
 
             response = await process.client.messages.create(
                 model=process.model_name,
-                system=process.enrich_system_prompt,
-                messages=process.messages,
-                tools=process.tools_schema,
+                system=process.enriched_system_prompt,
+                messages=[message for message in process.messages if message["role"] != "system"],
+                tools=process.tools,
                 **process.api_params
             )
 
@@ -87,7 +85,7 @@ class AnthropicProcessExecutor:
                         })
                 process.messages.append({"role": "assistant", "content": response.content})
                 process.messages.extend(tool_results)
-        if iterations >= self.max_iterations:
+        if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
         return iterations
 

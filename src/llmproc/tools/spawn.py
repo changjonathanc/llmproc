@@ -1,12 +1,15 @@
 """Spawn system call for LLMProcess to create new processes from linked programs."""
 
 import asyncio
-import os
-import sys
 import json
+import logging
 from typing import Any, Dict, Optional
 
-from llmproc.llm_process import LLMProcess
+# Avoid circular import
+# LLMProcess is imported within the function
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Detailed spawn tool description explaining the Unix metaphor and usage patterns
 spawn_tool_description = """
@@ -60,7 +63,7 @@ spawn_tool_def = {
 async def spawn_tool(
     program_name: str,
     query: str,
-    llm_process: Optional[LLMProcess] = None,
+    llm_process = None,
 ) -> Dict[str, Any]:
     """Create a new process from a linked program to handle a specific query.
     
@@ -78,13 +81,9 @@ async def spawn_tool(
     Raises:
         ValueError: If the program_name is not found in linked programs
     """
-    import sys
-    debug = getattr(llm_process, 'debug_tools', False) and os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
-    
     if not llm_process or not hasattr(llm_process, "linked_programs"):
         error_msg = "Spawn system call requires a parent LLMProcess with linked_programs defined"
-        if debug:
-            print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
+        logger.error(f"SPAWN ERROR: {error_msg}")
         return {
             "error": error_msg,
             "is_error": True,
@@ -94,8 +93,7 @@ async def spawn_tool(
     if program_name not in linked_programs:
         available_programs = ", ".join(linked_programs.keys())
         error_msg = f"Program '{program_name}' not found. Available programs: {available_programs}"
-        if debug:
-            print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
+        logger.error(f"SPAWN ERROR: {error_msg}")
         return {
             "error": error_msg,
             "is_error": True,
@@ -126,9 +124,8 @@ async def spawn_tool(
     except Exception as e:
         import traceback
         error_msg = f"Error creating process from program '{program_name}': {str(e)}"
-        if debug:
-            print(f"SPAWN ERROR: {error_msg}", file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
+        logger.error(f"SPAWN ERROR: {error_msg}")
+        logger.debug(f"Detailed traceback:", exc_info=True)
         return {
             "error": error_msg,
             "is_error": True,

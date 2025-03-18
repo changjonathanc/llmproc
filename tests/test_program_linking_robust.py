@@ -32,8 +32,6 @@ class TestProgramLinkingRobust:
                 [parameters]
                 max_tokens = 1000
                 
-                [debug]
-                debug_tools = true
                 
                 [tools]
                 enabled = ["spawn"]
@@ -95,11 +93,20 @@ class TestProgramLinkingRobust:
             
             # Set mcp_enabled to allow tool registration
             main_process.mcp_enabled = True
-            main_process._register_spawn_tool()
+            main_process.enabled_tools = ["spawn"]
             
-            # Ensure the tool was registered
-            assert len(main_process.tools) == 1
-            assert main_process.tools[0]["name"] == "spawn"
+            # Register spawn tool using the new method
+            from llmproc.tools import register_spawn_tool
+            register_spawn_tool(main_process.tool_registry, main_process)
+            
+            # For backward compatibility
+            main_process.tools.extend(main_process.tool_registry.get_definitions())
+            main_process.tool_handlers.update(main_process.tool_registry.tool_handlers)
+            
+            # Ensure the tool was registered - tools is now a property
+            assert len(main_process.tools) > 0
+            assert any(tool["name"] == "spawn" for tool in main_process.tools)
+            assert "spawn" in main_process.tool_handlers
             assert "expert" in main_process.linked_programs
             
             # Call the spawn tool directly

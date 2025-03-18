@@ -466,9 +466,6 @@ class LLMProgram:
             for program_name, program_path in config.linked_programs.root.items():
                 linked_programs[program_name] = program_path
         
-        # Get debug settings
-        debug_tools = config.debug.debug_tools if config.debug else False
-        
         # Extract environment info configuration
         env_info = config.env_info.model_dump() if config.env_info else {"variables": []}
         
@@ -484,7 +481,6 @@ class LLMProgram:
             mcp_tools=mcp_tools,
             tools=config.tools.model_dump() if config.tools else None,
             linked_programs=linked_programs,
-            debug_tools=debug_tools,
             env_info=env_info,
             base_dir=base_dir
         )

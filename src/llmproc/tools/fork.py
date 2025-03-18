@@ -7,7 +7,8 @@ import sys
 import json
 from typing import Any, Dict, List, Optional
 
-from llmproc.llm_process import LLMProcess
+# Avoid circular import
+# LLMProcess is imported within the function
 
 # Detailed fork tool description explaining the Unix metaphor and usage patterns
 fork_tool_description = """
@@ -62,75 +63,22 @@ fork_tool_def = {
 
 async def fork_tool(
     prompts: List[str],
-    llm_process: Optional[LLMProcess] = None,
+    llm_process = None,
 ) -> Dict[str, Any]:
-    """Create a copy of the current process to handle multiple tasks in parallel.
+    """Placeholder function for the fork system call.
     
-    This system call allows an LLM process to fork itself into multiple child processes,
-    with each child inheriting the full conversation history of the parent process.
+    The actual implementation is handled by the process executor,
+    as it requires special handling of the process state.
     
     Args:
         prompts: List of prompts/instructions for each forked process
         llm_process: The parent LLMProcess instance to fork
         
     Returns:
-        A dictionary with responses from all forked processes
-        
-    Raises:
-        ValueError: If the process cannot be forked
+        A dictionary with placeholder response
     """
-    debug = getattr(llm_process, 'debug_tools', False) and os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
-    
-    if not llm_process:
-        error_msg = "Fork system call requires a parent LLMProcess"
-        if debug:
-            print(f"FORK ERROR: {error_msg}", file=sys.stderr)
-        return {
-            "error": error_msg,
-            "is_error": True,
-        }
-    
-    try:
-        # Start a list to track all forked processes and their results
-        forked_results = []
-        
-        for i, prompt in enumerate(prompts):
-            if debug:
-                print(f"FORK: Creating fork {i+1} with prompt: {prompt[:100]}...", file=sys.stderr)
-                
-            # Create a deep copy of the parent process
-            # We'll use a new method to ensure a proper deep copy
-            forked_process = await llm_process.fork_process()
-            
-            if debug:
-                print(f"FORK: Successfully created fork {i+1}", file=sys.stderr)
-            
-            # Run the forked process with the specified prompt
-            # The prompt will be processed as a user query
-            forked_response = await forked_process.run(prompt)
-            
-            # Add the result to our list
-            forked_results.append({
-                "id": i,
-                "message": forked_response
-            })
-            
-            if debug:
-                print(f"FORK: Fork {i+1} completed with response length: {len(forked_response)}", file=sys.stderr)
-        
-        # Return all results from the forked processes
-        result = {
-            "results": forked_results,
-        }
-        return result
-        
-    except Exception as e:
-        import traceback
-        error_msg = f"Error forking process: {str(e)}"
-        if debug:
-            print(f"FORK ERROR: {error_msg}", file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
-        return {
-            "error": error_msg,
-            "is_error": True,
-        }
+    # This is just a placeholder - the real implementation is in the process executor
+    return {
+        "error": "Direct calls to fork_tool are not supported. This should be handled by the process executor.",
+        "is_error": True
+    }
