@@ -4,11 +4,6 @@
       "type": "stdio",
       "command": "/bin/zsh",
       "args": ["-c", "uvx --from git+https://github.com/ezyang/codemcp@main codemcp-multi"]
-    },
-    "time": {
-      "type": "stdio", 
-      "command": "npx",
-      "args": ["-y", "mcp-server-time"]
     }
   }
 }

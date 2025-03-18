@@ -27,7 +27,7 @@
 - Test example programs with API: `pytest tests/test_example_programs.py -m llm_api`
 - Test program linking: `pytest tests/test_program_linking_robust.py`
 - Test program linking with API access: `pytest tests/test_program_linking_api.py -m llm_api`
-- Debug output: Set `LLMPROC_DEBUG=true` environment variable for detailed logging
+- Debug output: Configure Python logging for `llmproc` package
 
 ### Test Coverage
 - Unit tests: Cover core functionality without API calls (~41% code coverage)
@@ -169,7 +169,7 @@
 9. Created API integration tests for program linking with real APIs
 10. Updated CLAUDE.md with detailed testing procedures
 11. Added MISC.md with additional documentation and advanced usage
-12. Added LLMPROC_DEBUG environment variable for detailed debugging
+12. Added logging support for debugging and diagnostics
 
 ## Session Summary (2025-03-21)
 1. Improved preloaded files implementation by appending to system prompt
@@ -351,7 +351,7 @@
 4. Enhanced the Fork Implementation
    - Designed fork_tool to return results from all child processes
    - Structured fork results in a consistent format
-   - Added debug logging with LLMPROC_DEBUG environment variable
+   - Added detailed logging for debugging and diagnostics
    - Preserved all process state including preloaded content
    - Ensured tools are properly initialized in forked processes
 
