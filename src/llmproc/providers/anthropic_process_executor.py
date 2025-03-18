@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Union
 import asyncio
 import logging
 
+from llmproc.results import RunResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,8 +16,12 @@ PROMPT_SUMMARIZE_CONVERSATION = "Please stop using tools and summarize your prog
 
 class AnthropicProcessExecutor:
     async def run(self, process: 'Process', user_prompt: str, max_iterations: int = 10, 
-                  callbacks: dict = None, run_result = None, is_tool_continuation: bool = False) -> int:
+                  callbacks: dict = None, run_result = None, is_tool_continuation: bool = False) -> "RunResult":
         """Execute a conversation with the Anthropic API.
+        
+        This method executes a conversation turn with proper tool handling, tracking metrics,
+        and callback notifications. It can be used for both initial user messages and
+        for continuing a conversation after tool execution.
         
         Args:
             process: The LLMProcess instance
@@ -26,7 +32,7 @@ class AnthropicProcessExecutor:
             is_tool_continuation: Whether this is continuing a previous tool call
             
         Returns:
-            int: The number of iterations (api calls) used
+            RunResult object containing execution metrics and API call information
         """
         # Initialize callbacks
         callbacks = callbacks or {}
@@ -135,21 +141,39 @@ class AnthropicProcessExecutor:
                             except Exception as e:
                                 logger.warning(f"Error in on_tool_end callback: {str(e)}")
                                 
+                        # Format the result for Anthropic API
+                        # Content must be either a string or a list of content blocks
+                        formatted_result = result
+                        if isinstance(result, dict) or isinstance(result, list):
+                            try:
+                                formatted_result = json.dumps(result)
+                            except TypeError:
+                                # If the result contains non-serializable objects, convert to string
+                                formatted_result = str(result)
+                        
                         tool_results.append({
                             "role": "user",
                             "content": [
                                 {
                                     "type": "tool_result",
                                     "tool_use_id": tool_id,
-                                    "content": result,
+                                    "content": formatted_result,
                                 }
                             ],
                         })
                 process.messages.append({"role": "assistant", "content": response.content})
                 process.messages.extend(tool_results)
+                
         if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
-        return iterations
+            
+        # Create a new RunResult if one wasn't provided
+        if run_result is None:
+            run_result = RunResult()
+            run_result.api_calls = iterations
+            
+        # Complete the RunResult and return it
+        return run_result.complete()
 
     async def run_till_text_response(self, process, user_prompt, max_iterations: int = 10):
         """
@@ -157,43 +181,62 @@ class AnthropicProcessExecutor:
         This is specifically designed for forked processes, where the child must respond with a text response, which will become the tool result for the parent.
 
         This has some special handling, it's not meant for general use.
+        
+        Args:
+            process: The LLMProcess instance
+            user_prompt: The user's input message
+            max_iterations: Maximum number of API calls for tool usage
+            
+        Returns:
+            The text response from the model, or an error message if no response is generated
         """
-        iterations = 0
+        # Create a combined RunResult to track all API calls
+        master_run_result = RunResult()
         next_prompt = user_prompt
         callbacks = {}  # No callbacks for this internal method
-        total_api_calls = 0
         
-        while iterations < max_iterations:
+        while master_run_result.api_calls < max_iterations:
             # Run the process and get a RunResult
-            run_result = await self.run(process, next_prompt, max_iterations=max_iterations-iterations, 
-                                       callbacks=callbacks, is_tool_continuation=False)
-            
-            # Track API calls
-            iterations += run_result.api_calls 
-            total_api_calls += run_result.api_calls
+            run_result = await self.run(
+                process, 
+                next_prompt, 
+                max_iterations=max_iterations - master_run_result.api_calls, 
+                callbacks=callbacks, 
+                run_result=master_run_result,  # Pass the master RunResult to accumulate metrics
+                is_tool_continuation=False
+            )
             
             # Check if we've reached the text response we need
             last_message = process.get_last_message()
             if last_message:
+                # Complete the RunResult before returning
+                master_run_result.complete()
                 return last_message  # Return the text message directly
                 
             # If we didn't get a response, handle special cases
             if process.run_stop_reason == "max_iterations":
                 # Allow the model another chance to respond with a text response to summarize
-                run_result = await self.run(process, PROMPT_SUMMARIZE_CONVERSATION, 
-                                           max_iterations=1, callbacks=callbacks, 
-                                           is_tool_continuation=False)
-                total_api_calls += run_result.api_calls
+                await self.run(
+                    process, 
+                    PROMPT_SUMMARIZE_CONVERSATION, 
+                    max_iterations=1, 
+                    callbacks=callbacks, 
+                    run_result=master_run_result,  # Pass the master RunResult
+                    is_tool_continuation=False
+                )
                 
                 # Check again for a text response
                 last_message = process.get_last_message()
                 if last_message:
+                    # Complete the RunResult before returning
+                    master_run_result.complete()
                     return last_message
 
             # If we still don't have a text response, prompt again
             next_prompt = PROMPT_FORCE_MODEL_RESPONSE
         
         # If we've exhausted iterations without getting a proper response
+        master_run_result.complete()
         return "Maximum iterations reached without final response."
 
 
