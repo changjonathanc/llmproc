@@ -5,20 +5,11 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 
-if TYPE_CHECKING:
-    from llmproc.program import LLMProgram
-
-try:
-    from mcp_registry import MCPAggregator, ServerRegistry, get_config_path
-
-    HAS_MCP = True
-except ImportError:
-    HAS_MCP = False
-
+from llmproc.program import LLMProgram
 from llmproc.providers import get_provider_client
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
@@ -35,8 +26,8 @@ class LLMProcess:
 
     def __init__(
         self,
-        program: "LLMProgram",
-        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
+        program: LLMProgram,
+        linked_programs_instances: Dict[str, "LLMProcess"] | None = None,
     ) -> None:
         """Initialize LLMProcess from a compiled program.
 
@@ -134,8 +125,8 @@ class LLMProcess:
     @classmethod
     async def create(
         cls, 
-        program: "LLMProgram",
-        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
+        program: LLMProgram,
+        linked_programs_instances: Dict[str, "LLMProcess"] | None = None,
     ) -> "LLMProcess":
         """Create and fully initialize an LLMProcess asynchronously.
         
@@ -290,7 +281,7 @@ class LLMProcess:
         
         return run_result
 
-    def get_state(self) -> list[dict[str, str]]:
+    def get_state(self) -> List[Dict[str, str]]:
         """Return the current conversation state.
 
         Returns:
