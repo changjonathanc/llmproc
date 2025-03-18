@@ -78,7 +78,7 @@ async def fork_tool(
         A dictionary with placeholder response
     """
     # This is just a placeholder - the real implementation is in the process executor
-    return {
-        "error": "Direct calls to fork_tool are not supported. This should be handled by the process executor.",
-        "is_error": True
-    }
+    from llmproc.tools.tool_result import ToolResult
+    return ToolResult.from_error(
+        "Direct calls to fork_tool are not supported. This should be handled by the process executor."
+    )

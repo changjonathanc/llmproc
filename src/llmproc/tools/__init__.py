@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union, TypedDict,
 
 from .spawn import spawn_tool, spawn_tool_def
 from .fork import fork_tool, fork_tool_def
+from .tool_result import ToolResult
 from . import mcp
 
 # Set up logger
@@ -213,5 +214,6 @@ __all__ = [
     "ToolSchema", "ToolHandler",
     "ToolRegistry", "register_system_tools",
     "register_spawn_tool", "register_fork_tool",
+    "ToolResult",
     "mcp"
 ]

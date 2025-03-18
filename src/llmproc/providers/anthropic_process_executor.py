@@ -15,14 +15,14 @@ PROMPT_FORCE_MODEL_RESPONSE = "Please respond with a text response"
 PROMPT_SUMMARIZE_CONVERSATION = "Please stop using tools and summarize your progress so far"
 
 class AnthropicProcessExecutor:
-    async def run(self, process: 'Process', user_prompt: str, max_iterations: int = 10, 
+    async def run(self, process: 'Process', user_prompt: str, max_iterations: int = 10,
                   callbacks: dict = None, run_result = None, is_tool_continuation: bool = False) -> "RunResult":
         """Execute a conversation with the Anthropic API.
-        
+
         This method executes a conversation turn with proper tool handling, tracking metrics,
         and callback notifications. It can be used for both initial user messages and
         for continuing a conversation after tool execution.
-        
+
         Args:
             process: The LLMProcess instance
             user_prompt: The user's input message
@@ -30,7 +30,7 @@ class AnthropicProcessExecutor:
             callbacks: Optional dictionary of callback functions
             run_result: Optional RunResult object to track execution metrics
             is_tool_continuation: Whether this is continuing a previous tool call
-            
+
         Returns:
             RunResult object containing execution metrics and API call information
         """
@@ -39,7 +39,7 @@ class AnthropicProcessExecutor:
         on_tool_start = callbacks.get('on_tool_start')
         on_tool_end = callbacks.get('on_tool_end')
         on_response = callbacks.get('on_response')
-        
+
         if is_tool_continuation:
             pass
         else:
@@ -50,9 +50,9 @@ class AnthropicProcessExecutor:
         while iterations < max_iterations:
 
             iterations += 1
-            
+
             logger.debug(f"Making API call {iterations}/{max_iterations}")
-            
+
             # Make the API call
             response = await process.client.messages.create(
                 model=process.model_name,
@@ -61,7 +61,7 @@ class AnthropicProcessExecutor:
                 tools=process.tools,
                 **process.api_params
             )
-            
+
             # Track API call in the run result if available
             if run_result:
                 # Extract API usage information
@@ -100,7 +100,7 @@ class AnthropicProcessExecutor:
                         on_response(text_content)
                     except Exception as e:
                         logger.warning(f"Error in on_response callback: {str(e)}")
-                
+
                 for content in response.content:
                     if content.type == "text":
                         continue
@@ -109,7 +109,7 @@ class AnthropicProcessExecutor:
                         tool_name = content.name
                         tool_args = content.input
                         tool_id = content.id
-                        
+
                         # Fire callback for tool start if provided
                         if on_tool_start:
                             try:
@@ -133,45 +133,64 @@ class AnthropicProcessExecutor:
                             )
                         else:
                             result = await process.call_tool(tool_name, tool_args)
-                            
+                            print(f"Tool result: {result}")
+
                         # Fire callback for tool end if provided
                         if on_tool_end:
                             try:
                                 on_tool_end(tool_name, result)
                             except Exception as e:
                                 logger.warning(f"Error in on_tool_end callback: {str(e)}")
-                                
-                        # Format the result for Anthropic API
-                        # Content must be either a string or a list of content blocks
-                        formatted_result = result
-                        if isinstance(result, dict) or isinstance(result, list):
-                            try:
-                                formatted_result = json.dumps(result)
-                            except TypeError:
-                                # If the result contains non-serializable objects, convert to string
-                                formatted_result = str(result)
+
+                        # Check if the result is a ToolResult instance
+                        from llmproc.tools.tool_result import ToolResult
                         
+                        if isinstance(result, ToolResult):
+                            # Get the dictionary representation
+                            result_dict = result.to_dict()
+                        else:
+                            # Legacy support for non-ToolResult results
+                            # Format the result for Anthropic API
+                            if isinstance(result, dict):
+                                # Check if it's already in the expected format with content and is_error
+                                if "content" in result and "is_error" in result:
+                                    result_dict = result
+                                else:
+                                    # Convert to ToolResult and then to dict
+                                    tool_result = ToolResult(content=json.dumps(result), is_error=False)
+                                    result_dict = tool_result.to_dict()
+                            elif isinstance(result, str):
+                                result_dict = {"content": result, "is_error": False}
+                            else:
+                                # Convert any other type to string via JSON
+                                try:
+                                    content_str = json.dumps(result)
+                                except TypeError:
+                                    # If JSON serialization fails, use str()
+                                    content_str = str(result)
+                                result_dict = {"content": content_str, "is_error": False}
+
                         tool_results.append({
                             "role": "user",
                             "content": [
                                 {
                                     "type": "tool_result",
                                     "tool_use_id": tool_id,
-                                    "content": formatted_result,
+                                    **result_dict
                                 }
                             ],
                         })
                 process.messages.append({"role": "assistant", "content": response.content})
                 process.messages.extend(tool_results)
-                
+
         if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
-            
+
         # Create a new RunResult if one wasn't provided
         if run_result is None:
             run_result = RunResult()
             run_result.api_calls = iterations
-            
+
         # Complete the RunResult and return it
         return run_result.complete()
 
@@ -181,12 +200,12 @@ class AnthropicProcessExecutor:
         This is specifically designed for forked processes, where the child must respond with a text response, which will become the tool result for the parent.
 
         This has some special handling, it's not meant for general use.
-        
+
         Args:
             process: The LLMProcess instance
             user_prompt: The user's input message
             max_iterations: Maximum number of API calls for tool usage
-            
+
         Returns:
             The text response from the model, or an error message if no response is generated
         """
@@ -194,37 +213,37 @@ class AnthropicProcessExecutor:
         master_run_result = RunResult()
         next_prompt = user_prompt
         callbacks = {}  # No callbacks for this internal method
-        
+
         while master_run_result.api_calls < max_iterations:
             # Run the process and get a RunResult
             run_result = await self.run(
-                process, 
-                next_prompt, 
-                max_iterations=max_iterations - master_run_result.api_calls, 
-                callbacks=callbacks, 
+                process,
+                next_prompt,
+                max_iterations=max_iterations - master_run_result.api_calls,
+                callbacks=callbacks,
                 run_result=master_run_result,  # Pass the master RunResult to accumulate metrics
                 is_tool_continuation=False
             )
-            
+
             # Check if we've reached the text response we need
             last_message = process.get_last_message()
             if last_message:
                 # Complete the RunResult before returning
                 master_run_result.complete()
                 return last_message  # Return the text message directly
-                
+
             # If we didn't get a response, handle special cases
             if process.run_stop_reason == "max_iterations":
                 # Allow the model another chance to respond with a text response to summarize
                 await self.run(
-                    process, 
-                    PROMPT_SUMMARIZE_CONVERSATION, 
-                    max_iterations=1, 
-                    callbacks=callbacks, 
+                    process,
+                    PROMPT_SUMMARIZE_CONVERSATION,
+                    max_iterations=1,
+                    callbacks=callbacks,
                     run_result=master_run_result,  # Pass the master RunResult
                     is_tool_continuation=False
                 )
-                
+
                 # Check again for a text response
                 last_message = process.get_last_message()
                 if last_message:
@@ -234,7 +253,7 @@ class AnthropicProcessExecutor:
 
             # If we still don't have a text response, prompt again
             next_prompt = PROMPT_FORCE_MODEL_RESPONSE
-        
+
         # If we've exhausted iterations without getting a proper response
         master_run_result.complete()
         return "Maximum iterations reached without final response."
@@ -243,8 +262,10 @@ class AnthropicProcessExecutor:
     @staticmethod
     async def _fork(process, params, tool_id, last_assistant_response):
         """Fork a conversation"""
+        from llmproc.tools.tool_result import ToolResult
+        
         if not process.allow_fork:
-            return "Forking is not allowed for this agent, possible reason: You are already a forked instance"
+            return ToolResult.from_error("Forking is not allowed for this agent, possible reason: You are already a forked instance")
 
         prompts = params["prompts"]
         print(f"Forking conversation with {len(prompts)} prompts: {prompts}")
@@ -291,8 +312,10 @@ class AnthropicProcessExecutor:
         responses = await asyncio.gather(
             *[process_fork(i, prompt) for i, prompt in enumerate(prompts)]
         )
-        result = json.dumps(responses)
-        return result
+        
+        # Return results as a ToolResult object
+        from llmproc.tools.tool_result import ToolResult
+        return ToolResult.from_success(json.dumps(responses))
 
 
 

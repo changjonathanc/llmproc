@@ -84,10 +84,11 @@ class TestForkTool:
             llm_process=mock_process
         )
         
-        # Check that the result contains the expected error
-        assert "error" in result
-        assert result["is_error"] is True
-        assert "process executor" in result["error"]
+        # Check that the result is a ToolResult with is_error=True
+        from llmproc.tools.tool_result import ToolResult
+        assert isinstance(result, ToolResult)
+        assert result.is_error is True
+        assert "process executor" in result.content
 
     @pytest.mark.asyncio
     async def test_fork_tool_error_handling(self):
@@ -97,16 +98,17 @@ class TestForkTool:
         
         # Call without a process
         result = await fork_tool(prompts=["Test"], llm_process=None)
-        assert "error" in result
-        assert result["is_error"] is True
-        assert "process executor" in result["error"]
+        from llmproc.tools.tool_result import ToolResult
+        assert isinstance(result, ToolResult)
+        assert result.is_error is True
+        assert "process executor" in result.content
         
         # Call with a process
         mock_process = MagicMock()
         result = await fork_tool(prompts=["Test"], llm_process=mock_process)
-        assert "error" in result
-        assert result["is_error"] is True
-        assert "process executor" in result["error"]
+        assert isinstance(result, ToolResult)
+        assert result.is_error is True
+        assert "process executor" in result.content
 
 
 # API tests that require real API keys

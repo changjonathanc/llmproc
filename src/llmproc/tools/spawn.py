@@ -84,20 +84,16 @@ async def spawn_tool(
     if not llm_process or not hasattr(llm_process, "linked_programs"):
         error_msg = "Spawn system call requires a parent LLMProcess with linked_programs defined"
         logger.error(f"SPAWN ERROR: {error_msg}")
-        return {
-            "error": error_msg,
-            "is_error": True,
-        }
+        from llmproc.tools.tool_result import ToolResult
+        return ToolResult.from_error(error_msg)
     
     linked_programs = llm_process.linked_programs
     if program_name not in linked_programs:
         available_programs = ", ".join(linked_programs.keys())
         error_msg = f"Program '{program_name}' not found. Available programs: {available_programs}"
         logger.error(f"SPAWN ERROR: {error_msg}")
-        return {
-            "error": error_msg,
-            "is_error": True,
-        }
+        from llmproc.tools.tool_result import ToolResult
+        return ToolResult.from_error(error_msg)
     
     try:
         # Get the linked program object
@@ -118,19 +114,21 @@ async def spawn_tool(
         # Get the actual text response from the process
         response_text = linked_process.get_last_message()
         
-        result = {
+        # Create a result dictionary with detailed information
+        result_info = {
             "program": program_name,
             "query": query,
             "response": response_text,
             "api_calls": run_result.api_calls
         }
-        return result
+        
+        # Return a successful ToolResult with the response text as content
+        from llmproc.tools.tool_result import ToolResult
+        return ToolResult.from_success(response_text)
     except Exception as e:
         import traceback
         error_msg = f"Error creating process from program '{program_name}': {str(e)}"
         logger.error(f"SPAWN ERROR: {error_msg}")
         logger.debug(f"Detailed traceback:", exc_info=True)
-        return {
-            "error": error_msg,
-            "is_error": True,
-        }
+        from llmproc.tools.tool_result import ToolResult
+        return ToolResult.from_error(error_msg)

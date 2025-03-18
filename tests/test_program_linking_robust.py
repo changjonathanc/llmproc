@@ -126,9 +126,10 @@ class TestProgramLinkingRobust:
             )
             
             # Verify the result
-            assert result["program"] == "expert"
-            assert result["query"] == "What is your expertise?"
-            assert result["response"] == "I am the expert's response"
+            from llmproc.tools.tool_result import ToolResult
+            assert isinstance(result, ToolResult)
+            assert result.is_error is False
+            assert result.content == "I am the expert's response"
             
             # Verify the expert was called with the right query
             expert_process.run.assert_called_once_with("What is your expertise?")
@@ -172,9 +173,10 @@ class TestProgramLinkingRobust:
             )
             
             # Verify the result
-            assert result["program"] == "expert"
-            assert result["query"] == "Tell me about version 0.1.0"
-            assert result["response"] == "Expert response from TOML"
+            from llmproc.tools.tool_result import ToolResult
+            assert isinstance(result, ToolResult)
+            assert result.is_error is False
+            assert result.content == "Expert response from TOML"
             
             # Verify the expert was called with the right query
             mock_expert.run.assert_called_once_with("Tell me about version 0.1.0")
@@ -210,9 +212,10 @@ class TestProgramLinkingRobust:
             )
             
             # Verify the error result
-            assert result["is_error"] is True
-            assert "error" in result
-            assert "Test error" in result["error"]
+            from llmproc.tools.tool_result import ToolResult
+            assert isinstance(result, ToolResult)
+            assert result.is_error is True
+            assert "Test error" in result.content
             
             # Test with nonexistent program
             result = await spawn_tool(
@@ -222,8 +225,9 @@ class TestProgramLinkingRobust:
             )
             
             # Verify the error result
-            assert result["is_error"] is True
-            assert "not found" in result["error"]
+            assert isinstance(result, ToolResult)
+            assert result.is_error is True
+            assert "not found" in result.content
             
     def test_empty_messages_filtering(self):
         """Test that empty messages are filtered when preparing messages for API."""

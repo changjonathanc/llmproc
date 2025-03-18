@@ -18,8 +18,8 @@ MCPToolsMap = Dict[str, List[Any]]
 
 async def initialize_mcp_tools(
     process,
-    tool_registry, 
-    mcp_config_path: str, 
+    tool_registry,
+    mcp_config_path: str,
     mcp_tools_config: Dict[str, Any]
 ) -> bool:
     """Initialize MCP registry and tools.
@@ -27,97 +27,97 @@ async def initialize_mcp_tools(
     This sets up the MCP registry and filters tools based on user configuration.
     Only tools explicitly specified in the mcp_tools configuration will be enabled.
     Only servers that have tools configured will be initialized.
-    
+
     Args:
         process: The LLMProcess instance that owns these tools
         tool_registry: The ToolRegistry to register tools with
         mcp_config_path: Path to the MCP configuration file
         mcp_tools_config: Dictionary mapping server names to tool configurations
-        
+
     Returns:
         True if initialization was successful, False otherwise
-        
+
     Raises:
         RuntimeError: If MCP registry initialization or tool listing fails
     """
     try:
         # Import MCP registry here to avoid circular imports
         from mcp_registry import ServerRegistry, MCPAggregator
-        
+
         # Initialize registry and aggregator
         registry = ServerRegistry.from_config(mcp_config_path)
         aggregator = process.aggregator = MCPAggregator(registry)
-        
+
         # Get tools grouped by server
         server_tools_map = await aggregator.list_tools(return_server_mapping=True)
-        
+
         # Track registered tools to avoid duplicates
         registered_tools = set()
-        
+
         # Process each server and tool configuration
         for server_name, tool_config in mcp_tools_config.items():
             # Skip servers that don't exist in the available tools
             if server_name not in server_tools_map:
                 logger.warning(f"Server '{server_name}' not found in available tools")
                 continue
-                
+
             server_tools = server_tools_map[server_name]
-            
+
             # Create a mapping of tool names to tools for this server
             server_tool_map = {tool.name: tool for tool in server_tools}
-            
+
             # Case 1: Register all tools for a server
             if tool_config == "all":
                 for tool in server_tools:
                     await register_mcp_tool(
-                        tool, 
-                        server_name, 
-                        tool_registry, 
-                        aggregator, 
+                        tool,
+                        server_name,
+                        tool_registry,
+                        aggregator,
                         registered_tools
                     )
-                    
+
                 logger.info(f"Registered all tools ({len(server_tools)}) from server '{server_name}'")
-                
+
             # Case 2: Register specific tools
             elif isinstance(tool_config, list):
                 for tool_name in tool_config:
                     if tool_name in server_tool_map:
                         tool = server_tool_map[tool_name]
                         await register_mcp_tool(
-                            tool, 
-                            server_name, 
-                            tool_registry, 
-                            aggregator, 
+                            tool,
+                            server_name,
+                            tool_registry,
+                            aggregator,
                             registered_tools
                         )
                     else:
                         logger.warning(f"Tool '{tool_name}' not found for server '{server_name}'")
-                        
+
                 logger.info(f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'")
-                
+
         # Summarize registered tools
         if not tool_registry.get_definitions():
             logger.warning("No MCP tools were registered. Check your configuration.")
         else:
             logger.info(f"Total MCP tools registered: {len(tool_registry.get_definitions())}")
-            
+
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize MCP tools: {str(e)}")
         return False
-        
+
 
 async def register_mcp_tool(
-    tool: MCPTool, 
-    server_name: str, 
-    tool_registry, 
-    aggregator, 
+    tool: MCPTool,
+    server_name: str,
+    tool_registry,
+    aggregator,
     registered_tools: Set[str]
 ) -> None:
     """Register an MCP tool with the tool registry.
-    
+
     Args:
         tool: The MCP tool object to register
         server_name: The name of the server the tool belongs to
@@ -129,21 +129,25 @@ async def register_mcp_tool(
     if namespaced_name not in registered_tools:
         # Format the tool for Anthropic API
         tool_def = format_tool_for_anthropic(tool, server_name)
-        
+
         # Create a handler for this tool
         async def mcp_tool_handler(args):
             try:
                 # Call the tool through the aggregator
                 result = await aggregator.call_tool(namespaced_name, args)
-                return result
+                # Return a standardized ToolResult
+                from llmproc.tools.tool_result import ToolResult
+                return ToolResult(content=result.content, is_error=result.isError)
             except Exception as e:
                 error_msg = f"Error executing MCP tool {namespaced_name}: {str(e)}"
                 logger.error(error_msg)
-                return {"error": error_msg, "is_error": True}
-        
+                # Return an error ToolResult
+                from llmproc.tools.tool_result import ToolResult
+                return ToolResult.from_error(error_msg)
+
         # Register with the registry
         tool_registry.register_tool(namespaced_name, mcp_tool_handler, tool_def)
-        
+
         # Mark as registered
         registered_tools.add(namespaced_name)
 

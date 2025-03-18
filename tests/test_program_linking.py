@@ -159,9 +159,10 @@ class TestProgramLinking:
         )
         
         # Check the result
-        assert result["program"] == "expert"
-        assert result["query"] == "Test query"
-        assert result["response"] == "Expert response"
+        from llmproc.tools.tool_result import ToolResult
+        assert isinstance(result, ToolResult)
+        assert result.is_error is False
+        assert result.content == "Expert response"
         mock_expert.run.assert_called_once_with("Test query")
     
     @pytest.mark.asyncio
@@ -189,9 +190,10 @@ class TestProgramLinking:
         )
         
         # Check that an error was returned
-        assert "error" in result
-        assert result["is_error"] is True
-        assert "not found" in result["error"]
+        from llmproc.tools.tool_result import ToolResult
+        assert isinstance(result, ToolResult)
+        assert result.is_error is True
+        assert "not found" in result.content
         
         # Test with exception in linked program
         mock_expert = MagicMock()
@@ -206,6 +208,6 @@ class TestProgramLinking:
         )
         
         # Check that an error was returned
-        assert "error" in result
-        assert result["is_error"] is True
-        assert "Test error" in result["error"]
+        assert isinstance(result, ToolResult)
+        assert result.is_error is True
+        assert "Test error" in result.content
