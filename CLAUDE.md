@@ -355,6 +355,35 @@
    - Preserved all process state including preloaded content
    - Ensured tools are properly initialized in forked processes
 
+## Session Summary (2025-03-31)
+1. Implemented OpenAI Process Executor
+   - Created `openai_process_executor.py` for OpenAI model integration
+   - Implemented conversation handling for OpenAI Chat Completions API
+   - Added proper message formatting specific to OpenAI's requirements
+   - Added error handling and logging for API calls
+   - Ensured compatibility with existing LLMProcess architecture
+
+2. Enhanced CLI with Non-Interactive Mode
+   - Added `--prompt/-p` option for single prompt/response mode
+   - Added `--non-interactive/-n` flag for reading from stdin
+   - Created comprehensive tests for both CLI modes
+   - Added examples using direct commands like `llmproc-demo examples/openai.toml -p "hi"`
+   - Ensured compatibility with all example configurations
+
+3. Improved Code Quality and Structure
+   - Refactored imports in llm_process.py for better organization
+   - Removed unnecessary TYPE_CHECKING and legacy imports
+   - Standardized type annotations across codebase
+   - Improved variable naming for better clarity (e.g., api_result → run_result)
+   - Enhanced error messages for tool usage with OpenAI models
+
+4. Added Testing and Documentation
+   - Created test_openai_process_executor.py with unit tests
+   - Added test_direct_cli_commands.py for real command usage testing
+   - Created test_cli_non_interactive.py for non-interactive mode
+   - Added examples and documentation for OpenAI usage
+   - Created NEXT_STEPS.md for future development planning
+
 ## Session Summary (2025-03-26)
 1. Improved preload file error handling with consistent warnings
    - Updated preload file warnings to use Python warnings module instead of print()
