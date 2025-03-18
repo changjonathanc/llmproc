@@ -28,102 +28,104 @@ File paths are relative to the location of the TOML file.
 
 ## Examples
 
-### Program-based Preloading
+### Using Preloaded Files with the New API
 
 ```python
-from llmproc import LLMProcess
+import asyncio
+from llmproc import LLMProgram
 
-# Load program with preloaded files
-process = LLMProcess.from_toml("examples/preload.toml")
+async def main():
+    # Load and compile program with preloaded files
+    program = LLMProgram.from_toml("examples/preload.toml")
+    
+    # Start the process (handles async initialization)
+    process = await program.start()
+    
+    # The model already has context from preloaded files
+    run_result = await process.run("What information can you tell me about the project?")
+    
+    # Get the assistant's response
+    response = process.get_last_message()
+    print(f"Response: {response}")  # Will incorporate information from preloaded files
+    
+    # Reset conversation but keep preloaded files
+    process.reset_state(keep_preloaded=True)
+    
+    # Run another query
+    run_result = await process.run("Tell me more about the project structure")
+    response = process.get_last_message()
+    print(f"Response after reset: {response}")
 
-# The model already has context from preloaded files
-response = process.run("What information can you tell me about the project?")
-print(response)  # The response will incorporate information from preloaded files
-
-# Reset conversation but keep preloaded files
-process.reset_state(keep_preloaded=True)
+# Run the async function
+asyncio.run(main())
 ```
 
 ### Runtime Preloading
 
 ```python
-from llmproc import LLMProcess
+import asyncio
+from llmproc import LLMProgram
 
-# Start with basic program
-process = LLMProcess.from_toml("examples/minimal.toml")
+async def main():
+    # Load a program without preloaded files initially
+    program = LLMProgram.from_toml("examples/basic.toml")
+    process = await program.start()
+    
+    # Add preloaded files at runtime
+    process.preload_files([
+        "README.md",
+        "pyproject.toml",
+        "docs/preload-feature.md"
+    ])
+    
+    # Now the model has context from the preloaded files
+    run_result = await process.run("What files did you just receive?")
+    
+    # Get the response
+    response = process.get_last_message()
+    print(f"Response: {response}")
+    
+    # You can remove preloaded files by resetting state
+    process.reset_state(keep_preloaded=False)
 
-# Add files to the conversation context at runtime
-process.preload_files([
-    "documentation.md",
-    "config_schema.json"
-])
-
-# Now the model has context from these files
-response = process.run("Explain the configuration schema")
-print(response)
+# Run the async function
+asyncio.run(main())
 ```
 
-## XML Formatting
+## Content Format
 
-Preloaded files are formatted with XML tags for better organization and added to the system prompt:
+Preloaded file content is added to the enriched system prompt in this format:
 
-```xml
-You are a helpful assistant...
-
+```
 <preload>
-<file path="file1.txt">
-Content of file1.txt goes here...
+<file path="README.md">
+# Project Title
+
+This is the README file content...
 </file>
-<file path="file2.md">
-Content of file2.md goes here...
+
+<file path="example.py">
+def example_function():
+    return "This is an example"
 </file>
 </preload>
 ```
 
-This format helps the LLM understand the structure and origin of the preloaded content while keeping it within the system context rather than as part of the conversation history.
+This structure helps the model understand the source of the information and maintain separation between different files.
 
-## Handling Missing Files
+## Implementation Details
 
-If a file specified in the preload section doesn't exist:
+- Files are loaded at initialization time or when added with `preload_files()`
+- Content is stored in the `preloaded_content` dictionary
+- The enriched system prompt is generated on first run, combining the original system prompt with preloaded content
+- File content is preserved across resets unless `keep_preloaded=False` is specified
+- Missing files generate warnings but won't cause the initialization to fail
+- File paths are resolved relative to the TOML file's location
 
-1. A warning is printed with XML tags: `<warning>/path/to/missing/file.txt does not exist.</warning>`
-2. The process continues, preloading any files that do exist
+## Best Practices
 
-## Reset Behavior
-
-When resetting the conversation state:
-
-- `reset_state(keep_preloaded=True)`: Keeps preloaded file content in the system prompt
-- `reset_state(keep_preloaded=False)`: Removes preloaded content, restoring the original system prompt
-- `reset_state(keep_system_prompt=False, keep_preloaded=False)`: Completely resets the conversation
-- `reset_state(keep_system_prompt=False, keep_preloaded=True)`: Creates a new system prompt with only preloaded content
-
-## Use Cases
-
-- Providing documentation or reference material for technical questions
-- Including project context for more relevant responses
-- Supplying background information to maintain conversation relevance
-- Loading configuration or settings that should persist across the conversation
-- Adding code examples or snippets as reference material
-
-## Testing
-
-The preload feature includes both mechanical tests (checking file loading and state manipulation) and 
-functional tests that verify the LLM actually uses the preloaded content:
-
-```bash
-# Run regular tests (skips actual API calls)
-pytest -v
-
-# Run LLM API tests that verify preloaded content is used in responses
-# Requires OPENAI_API_KEY to be set in environment
-pytest -v -m llm_api
-```
-
-The API test works by:
-1. Creating a temporary file with a unique secret flag
-2. Preloading this file into the conversation
-3. Asking the LLM to identify the secret flag
-4. Verifying the LLM's response contains the secret flag
-
-This ensures the preload mechanism is actually providing content that the LLM can access and use.
+1. **Selective Loading**: Only preload files that are essential for the assistant's knowledge
+2. **File Size**: Keep individual files relatively small to avoid context overload
+3. **Format Selection**: Use text-based formats (Markdown, code, plain text) for best results
+4. **Context Reset**: Reset state with `keep_preloaded=True` to maintain file context while clearing conversation history
+5. **Dynamic Loading**: Use `preload_files()` to add context based on user queries or session state
