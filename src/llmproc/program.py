@@ -108,34 +108,19 @@ class LLMProgram:
         }  # Default to empty list (disabled)
         self.base_dir = base_dir
 
-        # Extract API parameters from parameters for convenience
-        self.api_params = self._extract_api_parameters()
-
-    def _extract_api_parameters(self) -> dict[str, Any]:
-        """Extract known API parameters from the parameters dictionary.
-
+        # No need to initialize api_params here - we'll use a property
+        
+    @property
+    def api_params(self) -> dict[str, Any]:
+        """Get API parameters for LLM API calls.
+        
+        This property returns all parameters from the program configuration,
+        relying on the schema's validation to issue warnings for unknown parameters.
+        
         Returns:
             Dictionary of API parameters for LLM API calls
-            
-        Note:
-            This method is maintained for backward compatibility. For a more flexible
-            approach, consider using LLMProgramConfig.get_api_parameters() which doesn't
-            filter out unknown parameters, allowing for evolution of LLM APIs.
         """
-        api_params = {}
-        api_param_keys = [
-            "temperature",
-            "max_tokens",
-            "top_p",
-            "frequency_penalty",
-            "presence_penalty",
-        ]
-
-        for key in api_param_keys:
-            if key in self.parameters:
-                api_params[key] = self.parameters[key]
-
-        return api_params
+        return self.parameters.copy() if self.parameters else {}
 
     @classmethod
     def compile(
