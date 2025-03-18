@@ -151,10 +151,11 @@ class AnthropicProcessExecutor:
                             tool_result = ToolResult.from_error(error_msg)
                         else:
                             tool_result = result
-                            
+
                         # Only convert to dict at the last moment when building the response
                         tool_result_dict = tool_result.to_dict()
-                        
+                        # TODO: maybe tool_result should support to_anthropic and other providers format
+
                         # Append to tool results
                         tool_results.append({
                             "role": "user",
