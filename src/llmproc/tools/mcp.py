@@ -5,7 +5,7 @@ It handles the initialization, registration, and execution of MCP tools.
 """
 
 import logging
-from typing import Any, Dict, Optional, Set, List
+from typing import Any, Dict, List, Optional, Set
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -13,14 +13,11 @@ logger = logging.getLogger(__name__)
 # Define TypeAlias (available in Python 3.10+)
 # If pre-3.10, we could use a simple variable
 MCPTool = Any
-MCPToolsMap = Dict[str, List[Any]]
+MCPToolsMap = dict[str, list[Any]]
 
 
 async def initialize_mcp_tools(
-    process,
-    tool_registry,
-    mcp_config_path: str,
-    mcp_tools_config: Dict[str, Any]
+    process, tool_registry, mcp_config_path: str, mcp_tools_config: dict[str, Any]
 ) -> bool:
     """Initialize MCP registry and tools.
 
@@ -42,7 +39,7 @@ async def initialize_mcp_tools(
     """
     try:
         # Import MCP registry here to avoid circular imports
-        from mcp_registry import ServerRegistry, MCPAggregator
+        from mcp_registry import MCPAggregator, ServerRegistry
 
         # Initialize registry and aggregator
         registry = ServerRegistry.from_config(mcp_config_path)
@@ -70,14 +67,12 @@ async def initialize_mcp_tools(
             if tool_config == "all":
                 for tool in server_tools:
                     await register_mcp_tool(
-                        tool,
-                        server_name,
-                        tool_registry,
-                        aggregator,
-                        registered_tools
+                        tool, server_name, tool_registry, aggregator, registered_tools
                     )
 
-                logger.info(f"Registered all tools ({len(server_tools)}) from server '{server_name}'")
+                logger.info(
+                    f"Registered all tools ({len(server_tools)}) from server '{server_name}'"
+                )
 
             # Case 2: Register specific tools
             elif isinstance(tool_config, list):
@@ -89,18 +84,24 @@ async def initialize_mcp_tools(
                             server_name,
                             tool_registry,
                             aggregator,
-                            registered_tools
+                            registered_tools,
                         )
                     else:
-                        logger.warning(f"Tool '{tool_name}' not found for server '{server_name}'")
+                        logger.warning(
+                            f"Tool '{tool_name}' not found for server '{server_name}'"
+                        )
 
-                logger.info(f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'")
+                logger.info(
+                    f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'"
+                )
 
         # Summarize registered tools
         if not tool_registry.get_definitions():
             logger.warning("No MCP tools were registered. Check your configuration.")
         else:
-            logger.info(f"Total MCP tools registered: {len(tool_registry.get_definitions())}")
+            logger.info(
+                f"Total MCP tools registered: {len(tool_registry.get_definitions())}"
+            )
 
         return True
 
@@ -114,7 +115,7 @@ async def register_mcp_tool(
     server_name: str,
     tool_registry,
     aggregator,
-    registered_tools: Set[str]
+    registered_tools: set[str],
 ) -> None:
     """Register an MCP tool with the tool registry.
 
@@ -137,12 +138,14 @@ async def register_mcp_tool(
                 result = await aggregator.call_tool(namespaced_name, args)
                 # Return a standardized ToolResult
                 from llmproc.tools.tool_result import ToolResult
+
                 return ToolResult(content=result.content, is_error=result.isError)
             except Exception as e:
                 error_msg = f"Error executing MCP tool {namespaced_name}: {str(e)}"
                 logger.error(error_msg)
                 # Return an error ToolResult
                 from llmproc.tools.tool_result import ToolResult
+
                 return ToolResult.from_error(error_msg)
 
         # Register with the registry
@@ -152,7 +155,9 @@ async def register_mcp_tool(
         registered_tools.add(namespaced_name)
 
 
-def format_tool_for_anthropic(tool: MCPTool, server_name: Optional[str] = None) -> Dict[str, Any]:
+def format_tool_for_anthropic(
+    tool: MCPTool, server_name: str | None = None
+) -> dict[str, Any]:
     """Format a tool for Anthropic API.
 
     Args:
@@ -176,5 +181,5 @@ def format_tool_for_anthropic(tool: MCPTool, server_name: Optional[str] = None) 
     return {
         "name": namespaced_name,
         "description": tool.description,
-        "input_schema": input_schema
+        "input_schema": input_schema,
     }

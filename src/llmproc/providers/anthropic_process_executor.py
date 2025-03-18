@@ -1,7 +1,7 @@
 """Anthropic provider tools implementation for LLMProc."""
 
-import json
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -13,11 +13,21 @@ logger = logging.getLogger(__name__)
 
 
 PROMPT_FORCE_MODEL_RESPONSE = "Please respond with a text response"
-PROMPT_SUMMARIZE_CONVERSATION = "Please stop using tools and summarize your progress so far"
+PROMPT_SUMMARIZE_CONVERSATION = (
+    "Please stop using tools and summarize your progress so far"
+)
+
 
 class AnthropicProcessExecutor:
-    async def run(self, process: 'Process', user_prompt: str, max_iterations: int = 10,
-                  callbacks: dict = None, run_result = None, is_tool_continuation: bool = False) -> "RunResult":
+    async def run(
+        self,
+        process: "Process",
+        user_prompt: str,
+        max_iterations: int = 10,
+        callbacks: dict = None,
+        run_result=None,
+        is_tool_continuation: bool = False,
+    ) -> "RunResult":
         """Execute a conversation with the Anthropic API.
 
         This method executes a conversation turn with proper tool handling, tracking metrics,
@@ -37,9 +47,9 @@ class AnthropicProcessExecutor:
         """
         # Initialize callbacks
         callbacks = callbacks or {}
-        on_tool_start = callbacks.get('on_tool_start')
-        on_tool_end = callbacks.get('on_tool_end')
-        on_response = callbacks.get('on_response')
+        on_tool_start = callbacks.get("on_tool_start")
+        on_tool_end = callbacks.get("on_tool_end")
+        on_response = callbacks.get("on_response")
 
         if is_tool_continuation:
             pass
@@ -49,7 +59,6 @@ class AnthropicProcessExecutor:
         process.run_stop_reason = None
         iterations = 0
         while iterations < max_iterations:
-
             iterations += 1
 
             logger.debug(f"Making API call {iterations}/{max_iterations}")
@@ -58,9 +67,13 @@ class AnthropicProcessExecutor:
             response = await process.client.messages.create(
                 model=process.model_name,
                 system=process.enriched_system_prompt,
-                messages=[message for message in process.messages if message["role"] != "system"],
+                messages=[
+                    message
+                    for message in process.messages
+                    if message["role"] != "system"
+                ],
                 tools=process.tools,
-                **process.api_params
+                **process.api_params,
             )
 
             # Track API call in the run result if available
@@ -76,26 +89,41 @@ class AnthropicProcessExecutor:
 
             stop_reason = response.stop_reason
 
-            has_tool_calls = len([content for content in response.content if content.type == "tool_use"]) > 0
+            has_tool_calls = (
+                len(
+                    [
+                        content
+                        for content in response.content
+                        if content.type == "tool_use"
+                    ]
+                )
+                > 0
+            )
             tool_results = []
             # NOTE: these are the possible stop_reason values: ["end_turn", "max_tokens", "stop_sequence"]:
-            process.stop_reason = stop_reason # TODO: not finalized api,
+            process.stop_reason = stop_reason  # TODO: not finalized api,
             if not has_tool_calls:
                 if response.content:
                     # NOTE: sometimes model can decide to not response any text, for example, after using tools.
                     # appending the empty assistant message will cause the following API error in the next api call:
                     # ERROR: all messages must have non-empty content except for the optional final assistant message
-                    process.state.append({"role": "assistant", "content": response.content})
+                    process.state.append(
+                        {"role": "assistant", "content": response.content}
+                    )
                 # NOTE: this is needed for user to check the stop reason afterward
                 process.run_stop_reason = stop_reason
                 break
             else:
                 # Fire callback for model response if provided
-                if on_response and 'on_response' in callbacks:
+                if on_response and "on_response" in callbacks:
                     # Extract text content for callback
                     text_content = ""
                     for c in response.content:
-                        if hasattr(c, "type") and c.type == "text" and hasattr(c, "text"):
+                        if (
+                            hasattr(c, "type")
+                            and c.type == "text"
+                            and hasattr(c, "text")
+                        ):
                             text_content += c.text
                     try:
                         on_response(text_content)
@@ -116,21 +144,28 @@ class AnthropicProcessExecutor:
                             try:
                                 on_tool_start(tool_name, tool_args)
                             except Exception as e:
-                                logger.warning(f"Error in on_tool_start callback: {str(e)}")
+                                logger.warning(
+                                    f"Error in on_tool_start callback: {str(e)}"
+                                )
 
                         # Track tool in run_result if available
                         if run_result:
-                            run_result.add_api_call({
-                                "type": "tool_call",
-                                "tool_name": tool_name,
-                            })
+                            run_result.add_api_call(
+                                {
+                                    "type": "tool_call",
+                                    "tool_name": tool_name,
+                                }
+                            )
 
                         # NOTE: fork requires special handling, such as removing all other tool calls from the last assistant response
                         # so we separate the fork handling from other tool call handling
                         if tool_name == "fork":
                             logger.info(f"Forking with tool_args: {tool_args}")
                             result = await self._fork(
-                                process, tool_args, tool_id, last_assistant_response=response.content
+                                process,
+                                tool_args,
+                                tool_id,
+                                last_assistant_response=response.content,
                             )
                         else:
                             result = await process.call_tool(tool_name, tool_args)
@@ -140,7 +175,9 @@ class AnthropicProcessExecutor:
                             try:
                                 on_tool_end(tool_name, result)
                             except Exception as e:
-                                logger.warning(f"Error in on_tool_end callback: {str(e)}")
+                                logger.warning(
+                                    f"Error in on_tool_end callback: {str(e)}"
+                                )
 
                         # Require a ToolResult instance
                         if not isinstance(result, ToolResult):
@@ -157,17 +194,21 @@ class AnthropicProcessExecutor:
                         # TODO: maybe tool_result should support to_anthropic and other providers format
 
                         # Append to tool results
-                        tool_results.append({
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "tool_result",
-                                    "tool_use_id": tool_id,
-                                    **tool_result_dict
-                                }
-                            ],
-                        })
-                process.messages.append({"role": "assistant", "content": response.content})
+                        tool_results.append(
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": tool_id,
+                                        **tool_result_dict,
+                                    }
+                                ],
+                            }
+                        )
+                process.messages.append(
+                    {"role": "assistant", "content": response.content}
+                )
                 process.messages.extend(tool_results)
 
         if iterations >= max_iterations:
@@ -181,7 +222,9 @@ class AnthropicProcessExecutor:
         # Complete the RunResult and return it
         return run_result.complete()
 
-    async def run_till_text_response(self, process, user_prompt, max_iterations: int = 10):
+    async def run_till_text_response(
+        self, process, user_prompt, max_iterations: int = 10
+    ):
         """
         Run the process until a text response is generated
         This is specifically designed for forked processes, where the child must respond with a text response, which will become the tool result for the parent.
@@ -209,7 +252,7 @@ class AnthropicProcessExecutor:
                 max_iterations=max_iterations - master_run_result.api_calls,
                 callbacks=callbacks,
                 run_result=master_run_result,  # Pass the master RunResult to accumulate metrics
-                is_tool_continuation=False
+                is_tool_continuation=False,
             )
 
             # Check if we've reached the text response we need
@@ -228,7 +271,7 @@ class AnthropicProcessExecutor:
                     max_iterations=1,
                     callbacks=callbacks,
                     run_result=master_run_result,  # Pass the master RunResult
-                    is_tool_continuation=False
+                    is_tool_continuation=False,
                 )
 
                 # Check again for a text response
@@ -245,19 +288,21 @@ class AnthropicProcessExecutor:
         master_run_result.complete()
         return "Maximum iterations reached without final response."
 
-
     @staticmethod
     async def _fork(process, params, tool_id, last_assistant_response):
         """Fork a conversation"""
-
         if not process.allow_fork:
-            return ToolResult.from_error("Forking is not allowed for this agent, possible reason: You are already a forked instance")
+            return ToolResult.from_error(
+                "Forking is not allowed for this agent, possible reason: You are already a forked instance"
+            )
 
         prompts = params["prompts"]
         logger.info(f"Forking conversation with {len(prompts)} prompts: {prompts}")
 
         async def process_fork(i, prompt):
-            child = process.deepcopy() # TODO: need to implement deepcopy for Process class
+            child = (
+                process.deepcopy()
+            )  # TODO: need to implement deepcopy for Process class
 
             # NOTE: we need to remove all other tool calls from the last assistant response
             # because we might not have the tool call results for other tool calls yet
@@ -301,6 +346,3 @@ class AnthropicProcessExecutor:
 
         # Return results as a ToolResult object
         return ToolResult.from_success(json.dumps(responses))
-
-
-

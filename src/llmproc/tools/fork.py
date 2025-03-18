@@ -2,9 +2,9 @@
 
 import asyncio
 import copy
+import json
 import os
 import sys
-import json
 from typing import Any, Dict, List, Optional
 
 # Avoid circular import
@@ -53,32 +53,34 @@ fork_tool_def = {
                 "description": "List of prompts/instructions for each forked process",
                 "items": {
                     "type": "string",
-                    "description": "A specific task or query to be handled by a forked process"
-                }
+                    "description": "A specific task or query to be handled by a forked process",
+                },
             }
         },
-        "required": ["prompts"]
-    }
+        "required": ["prompts"],
+    },
 }
 
+
 async def fork_tool(
-    prompts: List[str],
-    llm_process = None,
-) -> Dict[str, Any]:
+    prompts: list[str],
+    llm_process=None,
+) -> dict[str, Any]:
     """Placeholder function for the fork system call.
-    
+
     The actual implementation is handled by the process executor,
     as it requires special handling of the process state.
-    
+
     Args:
         prompts: List of prompts/instructions for each forked process
         llm_process: The parent LLMProcess instance to fork
-        
+
     Returns:
         A dictionary with placeholder response
     """
     # This is just a placeholder - the real implementation is in the process executor
     from llmproc.tools.tool_result import ToolResult
+
     return ToolResult.from_error(
         "Direct calls to fork_tool are not supported. This should be handled by the process executor."
     )

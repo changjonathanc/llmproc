@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from llmproc.program import LLMProgram
 from llmproc.llm_process import LLMProcess
+from llmproc.program import LLMProgram
 
 
 def test_compile_all_programs():
@@ -31,7 +31,7 @@ def test_compile_all_programs():
             helper = "helper.toml"
             math = "math.toml"
             """)
-        
+
         helper_program_path = Path(temp_dir) / "helper.toml"
         with open(helper_program_path, "w") as f:
             f.write("""
@@ -45,7 +45,7 @@ def test_compile_all_programs():
             [linked_programs]
             utility = "utility.toml"
             """)
-        
+
         math_program_path = Path(temp_dir) / "math.toml"
         with open(math_program_path, "w") as f:
             f.write("""
@@ -56,7 +56,7 @@ def test_compile_all_programs():
             [prompt]
             system_prompt = "Math program"
             """)
-            
+
         utility_program_path = Path(temp_dir) / "utility.toml"
         with open(utility_program_path, "w") as f:
             f.write("""
@@ -67,23 +67,25 @@ def test_compile_all_programs():
             [prompt]
             system_prompt = "Utility program"
             """)
-        
+
         # Use the compile method with return_all=True
-        compiled_programs = LLMProgram.compile(main_program_path, include_linked=True, return_all=True)
-        
+        compiled_programs = LLMProgram.compile(
+            main_program_path, include_linked=True, return_all=True
+        )
+
         # Check that all programs were compiled
         assert len(compiled_programs) == 4
-        
+
         main_abs_path = main_program_path.resolve()
         helper_abs_path = helper_program_path.resolve()
         math_abs_path = math_program_path.resolve()
         utility_abs_path = utility_program_path.resolve()
-        
+
         assert str(main_abs_path) in compiled_programs
         assert str(helper_abs_path) in compiled_programs
         assert str(math_abs_path) in compiled_programs
         assert str(utility_abs_path) in compiled_programs
-        
+
         # Check that the programs were compiled correctly
         main_program = compiled_programs[str(main_abs_path)]
         assert main_program.model_name == "main-model"
@@ -93,18 +95,18 @@ def test_compile_all_programs():
         assert "math" in main_program.linked_programs
         assert main_program.linked_programs["helper"].model_name == "helper-model"
         assert main_program.linked_programs["math"].model_name == "math-model"
-        
+
         helper_program = compiled_programs[str(helper_abs_path)]
         assert helper_program.model_name == "helper-model"
         assert helper_program.provider == "anthropic"
         # Check that helper program has utility as a linked program object
         assert "utility" in helper_program.linked_programs
         assert helper_program.linked_programs["utility"].model_name == "utility-model"
-        
+
         math_program = compiled_programs[str(math_abs_path)]
         assert math_program.model_name == "math-model"
         assert math_program.provider == "anthropic"
-        
+
         utility_program = compiled_programs[str(utility_abs_path)]
         assert utility_program.model_name == "utility-model"
         assert utility_program.provider == "anthropic"
@@ -130,11 +132,11 @@ def test_compile_all_with_missing_file():
             [linked_programs]
             missing = "non_existent.toml"
             """)
-        
+
         # Should raise a FileNotFoundError
         with pytest.raises(FileNotFoundError) as excinfo:
             LLMProgram.compile(main_program_path, include_linked=True, return_all=True)
-        
+
         # Verify error message contains path information
         error_message = str(excinfo.value)
         assert "Linked program file not found" in error_message
@@ -158,7 +160,7 @@ def test_circular_dependency():
             [linked_programs]
             b = "program_b.toml"
             """)
-        
+
         program_b_path = Path(temp_dir) / "program_b.toml"
         with open(program_b_path, "w") as f:
             f.write("""
@@ -172,16 +174,18 @@ def test_circular_dependency():
             [linked_programs]
             a = "program_a.toml"
             """)
-        
+
         # Should compile both programs without infinite recursion
-        compiled_programs = LLMProgram.compile(program_a_path, include_linked=True, return_all=True)
-        
+        compiled_programs = LLMProgram.compile(
+            program_a_path, include_linked=True, return_all=True
+        )
+
         # Both programs should be compiled
         assert len(compiled_programs) == 2
-        
+
         program_a_abs_path = program_a_path.resolve()
         program_b_abs_path = program_b_path.resolve()
-        
+
         assert str(program_a_abs_path) in compiled_programs
         assert str(program_b_abs_path) in compiled_programs
 
@@ -206,7 +210,7 @@ def test_from_toml_with_linked_programs():
             [linked_programs]
             helper = "helper.toml"
             """)
-        
+
         helper_program_path = Path(temp_dir) / "helper.toml"
         with open(helper_program_path, "w") as f:
             f.write("""
@@ -217,27 +221,30 @@ def test_from_toml_with_linked_programs():
             [prompt]
             system_prompt = "Helper program"
             """)
-        
+
         # Mock the get_provider_client function to avoid API calls
-        with unittest.mock.patch('llmproc.providers.get_provider_client') as mock_get_client:
+        with unittest.mock.patch(
+            "llmproc.providers.get_provider_client"
+        ) as mock_get_client:
             mock_get_client.return_value = unittest.mock.MagicMock()
-            
+
             # Create a process using the two-step pattern
             from llmproc.program import LLMProgram
+
             program = LLMProgram.from_toml(main_program_path)
-            
+
             # Mock the start method to avoid actual async initialization
-            with unittest.mock.patch('llmproc.program.LLMProgram.start') as mock_start:
+            with unittest.mock.patch("llmproc.program.LLMProgram.start") as mock_start:
                 process = LLMProcess(program=program)
                 mock_start.return_value = process
-            
+
             # Check that the process was created correctly
             assert process.model_name == "main-model"
             assert process.provider == "anthropic"
-            
+
             # Check that linked programs were initialized
             assert "helper" in process.linked_programs
-            
+
             helper = process.linked_programs["helper"]
             assert helper.model_name == "helper-model"
             assert helper.provider == "anthropic"

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 async def run_anthropic_with_tools(
     llm_process,
     system_prompt: str,
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     max_iterations: int = 10,
 ) -> str:
     """Run Anthropic with tool support.
@@ -34,10 +34,10 @@ async def run_anthropic_with_tools(
     client = llm_process.client
     model_name = llm_process.model_name
     tools = llm_process.tools
-    api_params = getattr(llm_process, 'api_params', {})
-    tool_handlers = getattr(llm_process, 'tool_handlers', {})
-    aggregator = getattr(llm_process, 'aggregator', None)
-    
+    api_params = getattr(llm_process, "api_params", {})
+    tool_handlers = getattr(llm_process, "tool_handlers", {})
+    aggregator = getattr(llm_process, "aggregator", None)
+
     # Set up logging
     logger = logging.getLogger(__name__)
 
@@ -58,11 +58,11 @@ async def run_anthropic_with_tools(
             api_call_params = prepare_api_params(
                 model_name, system_prompt, messages, tools, api_params
             )
-            #print(f"API call params: {api_call_params}")
+            # print(f"API call params: {api_call_params}")
             import rich
+
             rich.print(f"{messages=}")
             rich.print(f"{tools=}")
-
 
             # Call Claude with current conversation
             try:
@@ -89,8 +89,12 @@ async def run_anthropic_with_tools(
             print(f"Response content: {response.content}")
 
             if response.stop_reason == "end_turn":
-#                print("Model completed naturally")
-                if response.content and len(response.content) > 0 and hasattr(response.content[0], "text"):
+                #                print("Model completed naturally")
+                if (
+                    response.content
+                    and len(response.content) > 0
+                    and hasattr(response.content[0], "text")
+                ):
                     final_response = response.content[0].text
                 else:
                     final_response = "model completed naturally but no response content text, try to ask again"
@@ -102,7 +106,7 @@ async def run_anthropic_with_tools(
             elif response.stop_reason == "tool_use":
                 # Define debug once here to fix the missing debug variable
                 debug = os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
-                
+
                 tool_results = await process_response_content(
                     response.content, aggregator, tool_handlers, debug
                 )
@@ -112,7 +116,7 @@ async def run_anthropic_with_tools(
         except Exception as e:
             # Define debug once here to fix the missing debug variable
             debug = os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
-            
+
             if debug:
                 print(f"ERROR in tool processing loop: {str(e)}")
             # If we have a final response, use it; otherwise return the error
@@ -135,10 +139,10 @@ async def run_anthropic_with_tools(
 def prepare_api_params(
     model_name: str,
     system_prompt: str,
-    messages: List[Dict[str, Any]],
-    tools: List[Dict[str, Any]],
-    api_params: Dict[str, Any],
-) -> Dict[str, Any]:
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    api_params: dict[str, Any],
+) -> dict[str, Any]:
     """Prepare API parameters for Anthropic request.
 
     Args:
@@ -160,7 +164,12 @@ def prepare_api_params(
     }
 
 
-async def process_response_content(content_list, aggregator, tool_handlers: Dict[str, callable] = None, debug: bool = False):
+async def process_response_content(
+    content_list,
+    aggregator,
+    tool_handlers: dict[str, callable] = None,
+    debug: bool = False,
+):
     """Process the content from an Anthropic response.
 
     Args:
@@ -182,11 +191,9 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
     for content in content_list:
         if content.type == "tool_use":
             # Store the tool call data for later processing
-            tool_calls.append({
-                "name": content.name,
-                "args": content.input,
-                "id": content.id
-            })
+            tool_calls.append(
+                {"name": content.name, "args": content.input, "id": content.id}
+            )
 
     # If no tool calls, return early
     if not tool_calls:
@@ -225,11 +232,13 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
             if debug:
                 print(f"Tool result: {str(formatted_result)[:150]}...")
 
-            tool_results.append({
-                "tool_use_id": tool_id,
-                "content": str(formatted_result),
-                "is_error": False,
-            })
+            tool_results.append(
+                {
+                    "tool_use_id": tool_id,
+                    "content": str(formatted_result),
+                    "is_error": False,
+                }
+            )
         except Exception as e:
             import sys
             import traceback
@@ -240,19 +249,21 @@ async def process_response_content(content_list, aggregator, tool_handlers: Dict
                 print("Traceback:", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
-            tool_results.append({
-                "tool_use_id": tool_id,
-                "content": error_msg,
-                "is_error": True,
-            })
+            tool_results.append(
+                {
+                    "tool_use_id": tool_id,
+                    "content": error_msg,
+                    "is_error": True,
+                }
+            )
 
     return tool_results
 
 
 def add_tool_results_to_conversation(
-    messages: List[Dict[str, Any]],
-    tool_results: List[Dict[str, Any]],
-    debug: bool = False
+    messages: list[dict[str, Any]],
+    tool_results: list[dict[str, Any]],
+    debug: bool = False,
 ):
     """Add tool results to the conversation as User messages.
 
@@ -270,9 +281,7 @@ def add_tool_results_to_conversation(
                         "type": "tool_result",
                         "tool_use_id": result["tool_use_id"],
                         "content": result["content"],
-                        **(
-                            {"is_error": True} if result.get("is_error") else {}
-                        ),
+                        **({"is_error": True} if result.get("is_error") else {}),
                     }
                 ],
             }
@@ -292,6 +301,7 @@ def format_tool_result(result: Any) -> str:
         Formatted result as a string
     """
     import sys
+
     debug = False  # Only enable for deep debugging
 
     # Extract content based on result type
@@ -345,10 +355,10 @@ def dump_api_error(
     provider: str,
     model_name: str,
     system_prompt: str,
-    messages: List[Dict[str, Any]],
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
+    messages: list[dict[str, Any]],
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    tools: list[dict[str, Any]] | None = None,
     iteration: int = 0,
 ) -> str:
     """Dump API error details to a file for debugging.
@@ -397,7 +407,12 @@ def dump_api_error(
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "tools_count": len(tools) if tools else 0,
-                    "tools": [{"name": tool["name"], "description": tool["description"]} for tool in tools] if tools else None,
+                    "tools": [
+                        {"name": tool["name"], "description": tool["description"]}
+                        for tool in tools
+                    ]
+                    if tools
+                    else None,
                 },
             },
             f,
@@ -405,5 +420,3 @@ def dump_api_error(
         )
 
     return str(dump_file)
-
-

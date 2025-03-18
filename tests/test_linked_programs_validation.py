@@ -2,8 +2,9 @@
 
 import os
 import tempfile
-import pytest
 from pathlib import Path
+
+import pytest
 
 from llmproc.program import LLMProgram
 
@@ -25,11 +26,11 @@ def test_linked_programs_validation_error():
             [linked_programs]
             enabled = ["./other_program.toml"]
             """)
-        
+
         # Attempt to compile the program - should raise ValueError
         with pytest.raises(ValueError) as excinfo:
             LLMProgram.compile(toml_path)
-        
+
         # Verify the error message indicates the linked_programs validation issue
         error_message = str(excinfo.value)
         assert "linked_programs.enabled" in error_message
@@ -53,7 +54,7 @@ def test_valid_linked_programs_format():
             [linked_programs]
             program1 = "./other_program.toml"
             """)
-            
+
         # Create the linked program file too
         other_toml_path = Path(temp_dir) / "other_program.toml"
         with open(other_toml_path, "w") as f:
@@ -65,10 +66,10 @@ def test_valid_linked_programs_format():
             [prompt]
             system_prompt = "Other system prompt"
             """)
-        
+
         # Compile the program - now we have the file created
         program = LLMProgram.compile(toml_path)
-        
+
         # Verify linked_programs was properly loaded with the compiled program object
         assert "program1" in program.linked_programs
         assert program.linked_programs["program1"].model_name == "other-model"

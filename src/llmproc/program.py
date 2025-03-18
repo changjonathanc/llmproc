@@ -25,7 +25,7 @@ class ProgramRegistry:
 
     def __new__(cls):
         """Create a singleton instance of ProgramRegistry.
-        
+
         Returns:
             The singleton ProgramRegistry instance.
         """

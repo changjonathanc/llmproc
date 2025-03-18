@@ -1,7 +1,7 @@
 """Tests for the TOML configuration functionality."""
 
-import os
 import asyncio
+import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from unittest.mock import MagicMock, patch
@@ -35,16 +35,16 @@ def mock_env():
 def mock_create_method():
     """Mock the async create method to make it synchronous for testing."""
     original_create = LLMProcess.create
-    
+
     @classmethod
     async def mock_create(cls, program, linked_programs_instances=None):
         # Create instance with basic initialization (skipping async)
         instance = cls(program, linked_programs_instances)
-        if hasattr(instance, '_needs_async_init') and instance._needs_async_init:
+        if hasattr(instance, "_needs_async_init") and instance._needs_async_init:
             instance.mcp_enabled = True
             instance._mcp_initialized = True  # Skip actual initialization
         return instance
-        
+
     LLMProcess.create = mock_create
     yield
     LLMProcess.create = original_create
@@ -68,7 +68,7 @@ system_prompt = "You are a test assistant."
         program = LLMProgram.from_toml(temp_path)
         # For tests, we can use asyncio.run to call start()
         process = asyncio.run(program.start())
-        
+
         assert process.model_name == "gpt-4o-mini"
         assert process.system_prompt == "You are a test assistant."
         assert process.state == []  # Empty until first run
@@ -86,7 +86,7 @@ def test_from_toml_complex(mock_env, mock_get_provider_client, mock_create_metho
         prompt_dir.mkdir()
         prompt_file = prompt_dir / "system_prompt.md"
         prompt_file.write_text("You are a complex test assistant.")
-        
+
         # Create a TOML config file
         config_file = Path(temp_dir) / "config.toml"
         config_file.write_text("""
@@ -104,11 +104,11 @@ top_p = 0.95
 frequency_penalty = 0.2
 presence_penalty = 0.1
 """)
-        
+
         # Use the two-step pattern
         program = LLMProgram.from_toml(config_file)
         process = asyncio.run(program.start())
-        
+
         assert process.model_name == "gpt-4o"
         assert process.system_prompt == "You are a complex test assistant."
         assert process.state == []  # Empty until first run

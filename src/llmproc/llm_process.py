@@ -20,6 +20,7 @@ from llmproc.tools import ToolRegistry, mcp, register_system_tools
 HAS_MCP = False
 try:
     import mcp_registry  # noqa
+
     HAS_MCP = True
 except ImportError:
     pass
@@ -185,7 +186,7 @@ class LLMProcess:
                 # Issue a clear warning with both specified and resolved paths
                 warnings.warn(
                     f"Preload file not found - Specified: '{file_path}', Resolved: '{os.path.abspath(file_path)}'",
-                    stacklevel=2
+                    stacklevel=2,
                 )
                 continue
 
