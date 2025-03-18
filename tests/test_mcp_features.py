@@ -189,20 +189,27 @@ codemcp = ["ReadFile"]
         with patch("llmproc.providers.providers.anthropic", MagicMock()):
             with patch("llmproc.providers.providers.Anthropic"):
                 with patch("llmproc.llm_process.asyncio.run"):
-                    process = LLMProcess.from_toml(config_file)
+                    # Use the two-step pattern
+                    from llmproc.program import LLMProgram
+                    program = LLMProgram.from_toml(config_file)
                     
-                    # In our new design, MCP is only enabled when needed (in create or run)
-                    # So we check the configuration instead
-                    expected_config_path = (config_dir / "mcp_servers.json").resolve()
-                    assert Path(process.mcp_config_path).resolve() == expected_config_path
-                    assert "github" in process.mcp_tools and "codemcp" in process.mcp_tools
-                    assert process.mcp_tools == {
-                        "github": ["search_repositories", "get_file_contents"],
-                        "codemcp": ["ReadFile"]
-                    }
-                    assert process.model_name == "claude-3-haiku-20240307"
-                    assert process.provider == "anthropic"
-                    assert process.display_name == "Test MCP Assistant"
+                    # Mock the start method to return a process without actually initializing MCP
+                    with patch("llmproc.program.LLMProgram.start") as mock_start:
+                        process = LLMProcess(program=program)
+                        mock_start.return_value = process
+                        
+                        # In our new design, MCP is only enabled when needed (in create or run)
+                        # So we check the configuration instead
+                        expected_config_path = (config_dir / "mcp_servers.json").resolve()
+                        assert Path(process.mcp_config_path).resolve() == expected_config_path
+                        assert "github" in process.mcp_tools and "codemcp" in process.mcp_tools
+                        assert process.mcp_tools == {
+                            "github": ["search_repositories", "get_file_contents"],
+                            "codemcp": ["ReadFile"]
+                        }
+                        assert process.model_name == "claude-3-haiku-20240307"
+                        assert process.provider == "anthropic"
+                        assert process.display_name == "Test MCP Assistant"
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
@@ -298,7 +305,9 @@ github = 123  # This is invalid, should be a list or "all"
         with patch("llmproc.providers.providers.anthropic", MagicMock()):
             with patch("llmproc.providers.providers.Anthropic"):
                 with pytest.raises(ValueError):
-                    LLMProcess.from_toml(config_file)
+                    # Use LLMProgram.from_toml instead
+                    from llmproc.program import LLMProgram
+                    LLMProgram.from_toml(config_file)
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)

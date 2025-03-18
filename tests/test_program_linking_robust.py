@@ -136,12 +136,18 @@ class TestProgramLinkingRobust:
     @pytest.mark.asyncio
     async def test_spawn_tool_with_real_toml(self, mock_toml_files):
         """Test spawn tool by loading from actual TOML files."""
-        with patch("llmproc.providers.providers.get_provider_client") as mock_client:
+        with patch("llmproc.providers.providers.get_provider_client") as mock_client, \
+             patch("llmproc.program.LLMProgram.start") as mock_start:
             # Mock the API client
             mock_client.return_value = MagicMock()
             
-            # Use a real TOML file with patched expert
-            main_process = LLMProcess.from_toml(mock_toml_files["main_toml"])
+            # Use the two-step pattern with patched start() to avoid actual async initialization
+            from llmproc.program import LLMProgram
+            main_program = LLMProgram.from_toml(mock_toml_files["main_toml"])
+            
+            # Create a mock process that would normally be returned by start()
+            main_process = LLMProcess(program=main_program)
+            mock_start.return_value = main_process
             
             # Replace expert process with mock
             mock_expert = MagicMock()

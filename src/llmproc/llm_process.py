@@ -180,81 +180,10 @@ class LLMProcess:
         if self.enriched_system_prompt is not None:
             self.enriched_system_prompt = None
 
-    @classmethod
-    def from_toml(cls, toml_path: str | Path) -> "LLMProcess":
-        """Create an LLMProcess from a TOML program file.
-
-        This method compiles the main program and all linked programs recursively,
-        then instantiates an LLMProcess with access to all linked programs as Program objects.
-        Linked programs are only compiled, not instantiated as processes, until they are needed.
-        
-        Note: This is a synchronous method. If your program requires async initialization
-        (e.g., MCP tools), you should use the async version from_toml_async instead.
-
-        Args:
-            toml_path: Path to the TOML program file
-
-        Returns:
-            An initialized LLMProcess instance with access to linked programs
-
-        Raises:
-            ValueError: If program configuration is invalid
-            FileNotFoundError: If the TOML file cannot be found
-        """
-        # Import the compiler
-        from llmproc.program import LLMProgram
-
-        # Compile the main program and all linked programs
-        # This will create a properly linked object graph with Program objects
-        main_path = Path(toml_path).resolve()
-        main_program = LLMProgram.compile(main_path, include_linked=True, check_linked_files=True)
-
-        if not main_program:
-            raise ValueError(f"Failed to compile program from {toml_path}")
-
-        # Create the main process
-        main_process = cls(program=main_program)
-
-        # The linked_programs attribute of main_program should now contain references to
-        # compiled Program objects instead of path strings
-        if hasattr(main_program, 'linked_programs') and main_program.linked_programs:
-            main_process.has_linked_programs = bool(main_program.linked_programs)
-
-        return main_process
-        
-    @classmethod
-    async def from_toml_async(cls, toml_path: str | Path) -> "LLMProcess":
-        """Create an LLMProcess from a TOML program file with async initialization.
-
-        This method compiles the main program and all linked programs recursively,
-        then instantiates an LLMProcess with async initialization for MCP and other
-        features that require async setup.
-
-        Args:
-            toml_path: Path to the TOML program file
-
-        Returns:
-            A fully initialized LLMProcess instance with access to linked programs
-
-        Raises:
-            ValueError: If program configuration is invalid
-            FileNotFoundError: If the TOML file cannot be found
-            RuntimeError: If async initialization fails
-        """
-        # Import the compiler
-        from llmproc.program import LLMProgram
-
-        # Compile the main program and all linked programs
-        main_path = Path(toml_path).resolve()
-        main_program = LLMProgram.compile(main_path, include_linked=True, check_linked_files=True)
-
-        if not main_program:
-            raise ValueError(f"Failed to compile program from {toml_path}")
-
-        # Create the main process with async initialization
-        main_process = await cls.create(program=main_program)
-
-        return main_process
+    # from_toml and from_toml_async methods have been removed
+    # Users should now use the two-step pattern:
+    # 1. program = LLMProgram.from_toml(path)
+    # 2. process = await program.start()
 
 
     async def run(self, user_input: str, max_iterations: int = 10, callbacks: dict = None) -> "RunResult":
@@ -314,11 +243,9 @@ class LLMProcess:
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
             
-        # Initialize MCP tools if needed and not already initialized
-        if self._needs_async_init and not self._mcp_initialized:
-            self.mcp_enabled = True
-            await self._initialize_mcp_tools()
-
+        # MCP tools should already be initialized during program.start()
+        # No need for lazy initialization here
+        
         # Generate enriched system prompt on first run
         if self.enriched_system_prompt is None:
             self.enriched_system_prompt = self.program.get_enriched_system_prompt(

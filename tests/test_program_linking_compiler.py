@@ -222,8 +222,14 @@ def test_from_toml_with_linked_programs():
         with unittest.mock.patch('llmproc.providers.get_provider_client') as mock_get_client:
             mock_get_client.return_value = unittest.mock.MagicMock()
             
-            # Create a process using from_toml
-            process = LLMProcess.from_toml(main_program_path)
+            # Create a process using the two-step pattern
+            from llmproc.program import LLMProgram
+            program = LLMProgram.from_toml(main_program_path)
+            
+            # Mock the start method to avoid actual async initialization
+            with unittest.mock.patch('llmproc.program.LLMProgram.start') as mock_start:
+                process = LLMProcess(program=program)
+                mock_start.return_value = process
             
             # Check that the process was created correctly
             assert process.model_name == "main-model"

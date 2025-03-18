@@ -598,6 +598,9 @@ class LLMProgram:
         This is the recommended way to create a process from a program, as it
         properly handles async initialization for features like MCP tools.
         
+        The process will have access to all linked programs that were included
+        during compilation. Linked programs are not instantiated until needed.
+        
         Returns:
             A fully initialized LLMProcess ready to run
             
@@ -609,5 +612,9 @@ class LLMProgram:
         
         # Create a process and fully initialize it asynchronously
         process = await llmproc.LLMProcess.create(program=self)
+        
+        # Ensure linked programs are properly registered if they exist
+        if hasattr(self, 'linked_programs') and self.linked_programs:
+            process.has_linked_programs = True
         
         return process

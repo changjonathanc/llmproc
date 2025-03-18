@@ -72,8 +72,16 @@ def test_documentation_example():
         with unittest.mock.patch('llmproc.providers.get_provider_client') as mock_get_client:
             mock_get_client.return_value = unittest.mock.MagicMock()
             
-            # Compile and link as shown in the documentation
-            process = LLMProcess.from_toml(main_toml)
+            # Compile and link as shown in the documentation - using the two-step pattern
+            program = LLMProgram.from_toml(main_toml)
+            
+            # Mock the start method to avoid actual async initialization
+            with unittest.mock.patch('llmproc.program.LLMProgram.start') as mock_start:
+                process = LLMProcess(program=program)
+                mock_start.return_value = process
+                
+                # Manually initialize linked programs field to simulate start()
+                process.has_linked_programs = True
             
             # Verify the process and its linked programs
             assert process.model_name == "main-model"
