@@ -1,8 +1,12 @@
 """Anthropic provider tools implementation for LLMProc."""
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
+# Set up module logger
+logger = logging.getLogger(__name__)
 
 
 async def run_anthropic_with_tools(
@@ -33,24 +37,20 @@ async def run_anthropic_with_tools(
     tool_handlers = getattr(llm_process, 'tool_handlers', {})
     aggregator = getattr(llm_process, 'aggregator', None)
     
-    # Check for debug environment variable
-    import os
-    debug = os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
+    # Set up logging
+    logger = logging.getLogger(__name__)
 
     # Track iterations to prevent infinite loops
     iterations = 0
     final_response = ""
 
-
-    if debug:
-        print("\n=== Starting Anthropic Tool Execution ===")
-        print(f"Tools available: {len(tools)}")
+    # Log tool execution start
+    logger.debug("Starting Anthropic Tool Execution, tools available: %d", len(tools))
 
     # Continue the conversation until no more tool calls or max iterations reached
     while iterations < max_iterations:
         iterations += 1
-        if debug:
-            print(f"\n--- Iteration {iterations}/{max_iterations} ---")
+        logger.debug("Iteration %d/%d", iterations, max_iterations)
 
         try:
             # Prepare API parameters

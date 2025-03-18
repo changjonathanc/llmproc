@@ -61,7 +61,8 @@ class LLMProcess:
         self.provider = program.provider
         self.system_prompt = program.system_prompt  # Basic system prompt without enhancements
         self.display_name = program.display_name
-        self.config_dir = program.base_dir  # Use base_dir from program
+        self.base_dir = program.base_dir
+        self.config_dir = self.base_dir  # Alias for backward compatibility
         self.api_params = program.api_params
         self.parameters = {} # Keep empty - parameters are already processed in program
 
@@ -316,7 +317,8 @@ class LLMProcess:
         # Add user input to state
         self.state.append({"role": "user", "content": user_input})
 
-        self.messages = self.state # TODO; deprecate state in favor of messages, it's more descriptive
+        # Keep messages as an alias to state for compatibility
+        self.messages = self.state
 
         # Create provider-specific process executors
         if self.provider == "openai":
@@ -338,8 +340,6 @@ class LLMProcess:
         """
         return self.state.copy()
 
-    # _initialize_mcp_tools_if_needed removed - logic moved to _async_run
-
     async def _initialize_mcp_tools(self) -> None:
         """Initialize MCP registry and tools.
 
@@ -359,15 +359,6 @@ class LLMProcess:
         
         if not success:
             logger.warning("Failed to initialize MCP tools. Some features may not work correctly.")
-
-    # Removed _create_mcp_tool_handler method - functionality moved to _register_mcp_tool
-
-    # _initialize_linked_programs method removed - functionality moved to LLMProgram.compile
-
-    # Removed _register_spawn_tool and _register_fork_tool methods
-    # These functions are now part of the tools module
-
-    # Removed _format_tool_for_anthropic - moved to tools/mcp.py
 
 
     def reset_state(
