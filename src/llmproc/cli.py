@@ -3,11 +3,21 @@
 
 import asyncio
 import sys
+import logging
+import time
 from pathlib import Path
 
 import click
 
-from llmproc import LLMProcess
+from llmproc import LLMProcess, LLMProgram
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S"
+)
+logger = logging.getLogger("llmproc.cli")
 
 
 @click.command()
@@ -63,48 +73,47 @@ def main(program_path=None) -> None:
     # Load the selected program
     try:
         selected_program_abs = selected_program.absolute()
-        process = LLMProcess.from_toml(selected_program_abs)
-        click.echo(f"\nLoaded program from: {selected_program_abs}")
-
+        
+        # Use the new API: load program first, then start it asynchronously
+        logger.info(f"Loading program from: {selected_program_abs}")
+        program = LLMProgram.from_toml(selected_program_abs)
+        
         # Display program summary
         click.echo("\nProgram Summary:")
-        # Try to extract and show key info from the program
-        try:
-            import tomli
-
-            with open(selected_program_abs, "rb") as f:
-                program_config = tomli.load(f)
-
-            # Show model info
-            if "model" in program_config:
-                model_info = program_config["model"]
-                # Show display name if available
-                if "display_name" in model_info:
-                    click.echo(f"  Display Name: {model_info['display_name']}")
-                click.echo(f"  Model: {model_info.get('name', 'Not specified')}")
-                click.echo(f"  Provider: {model_info.get('provider', 'Not specified')}")
-
-            # Show brief system prompt summary
-            if "prompt" in program_config and "system_prompt" in program_config["prompt"]:
-                system_prompt = program_config["prompt"]["system_prompt"]
-                # Truncate if too long
-                if len(system_prompt) > 60:
-                    system_prompt = system_prompt[:57] + "..."
-                click.echo(f"  System Prompt: {system_prompt}")
-
-            # Show a few key parameters if present
-            if "parameters" in program_config:
-                params = program_config["parameters"]
-                if "temperature" in params:
-                    click.echo(f"  Temperature: {params['temperature']}")
-                if "max_tokens" in params:
-                    click.echo(f"  Max Tokens: {params['max_tokens']}")
-        except Exception:
-            click.echo("  (Could not parse program details)")
+        click.echo(f"  Model: {program.model_name}")
+        click.echo(f"  Provider: {program.provider}")
+        click.echo(f"  Display Name: {program.display_name or program.model_name}")
+        
+        # Show brief system prompt summary
+        if hasattr(program, 'system_prompt') and program.system_prompt:
+            system_prompt = program.system_prompt
+            # Truncate if too long
+            if len(system_prompt) > 60:
+                system_prompt = system_prompt[:57] + "..."
+            click.echo(f"  System Prompt: {system_prompt}")
+        
+        # Show parameter summary if available
+        if hasattr(program, 'api_params') and program.api_params:
+            params = program.api_params
+            if "temperature" in params:
+                click.echo(f"  Temperature: {params['temperature']}")
+            if "max_tokens" in params:
+                click.echo(f"  Max Tokens: {params['max_tokens']}")
+        
+        # Initialize the process asynchronously
+        logger.info("Starting process initialization...")
+        start_time = time.time()
+        process = asyncio.run(program.start())
+        init_time = time.time() - start_time
+        logger.info(f"Process initialized in {init_time:.2f} seconds")
 
         # Start interactive session
         click.echo("\nStarting interactive chat session. Type 'exit' or 'quit' to end.")
         click.echo("Type 'reset' to reset the conversation state.")
+        click.echo("Type 'verbose' to toggle verbose logging.")
+
+        # Toggle for verbose logging
+        verbose = False
 
         while True:
             user_input = click.prompt("\nYou", prompt_suffix="> ")
@@ -117,9 +126,47 @@ def main(program_path=None) -> None:
                 process.reset_state()
                 click.echo("Conversation state has been reset.")
                 continue
+                
+            if user_input.lower() == "verbose":
+                verbose = not verbose
+                level = logging.DEBUG if verbose else logging.INFO
+                logging.getLogger("llmproc").setLevel(level)
+                click.echo(f"Verbose logging {'enabled' if verbose else 'disabled'}")
+                continue
 
-            # Run the process with async support
-            api_calls = asyncio.run(process.run(user_input))
+            # Set up callbacks for real-time updates
+            callbacks = {
+                "on_tool_start": lambda tool_name, args: logger.info(f"Using tool: {tool_name}"),
+                "on_tool_end": lambda tool_name, result: logger.info(f"Tool {tool_name} completed"),
+                "on_response": lambda content: logger.info(f"Received response: {content[:50]}...")
+            }
+            
+            # Track time for this run
+            start_time = time.time()
+            
+            # Show a spinner while running (to be implemented)
+            click.echo("Thinking...", nl=False)
+            
+            # Run the process with the new API
+            run_result = asyncio.run(process.run(user_input, callbacks=callbacks))
+            
+            # Get the elapsed time
+            elapsed = time.time() - start_time
+            
+            # Clear the "Thinking..." text
+            click.echo("\r" + " " * 12 + "\r", nl=False)
+            
+            # Log run result information
+            if verbose:
+                logger.debug(f"Run completed in {elapsed:.2f}s with {run_result.api_calls} API calls")
+                for i, api_info in enumerate(run_result.api_call_infos):
+                    if "type" in api_info and api_info["type"] == "tool_call":
+                        logger.debug(f"Tool call: {api_info.get('tool_name', 'unknown')}")
+                    elif "model" in api_info:
+                        logger.debug(f"API call {i+1}: model={api_info['model']}")
+            else:
+                if run_result.api_calls > 0:
+                    logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s")
             
             # Get the last assistant message
             response = process.get_last_message()
