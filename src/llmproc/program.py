@@ -571,6 +571,27 @@ class LLMProgram:
             
         return "\n\n".join(parts)
     
+    @classmethod
+    def from_toml(cls, toml_path: Union[str, Path], include_linked: bool = True) -> "LLMProgram":
+        """Load and compile a program from a TOML file.
+        
+        This is a convenience method that simply calls compile() with the 
+        most common options for end users. It handles loading the TOML file,
+        validating it, and creating a compiled program ready to be started.
+        
+        Args:
+            toml_path: Path to the TOML program file
+            include_linked: Whether to compile linked programs recursively
+            
+        Returns:
+            A compiled LLMProgram ready to start
+            
+        Raises:
+            FileNotFoundError: If the TOML file doesn't exist
+            ValueError: If the configuration is invalid
+        """
+        return cls.compile(toml_path, include_linked=include_linked, check_linked_files=True)
+    
     async def start(self) -> "LLMProcess":
         """Create and fully initialize an LLMProcess from this program.
         
