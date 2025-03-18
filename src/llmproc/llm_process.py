@@ -257,7 +257,7 @@ class LLMProcess:
         return main_process
 
 
-    async def run(self, user_input: str, max_iterations: int = 10) -> int:
+    async def run(self, user_input: str, max_iterations: int = 10, callbacks: dict = None) -> "RunResult":
         """Run the LLM process with user input asynchronously.
 
         This method supports full tool execution with proper async handling.
@@ -266,9 +266,13 @@ class LLMProcess:
         Args:
             user_input: The user message to process
             max_iterations: Maximum number of tool-calling iterations
+            callbacks: Optional dictionary of callback functions:
+                - 'on_tool_start': Called when a tool execution starts
+                - 'on_tool_end': Called when a tool execution completes
+                - 'on_response': Called when a model response is received
 
         Returns:
-            The number of API calls used during processing
+            RunResult object with execution metrics
         """
         # Check if we're in an event loop
         try:
@@ -279,23 +283,33 @@ class LLMProcess:
 
         # If not in an event loop, run in a new one
         if not in_event_loop:
-            return asyncio.run(self._async_run(user_input, max_iterations))
+            return asyncio.run(self._async_run(user_input, max_iterations, callbacks))
         else:
-            return await self._async_run(user_input, max_iterations)
+            return await self._async_run(user_input, max_iterations, callbacks)
 
-    async def _async_run(self, user_input: str, max_iterations: int = 10) -> int:
+    async def _async_run(self, user_input: str, max_iterations: int = 10, callbacks: dict = None) -> "RunResult":
         """Internal async implementation of run.
 
         Args:
             user_input: The user message to process
             max_iterations: Maximum number of tool-calling iterations
+            callbacks: Optional dictionary of callback functions
 
         Returns:
-            The number of API calls used during processing
+            RunResult object with execution metrics
 
         Raises:
             ValueError: If user_input is empty
         """
+        # Import the RunResult class
+        from llmproc.results import RunResult
+        
+        # Create a RunResult object to track this run
+        run_result = RunResult()
+        
+        # Normalize callbacks
+        callbacks = callbacks or {}
+        
         # Verify user input isn't empty
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
@@ -326,11 +340,21 @@ class LLMProcess:
         elif self.provider == "anthropic":
             # Use the stateless AnthropicProcessExecutor
             executor = AnthropicProcessExecutor()
-            return await executor.run(self, user_input, max_iterations)
+            api_calls = await executor.run(self, user_input, max_iterations, callbacks, run_result)
+            
+            # Update the run result with the number of API calls (legacy support)
+            if run_result.api_calls == 0 and api_calls > 0:
+                run_result.api_calls = api_calls
+                
         elif self.provider == "vertex":
             raise NotImplementedError("Vertex is not yet implemented")
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
+            
+        # Mark the run as complete and calculate duration
+        run_result.complete()
+        
+        return run_result
 
     def get_state(self) -> list[dict[str, str]]:
         """Return the current conversation state.

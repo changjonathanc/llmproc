@@ -571,17 +571,22 @@ class LLMProgram:
             
         return "\n\n".join(parts)
     
-    def instantiate(self, from_llmproc):
-        """Instantiate an LLMProcess from this program.
+    async def start(self) -> "LLMProcess":
+        """Create and fully initialize an LLMProcess from this program.
         
-        Args:
-            from_llmproc: The llmproc module to import LLMProcess from
-            
+        This is the recommended way to create a process from a program, as it
+        properly handles async initialization for features like MCP tools.
+        
         Returns:
-            An initialized LLMProcess instance
+            A fully initialized LLMProcess ready to run
+            
+        Raises:
+            RuntimeError: If initialization fails
         """
         # Import dynamically to avoid circular imports
-        LLMProcess = from_llmproc.LLMProcess
+        import llmproc
         
-        # Create the LLMProcess instance using the new API
-        return LLMProcess(program=self)
+        # Create a process and fully initialize it asynchronously
+        process = await llmproc.LLMProcess.create(program=self)
+        
+        return process
