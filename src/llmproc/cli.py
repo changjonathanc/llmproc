@@ -119,7 +119,12 @@ def main(program_path=None) -> None:
                 continue
 
             # Run the process with async support
-            response = asyncio.run(process.run(user_input))
+            api_calls = asyncio.run(process.run(user_input))
+            
+            # Get the last assistant message
+            response = process.get_last_message()
+            
+            # Display the response
             click.echo(f"\n{process.display_name}> {response}")
 
     except Exception as e:

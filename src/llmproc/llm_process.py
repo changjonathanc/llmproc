@@ -20,9 +20,8 @@ except ImportError:
     HAS_MCP = False
 
 from llmproc.providers import get_provider_client
-
-from llmproc.tools import spawn_tool, fork_tool, spawn_tool_def, fork_tool_def
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+from llmproc.tools import ToolRegistry, register_system_tools, mcp
 
 load_dotenv()
 
@@ -52,6 +51,7 @@ class LLMProcess:
 
         Notes:
             Missing preload files will generate warnings but won't cause the initialization to fail
+            For async initialization (MCP), use the create() factory method instead.
         """
         # Store the program reference
         self.program = program
@@ -77,15 +77,17 @@ class LLMProcess:
             # Get enabled tools from the program
             self.enabled_tools = program.tools.get("enabled", [])
 
-        # Initialize tool-related attributes
-        self.tools = []
-        self.tool_handlers = {}
+        # Initialize the tool registry
+        self.tool_registry = ToolRegistry()
 
         # MCP Configuration
         self.mcp_enabled = False
         self.mcp_config_path = getattr(program, "mcp_config_path", None)
         self.mcp_tools = getattr(program, "mcp_tools", {})
         self._mcp_initialized = False
+        
+        # Mark if we need async initialization
+        self._needs_async_init = (self.mcp_config_path is not None and bool(self.mcp_tools))
 
         # Linked Programs Configuration
         self.linked_programs = {}
@@ -100,7 +102,7 @@ class LLMProcess:
             self.has_linked_programs = True
             self.linked_programs = program.linked_programs
 
-        # Call the method to initialize all tools (both MCP and system tools)
+        # Initialize system tools 
         self._initialize_tools()
 
         # Get project_id and region for Vertex if provided in parameters
@@ -119,6 +121,38 @@ class LLMProcess:
         # Preload files if specified
         if hasattr(program, "preload_files") and program.preload_files:
             self.preload_files(program.preload_files)
+            
+    @classmethod
+    async def create(
+        cls, 
+        program: "LLMProgram",
+        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
+    ) -> "LLMProcess":
+        """Create and fully initialize an LLMProcess asynchronously.
+        
+        This factory method handles async initialization in a clean way,
+        ensuring the instance is fully ready to use when returned.
+        
+        Args:
+            program: The LLMProgram to use
+            linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
+            
+        Returns:
+            A fully initialized LLMProcess
+            
+        Raises:
+            All exceptions from __init__, plus:
+            RuntimeError: If MCP initialization fails
+        """
+        # Create instance with basic initialization
+        instance = cls(program, linked_programs_instances)
+        
+        # Perform async initialization if needed
+        if instance._needs_async_init:
+            instance.mcp_enabled = True
+            await instance._initialize_mcp_tools()
+        
+        return instance
 
     def preload_files(self, file_paths: list[str]) -> None:
         """Preload files and add their content to the preloaded_content dictionary.
@@ -152,6 +186,9 @@ class LLMProcess:
         This method compiles the main program and all linked programs recursively,
         then instantiates an LLMProcess with access to all linked programs as Program objects.
         Linked programs are only compiled, not instantiated as processes, until they are needed.
+        
+        Note: This is a synchronous method. If your program requires async initialization
+        (e.g., MCP tools), you should use the async version from_toml_async instead.
 
         Args:
             toml_path: Path to the TOML program file
@@ -182,7 +219,40 @@ class LLMProcess:
         if hasattr(main_program, 'linked_programs') and main_program.linked_programs:
             main_process.has_linked_programs = bool(main_program.linked_programs)
 
-        # No need to initialize spawn tool here - it's already done in the constructor
+        return main_process
+        
+    @classmethod
+    async def from_toml_async(cls, toml_path: str | Path) -> "LLMProcess":
+        """Create an LLMProcess from a TOML program file with async initialization.
+
+        This method compiles the main program and all linked programs recursively,
+        then instantiates an LLMProcess with async initialization for MCP and other
+        features that require async setup.
+
+        Args:
+            toml_path: Path to the TOML program file
+
+        Returns:
+            A fully initialized LLMProcess instance with access to linked programs
+
+        Raises:
+            ValueError: If program configuration is invalid
+            FileNotFoundError: If the TOML file cannot be found
+            RuntimeError: If async initialization fails
+        """
+        # Import the compiler
+        from llmproc.program import LLMProgram
+
+        # Compile the main program and all linked programs
+        main_path = Path(toml_path).resolve()
+        main_program = LLMProgram.compile(main_path, include_linked=True, check_linked_files=True)
+
+        if not main_program:
+            raise ValueError(f"Failed to compile program from {toml_path}")
+
+        # Create the main process with async initialization
+        main_process = await cls.create(program=main_program)
+
         return main_process
 
 
@@ -228,6 +298,11 @@ class LLMProcess:
         # Verify user input isn't empty
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
+            
+        # Initialize MCP tools if needed and not already initialized
+        if self._needs_async_init and not self._mcp_initialized:
+            self.mcp_enabled = True
+            await self._initialize_mcp_tools()
 
         # Generate enriched system prompt on first run
         if self.enriched_system_prompt is None:
@@ -263,28 +338,7 @@ class LLMProcess:
         """
         return self.state.copy()
 
-    async def _initialize_mcp_tools_if_needed(self) -> None:
-        """Initialize MCP registry and tools if they haven't been initialized yet.
-
-        This method safely handles initialization in both synchronous and asynchronous contexts.
-        It's designed to work correctly when called from both __init__ and async methods like fork_process.
-        """
-        # Return immediately if already initialized or MCP not enabled
-        if (hasattr(self, '_mcp_initialized') and self._mcp_initialized) or not self.mcp_enabled:
-            return
-
-        try:
-            # Initialize MCP tools
-            await self._initialize_mcp_tools()
-            # Mark as successfully initialized
-            self._mcp_initialized = True
-        except Exception as e:
-            # Log the error but mark as initialized to avoid repeated attempts
-            logger.warning(f"Failed to initialize MCP tools: {str(e)}")
-            self._mcp_initialized = True
-            # Re-raise if this is a critical error
-            if isinstance(e, (ImportError, FileNotFoundError)):
-                raise
+    # _initialize_mcp_tools_if_needed removed - logic moved to _async_run
 
     async def _initialize_mcp_tools(self) -> None:
         """Initialize MCP registry and tools.
@@ -296,223 +350,24 @@ class LLMProcess:
         if not self.mcp_enabled:
             return
 
-        # Ensure tools list is initialized
-        if not hasattr(self, 'tools') or self.tools is None:
-            self.tools = []
+        success = await mcp.initialize_mcp_tools(
+            self,
+            self.tool_registry,
+            self.mcp_config_path,
+            self.mcp_tools
+        )
+        
+        if not success:
+            logger.warning("Failed to initialize MCP tools. Some features may not work correctly.")
 
-        # Initialize registry and aggregator
-        try:
-            self.registry = ServerRegistry.from_config(self.mcp_config_path)
-            self.aggregator = MCPAggregator(self.registry)
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize MCP registry: {str(e)}")
+    # Removed _create_mcp_tool_handler method - functionality moved to _register_mcp_tool
 
-        # Get tools grouped by server
-        try:
-            server_tools_map = await self.aggregator.list_tools(return_server_mapping=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to list MCP tools: {str(e)}")
+    # _initialize_linked_programs method removed - functionality moved to LLMProgram.compile
 
-        # Track registered tools to avoid duplicates
-        registered_tools = set()
+    # Removed _register_spawn_tool and _register_fork_tool methods
+    # These functions are now part of the tools module
 
-        # Initialize tool_handlers if not already present
-        if not hasattr(self, 'tool_handlers'):
-            self.tool_handlers = {}
-
-        # Process each server and tool configuration
-        for server_name, tool_config in self.mcp_tools.items():
-            # Skip servers that don't exist in the available tools
-            if server_name not in server_tools_map:
-                logger.warning(f"Server '{server_name}' not found in available tools")
-                continue
-
-            server_tools = server_tools_map[server_name]
-
-            # Create a mapping of tool names to tools for this server
-            server_tool_map = {tool.name: tool for tool in server_tools}
-
-            # Case 1: Register all tools for a server
-            if tool_config == "all":
-                for tool in server_tools:
-                    namespaced_name = f"{server_name}__{tool.name}"
-                    if namespaced_name not in registered_tools:
-                        # Add to schema list for API
-                        self.tools.append(self._format_tool_for_anthropic(tool, server_name))
-
-                        # Create handler function for this tool that calls the MCP aggregator
-                        self.tool_handlers[namespaced_name] = self._create_mcp_tool_handler(namespaced_name)
-
-                        registered_tools.add(namespaced_name)
-
-                logger.info(f"Registered all tools ({len(server_tools)}) from server '{server_name}'")
-
-            # Case 2: Register specific tools
-            elif isinstance(tool_config, list):
-                for tool_name in tool_config:
-                    if tool_name in server_tool_map:
-                        tool = server_tool_map[tool_name]
-                        namespaced_name = f"{server_name}__{tool.name}"
-                        if namespaced_name not in registered_tools:
-                            # Add to schema list for API
-                            self.tools.append(self._format_tool_for_anthropic(tool, server_name))
-
-                            # Create handler function for this tool that calls the MCP aggregator
-                            self.tool_handlers[namespaced_name] = self._create_mcp_tool_handler(namespaced_name)
-
-                            registered_tools.add(namespaced_name)
-                    else:
-                        logger.warning(f"Tool '{tool_name}' not found for server '{server_name}'")
-
-                logger.info(f"Registered {len([t for t in tool_config if t in server_tool_map])} tools from server '{server_name}'")
-
-        # Summarize registered tools
-        if not self.tools:
-            logger.warning("No MCP tools were registered. Check your configuration.")
-        else:
-            logger.info(f"Total MCP tools registered: {len(self.tools)}")
-
-    def _create_mcp_tool_handler(self, tool_name: str):
-        """Create a handler function for an MCP tool.
-
-        Args:
-            tool_name: The namespaced tool name (server__tool)
-
-        Returns:
-            A callable that takes tool arguments and returns the result
-        """
-        # Return a handler function that closes over the tool_name and self reference
-        async def handler(args):
-            if not self.aggregator:
-                raise RuntimeError(f"MCP aggregator not initialized. Cannot call tool: {tool_name}")
-
-            try:
-                # Call the tool through the aggregator
-                result = await self.aggregator.call_tool(tool_name, args)
-
-                return result
-            except Exception as e:
-                error_msg = f"Error executing MCP tool {tool_name}: {str(e)}"
-                logger.error(error_msg)
-                return {"error": error_msg, "is_error": True}
-
-        return handler
-
-    def _initialize_linked_programs(self, linked_programs: dict[str, Path | str]) -> None:
-        """Initialize linked LLM programs from their TOML program files.
-
-        This method compiles all linked programs recursively and stores them as Program objects
-        that can be instantiated as processes when needed. This is more memory efficient and
-        follows compilation semantics where programs are validated first before instantiation.
-
-        Args:
-            linked_programs: Dictionary mapping program names to TOML program paths
-        """
-        from llmproc.program import LLMProgram
-
-        # Dictionary to store compiled program objects
-        compiled_program_objects = {}
-
-        # Resolve paths and compile all programs
-        for program_name, program_path in linked_programs.items():
-            path = Path(program_path)
-            original_path = program_path
-
-            # If path is relative and we have a config_dir, resolve it
-            if not path.is_absolute() and self.config_dir:
-                path = self.config_dir / path
-
-            if not path.exists():
-                raise FileNotFoundError(f"Linked program file not found - Specified: '{original_path}', Resolved: '{path}'")
-
-            try:
-                # Compile this linked program and its sub-linked programs
-                # But store the programs as objects, don't instantiate them as processes yet
-                compiled_program = LLMProgram.compile(path, include_linked=False)
-                compiled_program_objects[program_name] = compiled_program
-
-                # Log successful compilation
-                logger.info(f"Compiled linked program '{program_name}' ({compiled_program.provider} {compiled_program.model_name})")
-            except Exception as e:
-                raise RuntimeError(f"Failed to compile linked program '{program_name}': {str(e)}") from e
-
-        # Store the compiled program objects
-        self.linked_programs = compiled_program_objects
-        self.has_linked_programs = bool(compiled_program_objects)
-
-    def _register_spawn_tool(self) -> None:
-        """Register the spawn system call for creating new processes from linked programs."""
-
-        # Only register if we have linked programs
-        if not self.linked_programs:
-            logger.warning("No linked programs available. Spawn system call not registered.")
-            return
-
-        # Create a copy of the tool definition with dynamic available programs info
-        api_tool_def = spawn_tool_def.copy()
-        available_programs = ", ".join(self.linked_programs.keys())
-        api_tool_def["description"] = spawn_tool_def["description"] + f"\n\nAvailable programs: {available_programs}"
-
-        # Create the handler function for the spawn tool
-        async def spawn_handler(args):
-            return spawn_tool(
-                program_name=args.get("program_name"),
-                query=args.get("query"),
-                llm_process=self
-            )
-
-        # Register the handler in the unified tool_handlers dictionary
-        self.tool_handlers["spawn"] = spawn_handler
-
-        # Add the tool definition to the tools list for API
-        self.tools.append(api_tool_def)
-
-        logger.info(f"Registered spawn tool with access to programs: {', '.join(self.linked_programs.keys())}")
-
-    def _register_fork_tool(self) -> None:
-        """Register the fork system call for creating copies of the current process."""
-        # Create a copy of the tool definition for the API
-        api_tool_def = fork_tool_def.copy()
-
-        # Create the handler function for the fork tool
-        async def fork_handler(args):
-            # The actual fork implementation is in anthropic_tools.py
-            # This is just a placeholder for the handler interface
-            return f"Fork command received with args: {args}"
-
-        # Register the handler in the unified tool_handlers dictionary
-        self.tool_handlers["fork"] = fork_handler
-
-        # Add to the tools list for API
-        self.tools.append(api_tool_def)
-        logger.info(f"Registered fork tool for process {self.model_name}")
-
-    def _format_tool_for_anthropic(self, tool, server_name=None):
-        """Format a tool for Anthropic API.
-
-        Args:
-            tool: Tool object from MCP registry
-            server_name: Optional server name for proper namespacing
-
-        Returns:
-            Dictionary with tool information formatted for Anthropic API
-        """
-        # Create namespaced name with server prefix
-        namespaced_name = f"{server_name}__{tool.name}" if server_name else tool.name
-
-        # Ensure input schema has required fields
-        input_schema = tool.inputSchema.copy() if tool.inputSchema else {}
-        if "type" not in input_schema:
-            input_schema["type"] = "object"
-        if "properties" not in input_schema:
-            input_schema["properties"] = {}
-
-        # Create the tool definition
-        return {
-            "name": namespaced_name,
-            "description": tool.description,
-            "input_schema": input_schema
-        }
+    # Removed _format_tool_for_anthropic - moved to tools/mcp.py
 
 
     def reset_state(
@@ -537,13 +392,13 @@ class LLMProcess:
         self.enriched_system_prompt = None
 
     def _initialize_tools(self) -> None:
-        """Initialize all tools - both MCP and system tools.
+        """Initialize all system tools.
 
-        This method handles the setup of tool schemas and handlers in a unified way,
-        regardless of whether they are MCP tools or system tools.
+        MCP tools require async initialization and are handled separately
+        via the create() factory method or lazy initialization in run().
         """
-        # Initialize MCP if configured
-        if self.mcp_config_path and self.mcp_tools:
+        # Validate MCP configuration if present
+        if self._needs_async_init:
             if not HAS_MCP:
                 raise ImportError(
                     "MCP features require the mcp-registry package. Install it with 'pip install mcp-registry'."
@@ -555,24 +410,27 @@ class LLMProcess:
                     "MCP features are currently only supported with the Anthropic provider"
                 )
 
-            self.mcp_enabled = True
+        # Register system tools using the ToolRegistry
+        register_system_tools(self.tool_registry, self)
 
-            # Check if we're already in an event loop
-            try:
-                asyncio.get_running_loop()
-                # If in event loop, don't initialize now - will be done lazily
-                # during the first call to run()
-            except RuntimeError:
-                # No event loop, create one for initialization
-                asyncio.run(self._initialize_mcp_tools_if_needed())
-
-        # Register system tools
-        if "spawn" in self.enabled_tools and self.has_linked_programs:
-            self._register_spawn_tool()
-
-        if "fork" in self.enabled_tools:
-            self._register_fork_tool()
-
+    @property
+    def tools(self) -> list:
+        """Property to access tool definitions.
+        
+        Returns:
+            List of tool definitions.
+        """
+        return self.tool_registry.get_definitions()
+        
+    @property
+    def tool_handlers(self) -> dict:
+        """Property to access tool handlers.
+        
+        Returns:
+            Dictionary of tool handlers.
+        """
+        return self.tool_registry.tool_handlers
+    
     async def call_tool(self, tool_name: str, args: dict) -> Any:
         """Call a tool by name with the given arguments.
 
@@ -590,17 +448,52 @@ class LLMProcess:
             ValueError: If the tool is not found
             RuntimeError: If the tool execution fails
         """
-        if not hasattr(self, 'tool_handlers') or not self.tool_handlers:
-            raise ValueError("No tool handlers registered")
-
-        if tool_name not in self.tool_handlers:
-            raise ValueError(f"Tool '{tool_name}' not found. Available tools: {', '.join(self.tool_handlers.keys())}")
-
         try:
-            handler = self.tool_handlers[tool_name]
-            return await handler(args)
+            return await self.tool_registry.call_tool(tool_name, args)
         except Exception as e:
             raise RuntimeError(f"Error executing tool '{tool_name}': {str(e)}")
+
+    def get_last_message(self) -> str:
+        """Get the most recent message from the conversation.
+
+        Returns:
+            The text content of the last assistant message, 
+            or an empty string if the last message is not from an assistant.
+            
+        Note:
+            This handles both string content and structured content blocks from
+            providers like Anthropic.
+        """
+        # Check if state has any messages
+        if not self.state:
+            return ""
+            
+        # Get the last message
+        last_message = self.state[-1]
+        
+        # Return content if it's an assistant message, empty string otherwise
+        if last_message.get("role") == "assistant" and "content" in last_message:
+            content = last_message["content"]
+            
+            # If content is a string, return it directly
+            if isinstance(content, str):
+                return content
+                
+            # Handle Anthropic's content blocks format
+            if isinstance(content, list):
+                extracted_text = []
+                for block in content:
+                    # Handle text blocks
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        extracted_text.append(block.get("text", ""))
+                    # Handle TextBlock objects which may be used by Anthropic
+                    elif hasattr(block, "text") and hasattr(block, "type"):
+                        if getattr(block, "type") == "text":
+                            extracted_text.append(getattr(block, "text", ""))
+                
+                return " ".join(extracted_text)
+        
+        return ""
 
     async def fork_process(self) -> "LLMProcess":
         """Create a deep copy of this process with preserved state.
@@ -628,9 +521,16 @@ class LLMProcess:
         if hasattr(self, 'preloaded_content') and self.preloaded_content:
             forked_process.preloaded_content = copy.deepcopy(self.preloaded_content)
 
-        # If the forked process has MCP enabled, make sure it's initialized properly
-        if forked_process.mcp_enabled and hasattr(forked_process, '_mcp_initialized') and not forked_process._mcp_initialized:
-            await forked_process._initialize_mcp_tools_if_needed()
+        # No need to copy tools and tool_handlers - they are properties now
+        
+        # If the parent process had MCP initialized, replicate the state in the fork
+        if self.mcp_enabled and self._mcp_initialized:
+            forked_process.mcp_enabled = True
+            forked_process._mcp_initialized = True
+            
+            # Copy the aggregator if it exists
+            if hasattr(self, 'aggregator'):
+                forked_process.aggregator = self.aggregator
 
         # Preserve any other state we need
         # Note: We don't copy tool handlers as they're already set up in the constructor
