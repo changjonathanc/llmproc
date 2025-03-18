@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -99,6 +100,9 @@ async def run_anthropic_with_tools(
             elif response.stop_reason == "stop_sequence":
                 return response.content[0].text
             elif response.stop_reason == "tool_use":
+                # Define debug once here to fix the missing debug variable
+                debug = os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
+                
                 tool_results = await process_response_content(
                     response.content, aggregator, tool_handlers, debug
                 )
@@ -106,6 +110,9 @@ async def run_anthropic_with_tools(
                 add_tool_results_to_conversation(messages, tool_results, debug)
 
         except Exception as e:
+            # Define debug once here to fix the missing debug variable
+            debug = os.environ.get("LLMPROC_DEBUG", "").lower() == "true"
+            
             if debug:
                 print(f"ERROR in tool processing loop: {str(e)}")
             # If we have a final response, use it; otherwise return the error

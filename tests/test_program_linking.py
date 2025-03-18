@@ -120,8 +120,19 @@ class TestProgramLinking:
     async def test_spawn_tool_functionality(self):
         """Test the functionality of the spawn tool."""
         # Create mock linked program
+        # Import RunResult for mock creation
+        from llmproc.results import RunResult
+        
+        # Create mock linked program
         mock_expert = MagicMock()
-        mock_expert.run = AsyncMock(return_value="Expert response")
+        
+        # Create a mock RunResult for the expert's response
+        mock_run_result = RunResult()
+        mock_run_result.api_calls = 1
+        mock_expert.run = AsyncMock(return_value=mock_run_result)
+        
+        # Mock get_last_message to return the expected response
+        mock_expert.get_last_message = MagicMock(return_value="Expert response")
         
         # Mock the client creation to avoid API calls
         with patch("llmproc.providers.providers.get_provider_client") as mock_get_client:

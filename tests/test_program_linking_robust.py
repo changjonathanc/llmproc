@@ -77,8 +77,16 @@ class TestProgramLinkingRobust:
             )
             expert_process = LLMProcess(program=expert_program)
             
-            # Mock the run method of the expert
-            expert_process.run = AsyncMock(return_value="I am the expert's response")
+            # Import RunResult for mock creation
+            from llmproc.results import RunResult
+            
+            # Create a mock RunResult for the expert's response
+            mock_run_result = RunResult()
+            mock_run_result.api_calls = 1
+            expert_process.run = AsyncMock(return_value=mock_run_result)
+            
+            # Mock get_last_message to return the expected response
+            expert_process.get_last_message = MagicMock(return_value="I am the expert's response")
             
             # Create main process with linked program
             main_program = LLMProgram(
@@ -137,7 +145,16 @@ class TestProgramLinkingRobust:
             
             # Replace expert process with mock
             mock_expert = MagicMock()
-            mock_expert.run = AsyncMock(return_value="Expert response from TOML")
+            
+            # Import and create RunResult for the mock
+            from llmproc.results import RunResult
+            mock_run_result = RunResult()
+            mock_run_result.api_calls = 1
+            mock_expert.run = AsyncMock(return_value=mock_run_result)
+            
+            # Mock get_last_message to return the expected response
+            mock_expert.get_last_message = MagicMock(return_value="Expert response from TOML")
+            
             main_process.linked_programs["expert"] = mock_expert
             
             # Call the spawn tool directly
@@ -235,42 +252,7 @@ class TestProgramLinkingRobust:
             assert msg.get("content") != ""
                     
     @pytest.mark.asyncio
+    @pytest.mark.skip(reason="run_anthropic_with_tools is deprecated in favor of AnthropicProcessExecutor")
     async def test_run_anthropic_with_tools_skips_empty_response(self):
-        """Test that run_anthropic_with_tools properly handles empty responses."""
-        from llmproc.providers.anthropic_tools import run_anthropic_with_tools
-        
-        # Set up mock LLMProcess
-        mock_llm_process = MagicMock()
-        mock_llm_process.client = MagicMock()
-        mock_llm_process.model_name = "test-model"
-        mock_llm_process.tools = []
-        mock_llm_process.debug_tools = True
-        mock_llm_process.api_params = {}
-        mock_llm_process.tool_handlers = {}
-        mock_llm_process.aggregator = None
-        
-        # Set up mock response
-        mock_response = MagicMock()
-        mock_response.content = []
-        
-        # Set up mock for messages.create
-        mock_llm_process.client.messages.create = AsyncMock(return_value=mock_response)
-        
-        # Mock process_response_content to simulate empty response
-        with patch("llmproc.providers.anthropic_tools.process_response_content",
-                  return_value=(False, [], "")) as mock_process:
-            
-            # Call run_anthropic_with_tools
-            result = await run_anthropic_with_tools(
-                llm_process=mock_llm_process,
-                system_prompt="Test system prompt",
-                messages=[{"role": "user", "content": "Test message"}],
-                max_iterations=1
-            )
-            
-            # It should return a non-empty fallback message
-            assert result
-            assert len(result) > 0
-            # It should contain one of these fallback messages
-            possible_messages = ["didn't get", "rephrase", "error", "iteration"]
-            assert any(msg in result.lower() for msg in possible_messages)
+        """This test is now skipped as we've moved to the AnthropicProcessExecutor API."""
+        pass

@@ -196,12 +196,28 @@ async def test_run_with_time_tool(mock_anthropic, mock_mcp_registry, mock_env, t
         )
         process = LLMProcess(program=program)
     
-    # Patch the _async_run method directly
-    process._async_run = AsyncMock(return_value="The current time is 2022-03-10T00:00:00Z")
+    # Import RunResult for mocking
+    from llmproc.results import RunResult
+    
+    # Create a mock RunResult
+    mock_run_result = RunResult()
+    mock_run_result.api_calls = 1
+    
+    # Patch the _async_run method directly to return the mock RunResult
+    process._async_run = AsyncMock(return_value=mock_run_result)
+    
+    # Patch get_last_message to return our expected response
+    process.get_last_message = MagicMock(return_value="The current time is 2022-03-10T00:00:00Z")
     
     # Call the run method
-    response = await process.run("What time is it now?")
+    result = await process.run("What time is it now?")
     
-    # Assert response contains time information
-    assert "time" in response.lower()
-    process._async_run.assert_called_once_with("What time is it now?", 10)
+    # Assert the result is our mock RunResult
+    assert isinstance(result, RunResult)
+    assert result.api_calls == 1
+    
+    # Check that the _async_run method was called
+    process._async_run.assert_called_once_with("What time is it now?", 10, None)
+    
+    # In our new API design, get_last_message is not called inside the run method.
+    # It's the responsibility of the caller to extract the message when needed.
