@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union, TypedDict,
 
 from .spawn import spawn_tool, spawn_tool_def
 from .fork import fork_tool, fork_tool_def
+from .calculator import calculator_tool, calculator_tool_def
 from .tool_result import ToolResult
 from . import mcp
 
@@ -111,6 +112,7 @@ class ToolRegistry:
 _SYSTEM_TOOLS = {
     "spawn": (spawn_tool, spawn_tool_def),
     "fork": (fork_tool, fork_tool_def),
+    "calculator": (calculator_tool, calculator_tool_def),
 }
 
 def get_tool(name: str) -> Tuple[ToolHandler, ToolSchema]:
@@ -155,6 +157,10 @@ def register_system_tools(registry: ToolRegistry, process) -> None:
     # Register fork tool if enabled
     if "fork" in enabled_tools:
         register_fork_tool(registry, process)
+        
+    # Register calculator tool if enabled
+    if "calculator" in enabled_tools:
+        register_calculator_tool(registry)
 
 def register_spawn_tool(registry: ToolRegistry, process) -> None:
     """Register the spawn tool with a registry.
@@ -197,23 +203,44 @@ def register_fork_tool(registry: ToolRegistry, process) -> None:
     # The actual fork implementation is handled by the process executor
     # This is just a placeholder handler for the interface
     async def fork_handler(args):
-        return {
-            "error": "Direct calls to fork_tool are not supported. This should be handled by the process executor.",
-            "is_error": True
-        }
+        return ToolResult.from_error(
+            "Direct calls to fork_tool are not supported. This should be handled by the process executor."
+        )
     
     # Register with the registry
     registry.register_tool("fork", fork_handler, api_tool_def)
     
     logger.info(f"Registered fork tool for process")
+    
+
+def register_calculator_tool(registry: ToolRegistry) -> None:
+    """Register the calculator tool with a registry.
+    
+    Args:
+        registry: The ToolRegistry to register the tool with
+    """
+    # Get tool definition
+    api_tool_def = calculator_tool_def.copy()
+    
+    # Create a handler function
+    async def calculator_handler(args):
+        expression = args.get("expression", "")
+        precision = args.get("precision", 6)
+        return await calculator_tool(expression, precision)
+    
+    # Register with the registry
+    registry.register_tool("calculator", calculator_handler, api_tool_def)
+    
+    logger.info(f"Registered calculator tool")
 
 __all__ = [
     "spawn_tool", "spawn_tool_def", 
     "fork_tool", "fork_tool_def",
+    "calculator_tool", "calculator_tool_def",
     "get_tool", "list_available_tools",
     "ToolSchema", "ToolHandler",
     "ToolRegistry", "register_system_tools",
-    "register_spawn_tool", "register_fork_tool",
+    "register_spawn_tool", "register_fork_tool", "register_calculator_tool",
     "ToolResult",
     "mcp"
 ]
