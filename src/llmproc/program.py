@@ -116,6 +116,11 @@ class LLMProgram:
 
         Returns:
             Dictionary of API parameters for LLM API calls
+            
+        Note:
+            This method is maintained for backward compatibility. For a more flexible
+            approach, consider using LLMProgramConfig.get_api_parameters() which doesn't
+            filter out unknown parameters, allowing for evolution of LLM APIs.
         """
         api_params = {}
         api_param_keys = [

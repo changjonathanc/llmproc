@@ -150,3 +150,53 @@ class LLMProgramConfig(BaseModel):
     model_config = {
         "extra": "forbid"  # Forbid extra fields
     }
+    
+    @model_validator(mode="after")
+    def validate_parameters(self):
+        """Validate the parameters dictionary and issue warnings for unknown parameters.
+        
+        This validator doesn't reject unknown parameters, it just issues warnings.
+        We want to stay flexible as LLM APIs evolve, but provide guidance on what's expected.
+        """
+        import warnings
+        
+        # Standard LLM API parameters that we expect to see
+        known_parameters = {
+            "temperature",
+            "max_tokens",
+            "top_p",
+            "frequency_penalty",
+            "presence_penalty",
+            # OpenAI specific
+            "top_k",
+            "stop",
+            # Anthropic specific
+            "top_k",
+            "max_tokens_to_sample",
+            "stop_sequences",
+        }
+        
+        if self.parameters:
+            for param_name in self.parameters:
+                if param_name not in known_parameters:
+                    warnings.warn(
+                        f"Unknown API parameter '{param_name}' in configuration. "
+                        f"This may be a typo or a newer parameter not yet recognized.",
+                        stacklevel=2
+                    )
+        
+        return self
+        
+    def get_api_parameters(self) -> dict[str, Any]:
+        """Extract API parameters from the parameters dictionary.
+        
+        This method filters the parameters to only include those that are relevant
+        to the LLM API calls. Unlike the _extract_api_parameters method in LLMProgram,
+        this does NOT filter out unknown parameters, maintaining flexibility.
+        
+        Returns:
+            Dictionary of parameters to pass to the LLM API
+        """
+        # For now, we're being permissive and returning all parameters
+        # This allows for flexibility as APIs evolve
+        return self.parameters.copy() if self.parameters else {}
