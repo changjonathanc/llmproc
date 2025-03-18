@@ -273,20 +273,12 @@ class LLMProcess:
         if self.provider == "openai":
             # Use the OpenAI process executor (simplified version)
             executor = OpenAIProcessExecutor()
-            api_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
-            
-            # Update the run result with the number of API calls (legacy support)
-            if run_result.api_calls == 0 and api_result.api_calls > 0:
-                run_result.api_calls = api_result.api_calls
+            run_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
                 
         elif self.provider == "anthropic":
             # Use the stateless AnthropicProcessExecutor
             executor = AnthropicProcessExecutor()
-            api_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
-            
-            # Update the run result with the number of API calls (legacy support)
-            if run_result.api_calls == 0 and api_result.api_calls > 0:
-                run_result.api_calls = api_result.api_calls
+            run_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
                 
         elif self.provider == "vertex":
             raise NotImplementedError("Vertex is not yet implemented")
