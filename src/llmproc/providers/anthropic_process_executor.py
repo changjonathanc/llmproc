@@ -133,7 +133,6 @@ class AnthropicProcessExecutor:
                             )
                         else:
                             result = await process.call_tool(tool_name, tool_args)
-                            print(f"Tool result: {result}")
 
                         # Fire callback for tool end if provided
                         if on_tool_end:
@@ -144,7 +143,7 @@ class AnthropicProcessExecutor:
 
                         # Check if the result is a ToolResult instance
                         from llmproc.tools.tool_result import ToolResult
-                        
+
                         if isinstance(result, ToolResult):
                             # Get the dictionary representation
                             result_dict = result.to_dict()
@@ -263,7 +262,7 @@ class AnthropicProcessExecutor:
     async def _fork(process, params, tool_id, last_assistant_response):
         """Fork a conversation"""
         from llmproc.tools.tool_result import ToolResult
-        
+
         if not process.allow_fork:
             return ToolResult.from_error("Forking is not allowed for this agent, possible reason: You are already a forked instance")
 
@@ -312,7 +311,7 @@ class AnthropicProcessExecutor:
         responses = await asyncio.gather(
             *[process_fork(i, prompt) for i, prompt in enumerate(prompts)]
         )
-        
+
         # Return results as a ToolResult object
         from llmproc.tools.tool_result import ToolResult
         return ToolResult.from_success(json.dumps(responses))
