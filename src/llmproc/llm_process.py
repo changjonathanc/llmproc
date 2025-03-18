@@ -21,6 +21,7 @@ except ImportError:
 
 from llmproc.providers import get_provider_client
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 from llmproc.tools import ToolRegistry, register_system_tools, mcp
 
 load_dotenv()
@@ -109,6 +110,13 @@ class LLMProcess:
         # Get project_id and region for Vertex if provided in parameters
         project_id = getattr(program, "project_id", None)
         region = getattr(program, "region", None)
+        
+        # Check if OpenAI provider is used with tools (currently not supported)
+        if self.provider == "openai" and self.enabled_tools:
+            raise ValueError(
+                "Tool usage is not yet supported for OpenAI models in this implementation. "
+                "Please use a model without tools, or use the Anthropic provider for tool support."
+            )
 
         # Initialize the client
         self.client = get_provider_client(self.provider, self.model_name, project_id, region)
@@ -263,15 +271,22 @@ class LLMProcess:
 
         # Create provider-specific process executors
         if self.provider == "openai":
-            raise NotImplementedError("OpenAI is not yet implemented")
+            # Use the OpenAI process executor (simplified version)
+            executor = OpenAIProcessExecutor()
+            api_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
+            
+            # Update the run result with the number of API calls (legacy support)
+            if run_result.api_calls == 0 and api_result.api_calls > 0:
+                run_result.api_calls = api_result.api_calls
+                
         elif self.provider == "anthropic":
             # Use the stateless AnthropicProcessExecutor
             executor = AnthropicProcessExecutor()
-            api_calls = await executor.run(self, user_input, max_iterations, callbacks, run_result)
+            api_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
             
             # Update the run result with the number of API calls (legacy support)
-            if run_result.api_calls == 0 and api_calls > 0:
-                run_result.api_calls = api_calls
+            if run_result.api_calls == 0 and api_result.api_calls > 0:
+                run_result.api_calls = api_result.api_calls
                 
         elif self.provider == "vertex":
             raise NotImplementedError("Vertex is not yet implemented")

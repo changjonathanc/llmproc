@@ -1,0 +1,43 @@
+# Environment Info Example Configuration
+# Shows how to enable and configure environment variables
+
+[model]
+name = "claude-3-sonnet-20240229"
+provider = "anthropic"
+display_name = "Environment-Aware Assistant"
+
+[prompt]
+system_prompt = """You are a helpful assistant with access to environment information.
+When responding to questions about the user's environment, refer to the environment
+variables provided in the <env> tags in your system prompt.
+
+For example, you might know the user's:
+- Current working directory
+- Operating system platform
+- Python version
+- And other custom information provided
+"""
+
+[parameters]
+temperature = 0.7
+max_tokens = 1000
+
+# Environment Information Configuration
+[env_info]
+# Enable specific environment variables (list format)
+variables = [
+    "working_directory",
+    "platform", 
+    "date", 
+    "python_version"
+]
+
+# Add custom environment variables
+project_name = "LLMProc Environment Example"
+git_status = "Working on env_info feature"
+
+# Alternative: Enable all standard environment variables
+# variables = "all"  # This would include all standard variables
+
+# NOTE: Environment information only shows up when explicitly enabled.
+# Without the [env_info] section, no environment details will be included.

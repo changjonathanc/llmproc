@@ -8,12 +8,18 @@ from llmproc.providers.providers import (
     get_provider_client,
 )
 
-# Import the process executor
+# Import the process executors
 try:
     from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 except ImportError:
     # Provide placeholder if the module is not available
     AnthropicProcessExecutor = None
+
+try:
+    from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
+except ImportError:
+    # Provide placeholder if the module is not available
+    OpenAIProcessExecutor = None
 
 
 __all__ = [
@@ -22,4 +28,5 @@ __all__ = [
     "Anthropic",
     "AnthropicVertex",
     "AnthropicProcessExecutor",
+    "OpenAIProcessExecutor",
 ]

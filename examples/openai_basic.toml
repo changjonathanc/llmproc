@@ -1,0 +1,17 @@
+# Basic OpenAI example for LLMProc
+# Uses the new OpenAIProcessExecutor implementation
+
+[model]
+name = "gpt-4o-mini"
+provider = "openai"
+display_name = "GPT-4o-mini"
+
+[prompt]
+system_prompt = """You are a helpful AI assistant.
+Please respond to the user's query with relevant information and clear explanations.
+Keep your responses concise.
+"""
+
+[parameters]
+temperature = 0.7
+max_tokens = 250
