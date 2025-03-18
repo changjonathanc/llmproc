@@ -22,14 +22,23 @@ logger = logging.getLogger("llmproc.cli")
 
 @click.command()
 @click.argument("program_path", required=False)
-def main(program_path=None) -> None:
-    """Run a simple interactive CLI for LLMProc.
+@click.option("--prompt", "-p", help="Run in non-interactive mode with the given prompt")
+@click.option("--non-interactive", "-n", is_flag=True, help="Run in non-interactive mode (reads from stdin if no prompt provided)")
+def main(program_path=None, prompt=None, non_interactive=False) -> None:
+    """Run a simple CLI for LLMProc.
 
     PROGRAM_PATH is an optional path to a TOML program file.
     If not provided, you'll be prompted to select from available examples.
+    
+    Supports three modes:
+    1. Interactive mode (default): Chat continuously with the model
+    2. Non-interactive with prompt: Use --prompt/-p "your prompt here"
+    3. Non-interactive with stdin: Use --non-interactive/-n and pipe input
     """
-    click.echo("LLMProc CLI Demo")
-    click.echo("----------------")
+    # Only show header in interactive mode or if verbose logging is enabled
+    if not (prompt or non_interactive) or logging.getLogger("llmproc").level == logging.DEBUG:
+        click.echo("LLMProc CLI Demo")
+        click.echo("----------------")
 
     # If program path is provided, use it
     if program_path:
@@ -107,72 +116,104 @@ def main(program_path=None) -> None:
         init_time = time.time() - start_time
         logger.info(f"Process initialized in {init_time:.2f} seconds")
 
-        # Start interactive session
-        click.echo("\nStarting interactive chat session. Type 'exit' or 'quit' to end.")
-        click.echo("Type 'reset' to reset the conversation state.")
-        click.echo("Type 'verbose' to toggle verbose logging.")
+        # Set up callbacks for real-time updates
+        callbacks = {
+            "on_tool_start": lambda tool_name, args: logger.info(f"Using tool: {tool_name}"),
+            "on_tool_end": lambda tool_name, result: logger.info(f"Tool {tool_name} completed"),
+            "on_response": lambda content: logger.info(f"Received response: {content[:50]}...")
+        }
 
-        # Toggle for verbose logging
-        verbose = False
-
-        while True:
-            user_input = click.prompt("\nYou", prompt_suffix="> ")
-
-            if user_input.lower() in ("exit", "quit"):
-                click.echo("Ending session.")
-                break
-
-            if user_input.lower() == "reset":
-                process.reset_state()
-                click.echo("Conversation state has been reset.")
-                continue
-                
-            if user_input.lower() == "verbose":
-                verbose = not verbose
-                level = logging.DEBUG if verbose else logging.INFO
-                logging.getLogger("llmproc").setLevel(level)
-                click.echo(f"Verbose logging {'enabled' if verbose else 'disabled'}")
-                continue
-
-            # Set up callbacks for real-time updates
-            callbacks = {
-                "on_tool_start": lambda tool_name, args: logger.info(f"Using tool: {tool_name}"),
-                "on_tool_end": lambda tool_name, result: logger.info(f"Tool {tool_name} completed"),
-                "on_response": lambda content: logger.info(f"Received response: {content[:50]}...")
-            }
+        # Check if we're in non-interactive mode
+        if prompt or non_interactive:
+            # Non-interactive mode with single prompt
+            user_prompt = prompt
+            
+            # If no prompt is provided but non-interactive flag is set, read from stdin
+            if not user_prompt and non_interactive:
+                if not sys.stdin.isatty():  # Check if input is being piped in
+                    user_prompt = sys.stdin.read().strip()
+                else:
+                    click.echo("Error: No prompt provided for non-interactive mode. Use --prompt or pipe input.", err=True)
+                    sys.exit(1)
+            
+            logger.info("Running in non-interactive mode with single prompt")
             
             # Track time for this run
             start_time = time.time()
             
-            # Show a spinner while running (to be implemented)
-            click.echo("Thinking...", nl=False)
-            
-            # Run the process with the new API
-            run_result = asyncio.run(process.run(user_input, callbacks=callbacks))
+            # Run the process with the provided prompt
+            run_result = asyncio.run(process.run(user_prompt, callbacks=callbacks))
             
             # Get the elapsed time
             elapsed = time.time() - start_time
             
-            # Clear the "Thinking..." text
-            click.echo("\r" + " " * 12 + "\r", nl=False)
-            
             # Log run result information
-            if verbose:
-                logger.debug(f"Run completed in {elapsed:.2f}s with {run_result.api_calls} API calls")
-                for i, api_info in enumerate(run_result.api_call_infos):
-                    if "type" in api_info and api_info["type"] == "tool_call":
-                        logger.debug(f"Tool call: {api_info.get('tool_name', 'unknown')}")
-                    elif "model" in api_info:
-                        logger.debug(f"API call {i+1}: model={api_info['model']}")
-            else:
-                if run_result.api_calls > 0:
-                    logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s")
+            logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s")
             
-            # Get the last assistant message
+            # Get the last assistant message and just print the raw response
             response = process.get_last_message()
+            click.echo(response)
             
-            # Display the response
-            click.echo(f"\n{process.display_name}> {response}")
+        else:
+            # Interactive mode
+            click.echo("\nStarting interactive chat session. Type 'exit' or 'quit' to end.")
+            click.echo("Type 'reset' to reset the conversation state.")
+            click.echo("Type 'verbose' to toggle verbose logging.")
+
+            # Toggle for verbose logging
+            verbose = False
+
+            while True:
+                user_input = click.prompt("\nYou", prompt_suffix="> ")
+
+                if user_input.lower() in ("exit", "quit"):
+                    click.echo("Ending session.")
+                    break
+
+                if user_input.lower() == "reset":
+                    process.reset_state()
+                    click.echo("Conversation state has been reset.")
+                    continue
+                    
+                if user_input.lower() == "verbose":
+                    verbose = not verbose
+                    level = logging.DEBUG if verbose else logging.INFO
+                    logging.getLogger("llmproc").setLevel(level)
+                    click.echo(f"Verbose logging {'enabled' if verbose else 'disabled'}")
+                    continue
+                
+                # Track time for this run
+                start_time = time.time()
+                
+                # Show a spinner while running (to be implemented)
+                click.echo("Thinking...", nl=False)
+                
+                # Run the process with the new API
+                run_result = asyncio.run(process.run(user_input, callbacks=callbacks))
+                
+                # Get the elapsed time
+                elapsed = time.time() - start_time
+                
+                # Clear the "Thinking..." text
+                click.echo("\r" + " " * 12 + "\r", nl=False)
+                
+                # Log run result information
+                if verbose:
+                    logger.debug(f"Run completed in {elapsed:.2f}s with {run_result.api_calls} API calls")
+                    for i, api_info in enumerate(run_result.api_call_infos):
+                        if "type" in api_info and api_info["type"] == "tool_call":
+                            logger.debug(f"Tool call: {api_info.get('tool_name', 'unknown')}")
+                        elif "model" in api_info:
+                            logger.debug(f"API call {i+1}: model={api_info['model']}")
+                else:
+                    if run_result.api_calls > 0:
+                        logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s")
+                
+                # Get the last assistant message
+                response = process.get_last_message()
+                
+                # Display the response
+                click.echo(f"\n{process.display_name}> {response}")
 
     except Exception as e:
         import traceback
