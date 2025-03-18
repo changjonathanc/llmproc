@@ -113,12 +113,16 @@ async def spawn_tool(
             linked_process = LLMProcess(program=linked_program)
             
         # Execute the query on the process
-        response = await linked_process.run(query)
+        run_result = await linked_process.run(query)
+        
+        # Get the actual text response from the process
+        response_text = linked_process.get_last_message()
         
         result = {
             "program": program_name,
             "query": query,
-            "response": response
+            "response": response_text,
+            "api_calls": run_result.api_calls
         }
         return result
     except Exception as e:

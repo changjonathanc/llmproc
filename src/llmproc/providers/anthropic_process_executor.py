@@ -158,30 +158,42 @@ class AnthropicProcessExecutor:
 
         This has some special handling, it's not meant for general use.
         """
-
         iterations = 0
         next_prompt = user_prompt
+        callbacks = {}  # No callbacks for this internal method
+        total_api_calls = 0
+        
         while iterations < max_iterations:
-            iterations += await self.run(process, next_prompt, max_iterations=max_iterations-iterations, is_tool_continuation=False)
-            # NOTE: check if the last message is a text response
-            # TODO: maybe add a helper method for this
-
+            # Run the process and get a RunResult
+            run_result = await self.run(process, next_prompt, max_iterations=max_iterations-iterations, 
+                                       callbacks=callbacks, is_tool_continuation=False)
+            
+            # Track API calls
+            iterations += run_result.api_calls 
+            total_api_calls += run_result.api_calls
+            
+            # Check if we've reached the text response we need
+            last_message = process.get_last_message()
+            if last_message:
+                return last_message  # Return the text message directly
+                
+            # If we didn't get a response, handle special cases
             if process.run_stop_reason == "max_iterations":
-                # TODO: we might want to handle this case differently,
-                # Currently, we allow the model another chance to respond with a text response to summarize the conversation
-                iterations += await self.run(process, PROMPT_SUMMARIZE_CONVERSATION, max_iterations=1, is_tool_continuation=False)
+                # Allow the model another chance to respond with a text response to summarize
+                run_result = await self.run(process, PROMPT_SUMMARIZE_CONVERSATION, 
+                                           max_iterations=1, callbacks=callbacks, 
+                                           is_tool_continuation=False)
+                total_api_calls += run_result.api_calls
+                
+                # Check again for a text response
+                last_message = process.get_last_message()
+                if last_message:
+                    return last_message
 
-            # now we check if the last message is a text response
-            last_message = process.messages[-1]
-            if last_message["role"] != "assistant":
-                # NOTE: this happens when the model decides to not respond
-                next_prompt = PROMPT_FORCE_MODEL_RESPONSE
-                continue
-
-            if last_message["role"] == "assistant" and last_message["content"] and last_message["content"][0]["type"] == "text":
-                return last_message["content"][0]["text"]
-                # we need to check if the last message is a model response (sometimes model can decide to not respond)
-
+            # If we still don't have a text response, prompt again
+            next_prompt = PROMPT_FORCE_MODEL_RESPONSE
+        
+        # If we've exhausted iterations without getting a proper response
         return "Maximum iterations reached without final response."
 
 
@@ -226,8 +238,9 @@ class AnthropicProcessExecutor:
             )
             # NOTE: run() will immediately add the prompt to the conversation as user message
             # I found this to work better than adding the prompt as the tool result
-            response = await child.run_till_text_response(
-                user_prompt=prompt, max_iterations=20, is_tool_continuation=False
+            executor = AnthropicProcessExecutor()  # Create a new executor for the child
+            response = await executor.run_till_text_response(
+                child, user_prompt=prompt, max_iterations=20
             )
             return {"id": i, "message": response}
 
