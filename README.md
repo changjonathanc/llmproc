@@ -337,7 +337,8 @@ This enables:
 7. [ ] Add support for reasoning models
 8. [ ] Add Process State Serialization & Restoration
 9. [ ] Implement retry mechanism with exponential backoff for API calls
-10. [ ] Improve stream mode support for all providers
+10. [ ] Enhance error handling and reporting across providers
+11. [ ] Improve stream mode support for all providers
 
 ## License
 
