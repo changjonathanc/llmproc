@@ -2,9 +2,10 @@
 
 import asyncio
 import os
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from llmproc.llm_process import LLMProcess
 from llmproc.tools.spawn import spawn_tool
@@ -12,13 +13,13 @@ from llmproc.tools.spawn import spawn_tool
 
 class TestProgramLinking:
     """Test program linking functionality."""
-    
-    def test_initialize_linked_programs(self):
-        """Test initialization of linked programs by testing the method directly."""
+
+    def test_program_linking_compilation(self):
+        """Test compilation of linked programs using LLMProgram.compile."""
         # Create a temporary directory for test files
         tmp_dir = Path("tmp_test_linked")
         tmp_dir.mkdir(exist_ok=True)
-        
+
         try:
             # Create a test file path
             expert_toml = tmp_dir / "expert.toml"
@@ -31,141 +32,189 @@ class TestProgramLinking:
                 [prompt]
                 system_prompt = "Expert prompt"
                 """)
+
+            # Create a main toml that links to the expert
+            main_toml = tmp_dir / "main.toml"
+            with open(main_toml, "w") as f:
+                f.write(f"""
+                [model]
+                name = "main-model"
+                provider = "anthropic"
                 
+                [prompt]
+                system_prompt = "Main prompt"
+                
+                [linked_programs]
+                expert = "{expert_toml.name}"
+                """)
+
             # Mock the client creation to avoid API calls
-            with patch("llmproc.providers.providers.get_provider_client") as mock_get_client:
+            with patch(
+                "llmproc.providers.providers.get_provider_client"
+            ) as mock_get_client:
                 mock_client = MagicMock()
                 mock_get_client.return_value = mock_client
-                
-                # Initialize the base process without linked programs
-                process = LLMProcess(
-                    model_name="test-model",
-                    provider="anthropic",
-                    system_prompt="Test prompt"
-                )
-                
-                # Test with direct method call with mock
-                with patch("llmproc.llm_process.LLMProcess.from_toml") as mock_from_toml:
-                    mock_expert = MagicMock()
-                    mock_from_toml.return_value = mock_expert
-                    
-                    # Call the method directly
-                    process._initialize_linked_programs({"expert": str(expert_toml)})
-                    
-                    # Verify the method worked
+
+                # Test with direct compilation
+                from llmproc.program import LLMProgram
+
+                with patch(
+                    "llmproc.program.LLMProgram.compile", wraps=LLMProgram.compile
+                ) as mock_compile:
+                    # Compile the main program with linked programs
+                    main_program = LLMProgram.compile(main_toml, include_linked=True)
+
+                    # Verify the compilation worked - now linked_programs contains Program objects
+                    assert hasattr(main_program, "linked_programs")
+                    assert "expert" in main_program.linked_programs
+
+                    # Create a process from the program
+                    process = LLMProcess(program=main_program)
+
+                    # Verify the process has the linked program
+                    assert process.has_linked_programs
                     assert "expert" in process.linked_programs
-                    assert process.linked_programs["expert"] == mock_expert
-                    mock_from_toml.assert_called_once_with(expert_toml)
-        
+
+                    # Verify compile was called
+                    mock_compile.assert_called_with(main_toml, include_linked=True)
+
         finally:
             # Clean up test files
-            if expert_toml.exists():
-                expert_toml.unlink()
+            for file_path in [expert_toml, main_toml]:
+                if file_path.exists():
+                    file_path.unlink()
             if tmp_dir.exists():
                 tmp_dir.rmdir()
-    
+
     def test_register_spawn_tool(self):
         """Test registration of spawn tool."""
         # Mock the client creation to avoid API calls
-        with patch("llmproc.providers.providers.get_provider_client") as mock_get_client:
+        with patch(
+            "llmproc.providers.providers.get_provider_client"
+        ) as mock_get_client:
             mock_client = MagicMock()
             mock_get_client.return_value = mock_client
-            
+
             # Create a process with linked programs
-            process = LLMProcess(
+            from llmproc.program import LLMProgram
+            from llmproc.tools import register_spawn_tool
+
+            program = LLMProgram(
                 model_name="test-model",
                 provider="anthropic",
                 system_prompt="Test prompt",
-                linked_programs_instances={"expert": MagicMock()},
-                tools={"enabled": ["spawn"]}
+                tools={"enabled": ["spawn"]},
             )
-            
-            # Set mcp_enabled manually for testing
-            process.mcp_enabled = True
-            
-            # Register the spawn tool
-            process._register_spawn_tool()
-        
-        # Check that the tool was registered (may be registered twice in test environment)
+            process = LLMProcess(
+                program=program, linked_programs_instances={"expert": MagicMock()}
+            )
+
+            # Registry should already contain the spawn tool from initialization
+            # but we'll register it directly for testing
+            register_spawn_tool(process.tool_registry, process)
+
+        # Check that the tool was registered
         assert len(process.tools) >= 1
+        assert any(tool["name"] == "spawn" for tool in process.tools)
+        assert "spawn" in process.tool_handlers
         assert process.tools[0]["name"] == "spawn"
         assert "input_schema" in process.tools[0]
         # Handler is stored separately in tool_handlers
         assert "spawn" in process.tool_handlers
-    
+
     @pytest.mark.asyncio
     async def test_spawn_tool_functionality(self):
         """Test the functionality of the spawn tool."""
         # Create mock linked program
+        # Import RunResult for mock creation
+        from llmproc.results import RunResult
+
+        # Create mock linked program
         mock_expert = MagicMock()
-        mock_expert.run = AsyncMock(return_value="Expert response")
-        
+
+        # Create a mock RunResult for the expert's response
+        mock_run_result = RunResult()
+        mock_run_result.api_calls = 1
+        mock_expert.run = AsyncMock(return_value=mock_run_result)
+
+        # Mock get_last_message to return the expected response
+        mock_expert.get_last_message = MagicMock(return_value="Expert response")
+
         # Mock the client creation to avoid API calls
-        with patch("llmproc.providers.providers.get_provider_client") as mock_get_client:
+        with patch(
+            "llmproc.providers.providers.get_provider_client"
+        ) as mock_get_client:
             mock_client = MagicMock()
             mock_get_client.return_value = mock_client
-            
+
             # Create a process with linked programs
-            process = LLMProcess(
+            from llmproc.program import LLMProgram
+
+            program = LLMProgram(
                 model_name="test-model",
                 provider="anthropic",
                 system_prompt="Test prompt",
-                linked_programs_instances={"expert": mock_expert}
             )
-        
+            process = LLMProcess(
+                program=program, linked_programs_instances={"expert": mock_expert}
+            )
+
         # Test the spawn tool
         result = await spawn_tool(
-            program_name="expert",
-            query="Test query",
-            llm_process=process
+            program_name="expert", query="Test query", llm_process=process
         )
-        
+
         # Check the result
-        assert result["program"] == "expert"
-        assert result["query"] == "Test query"
-        assert result["response"] == "Expert response"
+        from llmproc.tools.tool_result import ToolResult
+
+        assert isinstance(result, ToolResult)
+        assert result.is_error is False
+        assert result.content == "Expert response"
         mock_expert.run.assert_called_once_with("Test query")
-    
+
     @pytest.mark.asyncio
     async def test_spawn_tool_error_handling(self):
         """Test error handling in the spawn tool."""
         # Mock the client creation to avoid API calls
-        with patch("llmproc.providers.providers.get_provider_client") as mock_get_client:
+        with patch(
+            "llmproc.providers.providers.get_provider_client"
+        ) as mock_get_client:
             mock_client = MagicMock()
             mock_get_client.return_value = mock_client
-            
+
             # Create a process without linked programs
-            process = LLMProcess(
+            from llmproc.program import LLMProgram
+
+            program = LLMProgram(
                 model_name="test-model",
                 provider="anthropic",
-                system_prompt="Test prompt"
+                system_prompt="Test prompt",
             )
-        
+            process = LLMProcess(program=program)
+
         # Test with missing linked program
         result = await spawn_tool(
-            program_name="nonexistent",
-            query="Test query",
-            llm_process=process
+            program_name="nonexistent", query="Test query", llm_process=process
         )
-        
+
         # Check that an error was returned
-        assert "error" in result
-        assert result["is_error"] is True
-        assert "not found" in result["error"]
-        
+        from llmproc.tools.tool_result import ToolResult
+
+        assert isinstance(result, ToolResult)
+        assert result.is_error is True
+        assert "not found" in result.content
+
         # Test with exception in linked program
         mock_expert = MagicMock()
         mock_expert.run = AsyncMock(side_effect=Exception("Test error"))
         process.linked_programs = {"expert": mock_expert}
         process.has_linked_programs = True
-        
+
         result = await spawn_tool(
-            program_name="expert",
-            query="Test query",
-            llm_process=process
+            program_name="expert", query="Test query", llm_process=process
         )
-        
+
         # Check that an error was returned
-        assert "error" in result
-        assert result["is_error"] is True
-        assert "Test error" in result["error"]
+        assert isinstance(result, ToolResult)
+        assert result.is_error is True
+        assert "Test error" in result.content

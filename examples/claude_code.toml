@@ -27,4 +27,4 @@ enabled = ["spawn"]
 
 
 [linked_programs]
-enabled = ["./claude_code_dispatch_agent.toml"]
+dispatch_agent = "./claude_code_dispatch_agent.toml"

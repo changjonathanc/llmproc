@@ -1,5 +1,6 @@
 """Tests for the TOML configuration functionality."""
 
+import asyncio
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -7,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmproc import LLMProcess
+from llmproc import LLMProcess, LLMProgram
 
 
 @pytest.fixture
@@ -29,7 +30,27 @@ def mock_env():
     os.environ.update(original_env)
 
 
-def test_from_toml_minimal(mock_env, mock_get_provider_client):
+# Mock LLMProcess.create to avoid async initialization
+@pytest.fixture
+def mock_create_method():
+    """Mock the async create method to make it synchronous for testing."""
+    original_create = LLMProcess.create
+
+    @classmethod
+    async def mock_create(cls, program, linked_programs_instances=None):
+        # Create instance with basic initialization (skipping async)
+        instance = cls(program, linked_programs_instances)
+        if hasattr(instance, "_needs_async_init") and instance._needs_async_init:
+            instance.mcp_enabled = True
+            instance._mcp_initialized = True  # Skip actual initialization
+        return instance
+
+    LLMProcess.create = mock_create
+    yield
+    LLMProcess.create = original_create
+
+
+def test_from_toml_minimal(mock_env, mock_get_provider_client, mock_create_method):
     """Test loading from a minimal TOML configuration."""
     with NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as temp_file:
         temp_file.write("""
@@ -43,17 +64,21 @@ system_prompt = "You are a test assistant."
         temp_path = temp_file.name
 
     try:
-        process = LLMProcess.from_toml(temp_path)
-        
+        # Use the two-step pattern
+        program = LLMProgram.from_toml(temp_path)
+        # For tests, we can use asyncio.run to call start()
+        process = asyncio.run(program.start())
+
         assert process.model_name == "gpt-4o-mini"
         assert process.system_prompt == "You are a test assistant."
-        assert process.state == [{"role": "system", "content": "You are a test assistant."}]
+        assert process.state == []  # Empty until first run
+        assert process.enriched_system_prompt is None  # Not generated yet
         assert process.parameters == {}
     finally:
         os.unlink(temp_path)
 
 
-def test_from_toml_complex(mock_env, mock_get_provider_client):
+def test_from_toml_complex(mock_env, mock_get_provider_client, mock_create_method):
     """Test loading from a complex TOML configuration."""
     with TemporaryDirectory() as temp_dir:
         # Create a system prompt file
@@ -61,7 +86,7 @@ def test_from_toml_complex(mock_env, mock_get_provider_client):
         prompt_dir.mkdir()
         prompt_file = prompt_dir / "system_prompt.md"
         prompt_file.write_text("You are a complex test assistant.")
-        
+
         # Create a TOML config file
         config_file = Path(temp_dir) / "config.toml"
         config_file.write_text("""
@@ -79,12 +104,15 @@ top_p = 0.95
 frequency_penalty = 0.2
 presence_penalty = 0.1
 """)
-        
-        process = LLMProcess.from_toml(config_file)
-        
+
+        # Use the two-step pattern
+        program = LLMProgram.from_toml(config_file)
+        process = asyncio.run(program.start())
+
         assert process.model_name == "gpt-4o"
         assert process.system_prompt == "You are a complex test assistant."
-        assert process.state == [{"role": "system", "content": "You are a complex test assistant."}]
+        assert process.state == []  # Empty until first run
+        assert process.enriched_system_prompt is None  # Not generated yet
         # Check that parameters are in api_params instead of parameters
         assert hasattr(process, "api_params")
         assert process.api_params.get("top_p") == 0.95

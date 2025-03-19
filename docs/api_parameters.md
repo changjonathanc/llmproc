@@ -24,17 +24,17 @@
 
 - **top_k**: Only samples from the top K options for each subsequent token. Used to remove "long tail" low probability responses.
 
-## Vertex AI API Parameters
+## Claude on Vertex AI (anthropic_vertex) Parameters
 
 - **temperature** (0-1): Controls randomness in responses, with values closer to 0 being more deterministic.
 
-- **max_output_tokens**: Maximum number of tokens to generate. The equivalent of OpenAI's max_tokens and Anthropic's max_tokens parameter.
+- **max_tokens**: Maximum number of tokens to generate. Same as direct Anthropic API.
 
 - **top_p** (0-1): Controls diversity via nucleus sampling, similar to other providers.
 
 - **top_k**: Only considers the top K tokens when generating each token in the response.
 
-### Vertex AI with Claude Models
+### Using Claude Models on Vertex AI
 
 When using Claude models through Vertex AI, the model name format includes the version with @ symbol:
 

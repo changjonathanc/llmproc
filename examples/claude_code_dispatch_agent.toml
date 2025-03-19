@@ -10,8 +10,6 @@ system_prompt_file = "../prompts/claude-code-dispatch-agent-system-prompt.md"
 temperature = 1
 max_tokens = 20000
 
-[preload]
-
 [mcp]
 config_path = "../config/mcp_servers.json"
 

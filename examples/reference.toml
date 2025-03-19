@@ -1,4 +1,4 @@
-# LLMProc Reference Configuration
+# LLMProc Reference Program
 # All supported options and parameters with minimal examples
 
 #----------------------------------------
@@ -7,11 +7,11 @@
 [model]
 # Model name (Required)
 name = "gpt-4o"  # OpenAI example
-# provider = "anthropic"  # For Claude models
-# provider = "vertex"  # For Google Vertex AI
+# provider = "anthropic"  # For Claude models directly via Anthropic API
+# provider = "anthropic_vertex"  # For Claude models via Google Vertex AI (uses ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION env vars)
 
 # Provider (Required)
-provider = "openai"  # Options: "openai", "anthropic", "vertex"
+provider = "openai"  # Options: "openai", "anthropic", "anthropic_vertex"
 
 # Optional: User-facing display name for the model
 # This is used in CLI interfaces and doesn't affect API calls
@@ -31,7 +31,7 @@ max_tokens = 150
 # Nucleus sampling parameter (0.0-1.0)
 top_p = 0.95
 
-# Top-K sampling (Anthropic and Vertex AI only)
+# Top-K sampling (Anthropic only)
 # top_k = 40
 
 # Frequency penalty (OpenAI only, -2.0 to 2.0)
@@ -45,6 +45,7 @@ presence_penalty = 0.0
 #----------------------------------------
 [prompt]
 # System prompt as a string
+# This is the base system prompt without any enhancements
 system_prompt = """You are a helpful assistant.
 Provide clear, accurate, and concise responses to user queries.
 Always maintain a neutral and professional tone."""
@@ -52,16 +53,78 @@ Always maintain a neutral and professional tone."""
 # OR use a file (relative path, takes precedence over system_prompt)
 # system_prompt_file = "../prompts/my_system_prompt.md"
 
+# Notes on system prompts:
+# - The system_prompt here is the base instruction set
+# - The actual prompt sent to the API is an "enriched system prompt"
+#   that includes environment info and preloaded file content
+# - The enriched prompt is generated on first run and preserved for the session
+
 #----------------------------------------
 # Preload Configuration
 #----------------------------------------
 [preload]
 # Files to preload as context (relative paths)
-# Content will be added to system prompt with XML tags
+# Content will be added to the enriched system prompt with XML tags
 # files = [
 #   "../prompts/example_prompt.md",
 #   "../README.md"
 # ]
+#
+# When files are preloaded:
+# - On first message, they're added to the enriched system prompt and stay fixed even if file changed during the conversation
+# - Format: <preload><file path="filename">content</file></preload>
+# - The combined system prompt + preload is used for all messages in the session
+
+#----------------------------------------
+# Environment Info Configuration
+#----------------------------------------
+[env_info]
+# The environment information feature provides context about the runtime environment to the LLM.
+# This adds an <env> XML block to the system prompt with selected information.
+#
+# This is disabled by default for privacy/security reasons (opt-in model).
+# No environment information is shared unless explicitly configured.
+#
+# CONFIGURATION OPTIONS:
+#
+# 1. SPECIFIC VARIABLES: List the exact variables you want included
+variables = ["working_directory", "platform", "date"]  
+
+# 2. ALL VARIABLES: Use "all" to include all standard environment variables
+# variables = "all"  
+
+# 3. DISABLE: Use an empty list to explicitly disable (this is the default)
+# variables = []  
+
+# NOTE: Only system-defined variables are supported.
+# Custom variables are not allowed in the env_info section.
+
+# AVAILABLE STANDARD VARIABLES:
+# - working_directory: Current working directory path
+#   Security note: Reveals file system structure
+#
+# - platform: Operating system (linux, darwin, windows)
+#   Usage: Useful for OS-specific instructions
+#
+# - date: Current date in YYYY-MM-DD format
+#   Usage: Provides temporal context for the model
+#
+# - python_version: Python interpreter version
+#   Usage: Helpful for code generation and compatibility
+#
+# - hostname: Name of the machine
+#   Security note: May reveal identifying information
+#
+# - username: Current user's system username
+#   Security note: Reveals identity information
+#
+# SECURITY CONSIDERATIONS:
+# - Only include variables necessary for your application
+# - Be cautious about exposing usernames, hostnames, or file paths
+# - Never include API keys, tokens, or passwords as custom variables
+# - Consider using different configurations for dev vs. production
+
+# For full documentation, see docs/env_info.md
 
 #----------------------------------------
 # Tools Configuration
@@ -69,12 +132,14 @@ Always maintain a neutral and professional tone."""
 [tools]
 # List of enabled tools
 # enabled = ["spawn"]  # Enable the spawn tool for program linking
+# enabled = ["fork"]   # Enable the fork tool for creating copies of the current process
+# enabled = ["spawn", "fork"]  # Enable multiple tools
 
 #----------------------------------------
 # Program Linking Configuration
 #----------------------------------------
 [linked_programs]
-# Map program names to their TOML configuration files
+# Map program names to their TOML program files
 # repo_expert = "./repo_expert.toml"
 # code_helper = "./code_helper.toml"
 
@@ -92,3 +157,4 @@ Always maintain a neutral and professional tone."""
 # github = ["search_repositories", "get_file_contents"]
 # codemcp = ["ReadFile"]
 # github = "all"  # Import all tools from GitHub server
+

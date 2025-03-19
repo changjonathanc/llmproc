@@ -2,21 +2,21 @@
 
 ## Overview
 
-The Program Linking feature allows LLMProcess instances to communicate with each other through a specialized "spawn" tool. This enables primary LLMs to delegate queries to specialized LLMs that have different configurations, system prompts, and preloaded content.
+The Program Linking feature allows LLM processes to communicate with each other through the "spawn" system call. This enables primary processes to delegate queries to specialized processes that have different system prompts, preloaded files, and parameters.
 
 ## Use Cases
 
-1. **Knowledge Specialization**: Create expert models with specialized knowledge by preloading different files for each model.
+1. **Knowledge Specialization**: Create specialized processes with domain-specific knowledge by preloading different files for each process.
    
-2. **Task Distribution**: Split complex tasks among multiple LLMs, each optimized for a specific subtask.
+2. **Task Distribution**: Split complex tasks among multiple processes, each optimized for a specific subtask.
    
-3. **Context Separation**: Keep large reference documents in separate LLMs to maintain clean context spaces.
+3. **Context Separation**: Keep large reference documents in separate processes to maintain clean context spaces.
 
-## Configuration
+## Setup
 
 Program linking is configured in two places:
 
-1. The main TOML configuration's `[linked_programs]` section specifies which programs to link:
+1. The main TOML program's `[linked_programs]` section specifies which programs to link:
 
 ```toml
 [linked_programs]
@@ -24,17 +24,17 @@ repo_expert = "./repo_expert.toml"
 code_helper = "./code_helper.toml"
 ```
 
-2. The `[tools]` section must include "spawn" in the enabled tools:
+2. The `[tools]` section must include "spawn" in the enabled system calls:
 
 ```toml
 [tools]
 enabled = ["spawn"]
 ```
 
-## Example
+## Example Program
 
 ```toml
-# main.toml - Primary LLM configuration
+# main.toml - Primary LLM program
 [model]
 name = "claude-3-haiku-20240307"
 provider = "anthropic"
@@ -55,7 +55,7 @@ repo_expert = "./repo_expert.toml"
 ```
 
 ```toml
-# repo_expert.toml - Expert LLM configuration
+# repo_expert.toml - Expert LLM program
 [model]
 name = "claude-3-haiku-20240307"
 provider = "anthropic"
@@ -79,12 +79,95 @@ files = [
 The spawn tool:
 1. Takes a program name and query
 2. Routes the query to the appropriate linked program
-3. Returns the response to the primary LLM
+3. Returns the response along with metrics to the primary LLM
 
 When the primary LLM uses the spawn tool, the query is executed by the linked program asynchronously, and the result is returned as part of the conversation.
+
+## Using Program Linking with the New API
+
+```python
+import asyncio
+from llmproc import LLMProgram
+
+async def main():
+    # Load and compile the main program with linked programs
+    main_program = LLMProgram.from_toml("path/to/main.toml")
+    
+    # Start the process with async initialization
+    main_process = await main_program.start()
+    
+    # Run a query that will likely use the spawn tool
+    run_result = await main_process.run(
+        "Please use the repo expert to analyze the structure of this project."
+    )
+    
+    # Get the assistant's response (which will include the expert's insights)
+    response = main_process.get_last_message()
+    print(f"Response (including expert knowledge): {response}")
+    
+    # Display run metrics
+    print(f"API calls: {run_result.api_calls}")
+    print(f"Duration: {run_result.duration_ms}ms")
+
+# Run the async function
+asyncio.run(main())
+```
+
+## Callback Support
+
+You can monitor spawn tool usage with callbacks:
+
+```python
+import asyncio
+from llmproc import LLMProgram
+
+async def main():
+    program = LLMProgram.from_toml("path/to/main.toml")
+    process = await program.start()
+    
+    # Define callbacks for monitoring tool usage
+    callbacks = {
+        "on_tool_start": lambda tool_name, args: print(
+            f"Starting {tool_name} with program={args.get('program_name')}"
+        ),
+        "on_tool_end": lambda tool_name, result: print(
+            f"Expert response received from {result.get('program')}"
+        )
+    }
+    
+    # Run with callbacks
+    run_result = await process.run(
+        "Ask the code helper to explain how async/await works", 
+        callbacks=callbacks
+    )
+    
+    # Get the final response
+    response = process.get_last_message()
+    print(f"Final response: {response}")
+
+asyncio.run(main())
+```
+
+## Metrics and Diagnostics
+
+The spawn tool now includes useful metrics in its results:
+
+```python
+# Example spawn tool result
+{
+    "program": "repo_expert",
+    "query": "What is the structure of this project?",
+    "response": "The project has a src/ directory with the main code...",
+    "api_calls": 2  # Number of API calls made by the expert
+}
+```
+
+These metrics are also aggregated in the main process's `RunResult` object.
 
 ## Best Practices
 
 1. **Clear System Prompts**: Make sure the primary LLM's system prompt explains the available expert programs
 2. **Specialized Knowledge**: Preload relevant files in each linked program to create true experts
 3. **Appropriate Delegation**: Train the main LLM to delegate only relevant queries to the specialized programs
+4. **Metrics Monitoring**: Use the RunResult object to track API usage across the entire program graph
+5. **Real-time Monitoring**: Use callbacks to get insights into tool execution as it happens

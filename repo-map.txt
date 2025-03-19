@@ -15,6 +15,7 @@ llmproc/
 │   └── mcp_servers.json             # Model Context Protocol servers configuration
 ├── docs/                            # Detailed documentation directory
 │   ├── api_parameters.md            # Documentation of OpenAI and Anthropic API parameters
+│   ├── fork-feature.md              # Documentation for fork system call feature
 │   ├── mcp-feature.md               # Documentation for Model Context Protocol (MCP) feature
 │   ├── mcp-feature-status.md        # Status and implementation progress of MCP feature
 │   ├── preload-feature.md           # Documentation for file preloading feature
@@ -23,6 +24,7 @@ llmproc/
 │   ├── anthropic.toml               # Anthropic model configuration example
 │   ├── claude_code.toml             # Claude Code assistant with MCP tools configuration
 │   ├── complex.toml                 # Complex configuration example with multiple parameters
+│   ├── fork.toml                    # Example showing fork system call functionality
 │   ├── minimal.toml                 # Minimal configuration example
 │   ├── mcp.toml                     # Model Context Protocol (MCP) configuration example
 │   ├── openai.toml                  # OpenAI model configuration example
@@ -70,9 +72,11 @@ llmproc/
 
 ### Core Implementation
 - `src/llmproc/llm_process.py`: The main LLMProcess class that handles interactions with LLM APIs, maintains conversation state, processes configurations, supports file preloading for context, and provides tool integration.
+- `src/llmproc/llm_process_inheritance.py`: Alternative implementation of LLMProcess as a subclass of LLMProgram.
 - `src/llmproc/providers/providers.py`: Implementations for different LLM providers (OpenAI, Anthropic, Vertex AI) with asynchronous API support.
 - `src/llmproc/providers/anthropic_tools.py`: Anthropic-specific tool implementations for functional tools support.
 - `src/llmproc/tools/spawn.py`: Implementation of the spawn tool for program linking functionality.
+- `src/llmproc/tools/fork.py`: Implementation of the fork tool for creating copies of the current process.
 - `src/llmproc/cli.py`: Command-line interface for interactive chat with LLM models using TOML configurations, including support for tools and program linking.
 
 ### Configuration

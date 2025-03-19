@@ -1,0 +1,17 @@
+[model]
+name = "claude-3-haiku-20240307"
+provider = "anthropic"
+display_name = "Math Assistant"
+
+[prompt]
+system_prompt = """You are a helpful math assistant with access to a calculator tool.
+When asked about calculations, use the calculator tool to compute the result rather than trying to compute it yourself.
+This ensures accurate results, especially for complex calculations.
+"""
+
+[parameters]
+temperature = 0.7
+max_tokens = 1000
+
+[tools]
+enabled = ["calculator"]
