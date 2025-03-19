@@ -105,10 +105,10 @@ async def run_anthropic_with_tools(
                 return response.content[0].text
             elif response.stop_reason == "tool_use":
                 tool_results = await process_response_content(
-                    response.content, aggregator, tool_handlers, debug=False
+                    response.content, aggregator, tool_handlers
                 )
                 # Add tool results to conversation
-                add_tool_results_to_conversation(messages, tool_results, debug=False)
+                add_tool_results_to_conversation(messages, tool_results)
 
         except Exception as e:
             # Log the error using proper logging
@@ -122,10 +122,7 @@ async def run_anthropic_with_tools(
     if iterations >= max_iterations and not final_response:
         final_response = "Maximum tool iterations reached without final response."
 
-    if debug:
-        print(
-            f"=== Anthropic Tool Execution Complete ({iterations}/{max_iterations} iterations) ===\n"
-        )
+    logger.debug(f"=== Anthropic Tool Execution Complete ({iterations}/{max_iterations} iterations) ===\n")
 
     return final_response
 
@@ -162,7 +159,6 @@ async def process_response_content(
     content_list,
     aggregator,
     tool_handlers: dict[str, callable] = None,
-    debug: bool = False,
 ):
     """Process the content from an Anthropic response.
 
@@ -170,7 +166,6 @@ async def process_response_content(
         content_list: The content from the response
         aggregator: The MCP aggregator
         tool_handlers: Dictionary mapping tool names to handler functions
-        debug: Whether to enable debug output
 
     Returns:
         List of tool results
@@ -199,21 +194,18 @@ async def process_response_content(
         tool_args = tool_call["args"]
         tool_id = tool_call["id"]
 
-        if debug:
-            print(f"Calling tool {tool_name} with args {tool_args}")
+        logger.debug(f"Calling tool {tool_name} with args {tool_args}")
 
         try:
             # Check if we have a custom handler for this tool
-            print(f"Tool handlers: {tool_handlers}, tool_name: {tool_name}")
+            logger.debug(f"Tool handlers: {tool_handlers}, tool_name: {tool_name}")
             if tool_name in tool_handlers:
-                if debug:
-                    print(f"Using custom handler for tool {tool_name}")
+                logger.debug(f"Using custom handler for tool {tool_name}")
                 # Call the custom handler with the arguments
                 result = await tool_handlers[tool_name](tool_args)
             # Otherwise try to use the MCP aggregator
             elif aggregator is not None:
-                if debug:
-                    print(f"Using MCP aggregator for tool {tool_name}")
+                logger.debug(f"Using MCP aggregator for tool {tool_name}")
                 # Execute the tool through the aggregator
                 result = await aggregator.call_tool(tool_name, tool_args)
             else:
@@ -223,8 +215,7 @@ async def process_response_content(
             # Process and format the result
             formatted_result = format_tool_result(result)
 
-            if debug:
-                print(f"Tool result: {str(formatted_result)[:150]}...")
+            logger.debug(f"Tool result: {str(formatted_result)[:150]}...")
 
             tool_results.append(
                 {
@@ -234,14 +225,11 @@ async def process_response_content(
                 }
             )
         except Exception as e:
-            import sys
             import traceback
 
             error_msg = f"Error processing tool {tool_name}: {str(e)}"
-            if debug:
-                print(f"ERROR: {error_msg}", file=sys.stderr)
-                print("Traceback:", file=sys.stderr)
-                traceback.print_exc(file=sys.stderr)
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
             tool_results.append(
                 {
@@ -257,14 +245,12 @@ async def process_response_content(
 def add_tool_results_to_conversation(
     messages: list[dict[str, Any]],
     tool_results: list[dict[str, Any]],
-    debug: bool = False,
 ):
     """Add tool results to the conversation as User messages.
 
     Args:
         messages: The conversation messages
         tool_results: The tool results to add
-        debug: Whether to enable debug output
     """
     for result in tool_results:
         messages.append(
@@ -281,8 +267,7 @@ def add_tool_results_to_conversation(
             }
         )
 
-        if debug:
-            print(f"Added result for tool_id: {result['tool_use_id']}")
+        logger.debug(f"Added result for tool_id: {result['tool_use_id']}")
 
 
 def format_tool_result(result: Any) -> str:
@@ -294,9 +279,6 @@ def format_tool_result(result: Any) -> str:
     Returns:
         Formatted result as a string
     """
-    import sys
-
-    debug = False  # Only enable for deep debugging
 
     # Extract content based on result type
     content = None
