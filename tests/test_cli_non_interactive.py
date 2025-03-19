@@ -76,7 +76,7 @@ def run_cli_non_interactive(program_path, prompt=None, timeout=45):
         "anthropic.toml",
         "openai.toml",
         pytest.param(
-            "vertex.toml",
+            "anthropic_vertex.toml",
             marks=pytest.mark.skipif(
                 "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ,
                 reason="Vertex AI credentials not available",

@@ -102,7 +102,7 @@ async def test_example_program(program_path):
 
     # Skip certain providers if you need to
     provider = get_provider_from_program(program_path)
-    if provider == "vertex" and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+    if provider == "anthropic_vertex" and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
         pytest.skip("Vertex AI credentials not available")
 
     # Create LLMProcess from TOML program file
@@ -293,13 +293,13 @@ async def test_provider_specific_functionality():
     provider_programs = {
         "openai.toml": ["gpt", "openai"],
         "anthropic.toml": ["claude", "anthropic", "haiku"],
-        "vertex.toml": ["vertex", "claude", "google"],
+        "anthropic_vertex.toml": ["vertex", "claude", "google"],
     }
 
     for program_name, expected_terms in provider_programs.items():
-        # Skip vertex test if credentials aren't available
+        # Skip anthropic_vertex test if credentials aren't available
         if (
-            program_name == "vertex.toml"
+            program_name == "anthropic_vertex.toml"
             and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
         ):
             continue
@@ -415,7 +415,7 @@ def test_cli_with_program_linking():
         "mcp.toml",
         "preload.toml",
         pytest.param(
-            "vertex.toml",
+            "anthropic_vertex.toml",
             marks=pytest.mark.skipif(
                 "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ,
                 reason="Vertex AI credentials not available",

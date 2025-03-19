@@ -6,6 +6,13 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+# Import Anthropic clients (will be None if not installed)
+try:
+    from anthropic import AsyncAnthropic, AsyncAnthropicVertex
+except ImportError:
+    AsyncAnthropic = None
+    AsyncAnthropicVertex = None
+
 from llmproc.results import RunResult
 from llmproc.tools.tool_result import ToolResult
 

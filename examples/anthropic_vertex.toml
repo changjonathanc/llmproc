@@ -1,0 +1,17 @@
+[model]
+name = "claude-3-sonnet@20240229"  # Use appropriate Vertex model name
+provider = "anthropic_vertex"
+display_name = "Claude Sonnet (Vertex AI)"
+
+[prompt]
+system_prompt = "You are Claude on Vertex AI, a helpful AI assistant. Keep all responses under 3 sentences for brevity."
+
+[parameters]
+temperature = 0.7
+max_tokens = 150
+top_p = 0.95
+
+# These are used for Vertex AI authentication
+# Will be loaded from environment variables if not specified
+# project_id = "your-gcp-project-id"  
+# region = "us-central1"  # Region where Claude models are deployed

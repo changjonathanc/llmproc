@@ -119,8 +119,8 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
 
 @patch("llmproc.providers.providers.anthropic", MagicMock())
 @patch("llmproc.providers.providers.AnthropicVertex")
-def test_vertex_provider_run(mock_vertex, mock_env):
-    """Test LLMProcess with Vertex provider."""
+def test_anthropic_vertex_provider_run(mock_vertex, mock_env):
+    """Test LLMProcess with Anthropic Vertex provider."""
     # Setup mock client and response
     mock_client = MagicMock()
     mock_vertex.return_value = mock_client
@@ -130,20 +130,20 @@ def test_vertex_provider_run(mock_vertex, mock_env):
 
     mock_content = [MagicMock()]
     mock_response.content = mock_content
-    mock_content[0].text = "Test response from Vertex"
+    mock_content[0].text = "Test response from Anthropic Vertex"
 
     # Create LLMProcess and run using the new API
     from llmproc.program import LLMProgram
 
     program = LLMProgram(
         model_name="claude-3-haiku@20240307",
-        provider="vertex",
+        provider="anthropic_vertex",
         system_prompt="You are a test assistant.",
     )
     process = LLMProcess(program=program)
 
     # Mock the internal async method to return a known value
-    with patch.object(process, "_async_run", return_value="Test response from Vertex"):
+    with patch.object(process, "_async_run", return_value="Test response from Anthropic Vertex"):
         # Use asyncio.run to handle the async run method
         response = asyncio.run(process.run("Hello!"))
 
@@ -151,13 +151,13 @@ def test_vertex_provider_run(mock_vertex, mock_env):
         process.state = [
             {"role": "system", "content": "You are a test assistant."},
             {"role": "user", "content": "Hello!"},
-            {"role": "assistant", "content": "Test response from Vertex"},
+            {"role": "assistant", "content": "Test response from Anthropic Vertex"},
         ]
 
     # Verify
-    assert response == "Test response from Vertex"
+    assert response == "Test response from Anthropic Vertex"
     assert process.state == [
         {"role": "system", "content": "You are a test assistant."},
         {"role": "user", "content": "Hello!"},
-        {"role": "assistant", "content": "Test response from Vertex"},
+        {"role": "assistant", "content": "Test response from Anthropic Vertex"},
     ]

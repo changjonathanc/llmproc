@@ -64,7 +64,7 @@ def run_exact_cli_command(command, timeout=45):
         "llmproc-demo examples/minimal.toml -p 'what is 2+2?'",
         "llmproc-demo examples/claude_code.toml -p 'say hello'",
         pytest.param(
-            "llmproc-demo examples/vertex.toml -p 'hello'",
+            "llmproc-demo examples/anthropic_vertex.toml -p 'hello'",
             marks=pytest.mark.skipif(
                 "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ,
                 reason="Vertex AI credentials not available",

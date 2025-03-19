@@ -27,7 +27,7 @@ def get_provider_client(
     """Get the appropriate provider client.
 
     Args:
-        provider: The provider to use (openai, anthropic, or vertex)
+        provider: The provider to use (openai, anthropic, or anthropic_vertex)
         model_name: The model name to use (used for logging)
         project_id: Google Cloud project ID for Vertex AI
         region: Google Cloud region for Vertex AI
@@ -49,10 +49,10 @@ def get_provider_client(
             )
         return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    elif provider == "vertex":
+    elif provider == "anthropic_vertex":
         if anthropic is None or AnthropicVertex is None:
             raise ImportError(
-                "The 'anthropic' package is required for Vertex provider. Install it with 'pip install anthropic'."
+                "The 'anthropic' package with vertex support is required. Install it with 'pip install \"anthropic[vertex]\"'."
             )
 
         # Use provided project_id/region or get from environment variables
