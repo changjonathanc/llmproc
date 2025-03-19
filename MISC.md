@@ -130,14 +130,5 @@ async def run_with_expert(query):
 ## Current Limitations
 
 - Limited to Anthropic provider for the main process (due to MCP tool support)
-- No automatic fallback if a linked program fails
-- State is not shared between linked programs
-- No automatic batching of related queries to the same expert
+- State is not persistent, the children are ephemeral
 - Limited debugging information for tool execution
-
-## Advanced Program Setups
-
-
-### Program Linking
-
-Program linking is a feature of LLMProc that allows you to link related programs and allow the main agent to call the linked programs using the `spawn` tool.
