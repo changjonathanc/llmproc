@@ -69,7 +69,7 @@ display_name = "Main Assistant"
 
 [prompt]
 system_prompt = """You are a helpful assistant with access to specialized experts.
-When users ask detailed questions about specific domains, use the 'spawn' tool to 
+When users ask detailed questions about specific domains, use the 'spawn' tool to
 delegate to the appropriate expert."""
 
 [parameters]
@@ -140,14 +140,6 @@ async def run_with_expert(query):
 ## Advanced Program Setups
 
 
-### Chaining Multiple Experts
+### Program Linking
 
-You can create chains of experts by configuring linked programs that themselves have linked programs:
-
-```
-Main Assistant → Domain Expert → Specialized Sub-Expert
-```
-
-### Multi-turn Conversations with Experts
-
-To enable multi-turn conversations with the same expert, you'll need to implement a session management pattern that maintains state between calls to the expert.
+Program linking is a feature of LLMProc that allows you to link related programs and allow the main agent to call the linked programs using the `spawn` tool.
