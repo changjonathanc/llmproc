@@ -39,6 +39,7 @@ The LLMProc library functions as a kernel:
 - Program Linking for LLM-to-LLM communication via spawn tool (like `dispatch_agent` in Claude Code)
 - Program Compiler for robust validation and preprocessing of configurations
 
+
 ## Installation
 
 ```bash
@@ -336,6 +337,9 @@ This enables:
 6. [ ] Improve OpenAI integration (MCP support)
 7. [ ] Add support for reasoning models
 8. [ ] Add Process State Serialization & Restoration
+9. [ ] Implement retry mechanism with exponential backoff for API calls
+10. [ ] Enhance error handling and reporting across providers
+11. [ ] Improve stream mode support for all providers
 
 ## License
 
