@@ -219,7 +219,7 @@ async def calculator_tool(
         result = safe_eval(expression)
 
         # Format result based on type and precision
-        if isinstance(result, (int, float)):
+        if isinstance(result, int | float):
             if math.isnan(result):
                 formatted_result = "NaN"
             elif math.isinf(result):

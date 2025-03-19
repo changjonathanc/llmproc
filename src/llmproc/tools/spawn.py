@@ -113,18 +113,12 @@ async def spawn_tool(
             linked_process = LLMProcess(program=linked_program)
 
         # Execute the query on the process
-        run_result = await linked_process.run(query)
+        await linked_process.run(query)
 
         # Get the actual text response from the process
         response_text = linked_process.get_last_message()
 
         # Create a result dictionary with detailed information
-        result_info = {
-            "program": program_name,
-            "query": query,
-            "response": response_text,
-            "api_calls": run_result.api_calls,
-        }
 
         # Return a successful ToolResult with the response text as content
         from llmproc.tools.tool_result import ToolResult

@@ -22,7 +22,7 @@ class ProgramRegistry:
 
     def __new__(cls):
         """Create a singleton instance of ProgramRegistry.
-        
+
         Returns:
             The singleton ProgramRegistry instance.
         """
@@ -106,14 +106,14 @@ class LLMProgram:
         self.base_dir = base_dir
 
         # No need to initialize api_params here - we'll use a property
-        
+
     @property
     def api_params(self) -> dict[str, Any]:
         """Get API parameters for LLM API calls.
-        
+
         This property returns all parameters from the program configuration,
         relying on the schema's validation to issue warnings for unknown parameters.
-        
+
         Returns:
             Dictionary of API parameters for LLM API calls
         """
@@ -204,19 +204,19 @@ class LLMProgram:
                     # Skip any non-string items (already processed linked programs)
                     if not isinstance(linked_path_str, str):
                         continue
-                    
+
                     # Only validate existence if check_linked_files is True
                     try:
                         linked_path = resolve_path(
-                            linked_path_str, 
-                            base_dir, 
+                            linked_path_str,
+                            base_dir,
                             must_exist=check_linked_files,
                             error_prefix=f"Linked program file (from '{current_path}')"
                         )
                     except FileNotFoundError as e:
                         # Re-raise with the original error message
                         raise FileNotFoundError(str(e))
-                        
+
                     # Only add to queue if we haven't seen it before
                     linked_abs_path = str(linked_path)
                     if linked_abs_path not in compiled_paths:
@@ -242,7 +242,7 @@ class LLMProgram:
 
                     # Resolve the path using our utility
                     linked_path = resolve_path(linked_path_str, base_dir, must_exist=False)
-                    
+
                     # Get the compiled program from the registry
                     linked_program = registry.get(linked_path)
                     if linked_program:
@@ -250,7 +250,7 @@ class LLMProgram:
                     else:
                         # Should never happen if Stage 1 completed successfully
                         warnings.warn(
-                            f"Could not find compiled program for {linked_path}"
+                            f"Could not find compiled program for {linked_path}", stacklevel=2
                         )
                         updated_links[linked_name] = linked_path_str
 
@@ -344,8 +344,8 @@ class LLMProgram:
         if config.mcp and config.mcp.config_path:
             try:
                 mcp_path = resolve_path(
-                    config.mcp.config_path, 
-                    base_dir, 
+                    config.mcp.config_path,
+                    base_dir,
                     must_exist=True,
                     error_prefix="MCP config file"
                 )

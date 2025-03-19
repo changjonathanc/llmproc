@@ -2,8 +2,8 @@
 
 from llmproc.config.schema import (
     EnvInfoConfig,
-    LLMProgramConfig,
     LinkedProgramsConfig,
+    LLMProgramConfig,
     MCPConfig,
     MCPToolsConfig,
     ModelConfig,

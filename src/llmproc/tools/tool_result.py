@@ -44,7 +44,7 @@ class ToolResult:
         if content_value is None:
             content_value = ""
         # Handle dictionary and list by JSON serializing
-        elif isinstance(content_value, (dict, list)):
+        elif isinstance(content_value, dict | list):
             try:
                 content_value = json.dumps(content_value)
             except (TypeError, ValueError):

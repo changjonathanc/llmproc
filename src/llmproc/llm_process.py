@@ -333,8 +333,8 @@ class LLMProcess:
         Args:
             keep_system_prompt: Whether to keep the system prompt for the next API call
             keep_preloaded: Whether to keep preloaded file content
-        
-        Note: 
+
+        Note:
             State only contains user/assistant messages, not system message.
             System message is stored separately in enriched_system_prompt.
         """
@@ -497,7 +497,7 @@ class LLMProcess:
 
         # Prevent forked processes from forking again
         forked_process.allow_fork = False
-        
+
         # Preserve any other state we need
         # Note: We don't copy tool handlers as they're already set up in the constructor
 

@@ -64,8 +64,8 @@ class PromptConfig(BaseModel):
         if self.system_prompt_file:
             try:
                 file_path = resolve_path(
-                    self.system_prompt_file, 
-                    base_dir, 
+                    self.system_prompt_file,
+                    base_dir,
                     must_exist=True,
                     error_prefix="System prompt file"
                 )
@@ -143,16 +143,16 @@ class LLMProgramConfig(BaseModel):
     model_config = {
         "extra": "forbid"  # Forbid extra fields
     }
-    
+
     @model_validator(mode="after")
     def validate_parameters(self):
         """Validate the parameters dictionary and issue warnings for unknown parameters.
-        
+
         This validator doesn't reject unknown parameters, it just issues warnings.
         We want to stay flexible as LLM APIs evolve, but provide guidance on what's expected.
         """
         import warnings
-        
+
         # Standard LLM API parameters that we expect to see
         known_parameters = {
             "temperature",
@@ -164,11 +164,10 @@ class LLMProgramConfig(BaseModel):
             "top_k",
             "stop",
             # Anthropic specific
-            "top_k",
             "max_tokens_to_sample",
             "stop_sequences",
         }
-        
+
         if self.parameters:
             for param_name in self.parameters:
                 if param_name not in known_parameters:
@@ -177,16 +176,16 @@ class LLMProgramConfig(BaseModel):
                         f"This may be a typo or a newer parameter not yet recognized.",
                         stacklevel=2
                     )
-        
+
         return self
-        
+
     def get_api_parameters(self) -> dict[str, Any]:
         """Extract API parameters from the parameters dictionary.
-        
+
         This method filters the parameters to only include those that are relevant
         to the LLM API calls. Unlike the _extract_api_parameters method in LLMProgram,
         this does NOT filter out unknown parameters, maintaining flexibility.
-        
+
         Returns:
             Dictionary of parameters to pass to the LLM API
         """

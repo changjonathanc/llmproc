@@ -249,7 +249,7 @@ class AnthropicProcessExecutor:
 
         while master_run_result.api_calls < max_iterations:
             # Run the process and get a RunResult
-            run_result = await self.run(
+            await self.run(
                 process,
                 next_prompt,
                 max_iterations=max_iterations - master_run_result.api_calls,
@@ -293,7 +293,7 @@ class AnthropicProcessExecutor:
 
     @staticmethod
     async def _fork(process, params, tool_id, last_assistant_response):
-        """Fork a conversation"""
+        """Fork a conversation."""
         if not process.allow_fork:
             return ToolResult.from_error(
                 "Forking is not allowed for this agent, possible reason: You are already a forked instance"
