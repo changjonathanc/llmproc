@@ -10,10 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llmproc import LLMProcess
-from llmproc.providers.anthropic_tools import (
-    format_tool_result,
-    process_response_content,
-)
 
 
 @pytest.fixture
@@ -117,36 +113,14 @@ def mock_mcp_registry():
         yield mock_aggregator
 
 
+# This test has been removed as it relied on the removed process_response_content function
+# We will need to implement a new test when we create a replacement error handling utility
+@pytest.mark.skip("Test removed because process_response_content has been removed")
 @pytest.mark.asyncio
 @patch("llmproc.llm_process.HAS_MCP", True)
 async def test_process_response_content(mock_mcp_registry, mock_time_response):
-    """Test the process_response_content function directly."""
-
-    # Create mock content
-    class MockContent:
-        def __init__(self, type_name, **kwargs):
-            self.type = type_name
-            for key, value in kwargs.items():
-                setattr(self, key, value)
-
-    text_content = MockContent("text", text="This is a test response")
-    tool_content = MockContent("tool_use", name="time.current", input={}, id="tool1")
-
-    content_list = [text_content, tool_content]
-
-    # Mock the aggregator's call_tool
-    mock_mcp_registry.call_tool = AsyncMock(return_value=mock_time_response)
-
-    # Call the function
-    tool_results = await process_response_content(
-        content_list, mock_mcp_registry
-    )
-
-    # Assertions
-    assert len(tool_results) == 1
-    assert tool_results[0]["tool_use_id"] == "tool1"
-    assert "unix_timestamp" in tool_results[0]["content"]
-    assert not tool_results[0]["is_error"]
+    """This test has been removed as it relied on the removed process_response_content function."""
+    pass
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
