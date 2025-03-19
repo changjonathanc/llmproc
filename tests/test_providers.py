@@ -14,6 +14,8 @@ def mock_env():
     original_env = os.environ.copy()
     os.environ["OPENAI_API_KEY"] = "test-openai-key"
     os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
+    os.environ["ANTHROPIC_VERTEX_PROJECT_ID"] = "test-vertex-project"
+    os.environ["CLOUD_ML_REGION"] = "us-central1-vertex"
     os.environ["GOOGLE_CLOUD_PROJECT"] = "test-project"
     os.environ["GOOGLE_CLOUD_LOCATION"] = "us-central1"
     yield
@@ -71,7 +73,7 @@ def test_get_anthropic_vertex_provider(mock_vertex, mock_env):
 
     client = get_provider_client("anthropic_vertex", "claude-3-haiku@20240307")
 
-    mock_vertex.assert_called_once_with(project_id="test-project", region="us-central1")
+    mock_vertex.assert_called_once_with(project_id="test-vertex-project", region="us-central1-vertex")
     assert client == mock_client
 
 

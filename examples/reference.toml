@@ -8,7 +8,7 @@
 # Model name (Required)
 name = "gpt-4o"  # OpenAI example
 # provider = "anthropic"  # For Claude models directly via Anthropic API
-# provider = "anthropic_vertex"  # For Claude models via Google Vertex AI
+# provider = "anthropic_vertex"  # For Claude models via Google Vertex AI (uses ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION env vars)
 
 # Provider (Required)
 provider = "openai"  # Options: "openai", "anthropic", "anthropic_vertex"
