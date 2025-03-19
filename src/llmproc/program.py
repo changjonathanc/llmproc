@@ -67,7 +67,6 @@ class LLMProgram:
         mcp_tools: dict[str, list[str]] | None = None,
         tools: dict[str, Any] | None = None,
         linked_programs: dict[str, Union[str, "LLMProgram"]] | None = None,
-        debug_tools: bool = False,
         env_info: dict[str, Any] | None = None,
         base_dir: Path | None = None,
     ):
@@ -84,7 +83,6 @@ class LLMProgram:
             mcp_tools: Dictionary mapping server names to tools to enable
             tools: Dictionary from the [tools] section in the TOML program
             linked_programs: Dictionary mapping program names to TOML program paths or compiled LLMProgram objects
-            debug_tools: Enable detailed debugging output for tool execution
             env_info: Environment information configuration
             base_dir: Base directory for resolving relative paths in files
         """
@@ -102,7 +100,6 @@ class LLMProgram:
         self.mcp_tools = mcp_tools or {}
         self.tools = tools or {}
         self.linked_programs = linked_programs or {}
-        self.debug_tools = debug_tools
         self.env_info = env_info or {
             "variables": []
         }  # Default to empty list (disabled)

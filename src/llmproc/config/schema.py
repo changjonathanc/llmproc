@@ -122,11 +122,6 @@ class EnvInfoConfig(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class DebugConfig(BaseModel):
-    """Debug configuration section."""
-
-    debug_tools: bool = False
-
 
 class LinkedProgramsConfig(RootModel):
     """Linked programs configuration section."""
@@ -144,7 +139,6 @@ class LLMProgramConfig(BaseModel):
     mcp: MCPConfig | None = None
     tools: ToolsConfig | None = ToolsConfig()
     env_info: EnvInfoConfig | None = EnvInfoConfig()
-    debug: DebugConfig | None = DebugConfig()
     linked_programs: LinkedProgramsConfig | None = LinkedProgramsConfig()
 
     model_config = {
