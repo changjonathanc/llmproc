@@ -289,15 +289,12 @@ class LLMProcess:
                 self, user_input, max_iterations, callbacks, run_result
             )
 
-        elif self.provider == "anthropic":
-            # Use the stateless AnthropicProcessExecutor
+        elif self.provider in ["anthropic", "anthropic_vertex"]:
+            # Use the stateless AnthropicProcessExecutor for both direct Anthropic API and Vertex AI
             executor = AnthropicProcessExecutor()
             run_result = await executor.run(
                 self, user_input, max_iterations, callbacks, run_result
             )
-
-        elif self.provider == "vertex":
-            raise NotImplementedError("Vertex is not yet implemented")
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
 
