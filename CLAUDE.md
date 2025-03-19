@@ -503,3 +503,5 @@ Important details about our changes:
    - Removed deprecated `vertex` provider, standardizing on explicit `anthropic_vertex` naming
    - Updated reference.toml documentation with accurate provider information
    - Created anthropic_vertex.toml example configuration file
+   - Added support for ANTHROPIC_VERTEX_PROJECT_ID and CLOUD_ML_REGION environment variables
+   - Fixed LLMProcess._async_run method to properly handle anthropic_vertex provider
