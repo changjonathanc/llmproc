@@ -278,7 +278,7 @@ async def test_claude_code_comprehensive():
     # Either the model references an example or identifies a provider
     assert any(
         term in combined_response.lower()
-        for term in ["anthropic", "openai", "vertex", "claude", "gpt", "example"]
+        for term in ["anthropic", "openai", "anthropic_vertex", "vertex ai", "claude", "gpt", "example"]
     ), "Expected response to identify provider from example programs using tools"
 
 
@@ -293,7 +293,7 @@ async def test_provider_specific_functionality():
     provider_programs = {
         "openai.toml": ["gpt", "openai"],
         "anthropic.toml": ["claude", "anthropic", "haiku"],
-        "anthropic_vertex.toml": ["vertex", "claude", "google"],
+        "anthropic_vertex.toml": ["vertex ai", "anthropic_vertex", "claude", "google"],
     }
 
     for program_name, expected_terms in provider_programs.items():

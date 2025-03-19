@@ -75,7 +75,7 @@ class LLMProgram:
 
         Args:
             model_name: Name of the model to use
-            provider: Provider of the model (openai, anthropic, or vertex)
+            provider: Provider of the model (openai, anthropic, or anthropic_vertex)
             system_prompt: System prompt that defines the behavior of the process
             parameters: Dictionary of API parameters
             display_name: User-facing name for the process in CLI interfaces
