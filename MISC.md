@@ -22,12 +22,13 @@ The LLMProc project uses specific terminology to describe its components, built 
 - **Tool**: A function that an LLM process can use to perform operations outside its context.
 - **MCP (Model Context Protocol)**: A portable protocol for tool communication with LLMs, providing "userspace" tools.
 - **System Call**: A kernel-level tool implemented by LLMProc, defined in the `[tools]` section (e.g., `spawn`).
-- **Provider**: The API service providing the LLM (OpenAI, Anthropic, Vertex).
+- **Provider**: The API service providing the LLM (openai, anthropic, anthropic_vertex).
 
 ### Relationships and Connections
 
 - **Linked Program**: A reference to another TOML program file that can be spawned by a main process.
 - **Spawn**: A system call that creates a new process from a linked program to handle a specific query.
+- **Fork**: A system call that duplicates an existing process including its conversation history.
 - **Preloaded Content**: Files loaded into the system prompt to provide additional context to an LLM process.
 
 ### Implementation Details
@@ -42,7 +43,10 @@ LLMProc supports the following environment variables:
 
 - `OPENAI_API_KEY`: Required for OpenAI providers (GPT models)
 - `ANTHROPIC_API_KEY`: Required for Anthropic providers (Claude models)
-- `VERTEX_API_KEY`: Required for Google Vertex AI providers
+- `ANTHROPIC_VERTEX_PROJECT_ID`: Project ID for Claude models on Vertex AI
+- `CLOUD_ML_REGION`: Region for Claude models on Vertex AI (defaults to us-central1)
+- `GOOGLE_CLOUD_PROJECT`: Alternative project ID for Vertex AI (used if ANTHROPIC_VERTEX_PROJECT_ID not set)
+- `GOOGLE_CLOUD_LOCATION`: Alternative region for Vertex AI (used if CLOUD_ML_REGION not set)
 - `LLMPROC_DEBUG`: Set to "true" to enable detailed debug output for tools and program linking
 
 You can set these in your environment or include them in a `.env` file.

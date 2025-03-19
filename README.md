@@ -258,7 +258,7 @@ See [Testing Guide](docs/testing.md) for details on running and writing tests.
 
 LLMProc implements Unix-like process system calls:
 - **spawn**: Create new processes from linked programs (analogous to exec()) - ✅ Implemented
-- **fork**: Duplicate an existing process with its state (analogous to fork()) - 🚧 Planned
+- **fork**: Duplicate an existing process with its state (analogous to fork()) - ✅ Implemented
 
 Reference: [forking-an-agent](https://github.com/cccntu/forking-an-agent)
 
@@ -289,13 +289,13 @@ This enables:
 ## Roadmap
 
 1. [x] Implement Program Linking via Spawn Tool
-2. [ ] Implement Fork System Call
+2. [x] Implement Fork System Call
 3. [ ] Implement Prompt Caching, Cost Tracking
-4. [ ] Implement Environment Variables
+4. [x] Implement Environment Variables
 5. [ ] Implement File Descriptor
-5. [ ] Improve OpenAI integration (MCP support)
-6. [ ] Add support for reasoning models
-7. [ ] Add Process State Serialization & Restoration
+6. [ ] Improve OpenAI integration (MCP support)
+7. [ ] Add support for reasoning models
+8. [ ] Add Process State Serialization & Restoration
 
 ## License
 
