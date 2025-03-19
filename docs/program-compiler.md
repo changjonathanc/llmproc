@@ -170,7 +170,6 @@ A compiled program includes these components:
 - `mcp_tools`: Dictionary of MCP tools to enable
 - `tools`: Dictionary of built-in tools configuration
 - `linked_programs`: Dictionary of linked programs (references to Program objects)
-- `debug_tools`: Flag to enable detailed tool debugging output
 - `base_dir`: Base directory for resolving relative paths
 - `compiled`: Flag indicating whether the program is fully compiled
 - `source_path`: Path to the source TOML file
