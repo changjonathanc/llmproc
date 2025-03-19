@@ -86,7 +86,6 @@ display_name = "Claude MCP Assistant"
 [parameters]
 temperature = 0.7
 max_tokens = 300
-debug_tools = true  # Optional: Enable debugging for tool calls
 
 [prompt]
 system_prompt = "You are a helpful assistant with access to tools. Use tools whenever appropriate to answer user queries accurately."
