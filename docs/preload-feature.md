@@ -11,7 +11,7 @@ When you specify files in the `[preload]` section of your TOML program, LLMProc 
 3. Add the content to the system prompt as part of the primary context
 4. Maintain this context even after conversation resets (optional)
 
-## TOML Program Configuration
+## TOML Program Format
 
 Add a `[preload]` section to your TOML program file:
 

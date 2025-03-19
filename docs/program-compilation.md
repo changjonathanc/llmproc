@@ -1,7 +1,7 @@
 # Program Compilation and Linking
 
 This document describes the program compilation and linking system in LLMProc. The system is responsible for:
-1. Loading, validating, and processing TOML program configurations
+1. Loading, validating, and processing TOML program files
 2. Compiling all linked programs recursively
 3. Establishing connections between programs for runtime interaction
 
@@ -12,13 +12,13 @@ This document describes the program compilation and linking system in LLMProc. T
 When compiling a single program file, the system performs the following steps:
 
 1. **Load and Parse TOML**: The program file is loaded and parsed using the `tomllib` module.
-2. **Validate Configuration**: The parsed configuration is validated using Pydantic models to ensure it follows the expected schema.
+2. **Validate Program**: The parsed program is validated using Pydantic models to ensure it follows the expected schema.
 3. **Resolve File Paths**:
    - System prompt files are loaded and validated
    - Preload files are resolved (with warnings for missing files)
    - MCP configuration files are verified
-   - Tool configurations are extracted
-4. **Create Program Instance**: A `LLMProgram` instance is created with the validated configuration.
+   - Tool settings are extracted
+4. **Create Program Instance**: A `LLMProgram` instance is created with the validated program definition.
 
 ```python
 # Compile a single program
@@ -45,7 +45,7 @@ After compilation, programs need to be linked together to establish runtime conn
 
 1. **Create Process Instances**: Each compiled program is instantiated as an `LLMProcess`.
 2. **Establish Connections**: References between programs are resolved and connected.
-3. **Initialize Tools**: Spawn tools and other tools are initialized based on the program configuration.
+3. **Initialize Tools**: Spawn tools and other tools are initialized based on the program settings.
 
 The `from_toml` method in `LLMProcess` handles the complete compilation and linking process:
 
@@ -113,7 +113,7 @@ To debug compilation and linking issues:
 
 1. Check warnings during compilation for missing files or other problems.
 2. Ensure all referenced files exist and have the correct paths.
-3. Verify that the program configuration follows the expected schema.
+3. Verify that the program definition follows the expected schema.
 4. Use the `compile_all` method to compile programs separately from linking to isolate issues.
 
 ## Implementation Details
@@ -169,7 +169,7 @@ process._initialize_linked_programs(linked_programs_dict)
 
 Ensure the specified program file exists and the path is correct.
 
-### "Invalid program configuration"
+### "Invalid program"
 
 Check that your TOML file follows the expected schema. Common issues include:
 - Missing required sections or fields

@@ -12,8 +12,8 @@ The LLMProc project uses specific terminology to describe its components, built 
 
 - **LLM**: The underlying large language model technology (like GPT-4, Claude, etc.).
 - **Model**: A specific LLM configuration from a provider (e.g., "gpt-4o-mini" or "claude-3-haiku").
-- **Program**: A TOML file that defines an LLM's configuration (model, provider, parameters, etc.). Programs are the fundamental unit of definition in LLMProc, analogous to a program executable file.
-- **Process**: A running instance of an LLM, created from a program file. This represents the active, stateful execution environment.
+- **Program**: A definition of an LLM's behavior in a TOML file. Programs are the fundamental unit of definition in LLMProc, analogous to a program executable file.
+- **Process**: An instantiated LLMProcess that executes a program. This represents the active, stateful execution environment.
 - **State**: The conversation history maintained by a process across interactions.
 
 ### Communication and Tools

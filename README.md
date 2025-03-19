@@ -26,7 +26,7 @@ The LLMProc library functions as a kernel:
 
 ## Features
 
-- Load programs from TOML files with validation and error checking
+- Load and validate programs from TOML files with robust error checking
 - Maintain conversation state
 - Support for different LLM providers (OpenAI, Anthropic, Vertex)
 - Extensive parameter customization

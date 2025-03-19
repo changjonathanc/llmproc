@@ -1,4 +1,4 @@
-# LLMProc Reference Configuration
+# LLMProc Reference Program
 # All supported options and parameters with minimal examples
 
 #----------------------------------------
@@ -110,7 +110,7 @@ variables = ["working_directory", "platform", "date"]  # Include specific variab
 # Program Linking Configuration
 #----------------------------------------
 [linked_programs]
-# Map program names to their TOML configuration files
+# Map program names to their TOML program files
 # repo_expert = "./repo_expert.toml"
 # code_helper = "./code_helper.toml"
 

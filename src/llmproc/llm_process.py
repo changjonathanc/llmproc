@@ -1,4 +1,4 @@
-"""LLMProcess class for handling LLM interactions."""
+"""LLMProcess class for executing LLM programs and handling interactions."""
 
 import asyncio
 import logging
@@ -66,7 +66,6 @@ class LLMProcess:
         )  # Basic system prompt without enhancements
         self.display_name = program.display_name
         self.base_dir = program.base_dir
-        self.config_dir = self.base_dir  # Alias for backward compatibility
         self.api_params = program.api_params
         self.parameters = {}  # Keep empty - parameters are already processed in program
 

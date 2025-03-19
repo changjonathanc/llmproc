@@ -2,14 +2,14 @@
 
 ## Overview
 
-The Program Compiler feature provides a robust way to validate, load, and process TOML program configurations before instantiating an `LLMProcess`. This separation of concerns makes the codebase more maintainable and easier to extend. The compiler now uses a global registry and builds a complete object graph of compiled programs.
+The Program Compiler feature provides a robust way to validate, load, and process TOML program files before instantiating an `LLMProcess`. This separation of concerns makes the codebase more maintainable and easier to extend. The compiler now uses a global registry and builds a complete object graph of compiled programs.
 
 ## Key Benefits
 
-1. **Validation**: Automatic validation of program configurations with clear error messages using Pydantic
-2. **Separation of Concerns**: Moves configuration parsing logic out of `LLMProcess`
+1. **Validation**: Automatic validation of program definitions with clear error messages using Pydantic
+2. **Separation of Concerns**: Moves program parsing logic out of `LLMProcess`
 3. **Reusability**: Allows programs to be compiled once and used multiple times
-4. **Extensibility**: Makes it easier to add new configuration options in the future
+4. **Extensibility**: Makes it easier to add new program options in the future
 5. **Memory Efficiency**: Program registry avoids redundant compilation
 6. **Object Graph**: Direct references between compiled programs create a proper object graph
 7. **Lazy Instantiation**: Programs are only instantiated as processes when needed
@@ -149,7 +149,7 @@ The program compiler validates:
 When validation fails, the compiler provides clear error messages with specific information about what went wrong:
 
 ```
-Invalid program configuration in path/to/program.toml:
+Invalid program in path/to/program.toml:
 1 validation error for LLMProgramConfig
 model -> name
   field required (type=value_error.missing)

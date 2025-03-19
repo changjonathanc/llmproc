@@ -12,7 +12,7 @@ The Program Linking feature allows LLM processes to communicate with each other 
    
 3. **Context Separation**: Keep large reference documents in separate processes to maintain clean context spaces.
 
-## Configuration
+## Setup
 
 Program linking is configured in two places:
 
@@ -31,7 +31,7 @@ code_helper = "./code_helper.toml"
 enabled = ["spawn"]
 ```
 
-## Example Configuration
+## Example Program
 
 ```toml
 # main.toml - Primary LLM program
