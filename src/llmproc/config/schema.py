@@ -122,7 +122,6 @@ class EnvInfoConfig(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class LinkedProgramsConfig(RootModel):
     """Linked programs configuration section."""
 

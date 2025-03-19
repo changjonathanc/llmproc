@@ -37,7 +37,7 @@ class TestOpenAIProcessExecutor:
         process.model_name = "gpt-4"
         process.provider = "openai"
         process.enriched_system_prompt = "Test system prompt"
-        process.messages = []
+        process.state = []
         process.tools = []
         process.api_params = {"temperature": 0.7}
 
@@ -62,10 +62,10 @@ class TestOpenAIProcessExecutor:
         # Verify the API call was made
         process.client.chat.completions.create.assert_called_once()
 
-        # Verify the messages were updated
-        assert len(process.messages) == 2
-        assert process.messages[0] == {"role": "user", "content": "Test input"}
-        assert process.messages[1] == {"role": "assistant", "content": "Test response"}
+        # Verify the state was updated
+        assert len(process.state) == 2
+        assert process.state[0] == {"role": "user", "content": "Test input"}
+        assert process.state[1] == {"role": "assistant", "content": "Test response"}
 
         # Verify the run result
         assert result.api_calls == 1
@@ -80,7 +80,7 @@ class TestOpenAIProcessExecutor:
         process.model_name = "gpt-4"
         process.provider = "openai"
         process.enriched_system_prompt = "Test system prompt"
-        process.messages = []
+        process.state = []
         process.tools = []
         process.api_params = {"temperature": 0.7}
 

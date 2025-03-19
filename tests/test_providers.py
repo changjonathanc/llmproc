@@ -16,8 +16,6 @@ def mock_env():
     os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
     os.environ["ANTHROPIC_VERTEX_PROJECT_ID"] = "test-vertex-project"
     os.environ["CLOUD_ML_REGION"] = "us-central1-vertex"
-    os.environ["GOOGLE_CLOUD_PROJECT"] = "test-project"
-    os.environ["GOOGLE_CLOUD_LOCATION"] = "us-central1"
     yield
     os.environ.clear()
     os.environ.update(original_env)

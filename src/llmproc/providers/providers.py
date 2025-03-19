@@ -56,12 +56,12 @@ def get_provider_client(
             )
 
         # Use provided project_id/region or get from environment variables
-        project = project_id or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
-        reg = region or os.getenv("CLOUD_ML_REGION") or os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+        project = project_id or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID")
+        reg = region or os.getenv("CLOUD_ML_REGION", "us-central1")
 
         if not project:
             raise ValueError(
-                "Project ID must be provided either as parameter or via ANTHROPIC_VERTEX_PROJECT_ID or GOOGLE_CLOUD_PROJECT environment variable"
+                "Project ID must be provided either as parameter or via ANTHROPIC_VERTEX_PROJECT_ID environment variable"
             )
 
         return AnthropicVertex(project_id=project, region=reg)
