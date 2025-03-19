@@ -134,6 +134,9 @@ class LLMProcess:
         # Initialize message state (will set system message on first run)
         self.state = []
 
+        # Initialize fork support
+        self.allow_fork = True  # By default, allow forking
+
         # Preload files if specified
         if hasattr(program, "preload_files") and program.preload_files:
             self.preload_files(program.preload_files)
@@ -492,6 +495,9 @@ class LLMProcess:
             if hasattr(self, "aggregator"):
                 forked_process.aggregator = self.aggregator
 
+        # Prevent forked processes from forking again
+        forked_process.allow_fork = False
+        
         # Preserve any other state we need
         # Note: We don't copy tool handlers as they're already set up in the constructor
 

@@ -139,7 +139,7 @@ async def test_process_response_content(mock_mcp_registry, mock_time_response):
 
     # Call the function
     tool_results = await process_response_content(
-        content_list, mock_mcp_registry, debug=True
+        content_list, mock_mcp_registry
     )
 
     # Assertions

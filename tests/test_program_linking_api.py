@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
 
 def check_keys():
@@ -79,11 +79,13 @@ class TestProgramLinkingAPI:
     async def test_basic_program_linking(self, minimal_toml_files, capsys):
         """Test basic program linking functionality with a simple example."""
         # Load the main program
-        process = LLMProcess.from_toml(minimal_toml_files["main_toml"])
+        program = LLMProgram.from_toml(minimal_toml_files["main_toml"])
+        process = await program.start()
 
         # Ask a question that should trigger the spawn tool
         print("\nSending query to main assistant...", file=sys.stderr)
-        response = await process.run("What color is the sky?")
+        run_result = await process.run("What color is the sky?")
+        response = process.get_last_message()
 
         print(f"\nMain assistant response: {response}", file=sys.stderr)
 
@@ -92,7 +94,8 @@ class TestProgramLinkingAPI:
 
         # Make a follow-up query that's different
         print("\nSending follow-up query...", file=sys.stderr)
-        response = await process.run("Thanks! Now, what time is it?")
+        run_result = await process.run("Thanks! Now, what time is it?")
+        response = process.get_last_message()
 
         print(f"\nFollow-up response: {response}", file=sys.stderr)
 
@@ -104,7 +107,8 @@ class TestProgramLinkingAPI:
     async def test_empty_input_handling(self, minimal_toml_files, capsys):
         """Test handling of minimal/empty inputs that previously caused issues."""
         # Load the main program
-        process = LLMProcess.from_toml(minimal_toml_files["main_toml"])
+        program = LLMProgram.from_toml(minimal_toml_files["main_toml"])
+        process = await program.start()
 
         # First send a normal query
         print("\nSending initial query...", file=sys.stderr)
@@ -112,7 +116,8 @@ class TestProgramLinkingAPI:
 
         # Then send a minimal follow-up (this used to cause the 400 error)
         print("\nSending minimal follow-up query...", file=sys.stderr)
-        response = await process.run("??")
+        await process.run("??")
+        response = process.get_last_message()
 
         print(f"\nResponse to minimal input: {response}", file=sys.stderr)
 
@@ -121,7 +126,8 @@ class TestProgramLinkingAPI:
 
         # Try another minimal input
         print("\nSending another minimal query...", file=sys.stderr)
-        response = await process.run("ok")
+        await process.run("ok")
+        response = process.get_last_message()
 
         print(f"\nResponse to 'ok': {response}", file=sys.stderr)
 
@@ -132,7 +138,8 @@ class TestProgramLinkingAPI:
     async def test_state_reset_behavior(self, minimal_toml_files, capsys):
         """Test program linking behavior after state reset."""
         # Load the main program
-        process = LLMProcess.from_toml(minimal_toml_files["main_toml"])
+        program = LLMProgram.from_toml(minimal_toml_files["main_toml"])
+        process = await program.start()
 
         # Send an initial query
         print("\nSending initial query...", file=sys.stderr)
@@ -144,7 +151,8 @@ class TestProgramLinkingAPI:
 
         # Send a query that should trigger the spawn tool again
         print("\nSending query after reset...", file=sys.stderr)
-        response = await process.run("What color is the sky?")
+        await process.run("What color is the sky?")
+        response = process.get_last_message()
 
         print(f"\nResponse after reset: {response}", file=sys.stderr)
 

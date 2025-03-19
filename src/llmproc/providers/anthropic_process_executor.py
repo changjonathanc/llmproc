@@ -61,7 +61,7 @@ class AnthropicProcessExecutor:
         if is_tool_continuation:
             pass
         else:
-            process.messages.append({"role": "user", "content": user_prompt})
+            process.state.append({"role": "user", "content": user_prompt})
 
         process.run_stop_reason = None
         iterations = 0
@@ -76,7 +76,7 @@ class AnthropicProcessExecutor:
                 system=process.enriched_system_prompt,
                 messages=[
                     message
-                    for message in process.messages
+                    for message in process.state
                     if message["role"] != "system"
                 ],
                 tools=process.tools,
@@ -213,10 +213,10 @@ class AnthropicProcessExecutor:
                                 ],
                             }
                         )
-                process.messages.append(
+                process.state.append(
                     {"role": "assistant", "content": response.content}
                 )
-                process.messages.extend(tool_results)
+                process.state.extend(tool_results)
 
         if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
@@ -307,14 +307,13 @@ class AnthropicProcessExecutor:
         logger.info(f"Forking conversation with {len(prompts)} prompts: {prompts}")
 
         async def process_fork(i, prompt):
-            child = (
-                process.deepcopy()
-            )  # TODO: need to implement deepcopy for Process class
+            # Use the fork_process method to create a deep copy
+            child = await process.fork_process()
 
             # NOTE: we need to remove all other tool calls from the last assistant response
             # because we might not have the tool call results for other tool calls yet
             # this is also important for the forked process to focus on the assigned goal
-            child.messages.append(
+            child.state.append(
                 {
                     "role": "assistant",
                     "content": [
@@ -326,7 +325,7 @@ class AnthropicProcessExecutor:
                 }
             )
             # NOTE: return the fork result as tool result
-            child.messages.append(
+            child.state.append(
                 {
                     "role": "user",
                     "content": [

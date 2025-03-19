@@ -1,7 +1,6 @@
 """Configuration schema and utilities package."""
 
 from llmproc.config.schema import (
-    DebugConfig,
     EnvInfoConfig,
     LLMProgramConfig,
     LinkedProgramsConfig,

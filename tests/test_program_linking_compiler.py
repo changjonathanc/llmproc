@@ -139,7 +139,7 @@ def test_compile_all_with_missing_file():
 
         # Verify error message contains path information
         error_message = str(excinfo.value)
-        assert "Linked program file not found" in error_message
+        assert "Linked program file (from" in error_message
         assert "non_existent.toml" in error_message
 
 

@@ -57,11 +57,14 @@ pip install -e .
 
 ```python
 import asyncio
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
 async def main():
     # Load program from TOML (recommended approach)
-    process = LLMProcess.from_toml('examples/minimal.toml')
+    program = LLMProgram.from_toml('examples/minimal.toml')
+    
+    # Start the process asynchronously
+    process = await program.start()
 
     # Run the process with user input
     output = await process.run('Hello!')
@@ -82,10 +85,10 @@ You can also create a process from a manually constructed program:
 
 ```python
 import asyncio
-from llmproc import LLMProcess, LLMProgram
+from llmproc import LLMProgram
 
 async def main():
-    # Compile a program
+    # Create a program
     program = LLMProgram(
         model_name="claude-3-haiku-20240307",
         provider="anthropic",
@@ -94,8 +97,8 @@ async def main():
         parameters={"temperature": 0.7}
     )
 
-    # Create process from program
-    process = LLMProcess(program=program)
+    # Start the process asynchronously
+    process = await program.start()
 
     # Use the process
     response = await process.run("Hello, how can you help me?")
@@ -105,22 +108,25 @@ async def main():
 asyncio.run(main())
 ```
 
-### Async Example
+### Async Example with MCP Tools
 
 ```python
 import asyncio
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
 async def main():
     # Load program with MCP tools
-    process = LLMProcess.from_toml('examples/minimal.toml')
+    program = LLMProgram.from_toml('examples/mcp.toml')
+    
+    # Start the process asynchronously
+    process = await program.start()
 
     # Run the process with user input
-    output = await process.run('Hello, how are you today?')
+    output = await process.run('Hello, what time is it?')  # Will use MCP time tool
     print(output)
 
     # Continue the conversation
-    output = await process.run('Tell me more about yourself.')
+    output = await process.run('Tell me more about how MCP tools work.')
     print(output)
 
 # Run the async example
@@ -130,10 +136,13 @@ asyncio.run(main())
 While `run()` is an async method, it automatically handles event loops when called from synchronous code:
 
 ```python
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
 # Load program from TOML
-process = LLMProcess.from_toml('examples/minimal.toml')
+program = LLMProgram.from_toml('examples/minimal.toml')
+
+# Start the process
+process = program.start()  # Creates event loop internally for sync calls
 
 # This works in synchronous code too (creates event loop internally)
 output = process.run('Hello, what can you tell me about Python?')
@@ -146,7 +155,7 @@ print(output)
 The program compiler provides robust validation and preprocessing of TOML configurations:
 
 ```python
-from llmproc import LLMProgram, LLMProcess
+from llmproc import LLMProgram
 
 # Compile a program with validation
 program = LLMProgram.compile('examples/minimal.toml')
@@ -156,9 +165,8 @@ print(f"Model: {program.model_name}")
 print(f"Provider: {program.provider}")
 print(f"API Parameters: {program.api_params}")
 
-# Instantiate an LLMProcess from the compiled program
-import llmproc
-process = program.instantiate(llmproc)
+# Start the process from the compiled program
+process = program.start()
 
 # Use the process
 response = process.run("Hello, how are you?")
@@ -171,11 +179,14 @@ Program linking allows you to link together multiple LLM processes to form a mor
 
 ```python
 import asyncio
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
 async def main():
-    # Load main process with program linking
-    main_process = LLMProcess.from_toml('examples/program_linking/main.toml')
+    # Load main program with linking configuration
+    program = LLMProgram.from_toml('examples/program_linking/main.toml')
+    
+    # Start the main process
+    main_process = await program.start()
 
     # Main process can delegate to specialized expert process
     response = await main_process.run("What is the current version of LLMProc?")
@@ -211,20 +222,27 @@ LLMProc includes a simple command-line demo for interacting with LLM models:
 # Start the interactive demo (select from examples)
 llmproc-demo
 
-# Start with a specific TOML configuration file
-llmproc-demo path/to/your/config.toml
+# Start with a specific TOML program file
+llmproc-demo path/to/your/program.toml
 
-# Start with Claude Code example configuration
+# Start with Claude Code example program
 llmproc-demo ./examples/claude_code.toml
 
 # Try Program Linking (LLM-to-LLM communication)
 llmproc-demo ./examples/program_linking/main.toml
+
+# Run in non-interactive mode with a single prompt
+llmproc-demo ./examples/anthropic.toml -p "Write a short poem about AI"
+
+# Run in non-interactive mode reading from stdin
+cat input.txt | llmproc-demo ./examples/openai.toml -n
 ```
 
 The demo will:
-1. If no config is specified, show a list of available TOML programs from the examples directory
+1. If no program is specified, show a list of available TOML programs from the examples directory
 2. Let you select a program by number, or use the specified program file
-3. Start an interactive chat session with the selected model
+3. Load and initialize the program with LLMProgram.from_toml() and program.start()
+4. Start an interactive chat session with the selected model (or process a single prompt in non-interactive mode)
 
 ### Program Linking Example
 
@@ -236,6 +254,7 @@ In the interactive session, you can use the following commands:
 
 - Type `exit` or `quit` to end the session
 - Type `reset` to reset the conversation state
+- Type `verbose` to toggle verbose logging
 
 ## Implementation Details
 

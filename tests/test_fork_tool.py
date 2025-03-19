@@ -133,14 +133,17 @@ class TestForkToolWithAPI:
         example_path = Path(__file__).parents[1] / "examples" / "fork.toml"
 
         program = LLMProgram.compile(example_path)
-        process = LLMProcess(program=program)
+        process = await program.start()
 
         # Run a test query
-        response = await process.run(
+        await process.run(
             "Fork yourself to perform these two tasks in parallel: "
             "1. Count from 1 to 5. "
             "2. List the first 5 letters of the alphabet."
         )
+        
+        # Get the last message
+        response = process.get_last_message()
 
         # Check that the response includes both tasks' results
         assert any(word in response.lower() for word in ["1", "2", "3", "4", "5"])

@@ -362,21 +362,27 @@ async def test_llm_actually_uses_preloaded_content():
         temp_path = temp_file.name
 
     try:
-        # Create a process with actual OpenAI client
-        process = LLMProcess(
+        # Create a program and process
+        from llmproc.program import LLMProgram
+        
+        program = LLMProgram(
             model_name="gpt-3.5-turbo",  # Using cheaper model for tests
             provider="openai",
             system_prompt="You are a helpful assistant.",
-            max_tokens=150,
+            parameters={"max_tokens": 150},
         )
+        
+        # Start the process
+        process = await program.start()
 
         # Preload the file with the secret flag
         process.preload_files([temp_path])
 
         # Ask the model about the secret flag - using await with async run method
-        response = await process.run(
+        await process.run(
             "What is the secret flag mentioned in the preloaded document? Just output the flag and nothing else."
         )
+        response = process.get_last_message()
 
         # Assert the secret flag is in the response
         assert secret_flag in response, (
