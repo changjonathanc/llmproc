@@ -75,14 +75,6 @@ pytest -m llm_api tests/test_example_programs.py
 
 See [API Testing Guide](api_testing.md) for detailed information on API tests.
 
-### Debug Output
-
-To enable detailed debug output during tests:
-
-```bash
-export LLMPROC_DEBUG=true
-pytest -m llm_api
-```
 
 ## Test Coverage
 

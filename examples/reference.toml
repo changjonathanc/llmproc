@@ -129,9 +129,3 @@ variables = ["working_directory", "platform", "date"]  # Include specific variab
 # codemcp = ["ReadFile"]
 # github = "all"  # Import all tools from GitHub server
 
-#----------------------------------------
-# Debug Configuration
-#----------------------------------------
-[debug]
-# Enable detailed debugging output for tool execution
-# debug_tools = true  # Set to true for verbose tool execution logging

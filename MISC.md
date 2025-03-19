@@ -47,7 +47,6 @@ LLMProc supports the following environment variables:
 - `CLOUD_ML_REGION`: Region for Claude models on Vertex AI (defaults to us-central1)
 - `GOOGLE_CLOUD_PROJECT`: Alternative project ID for Vertex AI (used if ANTHROPIC_VERTEX_PROJECT_ID not set)
 - `GOOGLE_CLOUD_LOCATION`: Alternative region for Vertex AI (used if CLOUD_ML_REGION not set)
-- `LLMPROC_DEBUG`: Set to "true" to enable detailed debug output for tools and program linking
 
 You can set these in your environment or include them in a `.env` file.
 
@@ -140,13 +139,6 @@ async def run_with_expert(query):
 
 ## Advanced Program Setups
 
-### Enabling Debug Mode
-
-```bash
-# Enable detailed debug output
-export LLMPROC_DEBUG=true
-llmproc-demo ./examples/program_linking/main.toml
-```
 
 ### Chaining Multiple Experts
 
