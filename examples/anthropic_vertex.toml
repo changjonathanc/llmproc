@@ -1,7 +1,7 @@
 [model]
-name = "claude-3-sonnet@20240229"  # Use appropriate Vertex model name
+name = "claude-3-5-haiku@20241022"  # Use appropriate Vertex model name
 provider = "anthropic_vertex"
-display_name = "Claude Sonnet (Vertex AI)"
+display_name = "Claude Haiku (Vertex AI)"
 
 [prompt]
 system_prompt = "You are Claude on Vertex AI, a helpful AI assistant. Keep all responses under 3 sentences for brevity."
