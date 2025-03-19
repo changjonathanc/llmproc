@@ -34,6 +34,7 @@ The LLMProc library functions as a kernel:
 - Command-line interface for interactive chat sessions
 - Comprehensive documentation for all parameters
 - File preloading for context enhancement by adding content to system prompt
+- Environment information sharing for context-aware LLMs
 - Model Context Protocol (MCP) support for tool usage
 - Program Linking for LLM-to-LLM communication via spawn tool (like `dispatch_agent` in Claude Code)
 - Program Compiler for robust validation and preprocessing of configurations
@@ -210,9 +211,13 @@ provider = "openai"
 
 [prompt]
 system_prompt = "You are a helpful assistant."
+
+# Optional: Add environment information for context awareness
+[env_info]
+variables = ["working_directory", "platform", "date"]
 ```
 
-See **`examples/reference.toml`** for a comprehensive reference with comments for all supported parameters.
+See **`examples/reference.toml`** for a comprehensive reference with comments for all supported parameters and **`docs/env_info.md`** for detailed documentation on the environment information feature.
 
 ## Command-Line Demo
 

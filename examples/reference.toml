@@ -79,23 +79,52 @@ Always maintain a neutral and professional tone."""
 # Environment Info Configuration
 #----------------------------------------
 [env_info]
-# Control environment information included in the enriched system prompt
-# By default, no environment information is included
-# Use a list of variables to include or "all" to include all available variables
-variables = ["working_directory", "platform", "date"]  # Include specific variables
-# variables = "all"  # Include all available environment variables
+# The environment information feature provides context about the runtime environment to the LLM.
+# This adds an <env> XML block to the system prompt with selected information.
+#
+# This is disabled by default for privacy/security reasons (opt-in model).
+# No environment information is shared unless explicitly configured.
+#
+# CONFIGURATION OPTIONS:
+#
+# 1. SPECIFIC VARIABLES: List the exact variables you want included
+variables = ["working_directory", "platform", "date"]  
 
-# Custom environment variables can be added as string key-value pairs
-# git_branch = "main"  # Custom git branch info
-# project_name = "My Project"  # Custom project name
+# 2. ALL VARIABLES: Use "all" to include all standard environment variables
+# variables = "all"  
 
-# Available standard variables:
-# - working_directory: Current working directory
+# 3. DISABLE: Use an empty list to explicitly disable (this is the default)
+# variables = []  
+
+# NOTE: Only system-defined variables are supported.
+# Custom variables are not allowed in the env_info section.
+
+# AVAILABLE STANDARD VARIABLES:
+# - working_directory: Current working directory path
+#   Security note: Reveals file system structure
+#
 # - platform: Operating system (linux, darwin, windows)
-# - date: Current date (YYYY-MM-DD)
-# - python_version: Python version
+#   Usage: Useful for OS-specific instructions
+#
+# - date: Current date in YYYY-MM-DD format
+#   Usage: Provides temporal context for the model
+#
+# - python_version: Python interpreter version
+#   Usage: Helpful for code generation and compatibility
+#
 # - hostname: Name of the machine
-# - username: Current user
+#   Security note: May reveal identifying information
+#
+# - username: Current user's system username
+#   Security note: Reveals identity information
+#
+# SECURITY CONSIDERATIONS:
+# - Only include variables necessary for your application
+# - Be cautious about exposing usernames, hostnames, or file paths
+# - Never include API keys, tokens, or passwords as custom variables
+# - Consider using different configurations for dev vs. production
+
+# For full documentation, see docs/env_info.md
 
 #----------------------------------------
 # Tools Configuration
