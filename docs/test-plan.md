@@ -121,9 +121,13 @@ async def test_api_error_recovery():
 @pytest.mark.asyncio
 async def test_concurrent_processes():
     """Test multiple processes running concurrently."""
-    # Create multiple process instances with different configs
-    process1 = LLMProcess.from_toml("examples/minimal.toml")
-    process2 = LLMProcess.from_toml("examples/anthropic.toml")
+    # Create multiple process instances with different programs
+    program1 = LLMProgram.from_toml("examples/minimal.toml")
+    program2 = LLMProgram.from_toml("examples/anthropic.toml")
+    
+    # Start the processes
+    process1 = await program1.start()
+    process2 = await program2.start()
     
     # Mock API clients
     with patch_multiple_providers():
@@ -162,7 +166,8 @@ async def test_concurrent_processes():
 @pytest.mark.asyncio
 async def test_long_conversation():
     """Test a conversation with many turns."""
-    process = LLMProcess.from_toml("examples/minimal.toml")
+    program = LLMProgram.from_toml("examples/minimal.toml")
+    process = await program.start()
     
     # Mock API responses
     with patch_provider() as mock_provider:
@@ -324,7 +329,7 @@ def test_program_validation():
             
             # Should raise appropriate error
             with pytest.raises(Exception) as exc_info:
-                LLMProcess.from_toml(program_file.name)
+                LLMProgram.from_toml(program_file.name)
             
             # Verify error message contains expected text
             assert expected_error.lower() in str(exc_info.value).lower()

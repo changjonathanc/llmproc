@@ -191,7 +191,7 @@ def test_circular_dependency():
 
 
 def test_from_toml_with_linked_programs():
-    """Test LLMProcess.from_toml with linked programs."""
+    """Test LLMProgram.from_toml with linked programs."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create test programs
         main_program_path = Path(temp_dir) / "main.toml"

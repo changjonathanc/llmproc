@@ -43,15 +43,18 @@ The `run` method is now fully asynchronous and handles tooling properly:
 
 ```python
 import asyncio
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
 async def main():
-    # Initialize from TOML configuration
-    llm = LLMProcess.from_toml("examples/mcp.toml")
+    # Step 1: Load and compile the program
+    program = LLMProgram.from_toml("examples/mcp.toml")
     
-    # Use the LLM with full tool execution support
-    response = await llm.run("Please search for popular Python repositories on GitHub.")
-    print(response)
+    # Step 2: Initialize the process (handles async MCP setup)
+    process = await program.start()
+    
+    # Use the process with full tool execution support
+    result = await process.run("Please search for popular Python repositories on GitHub.")
+    print(process.get_last_message())
 
 # Run the async function
 asyncio.run(main())
@@ -62,15 +65,18 @@ asyncio.run(main())
 The `run` method automatically detects if it's called from synchronous code and handles the event loop creation:
 
 ```python
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
-# Initialize from TOML configuration
-llm = LLMProcess.from_toml("examples/mcp.toml")
+# Step 1: Load and compile the program
+program = LLMProgram.from_toml("examples/mcp.toml")
+
+# Step 2: Initialize the process (creates event loop internally)
+process = program.start()
 
 # Even in synchronous code, full tool support is available
 # The method will automatically create an event loop if needed
-response = llm.run("Please search for popular Python repositories on GitHub.")
-print(response)
+result = process.run("Please search for popular Python repositories on GitHub.")
+print(process.get_last_message())
 ```
 
 ### Using the CLI

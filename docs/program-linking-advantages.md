@@ -42,9 +42,9 @@ The enhanced system builds a complete program graph where:
 
 The API has been streamlined to make program compilation and linking easier:
 
-- `LLMProgram.compile_all`: Compiles all programs in a graph in one operation
-- `LLMProcess.from_toml`: Compiles and links an entire program graph in one operation
-- `LLMProcess._initialize_linked_programs`: Enhanced to handle recursive program graphs
+- `LLMProgram.from_toml`: Compiles all programs in a graph in one operation
+- `program.start()`: Initializes the process and all linked processes as needed 
+- `LLMProgram.compile`: Supports various options to control compilation behavior
 
 **Before**: Users needed to manage program compilation and linking manually for complex graphs.
 **After**: A single method call handles the entire process of compilation and linking.

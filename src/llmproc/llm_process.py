@@ -200,10 +200,6 @@ class LLMProcess:
         if self.enriched_system_prompt is not None:
             self.enriched_system_prompt = None
 
-    # from_toml and from_toml_async methods have been removed
-    # Users should now use the two-step pattern:
-    # 1. program = LLMProgram.from_toml(path)
-    # 2. process = await program.start()
 
     async def run(
         self, user_input: str, max_iterations: int = 10, callbacks: dict = None

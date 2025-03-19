@@ -11,7 +11,7 @@ from typing import Optional
 import pytest
 import tomli
 
-from llmproc import LLMProcess
+from llmproc import LLMProcess, LLMProgram
 
 
 def get_example_programs():
@@ -105,8 +105,9 @@ async def test_example_program(program_path):
     if provider == "anthropic_vertex" and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
         pytest.skip("Vertex AI credentials not available")
 
-    # Create LLMProcess from TOML program file
-    process = LLMProcess.from_toml(program_path)
+    # Create and start process using two-step pattern
+    program = LLMProgram.from_toml(program_path)
+    process = await program.start()
 
     # Send a simple test query
     test_query = (
@@ -130,7 +131,8 @@ async def test_minimal_functionality():
         pytest.skip("API keys not available for testing")
 
     program_path = Path(__file__).parent.parent / "examples" / "minimal.toml"
-    process = LLMProcess.from_toml(program_path)
+    program = LLMProgram.from_toml(program_path)
+    process = await program.start()
 
     # Test basic Q&A functionality
     response = await process.run("What is 2+2?")
@@ -161,7 +163,8 @@ async def test_mcp_tool_functionality():
 
     # Use the more reliable time-only example
     program_path = Path(__file__).parent.parent / "examples" / "mcp_time.toml"
-    process = LLMProcess.from_toml(program_path)
+    program = LLMProgram.from_toml(program_path)
+    process = await program.start()
 
     # Send a request that should trigger the time tool
     response = await process.run(
@@ -184,7 +187,8 @@ async def test_program_linking_functionality():
     program_path = (
         Path(__file__).parent.parent / "examples" / "program_linking" / "main.toml"
     )
-    process = LLMProcess.from_toml(program_path)
+    program = LLMProgram.from_toml(program_path)
+    process = await program.start()
 
     # Send a query that should use the spawn tool to delegate to repo_expert
     response = await process.run(
@@ -220,7 +224,8 @@ async def test_file_preload_functionality():
         pytest.skip("API keys not available for testing")
 
     program_path = Path(__file__).parent.parent / "examples" / "preload.toml"
-    process = LLMProcess.from_toml(program_path)
+    program = LLMProgram.from_toml(program_path)
+    process = await program.start()
 
     # Ask about content that should be in the preloaded files
     response = await process.run(
@@ -242,7 +247,8 @@ async def test_claude_code_comprehensive():
         pytest.skip("API keys not available for testing")
 
     program_path = Path(__file__).parent.parent / "examples" / "claude_code.toml"
-    process = LLMProcess.from_toml(program_path)
+    program = LLMProgram.from_toml(program_path)
+    process = await program.start()
 
     # Test preloaded file knowledge
     preload_response = await process.run(
@@ -303,7 +309,8 @@ async def test_provider_specific_functionality():
             continue
 
         program_path = Path(__file__).parent.parent / "examples" / program_name
-        process = LLMProcess.from_toml(program_path)
+        program = LLMProgram.from_toml(program_path)
+        process = await program.start()
 
         # Use a simple test prompt that should work with any provider
         test_prompt = "Echo this unique identifier: TEST_CONNECTION_SUCCESS_12345"

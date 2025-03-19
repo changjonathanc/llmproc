@@ -47,11 +47,14 @@ After compilation, programs need to be linked together to establish runtime conn
 2. **Establish Connections**: References between programs are resolved and connected.
 3. **Initialize Tools**: Spawn tools and other tools are initialized based on the program settings.
 
-The `from_toml` method in `LLMProcess` handles the complete compilation and linking process:
+The two-step factory pattern handles the complete compilation and linking process:
 
 ```python
-# Compile and link the main program and all its linked programs
-process = LLMProcess.from_toml("path/to/main.toml")
+# Step 1: Compile the main program and all its linked programs
+program = LLMProgram.from_toml("path/to/main.toml")
+
+# Step 2: Start the process
+process = await program.start()  # Use await in async context
 ```
 
 ## Program Configuration

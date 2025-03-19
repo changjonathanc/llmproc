@@ -125,13 +125,14 @@ async def main():
 asyncio.run(main())
 ```
 
-### Legacy Method (for backward compatibility)
+### Simplified Synchronous API
 
 ```python
-from llmproc import LLMProcess
+from llmproc import LLMProgram
 
-# Create a process directly from a TOML file (now uses from_toml_async internally)
-process = LLMProcess.from_toml("path/to/program.toml")
+# Create a program and start the process in one session
+program = LLMProgram.from_toml("path/to/program.toml")
+process = program.start()  # Creates event loop internally for sync calls
 ```
 
 ## Validation Features
