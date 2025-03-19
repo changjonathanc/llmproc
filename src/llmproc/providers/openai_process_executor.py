@@ -52,7 +52,7 @@ class OpenAIProcessExecutor:
             )
 
         # Add user message to conversation history
-        process.messages.append({"role": "user", "content": user_prompt})
+        process.state.append({"role": "user", "content": user_prompt})
 
         # Set up messages for OpenAI format
         formatted_messages = []
@@ -64,11 +64,7 @@ class OpenAIProcessExecutor:
             )
 
         # Then add conversation history
-        for message in process.messages:
-            # Skip system messages as we've already added the enriched system prompt
-            if message["role"] == "system":
-                continue
-
+        for message in process.state:
             # Add user and assistant messages
             if message["role"] in ["user", "assistant"]:
                 formatted_messages.append(
@@ -105,7 +101,7 @@ class OpenAIProcessExecutor:
             process.run_stop_reason = finish_reason
 
             # Add assistant response to conversation history
-            process.messages.append({"role": "assistant", "content": message_content})
+            process.state.append({"role": "assistant", "content": message_content})
 
             # Fire callback for model response if provided
             if on_response:

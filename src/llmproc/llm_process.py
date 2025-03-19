@@ -130,7 +130,9 @@ class LLMProcess:
         # Store the original system prompt before any files are preloaded
         self.original_system_prompt = self.system_prompt
 
-        # Initialize message state (will set system message on first run)
+        # Initialize conversation state
+        # Note: State contains only user/assistant messages, not system message
+        # System message is kept separately and passed directly to the API
         self.state = []
 
         # Initialize fork support
@@ -270,14 +272,9 @@ class LLMProcess:
             self.enriched_system_prompt = self.program.get_enriched_system_prompt(
                 process_instance=self, include_env=True
             )
-            # Set the system message with enriched prompt
-            self.state = [{"role": "system", "content": self.enriched_system_prompt}]
 
         # Add user input to state
         self.state.append({"role": "user", "content": user_input})
-
-        # Keep messages as an alias to state for compatibility
-        self.messages = self.state
 
         # Create provider-specific process executors
         if self.provider == "openai":
@@ -334,16 +331,24 @@ class LLMProcess:
         """Reset the conversation state.
 
         Args:
-            keep_system_prompt: Whether to keep the system prompt in the state
-            keep_preloaded: Whether to keep preloaded file content in the state
+            keep_system_prompt: Whether to keep the system prompt for the next API call
+            keep_preloaded: Whether to keep preloaded file content
+        
+        Note: 
+            State only contains user/assistant messages, not system message.
+            System message is stored separately in enriched_system_prompt.
         """
-        # Clear the state
+        # Clear the conversation state (user/assistant messages)
         self.state = []
 
         # Handle preloaded content
         if not keep_preloaded:
             # Clear preloaded content
             self.preloaded_content = {}
+
+        # If we're not keeping the system prompt, reset it to original
+        if not keep_system_prompt:
+            self.system_prompt = self.original_system_prompt
 
         # Always reset the enriched system prompt - it will be regenerated on next run
         # with the correct combination of system prompt and preloaded content

@@ -35,7 +35,9 @@ To run the tests, you need to set the following environment variables:
 
 - `OPENAI_API_KEY` - For OpenAI models
 - `ANTHROPIC_API_KEY` - For Anthropic models
-- `GOOGLE_APPLICATION_CREDENTIALS` or `GOOGLE_CLOUD_PROJECT` - For Vertex AI models
+- `ANTHROPIC_VERTEX_PROJECT_ID` - For Anthropic on Vertex AI models
+- `CLOUD_ML_REGION` - For Anthropic on Vertex AI models (defaults to us-central1)
+- `GOOGLE_APPLICATION_CREDENTIALS` - Path to service account credentials for Google Cloud authentication
 
 ## Test Categories
 

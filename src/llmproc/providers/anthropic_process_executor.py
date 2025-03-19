@@ -74,11 +74,7 @@ class AnthropicProcessExecutor:
             response = await process.client.messages.create(
                 model=process.model_name,
                 system=process.enriched_system_prompt,
-                messages=[
-                    message
-                    for message in process.state
-                    if message["role"] != "system"
-                ],
+                messages=process.state,
                 tools=process.tools,
                 **process.api_params,
             )

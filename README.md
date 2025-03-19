@@ -28,7 +28,7 @@ The LLMProc library functions as a kernel:
 
 - Load and validate programs from TOML files with robust error checking
 - Maintain conversation state
-- Support for different LLM providers (OpenAI, Anthropic, Vertex)
+- Support for different LLM providers (OpenAI, Anthropic, Anthropic on Vertex AI)
 - Extensive parameter customization
 - Simple API for easy integration
 - Command-line interface for interactive chat sessions
@@ -49,8 +49,24 @@ pip install -e .
 
 # Set up environment variables
 # supports .env file
-# supports OPENAI_API_KEY, ANTHROPIC_API_KEY, VERTEX_API_KEY, etc
+# supports OPENAI_API_KEY, ANTHROPIC_API_KEY, ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION
 ```
+
+## Supported Providers
+
+### OpenAI
+- Requires `OPENAI_API_KEY` environment variable
+- Supports all GPT models (gpt-3.5-turbo, gpt-4o, etc.)
+
+### Anthropic
+- Requires `ANTHROPIC_API_KEY` environment variable
+- Supports all Claude models (claude-3-haiku, claude-3-opus, etc.)
+
+### Anthropic on Vertex AI
+- Requires `ANTHROPIC_VERTEX_PROJECT_ID` and `CLOUD_ML_REGION` environment variables
+- Google Cloud authentication must be set up (gcloud auth)
+- Supports Claude models deployed on Google Cloud Vertex AI
+- See [Anthropic Documentation](docs/anthropic.md) for details
 
 ## Usage
 

@@ -13,5 +13,5 @@ top_p = 0.95
 
 # These are used for Vertex AI authentication
 # Will be loaded from environment variables if not specified
-# project_id = "your-gcp-project-id"  # Can also use ANTHROPIC_VERTEX_PROJECT_ID or GOOGLE_CLOUD_PROJECT env var
-# region = "us-central1"  # Can also use CLOUD_ML_REGION or GOOGLE_CLOUD_LOCATION env var
+# project_id = "your-gcp-project-id"  # Can also use ANTHROPIC_VERTEX_PROJECT_ID env var
+# region = "us-central1"  # Can also use CLOUD_ML_REGION env var (defaults to us-central1)
