@@ -14,11 +14,11 @@ The LLMProc project uses specific terminology to describe its components, built 
 - **Model**: A specific LLM configuration from a provider (e.g., "gpt-4o-mini" or "claude-3-haiku").
 - **Program**: A definition of an LLM's behavior in a TOML file. Programs are the fundamental unit of definition in LLMProc, analogous to a program executable file.
 - **Process**: An instantiated LLMProcess that executes a program. This represents the active, stateful execution environment.
-- **State**: The conversation history maintained by a process across interactions.
+- **State**: The conversation history maintained by a process across interactions. Contains only user and assistant messages, not system messages. System messages are handled separately.
 
 ### Communication and Tools
 
-- **System Prompt**: The initial instructions provided to the LLM that define its behavior and capabilities.
+- **System Prompt**: The initial instructions provided to the LLM that define its behavior and capabilities. Stored separately from conversation state and passed directly to the API with each call.
 - **Tool**: A function that an LLM process can use to perform operations outside its context.
 - **MCP (Model Context Protocol)**: A portable protocol for tool communication with LLMs, providing "userspace" tools.
 - **System Call**: A kernel-level tool implemented by LLMProc, defined in the `[tools]` section (e.g., `spawn`).
@@ -45,8 +45,6 @@ LLMProc supports the following environment variables:
 - `ANTHROPIC_API_KEY`: Required for Anthropic providers (Claude models)
 - `ANTHROPIC_VERTEX_PROJECT_ID`: Project ID for Claude models on Vertex AI
 - `CLOUD_ML_REGION`: Region for Claude models on Vertex AI (defaults to us-central1)
-- `GOOGLE_CLOUD_PROJECT`: Alternative project ID for Vertex AI (used if ANTHROPIC_VERTEX_PROJECT_ID not set)
-- `GOOGLE_CLOUD_LOCATION`: Alternative region for Vertex AI (used if CLOUD_ML_REGION not set)
 
 You can set these in your environment or include them in a `.env` file.
 
