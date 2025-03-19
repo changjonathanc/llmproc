@@ -6,15 +6,7 @@ It also provides a registry to retrieve tool handlers and schemas by name.
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    TypedDict,
-    Union,
-)
+from typing import Any, TypedDict
 
 from . import mcp
 from .calculator import calculator_tool, calculator_tool_def

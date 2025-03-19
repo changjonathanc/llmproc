@@ -1,9 +1,7 @@
 """Spawn system call for LLMProcess to create new processes from linked programs."""
 
-import asyncio
-import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Avoid circular import
 # LLMProcess is imported within the function
@@ -125,7 +123,6 @@ async def spawn_tool(
 
         return ToolResult.from_success(response_text)
     except Exception as e:
-        import traceback
 
         error_msg = f"Error creating process from program '{program_name}': {str(e)}"
         logger.error(f"SPAWN ERROR: {error_msg}")

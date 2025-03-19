@@ -1,7 +1,6 @@
 """OpenAI provider implementation for LLMProc."""
 
 import logging
-from typing import Any, Optional, Union
 
 from llmproc.results import RunResult
 
@@ -17,7 +16,7 @@ class OpenAIProcessExecutor:
 
     async def run(
         self,
-        process: "Process",
+        process: "Process",  # noqa: F821
         user_prompt: str,
         max_iterations: int = 1,
         callbacks: dict = None,

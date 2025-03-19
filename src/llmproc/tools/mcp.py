@@ -5,7 +5,7 @@ It handles the initialization, registration, and execution of MCP tools.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 # Set up logger
 logger = logging.getLogger(__name__)

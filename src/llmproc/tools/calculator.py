@@ -3,8 +3,6 @@
 import ast
 import math
 import operator
-from collections.abc import Callable
-from typing import Any, Dict, Optional, Union
 
 from llmproc.tools.tool_result import ToolResult
 
@@ -69,17 +67,17 @@ class MathNode(ast.NodeVisitor):
         """Initialize the math evaluator."""
         self.constants = ALLOWED_CONSTANTS.copy()
 
-    def visit_Constant(self, node):
+    def visit_Constant(self, node):  # noqa: N802
         """Process constant values (numbers, etc.)."""
         return node.value
 
-    def visit_Name(self, node):
+    def visit_Name(self, node):  # noqa: N802
         """Process variable names (constants like pi, e)."""
         if node.id in self.constants:
             return self.constants[node.id]
         raise ValueError(f"Unknown variable: {node.id}")
 
-    def visit_BinOp(self, node):
+    def visit_BinOp(self, node):  # noqa: N802
         """Process binary operations (+, -, *, /, etc.)."""
         left = self.visit(node.left)
         right = self.visit(node.right)
@@ -89,7 +87,7 @@ class MathNode(ast.NodeVisitor):
 
         return ALLOWED_OPERATORS[type(node.op)](left, right)
 
-    def visit_UnaryOp(self, node):
+    def visit_UnaryOp(self, node):  # noqa: N802
         """Process unary operations (+x, -x)."""
         operand = self.visit(node.operand)
 
@@ -100,7 +98,7 @@ class MathNode(ast.NodeVisitor):
         else:
             raise ValueError(f"Unsupported unary operation: {type(node.op).__name__}")
 
-    def visit_Call(self, node):
+    def visit_Call(self, node):  # noqa: N802
         """Process function calls (sin, cos, sqrt, etc.)."""
         func_name = getattr(node.func, "id", "")
 

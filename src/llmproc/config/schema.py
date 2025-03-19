@@ -1,12 +1,10 @@
 """Configuration schema for LLM programs using Pydantic models."""
 
-from typing import Any, Optional, Union
+from typing import Any
 
 from pydantic import (
     BaseModel,
-    Field,
     RootModel,
-    ValidationError,
     field_validator,
     model_validator,
 )

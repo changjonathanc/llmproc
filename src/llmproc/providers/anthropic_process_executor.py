@@ -3,8 +3,6 @@
 import asyncio
 import json
 import logging
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 
 # Import Anthropic clients (will be None if not installed)
 try:
@@ -26,9 +24,14 @@ PROMPT_SUMMARIZE_CONVERSATION = (
 
 
 class AnthropicProcessExecutor:
+    """Process executor for Anthropic models.
+
+    This class manages interactions with the Anthropic API, including
+    handling conversation flow, tool calls, and response processing.
+    """
     async def run(
         self,
-        process: "Process",
+        process: "Process",  # noqa: F821
         user_prompt: str,
         max_iterations: int = 10,
         callbacks: dict = None,
@@ -228,8 +231,8 @@ class AnthropicProcessExecutor:
     async def run_till_text_response(
         self, process, user_prompt, max_iterations: int = 10
     ):
-        """
-        Run the process until a text response is generated
+        """Run the process until a text response is generated.
+
         This is specifically designed for forked processes, where the child must respond with a text response, which will become the tool result for the parent.
 
         This has some special handling, it's not meant for general use.

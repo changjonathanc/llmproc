@@ -1,6 +1,5 @@
 """LLMProgram compiler for validating and loading LLM program configurations."""
 
-import os
 import tomllib
 import warnings
 from collections import deque
@@ -439,7 +438,7 @@ class LLMProgram:
             toml_path, include_linked=include_linked, check_linked_files=True
         )
 
-    async def start(self) -> "LLMProcess":
+    async def start(self) -> "LLMProcess":  # noqa: F821
         """Create and fully initialize an LLMProcess from this program.
 
         This is the recommended way to create a process from a program, as it

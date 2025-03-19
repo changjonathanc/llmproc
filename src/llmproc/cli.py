@@ -9,7 +9,7 @@ from pathlib import Path
 
 import click
 
-from llmproc import LLMProcess, LLMProgram
+from llmproc import LLMProgram
 
 # Set up logging
 logging.basicConfig(
