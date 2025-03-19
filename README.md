@@ -39,7 +39,6 @@ The LLMProc library functions as a kernel:
 - Program Linking for LLM-to-LLM communication via spawn tool (like `dispatch_agent` in Claude Code)
 - Program Compiler for robust validation and preprocessing of configurations
 
-
 ## Installation
 
 ```bash
@@ -80,7 +79,7 @@ from llmproc import LLMProgram
 async def main():
     # Load program from TOML (recommended approach)
     program = LLMProgram.from_toml('examples/minimal.toml')
-    
+
     # Start the process asynchronously
     process = await program.start()
 
@@ -135,7 +134,7 @@ from llmproc import LLMProgram
 async def main():
     # Load program with MCP tools
     program = LLMProgram.from_toml('examples/mcp.toml')
-    
+
     # Start the process asynchronously
     process = await program.start()
 
@@ -202,7 +201,7 @@ from llmproc import LLMProgram
 async def main():
     # Load main program with linking configuration
     program = LLMProgram.from_toml('examples/program_linking/main.toml')
-    
+
     # Start the main process
     main_process = await program.start()
 
@@ -338,8 +337,7 @@ This enables:
 7. [ ] Add support for reasoning models
 8. [ ] Add Process State Serialization & Restoration
 9. [ ] Implement retry mechanism with exponential backoff for API calls
-10. [ ] Enhance error handling and reporting across providers
-11. [ ] Improve stream mode support for all providers
+10. [ ] Improve stream mode support for all providers
 
 ## License
 
