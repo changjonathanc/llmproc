@@ -84,12 +84,14 @@ async def main():
     process = await program.start()
 
     # Run the process with user input
-    output = await process.run('Hello!')
-    print(output)
+    run_result = await process.run('Hello!')
+    response = process.get_last_message()
+    print(response)
 
     # Continue the conversation
-    output = await process.run('Tell me more about that.')
-    print(output)
+    run_result = await process.run('Tell me more about that.')
+    response = process.get_last_message()
+    print(response)
 
     # Reset the conversation state
     process.reset_state()
@@ -125,56 +127,15 @@ async def main():
 asyncio.run(main())
 ```
 
-### Async Example with MCP Tools
-
-```python
-import asyncio
-from llmproc import LLMProgram
-
-async def main():
-    # Load program with MCP tools
-    program = LLMProgram.from_toml('examples/mcp.toml')
-
-    # Start the process asynchronously
-    process = await program.start()
-
-    # Run the process with user input
-    output = await process.run('Hello, what time is it?')  # Will use MCP time tool
-    print(output)
-
-    # Continue the conversation
-    output = await process.run('Tell me more about how MCP tools work.')
-    print(output)
-
-# Run the async example
-asyncio.run(main())
-```
-
-While `run()` is an async method, it automatically handles event loops when called from synchronous code:
-
-```python
-from llmproc import LLMProgram
-
-# Load program from TOML
-program = LLMProgram.from_toml('examples/minimal.toml')
-
-# Start the process
-process = program.start()  # Creates event loop internally for sync calls
-
-# This works in synchronous code too (creates event loop internally)
-output = process.run('Hello, what can you tell me about Python?')
-print(output)
-```
-
-
 ### Program Compiler Example
 
-The program compiler provides robust validation and preprocessing of TOML configurations:
+The program is compiled at initialization and provides validation and preprocessing of TOML configurations:
 
 ```python
 from llmproc import LLMProgram
 
 # Compile a program with validation
+# from_toml is a thin wrapper wround .compile.
 program = LLMProgram.compile('examples/minimal.toml')
 
 # Access program properties
@@ -184,36 +145,6 @@ print(f"API Parameters: {program.api_params}")
 
 # Start the process from the compiled program
 process = program.start()
-
-# Use the process
-response = process.run("Hello, how are you?")
-print(response)
-```
-
-### Program Linking Example
-
-Program linking allows you to link together multiple LLM processes to form a more complex application.
-
-```python
-import asyncio
-from llmproc import LLMProgram
-
-async def main():
-    # Load main program with linking configuration
-    program = LLMProgram.from_toml('examples/program_linking/main.toml')
-
-    # Start the main process
-    main_process = await program.start()
-
-    # Main process can delegate to specialized expert process
-    response = await main_process.run("What is the current version of LLMProc?")
-    print(f"Response: {response}")
-
-    # This will internally use the 'spawn' system call to delegate to repo_expert
-    response = await main_process.run("Explain how program linking works in this library")
-    print(f"Response: {response}")
-
-asyncio.run(main())
 ```
 
 ### TOML Program Format
