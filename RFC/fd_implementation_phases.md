@@ -45,7 +45,22 @@ The initial phase focuses on essential functionality to establish the basic file
 
 This phase focuses on integrating with the process model in two steps:
 
-### Phase 2.1: Basic Process Integration
+### Phase 2.1: Fork & Spawn Integration
+
+1. **Fork Integration**
+   - Automatic FD copying during fork
+   - Deep copy of all descriptors and metadata
+   - Full inheritance of parent's FDs by child processes
+
+2. **Cross-Process FD Access**
+   - Consistent FD referencing across forked / spawned processes
+   - Inherited FDs remain accessible with same IDs
+   - Support usage patterns with delegated reading (ask children to read a large fd)
+   - spawned processes inherit FDs from parent, but doesn't have the knowledge of the fd, so the parent needs to provide the fd to the child.
+
+### Phase 2.2.0: Spawn enhancements
+
+We need to implement the following:
 
 1. **Spawn File Preloading**
    - Add `additional_preload_files` parameter to spawn
@@ -53,19 +68,7 @@ This phase focuses on integrating with the process model in two steps:
    - Implement regardless of FD feature status
    - Update spawn tool schema and handler
 
-2. **Fork Integration**
-   - Automatic FD copying during fork
-   - Deep copy of all descriptors and metadata
-   - Full inheritance of parent's FDs by child processes
-
-### Phase 2.2: Advanced FD Process Integration
-
-1. **Cross-Process FD Access**
-   - Consistent FD referencing across forked processes
-   - Inherited FDs remain accessible with same IDs
-   - Support usage patterns with delegated reading
-
-2. **Spawn FD Integration**
+2. **Spawn FD Preloading**
    - Add `additional_preload_fds` parameter for spawn
    - FD content inclusion in child enriched system prompt
    - Conditional schema based on FD feature status
@@ -89,15 +92,31 @@ These features can be individually implemented and toggled:
    - File operation modes (write, append, insert)
    ```python
    # Examples
-   fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", mode="write")
-   fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", page=2, mode="write")
-   fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", start_line=45, end_line=90, mode="append")
+   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="write")
+   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", page=2, mode="write")
+   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", start_line=45, end_line=90, mode="append")
+   ```
+3. **Response Reference ID System**
+   - Allow LLMs to mark sections of their responses with reference IDs
+   - Enable exporting referenced content to files
+   - Reference specific parts of previous responses
+   - File operations on referenced content
+
+   ```python
+   # Example response with reference ID
+   <ref id="fibonacci_code">
+   def fibonacci(n):
+       a, b = 0, 1
+       for _ in range(n):
+           a, b = b, a + b
+       return a
+   </ref>
+
+   # Export to file using standard fd_to_file
+   fd_to_file(fd="ref:fibonacci_code", file_path="fibonacci.py")
    ```
 
-3. **Selective Content Sharing**
-   - Additional parameters for selectively preloading specific pages
-   - Support for preloading specific line ranges
-   - More precise control over what content is shared
+   See `response_reference_id.md` for detailed design.
 
 ## Future Work
 
@@ -127,31 +146,12 @@ Features planned for later development:
    - Code-aware navigation (by function, class)
    - More intuitive content access patterns
 
-## Additional Features
 
-These features complement the file descriptor system and address different use cases:
+5. **Selective Content Sharing**
+   - Additional parameters for selectively preloading specific pages
+   - Support for preloading specific line ranges
+   - More precise control over what content is shared
 
-1. **Response Reference ID System**
-   - Allow LLMs to mark sections of their responses with reference IDs
-   - Enable exporting referenced content to files
-   - Reference specific parts of previous responses
-   - File operations on referenced content
-   
-   ```python
-   # Example response with reference ID
-   <ref id="fibonacci_code">
-   def fibonacci(n):
-       a, b = 0, 1
-       for _ in range(n):
-           a, b = b, a + b
-       return a
-   </ref>
-   
-   # Export to file using standard fd_to_file
-   fd_to_file(fd="ref:fibonacci_code", file_path="fibonacci.py")
-   ```
-   
-   See `response_reference_id.md` for detailed design.
 
 ## Optional Enhancements (Not Planned)
 

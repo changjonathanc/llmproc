@@ -13,9 +13,9 @@ Previously, we observed:
 
 A kernel-level file descriptor system for managing large tool outputs:
 
-1. When output exceeds a threshold, it's stored in a file descriptor
-2. The LLM receives a summary with a file descriptor reference
-3. The LLM can read content in pages using a standard system call
+1. Large content (from tools or user) is stored in a file descriptor (fd:1234)
+2. A summary with the fd reference and preview is returned instead of full content
+3. Content can be read in pages or accessed in full via read_fd tool
 
 ## Core Components
 
@@ -25,29 +25,10 @@ A kernel-level file descriptor system for managing large tool outputs:
 
 ## Key Features
 
-1. **Line-Aware Pagination**: Breaks content at line boundaries whenever possible
-2. **Long Line Handling**: Special handling for content exceeding page size
-3. **Continuation Indicators**: Clear markers when lines are continued across pages
-4. **Character-Based Fallback**: For single-line content, pagination shifts to character-based
-
-## Edge Cases
-
-### Long Line Handling
-
-For content with very long lines (e.g., large JSON strings):
-
-1. **Special Formatting**:
-   - Add appropriate XML attributes to indicate line continuation
-   - Provide clear context to help LLMs understand partial content
-
-2. **Example with Long JSON**:
-   ```
-   # First page (truncated)
-   {"results":[{"title":"Quantum Computing","abstract":"Lorem ipsum...
-
-   # Second page (continued and truncated)
-   ...dolor sit amet","url":"https://example.com/quantum1"},{"title":"Quantum...
-   ```
+1. **Line-Aware Pagination**: Breaks content at line boundaries when possible
+2. **Continuation Indicators**: Clear markers when content continues across pages
+3. **Character-Based Fallback**: Falls back to character-based pagination for long lines
+4. **XML Formatting**: Structured format with metadata for pagination status
 
 ## API Design
 
@@ -58,7 +39,7 @@ When a tool returns large output:
 ```python
 # Result returned to LLM - XML-formatted response
 """
-<fd_result fd="fd-12345" pages="5" truncated="true" lines="1-42" total_lines="210">
+<fd_result fd="fd:12345" pages="5" truncated="true" lines="1-42" total_lines="210">
   <message>Output exceeds 4000 characters. Use read_fd to read more pages.</message>
   <preview>
   First page content is included here for immediate use. If the preview ends with
@@ -72,17 +53,17 @@ When a tool returns large output:
 
 ```python
 # Input with page number
-read_fd(fd="fd-12345", page=2)
+read_fd(fd="fd:12345", page=2)
 
 # Read the entire file content
-read_fd(fd="fd-12345", read_all=True)
+read_fd(fd="fd:12345", read_all=True)
 
 # Alternative (for specific line ranges - optional)
-read_fd(fd="fd-12345", start_line=45, end_line=90)
+read_fd(fd="fd:12345", start_line=45, end_line=90)
 
 # Output - XML-formatted response
 """
-<fd_content fd="fd-12345" page="2" pages="5" continued="true" truncated="true" lines="43-84" total_lines="210">
+<fd_content fd="fd:12345" page="2" pages="5" continued="true" truncated="true" lines="43-84" total_lines="210">
 Page content goes here. If this page starts with a continued line from the previous page, 
 the "continued" attribute will be true. If this page ends with a truncated line that
 continues on the next page, the "truncated" attribute will be true.
@@ -108,24 +89,24 @@ File descriptors will naturally be cleaned up when a process ends, and any memor
 
 ```python
 # Write FD content to a file
-fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", mode="write")
+fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="write")
 
 # Write specific page
-fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", page=2, mode="write")
+fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", page=2, mode="write")
 
 # Write specific line range
-fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", start_line=45, end_line=90, mode="write")
+fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", start_line=45, end_line=90, mode="write")
 
 # Append content to existing file
-fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", mode="append")
+fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append")
 
 # Insert at specific line
-fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", insert_at_line=100, mode="insert")
+fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", insert_at_line=100, mode="insert")
 
 # Output - XML-formatted response
 """
-<fd_write fd="fd-12345" file_path="/path/to/output.txt" success="true" mode="write">
-  <message>Content from fd-12345 successfully written to /path/to/output.txt</message>
+<fd_write fd="fd:12345" file_path="/path/to/output.txt" success="true" mode="write">
+  <message>Content from fd:12345 successfully written to /path/to/output.txt</message>
   <stats>
     <bytes>25600</bytes>
     <lines>320</lines>
@@ -219,8 +200,6 @@ The relationship between configuration values is important:
 
 ## Example Usage
 
-### Normal Multi-Line Content
-
 ```
 Human> Search for quantum computing papers
 
@@ -231,168 +210,94 @@ Assistant> I'll search for quantum computing papers.
 I found information about quantum computing papers. The results are extensive,
 so they've been stored in a file descriptor.
 
-The system returned:
-<fd_result fd="fd-12345" pages="5" truncated="false" lines="1-42" total_lines="210">
+<fd_result fd="fd:12345" pages="5" truncated="false" lines="1-42" total_lines="210">
   <message>Output exceeds 4000 characters. Use read_fd to read more pages.</message>
   <preview>
-  Recent papers in quantum computing have shown remarkable progress in several areas. 
-  The most significant developments include advances in quantum error correction, 
-  quantum machine learning, and quantum algorithm optimization.
-  
-  A 2023 paper by Johnson et al. demonstrated a new approach to quantum error correction 
-  that achieves a 50% reduction in overhead compared to previous methods...
-  [additional preview content]
+  Recent papers in quantum computing have shown remarkable progress in several areas...
+  [preview content]
   </preview>
 </fd_result>
 
 I'll read more information to provide a complete answer.
 
-[Uses read_fd tool]
-read_fd(fd="fd-12345", page=2)
+read_fd(fd="fd:12345", page=2)
 
-The system returned:
-<fd_content fd="fd-12345" page="2" pages="5" continued="false" truncated="false" lines="43-84" total_lines="210">
-Quantum algorithms have also seen significant improvements. The work by Chen and 
-Smith (2024) presents a novel approach to the quantum traveling salesman problem 
-that shows a quadratic speedup over the best known classical algorithms.
-
-Additionally, researchers at MIT have demonstrated a new quantum machine learning 
-technique that can process data with significantly fewer qubits than previously 
-thought possible...
-[additional content]
+<fd_content fd="fd:12345" page="2" pages="5" continued="false" truncated="false" lines="43-84" total_lines="210">
+Quantum algorithms have also seen significant improvements...
+[page 2 content]
 </fd_content>
 
 Based on all the information I've found, here's a summary of key quantum computing papers...
 ```
 
-### Long JSON String Example
-
-```
-Human> Get detailed data about quantum computing research funding
-
-Assistant> I'll retrieve detailed funding data for quantum computing research.
-
-[Uses funding_data_tool and gets a large JSON result]
-
-I've retrieved the detailed funding data, but it's quite extensive (single JSON object of 28,500 characters),
-so it has been stored in a file descriptor.
-
-The system returned:
-<fd_result fd="fd-7890" pages="8" truncated="true" lines="partial" total_lines="1">
-  <message>Output exceeds 4000 characters. Use read_fd to read more pages.</message>
-  <preview>
-  {"funding_data":{"total_global_investment":15.2,"currency":"USD_billions","by_country":[{"name":"USA",...
-  </preview>
-</fd_result>
-
-I'll analyze this data to provide insights about quantum computing research funding.
-
-[Uses read_fd tool]
-read_fd(fd="fd-7890", page=2)
-
-The system returned:
-<fd_content fd="fd-7890" page="2" pages="8" continued="true" truncated="true" lines="partial" total_lines="1">
-...{"name":"China","total_investment":4.8,"major_programs":["Quantum Information Science",...
-</fd_content>
-
-After analyzing all the funding data, I can tell you that quantum computing research has seen 
-dramatic growth in the past five years, with the USA, China, and EU being the top funders...
-```
+For more detailed examples and advanced usage patterns, see `fd_implementation_phases.md`.
 
 ## User Input Handling
 
-The file descriptor system can also manage large user inputs (stdin):
+The file descriptor system automatically manages large user inputs:
 
 1. When a user inputs content exceeding the `max_input_chars` threshold:
-   - The entire message is automatically stored in a file descriptor
-   - The entire user message is replaced with an FD reference and preview
+   - The content is stored in a file descriptor
+   - The message is replaced with an FD reference and preview
 
-2. Example workflow:
+2. Example:
    ```
    Human> [Sends a 15,000 character log file]
 
    # Automatically transformed to:
-   <fd_result fd="fd-9876" pages="4" truncated="false" lines="1-320" total_lines="320">
-     <message>Large user input has been stored in a file descriptor. Use read_fd to access the content.</message>
-     <preview>
-     [2024-03-23 08:15:02] INFO: Application startup
-     [2024-03-23 08:15:03] INFO: Loading configuration
-     [2024-03-23 08:15:04] INFO: Initializing database connection
-     ...
-     </preview>
+   <fd_result fd="fd:9876" pages="4" truncated="false" lines="1-320" total_lines="320">
+     <message>Large user input has been stored in a file descriptor.</message>
+     <preview>[First few lines of content...]</preview>
    </fd_result>
 
-   Assistant> I see you've shared a log file. Let me read through it.
-
-   read_fd(fd="fd-9876", page=1)
+   Assistant> I see you've shared a log file. Let me read it.
+   read_fd(fd="fd:9876", page=1)
    ```
 
-3. Benefits:
-   - Avoids context bloat from large inputs
-   - Preserves conversation history readability
-   - Provides a consistent interface for handling both input and output content
-   - User doesn't need to explicitly store content in files
-
-4. Future enhancement (TODO):
-   - Support chunk-aware paging where the LLMProcess interface could accept a list of message chunks
-   - This would allow selective paging of only the large portions of a message
-   - Would enable preserving user's introduction text while paging only the large content sections
+For more detailed implementation plans, see `fd_implementation_phases.md`.
 
 ## Cross-Process Behavior
 
-File descriptors interact with multi-process features in several ways:
+File descriptors work with multi-process features:
 
-1. **Automatic Inheritance**:
-   - File descriptors are automatically inherited by child processes during `fork`
-   - Child processes can directly access parent's FDs with the same IDs
+1. **Automatic Inheritance with Fork**:
+   - FDs are automatically inherited during `fork`
+   - Child processes access parent's FDs with the same IDs
 
-2. **Explicit Content Sharing**:
-   - Parent can use `additional_preload_fds` parameter in `spawn` to:
-     - Include content from specific FDs in child's enriched system prompt
-     - Make content immediately available without requiring explicit `read_fd` calls
+2. **Explicit Sharing with Spawn**:
+   - Parent can use `additional_preload_fds` parameter to share specific FDs
+   - Content appears in child's enriched system prompt
 
-3. **Context Control**:
-   - Parent process determines what context is most relevant:
-     - Fork provides full access to all parent's FDs
-     - Spawn with additional_preload_fds gives precise control over shared content
+## Benefits
 
-## Pros and Cons
-
-### Pros
-- Users can let LLM processes call any tools without worrying about context limits
-- Tools don't need to reimplement pagination features
-- XML format makes it easy for LLMs to understand pagination status
-- Line-awareness improves readability for multi-line content
-
-### Cons
-- Requires more tool calls to read in the context of a long file
-- May be more complex than direct truncation for simple cases
+- No truncation of large tool outputs or user inputs
+- Consistent interface for accessing large content
+- Tools don't need custom pagination logic
+- XML format clearly communicates pagination status
+- LLM can choose how much content to read
+- Efficient cross-process content sharing
 
 ## System Prompt Additions
 
-When file descriptor system is enabled, the following instructions will be added to the enriched system prompt to explain the feature to the model:
+Instructions added to system prompt when enabled:
 
 ```
 <file_descriptor_instructions>
 This system includes a file descriptor feature for handling large content:
 
-1. When tool outputs or user inputs exceed character limits, they are automatically stored in file descriptors
-2. Use the read_fd tool to access paginated content from file descriptors
-3. File descriptors are referenced by their ID (e.g., "fd-12345")
-4. You can read specific pages or the entire content at once
+1. Large outputs are stored in file descriptors (fd:12345)
+2. Use read_fd to access content in pages or all at once
+3. Use fd_to_file to export content to files
 
 Key commands:
-- read_fd(fd="fd-12345", page=2) - Read page 2
-- read_fd(fd="fd-12345", read_all=True) - Read entire content
-- fd_to_file(fd="fd-12345", file_path="/path/to/output.txt") - Write content to file
+- read_fd(fd="fd:12345", page=2) - Read page 2
+- read_fd(fd="fd:12345", read_all=True) - Read entire content
+- fd_to_file(fd="fd:12345", file_path="output.txt") - Write to file
 
-Important usage tips:
-- Always read complete file descriptors before drawing conclusions
-- Pay attention to the "truncated" and "continued" attributes that indicate content continuation
-- For JSON data that spans multiple pages, consider reading all pages before parsing
-- When working with very large content, consider using the fork tool to delegate analysis to child processes
-
-Content formats include helpful XML metadata about pagination status and line continuations.
+Tips:
+- Check "truncated" and "continued" attributes for content continuation
+- When analyzing large content, consider reading all pages first
+- For very large content, consider using fork to delegate analysis
 </file_descriptor_instructions>
 ```
 
