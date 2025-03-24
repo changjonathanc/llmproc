@@ -103,7 +103,35 @@ continues on the next page, the "truncated" attribute will be true.
 
 The XML format clearly separates content from metadata and makes it easy for the LLM to understand the structure of the response. The attributes provide all necessary information without cluttering the response.
 
-# Note: Explicit close_fd system call removed in favor of automatic management
+### 3. FD to File Operation
+
+```python
+# Write FD content to a file
+fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", mode="write")
+
+# Write specific page
+fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", page=2, mode="write")
+
+# Write specific line range
+fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", start_line=45, end_line=90, mode="write")
+
+# Append content to existing file
+fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", mode="append")
+
+# Insert at specific line
+fd_to_file(fd="fd-12345", file_path="/path/to/output.txt", insert_at_line=100, mode="insert")
+
+# Output - XML-formatted response
+"""
+<fd_write fd="fd-12345" file_path="/path/to/output.txt" success="true" mode="write">
+  <message>Content from fd-12345 successfully written to /path/to/output.txt</message>
+  <stats>
+    <bytes>25600</bytes>
+    <lines>320</lines>
+  </stats>
+</fd_write>
+"""
+```
 
 ## Implementation Details
 
@@ -126,7 +154,7 @@ The XML format clearly separates content from metadata and makes it easy for the
 2. Update fork_process to copy file descriptors
 3. Add automatic wrapping of large tool outputs
 4. Add automatic wrapping of large user inputs (stdin)
-5. Register read_fd tool
+5. Register read_fd and fd_to_file tools
 6. Add system prompt instructions about file descriptor usage
 
 ### Persistence Model
@@ -356,6 +384,7 @@ This system includes a file descriptor feature for handling large content:
 Key commands:
 - read_fd(fd="fd-12345", page=2) - Read page 2
 - read_fd(fd="fd-12345", read_all=True) - Read entire content
+- fd_to_file(fd="fd-12345", file_path="/path/to/output.txt") - Write content to file
 
 Important usage tips:
 - Always read complete file descriptors before drawing conclusions
