@@ -156,7 +156,7 @@ class AnthropicProcessExecutor:
 
                         # Track tool in run_result if available
                         if run_result:
-                            run_result.add_api_call(
+                            run_result.add_tool_call(
                                 {
                                     "type": "tool_call",
                                     "tool_name": tool_name,

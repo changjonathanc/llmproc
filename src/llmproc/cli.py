@@ -165,7 +165,7 @@ def main(program_path=None, prompt=None, non_interactive=False) -> None:
             elapsed = time.time() - start_time
 
             # Log run result information
-            logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s")
+            logger.info(f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s")
 
             # Get the last assistant message and just print the raw response
             response = process.get_last_message()
@@ -221,19 +221,22 @@ def main(program_path=None, prompt=None, non_interactive=False) -> None:
                 # Log run result information
                 if verbose:
                     logger.debug(
-                        f"Run completed in {elapsed:.2f}s with {run_result.api_calls} API calls"
+                        f"Run completed in {elapsed:.2f}s with {run_result.api_calls} API calls and {run_result.tool_calls} tool calls"
                     )
+                    # Log API calls
                     for i, api_info in enumerate(run_result.api_call_infos):
-                        if "type" in api_info and api_info["type"] == "tool_call":
-                            logger.debug(
-                                f"Tool call: {api_info.get('tool_name', 'unknown')}"
-                            )
-                        elif "model" in api_info:
+                        if "model" in api_info:
                             logger.debug(f"API call {i + 1}: model={api_info['model']}")
+                    
+                    # Log tool calls
+                    for i, tool_info in enumerate(run_result.tool_call_infos):
+                        logger.debug(
+                            f"Tool call {i + 1}: {tool_info.get('tool_name', 'unknown')}"
+                        )
                 else:
                     if run_result.api_calls > 0:
                         logger.info(
-                            f"Used {run_result.api_calls} API calls in {elapsed:.2f}s"
+                            f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s"
                         )
 
                 # Get the last assistant message
