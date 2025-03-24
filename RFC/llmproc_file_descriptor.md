@@ -2,11 +2,11 @@
 
 ## Background & Problem
 
-Tools often return large outputs that exceed context limits, causing information loss through truncation. Each tool currently needs to implement its own pagination logic, leading to inconsistency and duplicated effort.
+Tools can return large outputs, which can lead to contex exhaustion, and affecting the focus of the model.
 
 Previously, we observed:
-- Tool use can return very long results, especially with MCP tools
-- Files and other content can be too large for direct inclusion in context
+- Tool use can return long results, especially with MCP tools
+- Certain files and other content can be too large for direct inclusion in context
 - Agent frameworks like Cursor and Claude Code implement custom paged file reading
 
 ## Solution: File Descriptor System
@@ -303,7 +303,7 @@ Tips:
 
 ## Feature Configuration
 
-The file descriptor system is configured through two mechanisms:
+The file descriptor system is configured through two complementary mechanisms:
 
 1. **Basic enablement** through the `[tools]` section:
 
@@ -319,15 +319,21 @@ enabled = ["read_fd", "fd_to_file", "fork"] # Enable FD features with forking
 
 ```toml
 [file_descriptor]
-max_direct_output_chars = 8000    # Threshold for FD creation (larger than page size)
-default_page_size = 4000          # Page size for pagination
-max_input_chars = 8000            # Threshold for user input FD creation
-page_user_input = true            # Enable/disable user input paging
+enabled = true                     # Explicit enable flag (optional)
+max_direct_output_chars = 8000     # Threshold for FD creation (larger than page size)
+default_page_size = 4000           # Page size for pagination
+max_input_chars = 8000             # Threshold for user input FD creation
+page_user_input = true             # Enable/disable user input paging
 ```
 
 Configuration notes:
-- The FD system is enabled by including "read_fd" in the tools list
-- If "read_fd" is not enabled, the FD system will not activate
+- The file descriptor system is enabled if:
+  - Any FD tool is included in `[tools].enabled` (like "read_fd") OR
+  - `enabled = true` exists in the `[file_descriptor]` section
+- For full functionality, you need both the system enabled AND appropriate tools in `[tools].enabled`
+- At compile time:
+  - A warning is issued if `[file_descriptor]` has configuration but no FD tools are enabled
+  - An error is raised if `[file_descriptor].enabled = true` but no FD tools are in `[tools].enabled`
 - Additional features like "fd_to_file" follow the same pattern as other tools
 - Security-sensitive features can be disabled by omitting them from enabled tools
 
