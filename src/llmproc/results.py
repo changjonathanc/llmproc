@@ -18,8 +18,6 @@ class RunResult:
         api_call_infos: List of raw API response data, including usage metrics
         tool_call_infos: List of tool call data, including tool names and args
         api_calls: Number of API calls made during the run
-        tool_calls: Number of tool calls made during the run
-        total_interactions: Total number of API and tool calls
         start_time: When the run started (timestamp)
         end_time: When the run completed (timestamp)
         duration_ms: Duration of the run in milliseconds
@@ -28,11 +26,19 @@ class RunResult:
     api_call_infos: list[dict[str, Any]] = field(default_factory=list)
     tool_call_infos: list[dict[str, Any]] = field(default_factory=list)
     api_calls: int = 0
-    tool_calls: int = 0
     start_time: float = field(default_factory=time.time)
     end_time: float | None = None
     duration_ms: int = 0
-
+    
+    @property
+    def tool_calls(self) -> int:
+        """Get the number of tool calls made during the run.
+        
+        Returns:
+            Number of tool calls
+        """
+        return len(self.tool_call_infos)
+    
     @property
     def total_interactions(self) -> int:
         """Get the total number of interactions (API calls + tool calls).
@@ -58,7 +64,6 @@ class RunResult:
             info: Tool call information, including tool name and args
         """
         self.tool_call_infos.append(info)
-        self.tool_calls += 1
 
     def complete(self) -> "RunResult":
         """Mark the run as complete and calculate duration.
