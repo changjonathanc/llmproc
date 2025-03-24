@@ -301,6 +301,118 @@ Tips:
 </file_descriptor_instructions>
 ```
 
+## Feature Configuration
+
+The file descriptor system is configured through two mechanisms:
+
+1. **Basic enablement** through the `[tools]` section:
+
+```toml
+[tools]
+# Enable file descriptor-related tools
+enabled = ["read_fd"]                       # Basic FD reading capability
+enabled = ["read_fd", "fd_to_file"]         # Enable file export capability
+enabled = ["read_fd", "fd_to_file", "fork"] # Enable FD features with forking
+```
+
+2. **Advanced settings** in the `[file_descriptor]` section:
+
+```toml
+[file_descriptor]
+max_direct_output_chars = 8000    # Threshold for FD creation (larger than page size)
+default_page_size = 4000          # Page size for pagination
+max_input_chars = 8000            # Threshold for user input FD creation
+page_user_input = true            # Enable/disable user input paging
+```
+
+Configuration notes:
+- The FD system is enabled by including "read_fd" in the tools list
+- If "read_fd" is not enabled, the FD system will not activate
+- Additional features like "fd_to_file" follow the same pattern as other tools
+- Security-sensitive features can be disabled by omitting them from enabled tools
+
+## Error Handling
+
+The FD system handles errors gracefully to avoid disrupting the conversation:
+
+1. **Invalid FD References**:
+   ```python
+   # When referencing a non-existent FD
+   read_fd(fd="fd:nonexistent")
+   
+   # Returns error message in standardized XML format:
+   <fd_error type="not_found" fd="fd:nonexistent">
+     <message>File descriptor fd:nonexistent not found</message>
+   </fd_error>
+   ```
+
+2. **Pagination Errors**:
+   ```python
+   # When requesting a page beyond available content
+   read_fd(fd="fd:12345", page=100)  # But FD only has 5 pages
+   
+   # Returns error with available range:
+   <fd_error type="invalid_page" fd="fd:12345">
+     <message>Invalid page number. Valid range: 1-5</message>
+   </fd_error>
+   ```
+
+3. **File Operation Errors**:
+   ```python
+   # When file operations fail (e.g., permission denied)
+   fd_to_file(fd="fd:12345", file_path="/root/protected.txt")
+   
+   # Returns detailed error:
+   <fd_error type="file_operation" fd="fd:12345">
+     <message>Cannot write to file: Permission denied</message>
+     <details>Operation: write, Path: /root/protected.txt</details>
+   </fd_error>
+   ```
+
+All errors follow a consistent XML format to make them easily identifiable and processable by the LLM.
+
+## Testing Strategy
+
+Testing for the FD system should focus on these key areas:
+
+1. **Threshold Boundaries**:
+   - Test content exactly at threshold values (max_direct_output_chars, max_input_chars)
+   - Test content just above and below thresholds
+
+2. **Content Variety**:
+   - Multi-line text (e.g., code, logs)
+   - Single-line content (e.g., long JSON)
+   - Binary data (should be handled correctly as base64)
+   - Unicode and special characters
+
+3. **Pagination Edge Cases**:
+   - Content with very long individual lines
+   - Content with line breaks at page boundaries
+   - Empty content or single-line content
+
+4. **Cross-Process Testing**:
+   - FD inheritance during fork
+   - FD preloading during spawn
+   - References to the same FD from different processes
+
+5. **Integration Testing**:
+   - End-to-end tests with real LLM interactions
+   - Conversation scenarios with multiple FD references
+
+## Extension Strategy
+
+Guidelines for future extensions:
+
+1. **Feature Detection**:
+   - LLMs should detect available features based on system prompt instructions
+   - New capabilities should be clearly documented in system prompt
+   - Tools should be explicitly enabled in the [tools] section
+
+2. **Compatibility**:
+   - New parameters should be optional with reasonable defaults
+   - New operations should have distinct names rather than overloading existing ones
+   - XML formats should maintain backward compatibility
+
 ## Implementation Plan
 
 See `fd_implementation_phases.md` for a detailed phased implementation plan that breaks down the work into clear milestones.
