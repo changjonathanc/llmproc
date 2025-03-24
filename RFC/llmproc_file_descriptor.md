@@ -21,7 +21,7 @@ A kernel-level file descriptor system for managing large tool outputs:
 
 1. **File Descriptor Manager** - Maintains references to stored content
 2. **Read System Call** - Standard interface for accessing paginated content
-3. **Close System Call** - For explicitly freeing resources when no longer needed
+3. **Automatic Resource Management** - Handles expiration and cleanup of unused descriptors
 
 ## Key Features
 
@@ -103,19 +103,7 @@ continues on the next page, the "truncated" attribute will be true.
 
 The XML format clearly separates content from metadata and makes it easy for the LLM to understand the structure of the response. The attributes provide all necessary information without cluttering the response.
 
-### 3. Close File Descriptor
-
-```python
-# Input
-close_fd(fd="fd-12345")
-
-# Output - XML-formatted response
-"""
-<fd_close fd="fd-12345" success="true">
-  <message>File descriptor fd-12345 has been closed.</message>
-</fd_close>
-"""
-```
+# Note: Explicit close_fd system call removed in favor of automatic management
 
 ## Implementation Details
 
@@ -127,7 +115,8 @@ close_fd(fd="fd-12345")
   "lines": list[int],      # Start indices of each line
   "total_lines": int,      # Total line count
   "page_size": int,        # Characters per page
-  "creation_time": str     # For potential future cleanup
+  "creation_time": str,    # Creation timestamp
+  "source": str            # Origin of content (e.g., "tool:github_search", "user_input")
 }
 ```
 
@@ -137,15 +126,42 @@ close_fd(fd="fd-12345")
 2. Update fork_process to copy file descriptors
 3. Add automatic wrapping of large tool outputs
 4. Add automatic wrapping of large user inputs (stdin)
-5. Register read_fd and close_fd tools
+5. Register read_fd tool
 6. Add system prompt instructions about file descriptor usage
 
-## Why Include close_fd?
+### Persistence Model
 
-Though not always necessary, close_fd is useful for:
-1. Explicit resource management before fork/exec operations
-2. Memory optimization in constrained environments
-3. Maintaining the Unix-like file descriptor model
+File descriptors are treated as persistent state:
+
+1. **Full Persistence**:
+   - FDs remain available indefinitely, just like conversation state
+   - No automatic expiration or cleanup
+   - FDs are only lost if explicitly cleared or when the process ends
+
+2. **Future Enhancement: Disk Offloading**:
+   - Combined checkpoint system for both state and FDs
+   - Automatically offload to disk when memory pressure is high
+   - Create recovery points to restore full process state with FDs
+   - Enable process hibernation and restoration
+
+## FD Management Strategy
+
+The file descriptor system treats file descriptors as first-class conversation state:
+
+1. **Persistence First**:
+   - FDs are persistent by default and remain available throughout process lifetime
+   - FDs form part of the process's "memory" just like conversation history
+   - This approach simplifies usage and avoids lost references
+
+2. **Process Lifecycle Integration**:
+   - FDs are fully copied during fork operations
+   - Shared FDs can be explicitly preloaded into child processes through spawn
+   - FDs naturally end with process termination
+
+3. **Future: Checkpointing and Recovery**:
+   - Combined checkpointing of conversation state and file descriptors
+   - Enable hibernation/resumption of processes with all their FDs
+   - Recovery from crashes with full context restoration
 
 ## Configuration
 
@@ -158,7 +174,20 @@ max_direct_output_chars = 8000      # Threshold for FD creation (larger than pag
 default_page_size = 4000            # Default page size for pagination
 max_input_chars = 8000              # Threshold for creating FD from user input
 json_pretty_print = true            # Pretty print JSON for better pagination (optional)
+page_user_input = true              # Whether to enable paging for user inputs
 ```
+
+### Sizing Strategy
+
+The relationship between configuration values is important:
+
+1. `max_direct_output_chars` should generally be larger than `default_page_size` 
+   - This ensures the first page fits within context without pagination
+   - Recommended ratio: max_direct_output_chars = 1.5-2x default_page_size
+
+2. `max_input_chars` should be set based on typical user input patterns
+   - Lower values improve memory usage but increase pagination frequency
+   - Higher values preserve more context in a single turn but use more memory
 
 ## Example Usage
 
@@ -281,12 +310,23 @@ The file descriptor system can also manage large user inputs (stdin):
    - This would allow selective paging of only the large portions of a message
    - Would enable preserving user's introduction text while paging only the large content sections
 
-## Extension
+## Cross-Process Behavior
 
-- File descriptors will be shared and accessible when you `fork` a process
-- This allows:
-  - Main process can `fork` & delegate child processes to read existing file descriptors in detail
-  - Parent process can fill fresh subprocesses with file descriptors as context
+File descriptors interact with multi-process features in several ways:
+
+1. **Automatic Inheritance**:
+   - File descriptors are automatically inherited by child processes during `fork`
+   - Child processes can directly access parent's FDs with the same IDs
+
+2. **Explicit Content Sharing**:
+   - Parent can use `additional_preload_fds` parameter in `spawn` to:
+     - Include content from specific FDs in child's enriched system prompt
+     - Make content immediately available without requiring explicit `read_fd` calls
+
+3. **Context Control**:
+   - Parent process determines what context is most relevant:
+     - Fork provides full access to all parent's FDs
+     - Spawn with additional_preload_fds gives precise control over shared content
 
 ## Pros and Cons
 
@@ -316,7 +356,6 @@ This system includes a file descriptor feature for handling large content:
 Key commands:
 - read_fd(fd="fd-12345", page=2) - Read page 2
 - read_fd(fd="fd-12345", read_all=True) - Read entire content
-- close_fd(fd="fd-12345") - Close a file descriptor when no longer needed
 
 Important usage tips:
 - Always read complete file descriptors before drawing conclusions
@@ -330,7 +369,7 @@ Content formats include helpful XML metadata about pagination status and line co
 
 ## Implementation Plan
 
-1. Basic file descriptor management (create, read, close)
+1. Basic file descriptor management (create, read)
 2. Line-aware pagination 
 3. Large user input detection and wrapping
 4. Automatic wrapping for large tool outputs
@@ -340,7 +379,23 @@ Content formats include helpful XML metadata about pagination status and line co
 
 ## Future Enhancements (TODO)
 
-1. **Universal Conversation FD References**: Automatically assign a unique file descriptor to every message and tool result
+1. **Disk Offloading and Checkpointing**: Implement combined checkpointing system for both state and FDs
+   ```python
+   # Create a checkpoint of current process state with all FDs
+   checkpoint_id = checkpoint_process()
+   
+   # Restore a process from checkpoint
+   restore_process(checkpoint_id)
+   
+   # List available checkpoints
+   list_checkpoints()
+   ```
+   - Enables persistent storage of large content beyond process lifetime
+   - Provides crash recovery with complete context restoration
+   - Supports hibernation of inactive processes to free memory
+   - Unified approach that treats conversation state and FDs as a single unit
+
+2. **Universal Conversation FD References**: Automatically assign a unique file descriptor to every message and tool result
    ```python
    # Each message and tool result would get a unique FD
    # Example conversation state with automatic FD assignment:
@@ -413,14 +468,15 @@ Content formats include helpful XML metadata about pagination status and line co
    
    **Enhanced Process Communication with File Descriptors**:
    ```python
-   # Extended spawn tool with support for FD preloading
+   # Extended spawn tool with support for different preloading options
    spawn(
      program="sql_expert", 
      query="Optimize the SQL query in the logs (see preloaded content)",
-     additional_preload_fds=["fd-12345"]  # Automatically preload these FDs in child process
+     additional_preload_files=["data/queries.sql"],  # Regular files from filesystem
+     additional_preload_fds=["fd-12345"]            # Content from FDs preloaded as full text
    )
    
-   # Or simply rely on FD inheritance through fork, then direct child to relevant content
+   # For fork, FDs are automatically inherited by child processes
    fork([
      "Review the error logs in fd-12345, focusing on lines 100-150",
      "Check the config file in fd-67890, looking for security settings"
@@ -429,14 +485,28 @@ Content formats include helpful XML metadata about pagination status and line co
    
    **Advanced Cross-Process FD Features**:
    - Automatic FD inheritance for child processes
-   - Options for selective FD sharing (only share specific FDs with child processes)
-   - Ability to limit read permissions on shared FDs
+   - Options for selective FD sharing with child processes
    - Support for FD metadata that explains content type and structure to child processes
-
-7. **Chunk-Aware User Input Processing**: Support selective paging of message chunks
-   - Allow the API to accept message chunks that could be individually considered for paging
-   - Preserve introductory text while paging only large content sections
 
 8. **Auto-Summarization**: Generate automatic summaries of file descriptor content
    - Would require an additional LLM call to create the summary
    - Could provide immediate high-level understanding of large content
+   
+9. **Temporary Shared File System**: Create temporary files accessible to multiple processes
+   ```python
+   # Create a temporary file that persists for the kernel session
+   temp_file_id = create_temp_file("This is shared content for multiple children")
+   
+   # Use in spawn to provide to multiple children
+   spawn(program="child1", query="Analyze this data", additional_preload_temp_files=[temp_file_id])
+   spawn(program="child2", query="Summarize this data", additional_preload_temp_files=[temp_file_id])
+   
+   # Read from a temp file
+   read_temp_file(temp_file_id)
+   
+   # Delete when no longer needed
+   delete_temp_file(temp_file_id)
+   ```
+   - Provides a mechanism for sharing writable content between multiple processes
+   - Separate and complementary to the read-only file descriptor system
+   - More appropriate for collaborative content creation between processes
