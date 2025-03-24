@@ -337,3 +337,52 @@ Content formats include helpful XML metadata about pagination status and line co
 5. System prompt enrichment with FD instructions
 6. Integration with fork system call 
 7. JSON pretty-printing support (optional)
+
+## Future Enhancements (TODO)
+
+1. **Search Capability**: Add `search_fd(fd, query)` function to find specific text patterns without reading the entire content
+   ```python
+   search_fd(fd="fd-12345", query="ERROR", case_sensitive=False)
+   # Returns matching lines with context and position information
+   ```
+
+2. **User Message Paging Configuration**:
+   ```toml
+   [file_descriptor]
+   # ...
+   page_user_input = true  # Allow disabling user input paging
+   ```
+
+3. **Semantic Navigation**: Support navigation by semantic units
+   ```python
+   read_fd(fd="fd-12345", unit="paragraph", index=3)  # Read third paragraph
+   read_fd(fd="fd-12345", unit="function", name="process_data")  # For code files
+   ```
+
+4. **Named References**: Allow descriptive naming of file descriptors
+   ```python
+   rename_fd(fd="fd-12345", name="error_logs")
+   read_fd(name="error_logs", page=2)  # Use name instead of fd ID
+   ```
+
+5. **Batch Operations**: Support operations on multiple file descriptors at once
+   ```python
+   rename_fds({"fd-12345": "error_logs", "fd-67890": "config_file"})
+   close_fds(["fd-12345", "fd-67890"])  # Close multiple FDs at once
+   ```
+
+6. **Cross-Reference Support**: Allow referencing specific sections of content
+   ```python
+   # Mark a section with a reference ID for later access
+   mark_fd_section(fd="fd-12345", start_line=45, end_line=52, ref_id="bug_details")
+   # Later refer to that section
+   get_fd_section(fd="fd-12345", ref_id="bug_details")
+   ```
+
+7. **Chunk-Aware User Input Processing**: Support selective paging of message chunks
+   - Allow the API to accept message chunks that could be individually considered for paging
+   - Preserve introductory text while paging only large content sections
+
+8. **Auto-Summarization**: Generate automatic summaries of file descriptor content
+   - Would require an additional LLM call to create the summary
+   - Could provide immediate high-level understanding of large content
