@@ -340,44 +340,98 @@ Content formats include helpful XML metadata about pagination status and line co
 
 ## Future Enhancements (TODO)
 
-1. **Search Capability**: Add `search_fd(fd, query)` function to find specific text patterns without reading the entire content
+1. **Universal Conversation FD References**: Automatically assign a unique file descriptor to every message and tool result
+   ```python
+   # Each message and tool result would get a unique FD
+   # Example conversation state with automatic FD assignment:
+   [
+     {"role": "user", "content": "...", "fd": "fd-1001"},
+     {"role": "assistant", "content": "...", "fd": "fd-1002"},
+     {"role": "user", "content": [{"type": "tool_result", ...}], "fd": "fd-1003"},
+     # ...
+   ]
+   
+   # These FDs could be referenced in spawn or fork
+   spawn(
+     program="code_expert", 
+     query="Fix the bug described in fd-1001 using the error stack trace in fd-1003",
+     additional_preload_fds=["fd-1001", "fd-1003"]
+   )
+   ```
+   
+   **Benefits**:
+   - Creates a complete referenceable "memory" of the conversation
+   - Avoids duplicating content in cross-process communication
+   - Enables precise referencing of specific parts of the conversation history
+   - Makes all conversation history addressable through a consistent interface
+
+2. **Search Capability**: Add `search_fd(fd, query)` function to find specific text patterns without reading the entire content
    ```python
    search_fd(fd="fd-12345", query="ERROR", case_sensitive=False)
    # Returns matching lines with context and position information
    ```
 
-2. **User Message Paging Configuration**:
+3. **User Message Paging Configuration**:
    ```toml
    [file_descriptor]
    # ...
    page_user_input = true  # Allow disabling user input paging
    ```
 
-3. **Semantic Navigation**: Support navigation by semantic units
+4. **Semantic Navigation**: Support navigation by semantic units
    ```python
    read_fd(fd="fd-12345", unit="paragraph", index=3)  # Read third paragraph
    read_fd(fd="fd-12345", unit="function", name="process_data")  # For code files
    ```
 
-4. **Named References**: Allow descriptive naming of file descriptors
+5. **Named References**: Allow descriptive naming of file descriptors
    ```python
    rename_fd(fd="fd-12345", name="error_logs")
    read_fd(name="error_logs", page=2)  # Use name instead of fd ID
    ```
 
-5. **Batch Operations**: Support operations on multiple file descriptors at once
+6. **Batch Operations**: Support operations on multiple file descriptors at once
    ```python
    rename_fds({"fd-12345": "error_logs", "fd-67890": "config_file"})
    close_fds(["fd-12345", "fd-67890"])  # Close multiple FDs at once
    ```
 
-6. **Cross-Reference Support**: Allow referencing specific sections of content
+7. **Section Referencing System**: Allow marking and retrieving specific sections of content
    ```python
    # Mark a section with a reference ID for later access
    mark_fd_section(fd="fd-12345", start_line=45, end_line=52, ref_id="bug_details")
-   # Later refer to that section
+   
+   # Retrieve a specific section
    get_fd_section(fd="fd-12345", ref_id="bug_details")
+   
+   # List all marked sections in a file descriptor
+   list_fd_sections(fd="fd-12345")
+   
+   # Delete a section reference
+   delete_fd_section(fd="fd-12345", ref_id="bug_details")
    ```
+   
+   **Enhanced Process Communication with File Descriptors**:
+   ```python
+   # Extended spawn tool with support for FD preloading
+   spawn(
+     program="sql_expert", 
+     query="Optimize the SQL query in the logs (see preloaded content)",
+     additional_preload_fds=["fd-12345"]  # Automatically preload these FDs in child process
+   )
+   
+   # Or simply rely on FD inheritance through fork, then direct child to relevant content
+   fork([
+     "Review the error logs in fd-12345, focusing on lines 100-150",
+     "Check the config file in fd-67890, looking for security settings"
+   ])
+   ```
+   
+   **Advanced Cross-Process FD Features**:
+   - Automatic FD inheritance for child processes
+   - Options for selective FD sharing (only share specific FDs with child processes)
+   - Ability to limit read permissions on shared FDs
+   - Support for FD metadata that explains content type and structure to child processes
 
 7. **Chunk-Aware User Input Processing**: Support selective paging of message chunks
    - Allow the API to accept message chunks that could be individually considered for paging
