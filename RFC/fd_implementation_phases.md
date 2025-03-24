@@ -43,21 +43,32 @@ The initial phase focuses on essential functionality to establish the basic file
 
 ## Phase 2: Process Integration
 
-This phase focuses on integrating file descriptors with the process model:
+This phase focuses on integrating with the process model in two steps:
 
-1. **Fork Integration**
+### Phase 2.1: Basic Process Integration
+
+1. **Spawn File Preloading**
+   - Add `additional_preload_files` parameter to spawn
+   - Support filesystem file preloading in child processes
+   - Implement regardless of FD feature status
+   - Update spawn tool schema and handler
+
+2. **Fork Integration**
    - Automatic FD copying during fork
    - Deep copy of all descriptors and metadata
    - Full inheritance of parent's FDs by child processes
 
-2. **Cross-Process FD Access**
+### Phase 2.2: Advanced FD Process Integration
+
+1. **Cross-Process FD Access**
    - Consistent FD referencing across forked processes
    - Inherited FDs remain accessible with same IDs
    - Support usage patterns with delegated reading
 
-3. **Spawn Integration**
-   - `additional_preload_fds` parameter for spawn
+2. **Spawn FD Integration**
+   - Add `additional_preload_fds` parameter for spawn
    - FD content inclusion in child enriched system prompt
+   - Conditional schema based on FD feature status
    - Selective sharing of specific FDs with spawn
 
 ## Phase 3: Optional Features
@@ -146,27 +157,22 @@ These features complement the file descriptor system and address different use c
 
 These features might be implemented if specific use cases emerge:
 
-1. **JSON Pretty Printing**
-   - Automatic detection of JSON content
-   - Reformatting for better readability
-   - Improved pagination with structured format
-
-2. **Auto-Summarization**
+1. **Auto-Summarization**
    - LLM-based summarization of FD content
    - Quick overview of large content
    - Integration with FD metadata
 
-3. **Section Referencing System**
+2. **Section Referencing System**
    - Marking sections within file descriptors
    - Named references to specific content regions
    - Operations on marked sections
 
-4. **Temporary Shared File System**
+3. **Temporary Shared File System**
    - Temp files with kernel session persistence
    - Multi-process sharing of writable content
    - Integration with spawn and fork
 
-5. **Search Capability**
+4. **Search Capability**
    - Pattern matching within file descriptors
    - Content-aware searching
    - Integration with section markers

@@ -26,10 +26,9 @@ A kernel-level file descriptor system for managing large tool outputs:
 ## Key Features
 
 1. **Line-Aware Pagination**: Breaks content at line boundaries whenever possible
-2. **Long Line Handling**: Special handling for content exceeding page size (like large JSON strings)
+2. **Long Line Handling**: Special handling for content exceeding page size
 3. **Continuation Indicators**: Clear markers when lines are continued across pages
 4. **Character-Based Fallback**: For single-line content, pagination shifts to character-based
-5. **Format-Specific Handling**: Optional JSON pretty-printing for improved readability
 
 ## Edge Cases
 
@@ -39,7 +38,7 @@ For content with very long lines (e.g., large JSON strings):
 
 1. **Special Formatting**:
    - Add appropriate XML attributes to indicate line continuation
-   - For JSON, optionally pretty-print before pagination for better readability
+   - Provide clear context to help LLMs understand partial content
 
 2. **Example with Long JSON**:
    ```
@@ -48,16 +47,6 @@ For content with very long lines (e.g., large JSON strings):
 
    # Second page (continued and truncated)
    ...dolor sit amet","url":"https://example.com/quantum1"},{"title":"Quantum...
-
-   # With optional pretty-print formatting
-   {
-     "results": [
-       {
-         "title": "Quantum Computing",
-         "abstract": "Lorem ipsum dolor sit amet",
-         "url": "https://example.com/quantum1"
-       },
-       ...
    ```
 
 ## API Design
@@ -213,7 +202,6 @@ enabled = true                      # Enable file descriptor system
 max_direct_output_chars = 8000      # Threshold for FD creation (larger than page size)
 default_page_size = 4000            # Default page size for pagination
 max_input_chars = 8000              # Threshold for creating FD from user input
-json_pretty_print = true            # Pretty print JSON for better pagination (optional)
 page_user_input = true              # Whether to enable paging for user inputs
 ```
 
@@ -410,13 +398,14 @@ Content formats include helpful XML metadata about pagination status and line co
 
 ## Implementation Plan
 
+See `fd_implementation_phases.md` for a detailed phased implementation plan that breaks down the work into clear milestones.
+
 1. Basic file descriptor management (create, read)
 2. Line-aware pagination 
 3. Large user input detection and wrapping
 4. Automatic wrapping for large tool outputs
 5. System prompt enrichment with FD instructions
-6. Integration with fork system call 
-7. JSON pretty-printing support (optional)
+6. Integration with fork system call
 
 ## Future Enhancements (TODO)
 
