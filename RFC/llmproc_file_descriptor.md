@@ -82,8 +82,11 @@ When a tool returns large output:
 ### 2. Read File Descriptor
 
 ```python
-# Input (simplified - just page number)
+# Input with page number
 read_fd(fd="fd-12345", page=2)
+
+# Read the entire file content
+read_fd(fd="fd-12345", read_all=True)
 
 # Alternative (for specific line ranges - optional)
 read_fd(fd="fd-12345", start_line=45, end_line=90)
@@ -133,7 +136,9 @@ close_fd(fd="fd-12345")
 1. Add FileDescriptorManager to LLMProcess state
 2. Update fork_process to copy file descriptors
 3. Add automatic wrapping of large tool outputs
-4. Register read_fd and close_fd tools
+4. Add automatic wrapping of large user inputs (stdin)
+5. Register read_fd and close_fd tools
+6. Add system prompt instructions about file descriptor usage
 
 ## Why Include close_fd?
 
@@ -149,8 +154,9 @@ Simple TOML configuration:
 ```toml
 [file_descriptor]
 enabled = true                      # Enable file descriptor system
-max_direct_output_chars = 4000      # Threshold for FD creation
-page_size = 4000                    # Default page size
+max_direct_output_chars = 8000      # Threshold for FD creation (larger than page size)
+default_page_size = 4000            # Default page size for pagination
+max_input_chars = 8000              # Threshold for creating FD from user input
 json_pretty_print = true            # Pretty print JSON for better pagination (optional)
 ```
 
@@ -236,6 +242,41 @@ After analyzing all the funding data, I can tell you that quantum computing rese
 dramatic growth in the past five years, with the USA, China, and EU being the top funders...
 ```
 
+## User Input Handling
+
+The file descriptor system can also manage large user inputs (stdin):
+
+1. When a user pastes or inputs content exceeding the `max_input_chars` threshold:
+   - The content is automatically stored in a file descriptor
+   - The user message is replaced with a reference and preview
+
+2. Example workflow:
+   ```
+   Human> [Pastes a 15,000 character log file]
+
+   # Automatically transformed to:
+   Human> I need to analyze this log file:
+   <fd_result fd="fd-9876" pages="4" truncated="false" lines="1-320" total_lines="320">
+     <message>Large input has been stored in a file descriptor. Use read_fd to access the content.</message>
+     <preview>
+     [2024-03-23 08:15:02] INFO: Application startup
+     [2024-03-23 08:15:03] INFO: Loading configuration
+     [2024-03-23 08:15:04] INFO: Initializing database connection
+     ...
+     </preview>
+   </fd_result>
+
+   Assistant> I'll analyze the log file for you. Let me read through it first.
+
+   read_fd(fd="fd-9876", page=1)
+   ```
+
+3. Benefits:
+   - Avoids context bloat from large pastes
+   - Preserves conversation readability
+   - Provides a consistent interface for handling both input and output content
+   - User doesn't need to explicitly store content in files
+
 ## Extension
 
 - File descriptors will be shared and accessible when you `fork` a process
@@ -255,10 +296,34 @@ dramatic growth in the past five years, with the USA, China, and EU being the to
 - Requires more tool calls to read in the context of a long file
 - May be more complex than direct truncation for simple cases
 
+## System Prompt Additions
+
+When file descriptor system is enabled, the following instructions will be added to the enriched system prompt to explain the feature to the model:
+
+```
+<file_descriptor_instructions>
+This system includes a file descriptor feature for handling large content:
+
+1. When tool outputs or user inputs exceed character limits, they are automatically stored in file descriptors
+2. Use the read_fd tool to access paginated content from file descriptors
+3. File descriptors are referenced by their ID (e.g., "fd-12345")
+4. You can read specific pages or the entire content at once
+
+Key commands:
+- read_fd(fd="fd-12345", page=2) - Read page 2
+- read_fd(fd="fd-12345", read_all=True) - Read entire content
+- close_fd(fd="fd-12345") - Close a file descriptor when no longer needed
+
+Content formats include helpful XML metadata about pagination status and line continuations.
+</file_descriptor_instructions>
+```
+
 ## Implementation Plan
 
 1. Basic file descriptor management (create, read, close)
-2. Line-aware pagination
-3. Automatic wrapping for large outputs
-4. Integration with fork system call
-5. JSON pretty-printing support (optional)
+2. Line-aware pagination 
+3. Large user input detection and wrapping
+4. Automatic wrapping for large tool outputs
+5. System prompt enrichment with FD instructions
+6. Integration with fork system call 
+7. JSON pretty-printing support (optional)
