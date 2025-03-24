@@ -194,6 +194,26 @@ class AnthropicProcessExecutor:
                             tool_result = ToolResult.from_error(error_msg)
                         else:
                             tool_result = result
+                            
+                            # Check if file descriptor system is enabled and output exceeds the threshold
+                            if (hasattr(process, "file_descriptor_enabled") and 
+                                process.file_descriptor_enabled and 
+                                hasattr(process, "fd_manager") and 
+                                process.fd_manager and 
+                                not process.fd_manager.is_fd_related_tool(tool_name) and  # Skip FD-related tools
+                                isinstance(tool_result.content, str) and 
+                                len(tool_result.content) > process.fd_manager.max_direct_output_chars):
+                                
+                                logger.info(f"Tool result from '{tool_name}' exceeds {process.fd_manager.max_direct_output_chars} chars, creating file descriptor")
+                                
+                                # Create a file descriptor for the large content
+                                fd_result = process.fd_manager.create_fd(tool_result.content)
+                                
+                                # Replace the original tool result with the file descriptor result
+                                # fd_result is already a ToolResult instance now
+                                tool_result = fd_result
+                                
+                                logger.debug(f"Created file descriptor for tool result from '{tool_name}'")
 
                         # Only convert to dict at the last moment when building the response
                         tool_result_dict = tool_result.to_dict()

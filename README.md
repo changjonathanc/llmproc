@@ -38,6 +38,7 @@ The LLMProc library functions as a kernel:
 - Model Context Protocol (MCP) support for tool usage
 - Program Linking for LLM-to-LLM communication via spawn tool (like `dispatch_agent` in Claude Code)
 - Program Compiler for robust validation and preprocessing of configurations
+- File Descriptor system for handling large tool outputs with pagination
 
 ## Installation
 
@@ -283,6 +284,9 @@ llmproc-demo ./examples/calculator.toml
 
 # Try using the fork feature
 llmproc-demo ./examples/fork.toml
+
+# Try using the file descriptor system
+llmproc-demo ./examples/file_descriptor.toml
 ```
 
 Example program linking session:
@@ -326,6 +330,7 @@ The `examples/` directory contains ready-to-use program files:
 - `program_linking/main.toml` - Demonstrates LLM-to-LLM communication
 - `fork.toml` - Shows the fork system call in action
 - `preload.toml` - Demonstrates file preloading feature
+- `file_descriptor.toml` - Shows the file descriptor system for handling large outputs
 - `reference.toml` - Full reference with all available options
 
 ### CLI Options
@@ -372,6 +377,8 @@ See [Testing Guide](docs/testing.md) for details on running and writing tests.
 LLMProc implements Unix-like process system calls:
 - **spawn**: Create new processes from linked programs (analogous to exec()) - ✅ Implemented
 - **fork**: Duplicate an existing process with its state (analogous to fork()) - ✅ Implemented
+- **read_fd**: Read content from file descriptors (analogous to read()) - ✅ Implemented
+- **read_file**: Simple file reading capability (for demonstration) - ✅ Implemented
 
 Reference: [forking-an-agent](https://github.com/cccntu/forking-an-agent)
 
@@ -396,6 +403,29 @@ This enables:
 ### MCP Integration
 
 - System calls are implemented in the LLMProc kernel
+
+### File Descriptor System
+
+The file descriptor system provides a Unix-like solution for handling large tool outputs:
+
+```toml
+# Enable file descriptor tools
+[tools]
+enabled = ["read_fd"]
+
+# Configure the file descriptor system
+[file_descriptor]
+enabled = true                  # Explicitly enable (also enabled by read_fd in tools)
+max_direct_output_chars = 8000  # Threshold for FD creation
+default_page_size = 4000        # Size of each page
+```
+
+Key features:
+- Automatic wrapping of large tool outputs into file descriptors
+- Line-aware pagination with continuation indicators
+- XML-formatted responses with metadata
+- Preservation of FDs during fork operations
+- Read interface via read_fd system call
 - "Userspace" tools are provided via MCP
 - MCP provides a standard protocol for tools that's independent of the LLMProc implementation
 

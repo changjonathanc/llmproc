@@ -14,7 +14,8 @@ from llmproc.providers import get_provider_client
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 from llmproc.results import RunResult
-from llmproc.tools import ToolRegistry, mcp, register_system_tools
+from llmproc.tools import ToolRegistry, file_descriptor_instructions, mcp, register_system_tools
+from llmproc.tools.file_descriptor import FileDescriptorManager
 
 # Check if mcp-registry is installed
 HAS_MCP = False
@@ -137,6 +138,40 @@ class LLMProcess:
 
         # Initialize fork support
         self.allow_fork = True  # By default, allow forking
+        
+        # Initialize file descriptor system
+        self.file_descriptor_enabled = False
+        self.fd_manager = None
+        
+        # Check for file descriptor configuration in program
+        if hasattr(program, "file_descriptor"):
+            # Configure file descriptor manager with program settings
+            fd_config = program.file_descriptor
+            
+            # Enable if explicitly enabled in config or if read_fd is in enabled tools
+            explicit_enabled = getattr(fd_config, "enabled", False)
+            implicit_enabled = "read_fd" in self.enabled_tools
+            
+            if explicit_enabled or implicit_enabled:
+                self.file_descriptor_enabled = True
+                
+                # Get configuration values with defaults
+                default_page_size = getattr(fd_config, "default_page_size", 4000)
+                max_direct_output_chars = getattr(fd_config, "max_direct_output_chars", 8000)
+                
+                # Initialize the file descriptor manager
+                self.fd_manager = FileDescriptorManager(
+                    default_page_size=default_page_size,
+                    max_direct_output_chars=max_direct_output_chars
+                )
+                
+                logger.info(f"File descriptor system enabled with page size {default_page_size}")
+        
+        # If read_fd is in tools but no configuration provided, still enable with defaults
+        elif "read_fd" in self.enabled_tools:
+            self.file_descriptor_enabled = True
+            self.fd_manager = FileDescriptorManager()
+            logger.info("File descriptor system enabled with default settings")
 
         # Preload files if specified
         if hasattr(program, "preload_files") and program.preload_files:
@@ -326,13 +361,15 @@ class LLMProcess:
             )
 
     def reset_state(
-        self, keep_system_prompt: bool = True, keep_preloaded: bool = True
+        self, keep_system_prompt: bool = True, keep_preloaded: bool = True,
+        keep_file_descriptors: bool = True
     ) -> None:
         """Reset the conversation state.
 
         Args:
             keep_system_prompt: Whether to keep the system prompt for the next API call
             keep_preloaded: Whether to keep preloaded file content
+            keep_file_descriptors: Whether to keep file descriptor content
 
         Note:
             State only contains user/assistant messages, not system message.
@@ -349,6 +386,18 @@ class LLMProcess:
         # If we're not keeping the system prompt, reset it to original
         if not keep_system_prompt:
             self.system_prompt = self.original_system_prompt
+            
+        # Reset file descriptors if not keeping them
+        if not keep_file_descriptors and self.file_descriptor_enabled and self.fd_manager:
+            # Create a new manager but preserve the settings
+            self.fd_manager = FileDescriptorManager(
+                default_page_size=self.fd_manager.default_page_size,
+                max_direct_output_chars=self.fd_manager.max_direct_output_chars
+            )
+            # Copy over the FD-related tools registry
+            self.fd_manager.fd_related_tools = self.fd_manager.fd_related_tools.union(
+                self.fd_manager._FD_RELATED_TOOLS
+            )
 
         # Always reset the enriched system prompt - it will be regenerated on next run
         # with the correct combination of system prompt and preloaded content
@@ -494,6 +543,11 @@ class LLMProcess:
             # Copy the aggregator if it exists
             if hasattr(self, "aggregator"):
                 forked_process.aggregator = self.aggregator
+                
+        # If the parent process had file descriptors enabled, copy the manager and its state
+        if self.file_descriptor_enabled and self.fd_manager:
+            forked_process.file_descriptor_enabled = True
+            forked_process.fd_manager = copy.deepcopy(self.fd_manager)
 
         # Prevent forked processes from forking again
         forked_process.allow_fork = False

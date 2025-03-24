@@ -133,7 +133,9 @@ variables = ["working_directory", "platform", "date"]
 # List of enabled tools
 # enabled = ["spawn"]  # Enable the spawn tool for program linking
 # enabled = ["fork"]   # Enable the fork tool for creating copies of the current process
-# enabled = ["spawn", "fork"]  # Enable multiple tools
+# enabled = ["read_fd"]  # Enable the file descriptor reading tool
+# enabled = ["read_fd", "fd_to_file"]  # Enable both file descriptor tools
+# enabled = ["spawn", "fork", "read_fd"]  # Enable multiple tools
 
 #----------------------------------------
 # Program Linking Configuration
@@ -157,4 +159,23 @@ variables = ["working_directory", "platform", "date"]
 # github = ["search_repositories", "get_file_contents"]
 # codemcp = ["ReadFile"]
 # github = "all"  # Import all tools from GitHub server
+
+#----------------------------------------
+# File Descriptor Configuration
+#----------------------------------------
+[file_descriptor]
+# Enable file descriptor system explicitly (also enabled if read_fd in tools.enabled)
+# enabled = true
+
+# Threshold for FD creation (larger than page size)
+# max_direct_output_chars = 8000
+
+# Page size for pagination
+# default_page_size = 4000
+
+# Threshold for user input FD creation
+# max_input_chars = 8000
+
+# Enable/disable user input paging
+# page_user_input = true
 

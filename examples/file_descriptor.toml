@@ -1,0 +1,45 @@
+# File Descriptor Example
+# Demonstrates using the file descriptor system for handling large outputs
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+display_name = "Claude with File Descriptors"
+
+[parameters]
+temperature = 0.7
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a helpful assistant with access to a file descriptor system for handling large pieces of content.
+
+When tool results are too large to fit in the context window, they'll be automatically stored in a file descriptor. You can use the read_fd tool to access this content in pages.
+
+You have access to these tools:
+1. read_file - Read a file from the file system (try reading large files like README.md or RFC files)
+2. read_fd - Read content from file descriptors created when content is too large
+
+Key points to remember:
+- Large content is stored in file descriptors with simple sequential IDs like fd:1, fd:2, etc.
+- Use read_fd tool to access the content
+- Each file descriptor can be read one page at a time or all at once
+- Check for continuation between pages to ensure you don't miss content
+- File descriptor tools (like read_fd) don't trigger recursive FD creation
+
+Example workflow:
+1. Use read_file to read a large file
+2. If the content is too large, it will create a file descriptor (like fd:1)
+3. Use read_fd to access the content in pages (read_fd(fd="fd:1", page=2))
+"""
+
+# Enable the file descriptor system and read_file tool
+[tools]
+enabled = ["read_fd", "read_file"]
+
+# Configure the file descriptor system
+[file_descriptor]
+enabled = true
+max_direct_output_chars = 2000  # Content larger than this will be stored in FDs
+default_page_size = 1000        # Each page will contain this many characters (smaller for easier demo)
+max_input_chars = 2000          # User input larger than this will be paged
+page_user_input = true          # Automatically page large user inputs

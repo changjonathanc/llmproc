@@ -10,7 +10,9 @@ from typing import Any, TypedDict
 
 from . import mcp
 from .calculator import calculator_tool, calculator_tool_def
+from .file_descriptor import file_descriptor_instructions, read_fd_tool, read_fd_tool_def
 from .fork import fork_tool, fork_tool_def
+from .read_file import read_file_tool, read_file_tool_def
 from .spawn import spawn_tool, spawn_tool_def
 from .tool_result import ToolResult
 
@@ -123,6 +125,8 @@ _SYSTEM_TOOLS = {
     "spawn": (spawn_tool, spawn_tool_def),
     "fork": (fork_tool, fork_tool_def),
     "calculator": (calculator_tool, calculator_tool_def),
+    "read_fd": (read_fd_tool, read_fd_tool_def),
+    "read_file": (read_file_tool, read_file_tool_def),
 }
 
 
@@ -174,6 +178,14 @@ def register_system_tools(registry: ToolRegistry, process) -> None:
     # Register calculator tool if enabled
     if "calculator" in enabled_tools:
         register_calculator_tool(registry)
+        
+    # Register read_file tool if enabled
+    if "read_file" in enabled_tools:
+        register_read_file_tool(registry)
+        
+    # Register file descriptor tools if enabled
+    if "read_fd" in enabled_tools or getattr(process, "file_descriptor_enabled", False):
+        register_file_descriptor_tools(registry, process)
 
 
 def register_spawn_tool(registry: ToolRegistry, process) -> None:
@@ -249,6 +261,60 @@ def register_calculator_tool(registry: ToolRegistry) -> None:
     logger.info("Registered calculator tool")
 
 
+def register_file_descriptor_tools(registry: ToolRegistry, process) -> None:
+    """Register the file descriptor tools with a registry.
+
+    Args:
+        registry: The ToolRegistry to register the tool with
+        process: The LLMProcess instance to bind to the tool
+    """
+    # Get tool definition
+    api_tool_def = read_fd_tool_def.copy()
+
+    # Create a handler function that binds to the process
+    async def read_fd_handler(args):
+        return await read_fd_tool(
+            fd=args.get("fd"),
+            page=args.get("page", 1),
+            read_all=args.get("read_all", False),
+            llm_process=process,
+        )
+
+    # Register with the registry
+    registry.register_tool("read_fd", read_fd_handler, api_tool_def)
+
+    # Mark that file descriptors are enabled for this process
+    if not hasattr(process, "file_descriptor_enabled"):
+        process.file_descriptor_enabled = True
+    
+    # Register tool names to prevent recursive file descriptor creation
+    if hasattr(process, "fd_manager"):
+        # read_fd is already in the default set, but this makes it explicit
+        process.fd_manager.register_fd_tool("read_fd")
+
+    logger.info("Registered file descriptor tools for process")
+
+
+def register_read_file_tool(registry: ToolRegistry) -> None:
+    """Register the read_file tool with a registry.
+
+    Args:
+        registry: The ToolRegistry to register the tool with
+    """
+    # Get tool definition
+    api_tool_def = read_file_tool_def.copy()
+
+    # Create a handler function
+    async def read_file_handler(args):
+        file_path = args.get("file_path", "")
+        return await read_file_tool(file_path)
+
+    # Register with the registry
+    registry.register_tool("read_file", read_file_handler, api_tool_def)
+
+    logger.info("Registered read_file tool")
+
+
 __all__ = [
     "spawn_tool",
     "spawn_tool_def",
@@ -256,6 +322,11 @@ __all__ = [
     "fork_tool_def",
     "calculator_tool",
     "calculator_tool_def",
+    "read_fd_tool",
+    "read_fd_tool_def",
+    "read_file_tool",
+    "read_file_tool_def",
+    "file_descriptor_instructions",
     "get_tool",
     "list_available_tools",
     "ToolSchema",
@@ -265,6 +336,8 @@ __all__ = [
     "register_spawn_tool",
     "register_fork_tool",
     "register_calculator_tool",
+    "register_read_file_tool",
+    "register_file_descriptor_tools",
     "ToolResult",
     "mcp",
 ]

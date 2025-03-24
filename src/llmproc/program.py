@@ -67,6 +67,7 @@ class LLMProgram:
         tools: dict[str, Any] | None = None,
         linked_programs: dict[str, Union[str, "LLMProgram"]] | None = None,
         env_info: dict[str, Any] | None = None,
+        file_descriptor: dict[str, Any] | None = None,
         base_dir: Path | None = None,
     ):
         """Initialize a program.
@@ -83,6 +84,7 @@ class LLMProgram:
             tools: Dictionary from the [tools] section in the TOML program
             linked_programs: Dictionary mapping program names to TOML program paths or compiled LLMProgram objects
             env_info: Environment information configuration
+            file_descriptor: File descriptor configuration
             base_dir: Base directory for resolving relative paths in files
         """
         # Flag to track if this program has been fully compiled (including linked programs)
@@ -102,6 +104,7 @@ class LLMProgram:
         self.env_info = env_info or {
             "variables": []
         }  # Default to empty list (disabled)
+        self.file_descriptor = file_descriptor or {}
         self.base_dir = base_dir
 
         # No need to initialize api_params here - we'll use a property
@@ -369,6 +372,11 @@ class LLMProgram:
         env_info = (
             config.env_info.model_dump() if config.env_info else {"variables": []}
         )
+        
+        # Extract file descriptor configuration
+        file_descriptor = (
+            config.file_descriptor.model_dump() if config.file_descriptor else None
+        )
 
         # Create the program instance
         program = cls(
@@ -383,6 +391,7 @@ class LLMProgram:
             tools=config.tools.model_dump() if config.tools else None,
             linked_programs=linked_programs,
             env_info=env_info,
+            file_descriptor=file_descriptor,
             base_dir=base_dir,
         )
 
@@ -403,14 +412,20 @@ class LLMProgram:
         """
         # Use the EnvInfoBuilder to handle environment information and preloaded content
         preloaded_content = {}
-        if process_instance and hasattr(process_instance, "preloaded_content"):
-            preloaded_content = process_instance.preloaded_content
+        file_descriptor_enabled = False
+        
+        if process_instance:
+            if hasattr(process_instance, "preloaded_content"):
+                preloaded_content = process_instance.preloaded_content
+            if hasattr(process_instance, "file_descriptor_enabled"):
+                file_descriptor_enabled = process_instance.file_descriptor_enabled
 
         return EnvInfoBuilder.get_enriched_system_prompt(
             base_prompt=self.system_prompt,
             env_config=self.env_info,
             preloaded_content=preloaded_content,
-            include_env=include_env
+            include_env=include_env,
+            file_descriptor_enabled=file_descriptor_enabled
         )
 
     @classmethod

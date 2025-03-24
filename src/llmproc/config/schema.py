@@ -120,6 +120,24 @@ class EnvInfoConfig(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class FileDescriptorConfig(BaseModel):
+    """File descriptor configuration section."""
+
+    enabled: bool = False
+    max_direct_output_chars: int = 8000
+    default_page_size: int = 4000
+    max_input_chars: int = 8000
+    page_user_input: bool = True
+    
+    @classmethod
+    @field_validator("max_direct_output_chars", "default_page_size", "max_input_chars")
+    def validate_positive_int(cls, v):
+        """Validate that integer values are positive."""
+        if v <= 0:
+            raise ValueError("Value must be positive")
+        return v
+
+
 class LinkedProgramsConfig(RootModel):
     """Linked programs configuration section."""
 
@@ -137,10 +155,49 @@ class LLMProgramConfig(BaseModel):
     tools: ToolsConfig | None = ToolsConfig()
     env_info: EnvInfoConfig | None = EnvInfoConfig()
     linked_programs: LinkedProgramsConfig | None = LinkedProgramsConfig()
+    file_descriptor: FileDescriptorConfig | None = None
 
     model_config = {
         "extra": "forbid"  # Forbid extra fields
     }
+    
+    @model_validator(mode="after")
+    def validate_file_descriptor(self):
+        """Validate file descriptor configuration is consistent with tools.
+        
+        This validator checks if file_descriptor.enabled is true but no FD tools are enabled.
+        It also issues a warning if there's a file_descriptor section but no FD tools.
+        """
+        import warnings
+        
+        # FD tools
+        fd_tools = ["read_fd", "fd_to_file"]
+        
+        # Check if file_descriptor is configured
+        if self.file_descriptor:
+            # Check if any FD tools are enabled
+            has_fd_tools = False
+            if self.tools and self.tools.enabled:
+                has_fd_tools = any(tool in fd_tools for tool in self.tools.enabled)
+            
+            # If explicitly enabled but no tools, raise error
+            if self.file_descriptor.enabled and not has_fd_tools:
+                raise ValueError(
+                    "file_descriptor.enabled is set to true, but no file descriptor tools "
+                    "('read_fd', 'fd_to_file') are enabled in the [tools] section. "
+                    "Add at least 'read_fd' to the enabled tools list."
+                )
+            
+            # If has settings but not explicitly enabled and no tools, issue warning
+            if not self.file_descriptor.enabled and not has_fd_tools:
+                warnings.warn(
+                    "File descriptor configuration is present but no file descriptor tools "
+                    "are enabled in the [tools] section and file_descriptor.enabled is not true. "
+                    "The configuration will have no effect.",
+                    stacklevel=2
+                )
+        
+        return self
 
     @model_validator(mode="after")
     def validate_parameters(self):
