@@ -246,18 +246,17 @@ dramatic growth in the past five years, with the USA, China, and EU being the to
 
 The file descriptor system can also manage large user inputs (stdin):
 
-1. When a user pastes or inputs content exceeding the `max_input_chars` threshold:
-   - The content is automatically stored in a file descriptor
-   - The user message is replaced with a reference and preview
+1. When a user inputs content exceeding the `max_input_chars` threshold:
+   - The entire message is automatically stored in a file descriptor
+   - The entire user message is replaced with an FD reference and preview
 
 2. Example workflow:
    ```
-   Human> [Pastes a 15,000 character log file]
+   Human> [Sends a 15,000 character log file]
 
    # Automatically transformed to:
-   Human> I need to analyze this log file:
    <fd_result fd="fd-9876" pages="4" truncated="false" lines="1-320" total_lines="320">
-     <message>Large input has been stored in a file descriptor. Use read_fd to access the content.</message>
+     <message>Large user input has been stored in a file descriptor. Use read_fd to access the content.</message>
      <preview>
      [2024-03-23 08:15:02] INFO: Application startup
      [2024-03-23 08:15:03] INFO: Loading configuration
@@ -266,16 +265,21 @@ The file descriptor system can also manage large user inputs (stdin):
      </preview>
    </fd_result>
 
-   Assistant> I'll analyze the log file for you. Let me read through it first.
+   Assistant> I see you've shared a log file. Let me read through it.
 
    read_fd(fd="fd-9876", page=1)
    ```
 
 3. Benefits:
-   - Avoids context bloat from large pastes
-   - Preserves conversation readability
+   - Avoids context bloat from large inputs
+   - Preserves conversation history readability
    - Provides a consistent interface for handling both input and output content
    - User doesn't need to explicitly store content in files
+
+4. Future enhancement (TODO):
+   - Support chunk-aware paging where the LLMProcess interface could accept a list of message chunks
+   - This would allow selective paging of only the large portions of a message
+   - Would enable preserving user's introduction text while paging only the large content sections
 
 ## Extension
 
