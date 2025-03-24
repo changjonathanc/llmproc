@@ -45,7 +45,7 @@ Human> Export the iterative version to a file
 
 Assistant> I'll export the iterative version for you.
 
-ref_to_file(ref_id="fib_iterative", file_path="fibonacci.py")
+fd_to_file(fd="ref:fib_iterative", file_path="fibonacci.py")
 
 Done! The iterative Fibonacci function has been saved to fibonacci.py.
 ```
@@ -78,29 +78,23 @@ def hello_world():
 </ref>
 ```
 
-### 2. Reference to File Operation
+### 2. Reference and File Descriptor Unified Interface
+
+References are automatically stored as file descriptors with the reference ID serving as the descriptor ID:
 
 ```python
-# Write reference content to a file
-ref_to_file(ref_id="example_code", file_path="/path/to/hello.py", mode="write")
+# Use references directly with fd_to_file
+fd_to_file(fd="ref:example_code", file_path="/path/to/hello.py", mode="write")
 
-# Append to an existing file
-ref_to_file(ref_id="example_code", file_path="/path/to/examples.py", mode="append")
-
-# Insert at a specific line
-ref_to_file(ref_id="example_code", file_path="/path/to/examples.py", insert_at_line=10, mode="insert")
-
-# Output - XML-formatted response
-"""
-<ref_write ref_id="example_code" file_path="/path/to/hello.py" success="true" mode="write">
-  <message>Reference content successfully written to /path/to/hello.py</message>
-  <stats>
-    <bytes>48</bytes>
-    <lines>3</lines>
-  </stats>
-</ref_write>
-"""
+# Use any file descriptor operation with references
+read_fd(fd="ref:example_code", page=1)
 ```
+
+References use a namespaced identifier format:
+- System-generated FDs: `fd:12345`
+- LLM-generated references: `ref:example_code`
+
+This prevents namespace collisions while providing a unified interface for all content operations. LLMs can use the same tools for both system-generated FDs and their own references.
 
 ### 3. List Available References
 
@@ -120,6 +114,8 @@ list_refs()
 
 ### 4. Get Reference Content
 
+Getting reference content uses the file descriptor system under the hood:
+
 ```python
 # Get a reference's content for reuse
 get_ref(ref_id="example_code")
@@ -133,23 +129,30 @@ def hello_world():
 """
 ```
 
+This operation internally:
+1. Gets the file descriptor associated with the reference
+2. Uses read_fd with read_all=True to retrieve content
+3. Formats the response with reference-specific metadata
+
 ## Implementation Details
 
 ### Reference Storage
 
-References are stored in the LLMProcess state:
+References are stored directly in the file descriptor system:
 
 ```python
-self.references = {
-    "example_code": {
-        "content": "def hello_world():\n    print(\"Hello, world!\")",
-        "created": "2025-03-24T14:30:00",
-        "lines": 3,
-        "chars": 48
-    },
-    # ...
-}
+# When extracting references from LLM output, the system:
+reference_id = "example_code"
+reference_content = "def hello_world():\n    print(\"Hello, world!\")"
+
+# Creates an FD with the reference namespace prefix
+fd_id = f"ref:{reference_id}"  # "ref:example_code"
+
+# Stores in the FD manager alongside system-generated FDs
+self.fd_manager.create_fd(fd_id, content=reference_content)
 ```
+
+This integration avoids duplicate storage mechanisms and makes all content management functions available for references.
 
 ### Message Processing
 
@@ -173,9 +176,9 @@ This system includes a reference ID feature for marking and referencing parts of
 4. References persist throughout the conversation
 
 Key commands:
-- ref_to_file(ref_id="example_code", file_path="hello.py") - Write to file
+- fd_to_file(fd="ref:example_code", file_path="hello.py") - Write to file
 - list_refs() - List all available references
-- get_ref(ref_id="example_code") - Get reference content
+- read_fd(fd="ref:example_code", read_all=True) - Read reference content
 
 This feature is particularly useful for code, structured data, or any content that might
 need to be exported to a file or referenced later.
@@ -184,12 +187,22 @@ need to be exported to a file or referenced later.
 
 ## Integration with File Descriptors
 
-The reference ID system complements the file descriptor system:
+The reference ID system is tightly integrated with the file descriptor system:
 
 1. **File Descriptors**: Handle large **input** content (tool outputs, user input)
 2. **Reference IDs**: Handle specific parts of **output** content (LLM responses)
+3. **Unified Storage**: References are stored as file descriptors internally
 
-Together, they provide a comprehensive system for managing large content in both directions.
+When a reference is created, the system:
+1. Creates a file descriptor with the referenced content
+2. Maintains a mapping between reference IDs and their corresponding FD IDs
+3. Uses the existing FD infrastructure for content storage and retrieval
+
+This provides:
+- Unified storage and pagination system for both input and output content
+- Consistent APIs for working with large content
+- Reuse of file operation tools (fd_to_file) for references
+- Resource optimization through shared infrastructure
 
 ## Implementation Plan
 

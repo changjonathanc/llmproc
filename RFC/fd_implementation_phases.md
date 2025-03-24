@@ -136,8 +136,8 @@ These features complement the file descriptor system and address different use c
        return a
    </ref>
    
-   # Export to file
-   ref_to_file(ref_id="fibonacci_code", file_path="fibonacci.py")
+   # Export to file using standard fd_to_file
+   fd_to_file(fd="ref:fibonacci_code", file_path="fibonacci.py")
    ```
    
    See `response_reference_id.md` for detailed design.
