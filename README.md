@@ -168,45 +168,187 @@ See **`examples/reference.toml`** for a comprehensive reference with comments fo
 
 ## Command-Line Demo
 
-LLMProc includes a simple command-line demo for interacting with LLM models:
+LLMProc includes a command-line interface for interacting with LLM models. The `llmproc-demo` command provides an intuitive way to test different models and configurations.
+
+### Quick Start
 
 ```bash
-# Start the interactive demo (select from examples)
+# Install the package
+uv pip install -e .  # or pip install -e .
+
+# Set up your API keys (required)
+export OPENAI_API_KEY="your-openai-key"
+export ANTHROPIC_API_KEY="your-anthropic-key"
+# For Vertex AI (optional)
+export ANTHROPIC_VERTEX_PROJECT_ID="your-project-id" 
+export CLOUD_ML_REGION="us-central1"
+
+# Launch interactive demo
+llmproc-demo
+```
+
+### Usage Examples
+
+#### Interactive Mode
+
+The default mode starts an interactive chat session:
+
+```bash
+# Select from example programs
 llmproc-demo
 
-# Start with a specific TOML program file
-llmproc-demo path/to/your/program.toml
+# Use a specific program file
+llmproc-demo ./examples/minimal.toml
 
-# Start with Claude Code example program
+# Chat with Claude (requires ANTHROPIC_API_KEY)
+llmproc-demo ./examples/anthropic.toml
+```
+
+Example interactive session:
+
+```
+LLMProc CLI Demo
+----------------
+
+Available programs:
+1. anthropic.toml
+2. anthropic_vertex.toml
+3. calculator.toml
+...
+
+Select a program (number): 1
+
+Program Summary:
+  Model: claude-3-haiku-20240307
+  Provider: anthropic
+  Display Name: Claude Haiku Assistant
+  System Prompt: You are a helpful assistant.
+  Temperature: 0.7
+
+Starting interactive chat session. Type 'exit' or 'quit' to end.
+Type 'reset' to reset the conversation state.
+Type 'verbose' to toggle verbose logging.
+
+You> What can you do for me?
+
+Claude Haiku Assistant> I can help with a wide range of tasks including:
+- Answering questions on various topics
+- Explaining complex concepts
+- Writing and editing text
+- Summarizing information
+- Providing creative ideas
+- Offering thoughtful advice
+- Discussing different perspectives on topics
+
+Just let me know what you need assistance with!
+
+You> exit
+Ending session.
+```
+
+#### Non-Interactive Mode
+
+For single prompts or scripting:
+
+```bash
+# One-off prompt (returns a single response)
+llmproc-demo ./examples/openai.toml -p "Explain the concept of LLMs in one sentence"
+
+# Read from stdin (pipe mode)
+echo "What is Python?" | llmproc-demo ./examples/minimal.toml -n
+
+# Process a file
+cat questions.txt | llmproc-demo ./examples/anthropic.toml -n
+```
+
+Example output:
+
+```
+$ llmproc-demo ./examples/minimal.toml -p "Explain LLMs in one sentence"
+
+Large Language Models are neural networks trained on vast amounts of text data that can understand, generate, and manipulate human language based on the patterns they've learned.
+```
+
+#### Advanced Features
+
+```bash
+# Use Claude Code's dispatch_agent and other tools
 llmproc-demo ./examples/claude_code.toml
 
 # Try Program Linking (LLM-to-LLM communication)
 llmproc-demo ./examples/program_linking/main.toml
 
-# Run in non-interactive mode with a single prompt
-llmproc-demo ./examples/anthropic.toml -p "Write a short poem about AI"
+# Use the calculator tool
+llmproc-demo ./examples/calculator.toml
 
-# Run in non-interactive mode reading from stdin
-cat input.txt | llmproc-demo ./examples/openai.toml -n
+# Try using the fork feature
+llmproc-demo ./examples/fork.toml
 ```
 
-The demo will:
-1. If no program is specified, show a list of available TOML programs from the examples directory
-2. Let you select a program by number, or use the specified program file
-3. Load and initialize the program with LLMProgram.from_toml() and program.start()
-4. Start an interactive chat session with the selected model (or process a single prompt in non-interactive mode)
+Example program linking session:
 
-### Program Linking Example
+```
+You> Ask the repo expert how the program compiler works
 
-The program linking example in `./examples/program_linking/main.toml` demonstrates how to create a main process that can delegate queries to a specialized "repo_expert" process. The repo_expert process has access to preloaded files about the LLMProc repository and can answer specific questions about the codebase.
+Main Assistant> I'll ask the repo expert about the program compiler.
+
+The repo expert explains that the program compiler in LLMProc handles validation and preprocessing of TOML configurations. It uses a two-phase approach: first compiling individual programs and then linking them together. The compiler validates configuration parameters, resolves file paths, preprocesses system prompts, and handles tool registrations. It also manages a global program registry to prevent duplicate compilation and detects circular dependencies in program linking.
+
+You> What files implement the program compiler?
+
+Main Assistant> Let me ask the repo expert about the program compiler implementation files.
+
+According to the repo expert, the program compiler is primarily implemented in:
+1. src/llmproc/program.py - Contains the LLMProgram class with compile methods
+2. src/llmproc/config/schema.py - Defines Pydantic models for validation
+3. src/llmproc/config/utils.py - Provides path resolution utilities
+
+The main implementation is in program.py where the compile() and compile_all() methods handle the compilation process.
+```
 
 ### Interactive Commands
 
-In the interactive session, you can use the following commands:
+During an interactive session, you can use these special commands:
 
-- Type `exit` or `quit` to end the session
-- Type `reset` to reset the conversation state
-- Type `verbose` to toggle verbose logging
+- `exit` or `quit` - End the session
+- `reset` - Clear the conversation history and start fresh
+- `verbose` - Toggle detailed logging (shows API calls, timing, etc.)
+
+### Available Examples
+
+The `examples/` directory contains ready-to-use program files:
+
+- `minimal.toml` - Bare minimum configuration with OpenAI
+- `anthropic.toml` - Basic Claude configuration
+- `openai.toml` - Basic OpenAI configuration
+- `claude_code.toml` - Claude with coding tools enabled
+- `calculator.toml` - Demonstrates the calculator tool
+- `program_linking/main.toml` - Demonstrates LLM-to-LLM communication
+- `fork.toml` - Shows the fork system call in action
+- `preload.toml` - Demonstrates file preloading feature
+- `reference.toml` - Full reference with all available options
+
+### CLI Options
+
+```
+Usage: llmproc-demo [OPTIONS] [PROGRAM_PATH]
+
+  Run a simple CLI for LLMProc.
+
+  PROGRAM_PATH is an optional path to a TOML program file.
+  If not provided, you'll be prompted to select from available examples.
+
+  Supports three modes:
+  1. Interactive mode (default): Chat continuously with the model
+  2. Non-interactive with prompt: Use --prompt/-p "your prompt here"
+  3. Non-interactive with stdin: Use --non-interactive/-n and pipe input
+
+Options:
+  -p, --prompt TEXT  Run in non-interactive mode with the given prompt
+  -n, --non-interactive  Run in non-interactive mode (reads from stdin if no
+                     prompt provided)
+  --help             Show this message and exit
+```
 
 ## Implementation Details
 
@@ -264,12 +406,14 @@ This enables:
 3. [ ] Implement Prompt Caching, Cost Tracking
 4. [x] Implement Environment Variables
 5. [ ] Implement File Descriptor
-6. [ ] Improve OpenAI integration (MCP support)
-7. [ ] Add support for reasoning models
-8. [ ] Add Process State Serialization & Restoration
-9. [ ] Implement retry mechanism with exponential backoff for API calls
-10. [ ] Enhance error handling and reporting across providers
-11. [ ] Improve stream mode support for all providers
+6. [ ] Implement Exec System Call for process replacement
+7. [ ] Implement GOTO for program flow control
+8. [ ] Improve OpenAI integration (MCP support)
+9. [ ] Add support for reasoning models
+10. [ ] Add Process State Serialization & Restoration
+11. [ ] Implement retry mechanism with exponential backoff for API calls
+12. [ ] Enhance error handling and reporting across providers
+13. [ ] Improve stream mode support for all providers
 
 ## License
 
