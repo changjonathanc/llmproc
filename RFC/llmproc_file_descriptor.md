@@ -318,6 +318,12 @@ Key commands:
 - read_fd(fd="fd-12345", read_all=True) - Read entire content
 - close_fd(fd="fd-12345") - Close a file descriptor when no longer needed
 
+Important usage tips:
+- Always read complete file descriptors before drawing conclusions
+- Pay attention to the "truncated" and "continued" attributes that indicate content continuation
+- For JSON data that spans multiple pages, consider reading all pages before parsing
+- When working with very large content, consider using the fork tool to delegate analysis to child processes
+
 Content formats include helpful XML metadata about pagination status and line continuations.
 </file_descriptor_instructions>
 ```
