@@ -103,6 +103,18 @@ continues on the next page, the "truncated" attribute will be true.
 
 The XML format clearly separates content from metadata and makes it easy for the LLM to understand the structure of the response. The attributes provide all necessary information without cluttering the response.
 
+### Note on File Descriptor Lifecycle
+
+We explicitly decided NOT to implement a close_fd system call for the following reasons:
+
+1. **Simplicity**: File descriptors are treated as persistent state, just like conversation history.
+2. **Consistency**: FDs should remain available throughout the process lifetime.
+3. **Mental Model**: Makes the FD system simpler for LLMs to understand and use.
+4. **Cross-Process Behavior**: Simplifies inheritance during fork operations.
+5. **Error Prevention**: Avoids issues with dangling references to closed FDs.
+
+File descriptors will naturally be cleaned up when a process ends, and any memory constraints would be addressed through the future disk offloading system rather than manual resource management.
+
 ### 3. FD to File Operation
 
 ```python
@@ -474,11 +486,7 @@ Content formats include helpful XML metadata about pagination status and line co
    read_fd(name="error_logs", page=2)  # Use name instead of fd ID
    ```
 
-6. **Batch Operations**: Support operations on multiple file descriptors at once
-   ```python
-   rename_fds({"fd-12345": "error_logs", "fd-67890": "config_file"})
-   close_fds(["fd-12345", "fd-67890"])  # Close multiple FDs at once
-   ```
+<!-- Batch operations removed as they rely on close_fd which has been deprecated -->
 
 7. **Section Referencing System**: Allow marking and retrieving specific sections of content
    ```python

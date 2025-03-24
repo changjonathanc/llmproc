@@ -116,6 +116,32 @@ Features planned for later development:
    - Code-aware navigation (by function, class)
    - More intuitive content access patterns
 
+## Additional Features
+
+These features complement the file descriptor system and address different use cases:
+
+1. **Response Reference ID System**
+   - Allow LLMs to mark sections of their responses with reference IDs
+   - Enable exporting referenced content to files
+   - Reference specific parts of previous responses
+   - File operations on referenced content
+   
+   ```python
+   # Example response with reference ID
+   <ref id="fibonacci_code">
+   def fibonacci(n):
+       a, b = 0, 1
+       for _ in range(n):
+           a, b = b, a + b
+       return a
+   </ref>
+   
+   # Export to file
+   ref_to_file(ref_id="fibonacci_code", file_path="fibonacci.py")
+   ```
+   
+   See `response_reference_id.md` for detailed design.
+
 ## Optional Enhancements (Not Planned)
 
 These features might be implemented if specific use cases emerge:
@@ -144,3 +170,18 @@ These features might be implemented if specific use cases emerge:
    - Pattern matching within file descriptors
    - Content-aware searching
    - Integration with section markers
+
+## Note on Deliberate Omissions
+
+Features deliberately not included in the implementation plan:
+
+1. **close_fd System Call**
+   - Explicitly omitted to treat FDs as persistent state
+   - Simplifies inheritance and cross-process behavior
+   - Avoids issues with dangling references
+   - Resource management handled at process termination
+   - Future disk offloading will address memory constraints
+
+2. **Batch Operations on FDs**
+   - Without close_fd, most batch operations aren't needed
+   - Individual operations are sufficient for core functionality
