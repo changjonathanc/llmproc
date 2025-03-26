@@ -29,8 +29,8 @@ Agent frameworks like Cursor and Claude Code implement custom paged file reading
 
 A kernel-level file descriptor system for managing large tool outputs:
 
-1. Large content (from tools or user) is stored in a file descriptor (fd:1234)
-2. A summary with the fd reference and preview is returned instead of full content
+1. Large content (from tools or user) is stored in a file descriptor (FD, with identifier like fd:1234)
+2. A summary with the FD reference and preview is returned instead of full content
 3. Content can be read in pages or accessed in full via read_fd tool
 
 This provides a unified approach to handling large outputs that:
@@ -367,7 +367,7 @@ The FD system handles errors gracefully to avoid disrupting the conversation:
    read_fd(fd="fd:nonexistent")
    
    # Returns error message in standardized XML format:
-   <fd_error type="not_found" fd="fd:nonexistent">
+   <fd_error fd="fd:nonexistent" type="not_found">
      <message>File descriptor fd:nonexistent not found</message>
    </fd_error>
    ```
@@ -378,7 +378,7 @@ The FD system handles errors gracefully to avoid disrupting the conversation:
    read_fd(fd="fd:12345", page=100)  # But FD only has 5 pages
    
    # Returns error with available range:
-   <fd_error type="invalid_page" fd="fd:12345">
+   <fd_error fd="fd:12345" type="invalid_page">
      <message>Invalid page number. Valid range: 1-5</message>
    </fd_error>
    ```
@@ -389,7 +389,7 @@ The FD system handles errors gracefully to avoid disrupting the conversation:
    fd_to_file(fd="fd:12345", file_path="/root/protected.txt")
    
    # Returns detailed error:
-   <fd_error type="file_operation" fd="fd:12345">
+   <fd_error fd="fd:12345" type="file_operation">
      <message>Cannot write to file: Permission denied</message>
      <details>Operation: write, Path: /root/protected.txt</details>
    </fd_error>
