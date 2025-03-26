@@ -21,7 +21,7 @@ Agent frameworks like Cursor and Claude Code implement custom paged file reading
 - Enable seamless pagination across all tools
 - Support efficient state transfer during fork operations
 - Allow for flexible reading patterns (sequential or random access)
-- No truncation of large tool outputs or user inputs
+- No information loss from large tool outputs or user inputs
 - Consistent interface for accessing large content
 - Tools don't need custom pagination logic
 
