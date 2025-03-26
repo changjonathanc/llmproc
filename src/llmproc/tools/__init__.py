@@ -298,6 +298,7 @@ def register_file_descriptor_tools(registry: ToolRegistry, process) -> None:
             fd=args.get("fd"),
             page=args.get("page", 1),
             read_all=args.get("read_all", False),
+            extract_to_new_fd=args.get("extract_to_new_fd", False),
             llm_process=process,
         )
         
@@ -305,6 +306,7 @@ def register_file_descriptor_tools(registry: ToolRegistry, process) -> None:
         return await fd_to_file_tool(
             fd=args.get("fd"),
             file_path=args.get("file_path"),
+            mode=args.get("mode", "write"),
             llm_process=process,
         )
 

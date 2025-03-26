@@ -32,16 +32,19 @@ and you'll need to use this tool to read the content in pages.
 Usage:
   read_fd(fd="fd:12345", page=2) - Read page 2 from the file descriptor
   read_fd(fd="fd:12345", read_all=True) - Read the entire content (use cautiously with very large content)
+  read_fd(fd="fd:12345", page=2, create_fd=True) - Create a new FD containing just page 2
   
 Parameters:
   fd (str): The file descriptor ID to read from (e.g., "fd:12345")
   page (int, optional): The page number to read (starting from 1)
   read_all (bool, optional): If true, returns the entire content (may be very large)
+  create_fd (bool, optional): If true, creates a new file descriptor with the selected content
 
 When to use this tool:
 - When you see a file descriptor reference (fd:12345) in a tool result
 - When you need to read more pages from large content
 - When you want to analyze content that was too large to include directly in the response
+- When you need to extract a specific part of a large content into a new FD (use create_fd=True)
 """
 
 fd_to_file_tool_description = """
@@ -49,16 +52,24 @@ Writes the content of a file descriptor to a file on disk.
 This tool is useful when you want to save large content for later use.
 
 Usage:
-  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt")
+  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt") - Write content to a file (create or overwrite)
+  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append") - Append content to existing file
+  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False) - Write only if file exists
+  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", fail_if_exists=True) - Create only if file doesn't exist
   
 Parameters:
   fd (str): The file descriptor ID to export (e.g., "fd:12345")
-  file_path (str): The path to the file to write (will be created or overwritten)
+  file_path (str): The path to the file to write
+  mode (str, optional): "write" (default) or "append" - Whether to overwrite or append to file
+  create (bool, optional): True (default) or False - Whether to create the file if it doesn't exist
+  fail_if_exists (bool, optional): False (default) or True - Whether to fail if file already exists
 
 When to use this tool:
 - When you need to save file descriptor content to disk
 - When you want to process the content with other tools that work with files
 - When you need to preserve large output for later reference
+- When you need to append content to existing files (use mode="append")
+- When you need precise control over file creation and overwriting behavior
 """
 
 # Tool definitions for Anthropic API
@@ -80,6 +91,10 @@ read_fd_tool_def = {
                 "type": "boolean",
                 "description": "If true, returns the entire content (use cautiously with very large content)",
             },
+            "extract_to_new_fd": {
+                "type": "boolean",
+                "description": "If true, extracts the content to a new file descriptor and returns the new FD ID",
+            },
         },
         "required": ["fd"],
     },
@@ -97,7 +112,12 @@ fd_to_file_tool_def = {
             },
             "file_path": {
                 "type": "string",
-                "description": "The path to the file to write (will be created or overwritten)",
+                "description": "The path to the file to write",
+            },
+            "mode": {
+                "type": "string",
+                "enum": ["write", "append"],
+                "description": "Whether to overwrite ('write', default) or append ('append') to the file",
             },
         },
         "required": ["fd", "file_path"],
@@ -116,12 +136,15 @@ This system includes a file descriptor feature for handling large content:
 Key commands:
 - read_fd(fd="fd:12345", page=2) - Read page 2
 - read_fd(fd="fd:12345", read_all=True) - Read entire content
+- read_fd(fd="fd:12345", extract_to_new_fd=True) - Extract content to a new FD
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt") - Save to file
+- fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append") - Append to file
 
 Tips:
 - Check "truncated" and "continued" attributes for content continuation
 - When analyzing large content, consider reading all pages first
-- Use fd_to_file when you need to process content with other tools
+- Use extract_to_new_fd=True when you need to extract specific content
+- Use mode="append" when adding to existing files
 </file_descriptor_instructions>
 """
 
@@ -243,7 +266,8 @@ class FileDescriptorManager:
         self, 
         fd_id: str, 
         page: int = 1, 
-        read_all: bool = False
+        read_all: bool = False,
+        extract_to_new_fd: bool = False
     ) -> Dict[str, Any]:
         """Read content from a file descriptor.
 
@@ -251,9 +275,10 @@ class FileDescriptorManager:
             fd_id: The file descriptor ID to read from
             page: The page number to read (starting from 1)
             read_all: If True, returns the entire content
+            extract_to_new_fd: If True, creates a new file descriptor with the content and returns its ID
 
         Returns:
-            Dictionary with content and metadata
+            Dictionary with content and metadata, or a new file descriptor ID if extract_to_new_fd=True
 
         Raises:
             KeyError: If the file descriptor is not found
@@ -269,57 +294,87 @@ class FileDescriptorManager:
         
         fd_entry = self.file_descriptors[fd_id]
         
+        # Prepare to get content based on read parameters
+        content_to_return = None
+        content_metadata = {}
+        
         # Handle read_all case
         if read_all:
             # Use stored total pages value
             total_pages = fd_entry["total_pages"]
             
-            return self._format_fd_content({
+            content_to_return = fd_entry["content"]
+            content_metadata = {
                 "fd": fd_id,
-                "content": fd_entry["content"],
                 "page": "all",
                 "pages": total_pages,
                 "continued": False,
                 "truncated": False,
                 "lines": f"1-{fd_entry['total_lines']}",
                 "total_lines": fd_entry["total_lines"],
+            }
+        else:
+            # Use stored total pages value
+            total_pages = fd_entry["total_pages"]
+            
+            # Validate page number
+            if page < 1 or page > total_pages:
+                error_msg = f"Invalid page number. Valid range: 1-{total_pages}"
+                logger.error(error_msg)
+                return self._format_fd_error("invalid_page", fd_id, error_msg)
+            
+            # Get content for the requested page
+            content, page_info = self._get_page_content(fd_id, page)
+            content_to_return = content
+            
+            # Create the response metadata
+            content_metadata = {
+                "fd": fd_id,
+                "page": page,
+                "pages": total_pages,
+                "continued": page_info.get("continued", False),
+                "truncated": page_info.get("truncated", False),
+                "lines": f"{page_info.get('start_line', 1)}-{page_info.get('end_line', 1)}",
+                "total_lines": fd_entry["total_lines"],
+            }
+            
+            logger.debug(f"Read page {page}/{total_pages} from {fd_id}")
+        
+        # Check if we should extract the content to a new FD
+        if extract_to_new_fd and content_to_return:
+            # Create a new file descriptor with the content
+            new_fd_result = self.create_fd(content_to_return)
+            
+            # Extract the new FD ID from the result
+            new_fd_id = new_fd_result.content.split('fd="')[1].split('"')[0]
+            
+            # Return a special response indicating the content was extracted to a new FD
+            return self._format_fd_extraction({
+                "source_fd": fd_id,
+                "new_fd": new_fd_id,
+                "page": page if not read_all else "all",
+                "content_size": len(content_to_return),
+                "message": f"Content from {fd_id} has been extracted to {new_fd_id}",
             })
         
-        # Use stored total pages value
-        total_pages = fd_entry["total_pages"]
-        
-        # Validate page number
-        if page < 1 or page > total_pages:
-            error_msg = f"Invalid page number. Valid range: 1-{total_pages}"
-            logger.error(error_msg)
-            return self._format_fd_error("invalid_page", fd_id, error_msg)
-        
-        # Get content for the requested page
-        content, page_info = self._get_page_content(fd_id, page)
-        
-        # Create the response with metadata
-        fd_content = {
-            "fd": fd_id,
-            "page": page,
-            "pages": total_pages,
-            "continued": page_info.get("continued", False),
-            "truncated": page_info.get("truncated", False),
-            "lines": f"{page_info.get('start_line', 1)}-{page_info.get('end_line', 1)}",
-            "total_lines": fd_entry["total_lines"],
-            "content": content,
-        }
-        
-        logger.debug(f"Read page {page}/{total_pages} from {fd_id}")
+        # Add content to metadata and create the response
+        content_metadata["content"] = content_to_return
         
         # Format the response in standardized XML format
-        return self._format_fd_content(fd_content)
+        return self._format_fd_content(content_metadata)
 
-    def write_fd_to_file(self, fd_id: str, file_path: str) -> Dict[str, Any]:
+    def write_fd_to_file(
+        self, 
+        fd_id: str, 
+        file_path: str,
+        mode: str = "write"
+    ) -> Dict[str, Any]:
         """Write file descriptor content to a file.
         
         Args:
             fd_id: The file descriptor ID
             file_path: Path to the file to write
+            mode: "write" (default, overwrite) or "append" (add to existing file)
             
         Returns:
             ToolResult with success or error message
@@ -340,23 +395,34 @@ class FileDescriptorManager:
         content = self.file_descriptors[fd_id]["content"]
         
         try:
+            # Validate mode parameter
+            if mode not in ["write", "append"]:
+                error_msg = f"Invalid mode: {mode}. Valid options are 'write' or 'append'."
+                logger.error(error_msg)
+                return self._format_fd_error("invalid_parameter", fd_id, error_msg)
+            
             # Ensure parent directory exists
             file_path_obj = Path(file_path)
             if not file_path_obj.parent.exists():
                 file_path_obj.parent.mkdir(parents=True, exist_ok=True)
                 
+            # Open mode: 'w' for overwrite, 'a' for append
+            file_mode = 'w' if mode == "write" else 'a'
+            operation_type = "written" if mode == "write" else "appended"
+            
             # Write the file
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, file_mode, encoding='utf-8') as f:
                 f.write(content)
                 
             # Create success message
-            success_msg = f"File descriptor {fd_id} content ({len(content)} chars) successfully written to {file_path}"
+            success_msg = f"File descriptor {fd_id} content ({len(content)} chars) successfully {operation_type} to {file_path}"
             logger.info(success_msg)
             
             # Format successful result
             result = {
                 "fd": fd_id,
                 "file_path": file_path,
+                "mode": mode,
                 "char_count": len(content),
                 "size_bytes": os.path.getsize(file_path),
                 "success": True,
@@ -598,14 +664,34 @@ class FileDescriptorManager:
         
         xml = (
             f'<fd_file_result fd="{result["fd"]}" file_path="{result["file_path"]}" '
-            f'char_count="{result["char_count"]}" size_bytes="{result["size_bytes"]}" '
-            f'success="{str(result["success"]).lower()}">\n'
+            f'mode="{result["mode"]}" char_count="{result["char_count"]}" '
+            f'size_bytes="{result["size_bytes"]}" success="{str(result["success"]).lower()}">\n'
             f'  <message>{result["message"]}</message>\n'
             f'</fd_file_result>'
         )
         
         return ToolResult(content=xml, is_error=False)
 
+    def _format_fd_extraction(self, result: Dict[str, Any]) -> "ToolResult":
+        """Format file descriptor extraction result in XML format.
+
+        Args:
+            result: Dictionary with extraction result information
+
+        Returns:
+            ToolResult instance with formatted XML content
+        """
+        from llmproc.tools.tool_result import ToolResult
+        
+        xml = (
+            f'<fd_extraction source_fd="{result["source_fd"]}" new_fd="{result["new_fd"]}" '
+            f'page="{result["page"]}" content_size="{result["content_size"]}">\n'
+            f'  <message>{result["message"]}</message>\n'
+            f'</fd_extraction>'
+        )
+        
+        return ToolResult(content=xml, is_error=False)
+        
     def _format_fd_error(
         self, error_type: str, fd_id: str, message: str
     ) -> "ToolResult":
@@ -634,6 +720,7 @@ async def read_fd_tool(
     fd: str,
     page: int = 1,
     read_all: bool = False,
+    extract_to_new_fd: bool = False,
     llm_process=None,
 ) -> "ToolResult":
     """Read content from a file descriptor.
@@ -645,10 +732,12 @@ async def read_fd_tool(
         fd: The file descriptor ID to read from (e.g., "fd:12345")
         page: The page number to read (starting from 1)
         read_all: If true, returns the entire content
+        extract_to_new_fd: If true, extracts the content to a new file descriptor
         llm_process: The LLMProcess instance with FD manager
 
     Returns:
-        A ToolResult instance with the content and metadata
+        A ToolResult instance with the content and metadata,
+        or a new file descriptor ID if extract_to_new_fd=True
 
     Raises:
         KeyError: If the file descriptor is not found
@@ -663,7 +752,12 @@ async def read_fd_tool(
 
     try:
         # Read from the file descriptor - should now return a ToolResult directly
-        return llm_process.fd_manager.read_fd(fd, page=page, read_all=read_all)
+        return llm_process.fd_manager.read_fd(
+            fd, 
+            page=page, 
+            read_all=read_all,
+            extract_to_new_fd=extract_to_new_fd
+        )
     except Exception as e:
         error_msg = f"Error reading file descriptor: {str(e)}"
         logger.error(f"READ_FD ERROR: {error_msg}")
@@ -674,6 +768,7 @@ async def read_fd_tool(
 async def fd_to_file_tool(
     fd: str,
     file_path: str,
+    mode: str = "write",
     llm_process=None,
 ) -> "ToolResult":
     """Write file descriptor content to a file.
@@ -684,6 +779,7 @@ async def fd_to_file_tool(
     Args:
         fd: The file descriptor ID to export (e.g., "fd:12345")
         file_path: Path to the file to write (will be created or overwritten)
+        mode: "write" (default, overwrite) or "append" (add to existing file)
         llm_process: The LLMProcess instance with FD manager
         
     Returns:
@@ -703,7 +799,7 @@ async def fd_to_file_tool(
         
     try:
         # Write FD content to file - returns a ToolResult
-        return llm_process.fd_manager.write_fd_to_file(fd, file_path)
+        return llm_process.fd_manager.write_fd_to_file(fd, file_path, mode=mode)
     except Exception as e:
         error_msg = f"Error writing file descriptor to file: {str(e)}"
         logger.error(f"FD_TO_FILE ERROR: {error_msg}")

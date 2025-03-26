@@ -32,7 +32,7 @@ read_fd(
     fd="fd:1234",           # Source file descriptor
     page=1,                 # Page number (starting from 1)
     read_all=False,         # Read entire content
-    create_fd=False,        # Create a new FD with the result
+    extract_to_new_fd=False,# Extract content to a new file descriptor
     
     # Alternative positioning (optional in future)
     mode="page",            # "page" (default), "line", "char"
@@ -43,8 +43,8 @@ read_fd(
 
 ### 3.1 Key Improvements
 
-1. **New `create_fd` parameter**:
-   - When `create_fd=True`, returns a new file descriptor containing only the requested content
+1. **New `extract_to_new_fd` parameter**:
+   - When `extract_to_new_fd=True`, returns a new file descriptor containing only the requested content
    - Enables "dup"-like functionality to slice and manage content
    - Supports creation of smaller, more manageable content units
 
@@ -60,11 +60,11 @@ read_fd(
 read_fd(fd="fd:1234", page=2)
 
 # New functionality
-new_fd = read_fd(fd="fd:1234", page=2, create_fd=True)
+new_fd = read_fd(fd="fd:1234", page=2, extract_to_new_fd=True)
 # Returns new fd:1235 containing just page 2
 
 # Future extension (Phase 3)
-new_fd = read_fd(fd="fd:1234", mode="line", start=10, count=5, create_fd=True)
+new_fd = read_fd(fd="fd:1234", mode="line", start=10, count=5, extract_to_new_fd=True)
 # Returns new fd with just lines 10-14
 ```
 
@@ -143,7 +143,11 @@ The enhanced API will use the existing error format with specific error types:
 
 ### 6.1 Phase 1: Basic Enhancement (Immediate)
 
-1. Update `read_fd` to support `create_fd` parameter
+1. Update `read_fd` to support `extract_to_new_fd` parameter
+   - The parameter was renamed from `create_fd` to more clearly indicate its purpose
+   - When `extract_to_new_fd=True`, creates a new file descriptor with the content
+   - Returns the new FD identifier (not the content itself)
+   - Requires a second read operation to access the content
 2. Update `fd_to_file` to support `mode` parameter (write/append)
 
 ### 6.2 Phase 2: Full API Implementation
@@ -181,14 +185,14 @@ This system includes a file descriptor feature for handling large content:
 Key commands:
 - read_fd(fd="fd:1234", page=2) - Read page 2
 - read_fd(fd="fd:1234", read_all=True) - Read entire content
-- read_fd(fd="fd:1234", create_fd=True) - Create new FD with content
+- read_fd(fd="fd:1234", extract_to_new_fd=True) - Extract content to a new FD
 - fd_to_file(fd="fd:1234", file_path="/path/to/output.txt") - Save to file
 - fd_to_file(fd="fd:1234", file_path="/path/to/output.txt", mode="append") - Append to file
 
 Tips:
 - Check "truncated" and "continued" attributes for content continuation
 - When analyzing large content, consider reading all pages first
-- Use create_fd=True when you need to extract specific content
+- Use extract_to_new_fd=True when you need to extract specific content
 - Use mode="append" when adding to existing files
 </file_descriptor_instructions>
 ```
@@ -200,7 +204,7 @@ Tips:
 ```python
 # Parent process has a large log file in fd:12345
 # Extract just the error section
-error_section_fd = read_fd(fd="fd:12345", page=3, create_fd=True)  # This creates fd:12346
+error_section_fd = read_fd(fd="fd:12345", page=3, extract_to_new_fd=True)  # This creates fd:12346
 
 # Now send just the error section to a specialized process
 spawn(

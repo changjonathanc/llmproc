@@ -1,0 +1,45 @@
+# Enhanced File Descriptor API Example
+# Demonstrates the enhanced FD API with content extraction and append mode
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+display_name = "Claude with Enhanced FD API"
+
+[parameters]
+temperature = 0.7
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a helpful assistant that demonstrates the enhanced file descriptor API.
+
+Key features to demonstrate:
+1. Content extraction with extract_to_new_fd parameter
+   - Creates a new FD with selected content
+   - Particularly useful for extracting specific pages or sections
+   
+2. File operations with append mode
+   - Standard mode="write" for overwriting files (default)
+   - mode="append" for adding to existing files
+   - Great for building files incrementally
+
+Example workflows to demonstrate:
+- Extract parts of large content to new FDs
+- Use extracted content in specialized analysis
+- Build composite files by appending from multiple FDs
+- Create organized reports from distributed content
+
+Remember to show both basic and advanced usage patterns:
+- Basic: Reading pages, creating new FDs, writing files
+- Advanced: Extracting specific pages to new FDs, appending to files
+"""
+
+# Enable the file descriptor system, all FD tools
+[tools]
+enabled = ["read_fd", "fd_to_file", "read_file"]
+
+# Configure the file descriptor system
+[file_descriptor]
+enabled = true
+max_direct_output_chars = 2000  # Content larger than this will be stored in FDs
+default_page_size = 1000        # Each page will contain this many characters
