@@ -99,6 +99,7 @@ When a tool returns large output:
 ### 5.2 Read File Descriptor
 
 ```python
+# Basic usage
 # Read a specific page
 read_fd(fd="fd:12345", page=2)
 
@@ -115,9 +116,12 @@ continues on the next page, the "truncated" attribute will be true.
 """
 ```
 
+*Note: Enhanced parameters for content slicing and additional functionality are defined in [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md).*
+
 ### 5.3 FD to File Operation
 
 ```python
+# Basic usage
 # Write FD content to a file
 fd_to_file(fd="fd:12345", file_path="/path/to/output.txt")
 
@@ -132,6 +136,8 @@ fd_to_file(fd="fd:12345", file_path="/path/to/output.txt")
 </fd_write>
 """
 ```
+
+*Note: Enhanced parameters for file operations including append mode and file creation control are defined in [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md).*
 
 ### 5.4 Note on File Descriptor Lifecycle
 
