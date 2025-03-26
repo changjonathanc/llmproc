@@ -113,7 +113,9 @@ The file descriptor system integrates with:
 
 ## Implementation Status
 
-### Completed (Phase 1)
+The current implementation status is tracked in [RFC004: File Descriptor Implementation Phases](/RFC/RFC004_fd_implementation_phases.md). Below is a summary as of 2025-03-25:
+
+### ✅ Phase 1: Core Functionality (Completed)
 
 The file descriptor system has completed Phase 1 implementation, which includes:
 
@@ -123,25 +125,32 @@ The file descriptor system has completed Phase 1 implementation, which includes:
 - Automatic tool output wrapping
 - XML formatting with consistent metadata
 - System prompt instructions
-- Integration with fork system call
-- Protection against recursive file descriptor creation
 
-### Completed (Phase 2)
+### 🔄 Phase 2: Process Integration (Partially Completed)
 
-The file descriptor system has also completed Phase 2 implementation, which adds:
+- ✅ **Fork Integration**: Automatic FD copying during fork
+- ❌ **Cross-Process FD Access**: Not yet implemented
+- ❌ **Spawn Tool Integration**: Planned (See [RFC005](/RFC/RFC005_fd_spawn_integration.md))
 
-- **fd_to_file Tool**: Export content to filesystem
-- Support for creating parent directories when needed
-- Error handling for file operations
-- Integration with ToolRegistry for FD tools
-- Tool schema definitions for Anthropic tools API
+### 🔄 Phase 2.5: API Enhancements (Planned)
 
-### Future Enhancements (Phase 3)
+- ❌ **Enhanced read_fd**: Not yet implemented (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
+- ❌ **Enhanced fd_to_file**: Not yet implemented (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
 
-As documented in the RFCs, planned future enhancements include:
+### 🔄 Phase 3: Optional Features (Partially Completed)
 
-1. **User Input Wrapping**: Create FDs for large user inputs
-2. **Enhanced Process Integration**: Better interaction with spawn system call
-3. **Binary Content Support**: Handle non-text content types
-4. **Enhanced API**: Added parameters for more flexible file operations
-5. **Reference ID System**: Allow LLMs to mark sections of responses for reference
+- ✅ **fd_to_file Tool**: Export FD content to filesystem files
+- ❌ **User Input Handling**: Not yet implemented
+- ❌ **Reference ID System**: Planned (See [RFC006](/RFC/RFC006_response_reference_id.md))
+
+### Implementation Location
+
+The file descriptor system is implemented in the following files:
+
+- `src/llmproc/tools/file_descriptor.py`: Core implementation of FileDescriptorManager and FD tools
+- `src/llmproc/llm_process.py`: Integration with LLMProcess
+- `src/llmproc/providers/anthropic_process_executor.py`: Integration with AnthropicProcessExecutor for output wrapping
+- `src/llmproc/config/schema.py`: FileDescriptorConfig configuration schema
+- `tests/test_file_descriptor.py`: Basic unit tests
+- `tests/test_file_descriptor_integration.py`: Integration tests with process model
+- `tests/test_fd_to_file_tool.py`: Tests for FD export functionality
