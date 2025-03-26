@@ -285,7 +285,7 @@ llmproc-demo ./examples/calculator.toml
 # Try using the fork feature
 llmproc-demo ./examples/fork.toml
 
-# Try using the file descriptor system
+# Try the file descriptor system with read_fd and fd_to_file tools
 llmproc-demo ./examples/file_descriptor.toml
 ```
 
@@ -330,7 +330,7 @@ The `examples/` directory contains ready-to-use program files:
 - `program_linking/main.toml` - Demonstrates LLM-to-LLM communication
 - `fork.toml` - Shows the fork system call in action
 - `preload.toml` - Demonstrates file preloading feature
-- `file_descriptor.toml` - Shows the file descriptor system for handling large outputs
+- `file_descriptor.toml` - Shows the file descriptor system with read_fd and fd_to_file tools
 - `reference.toml` - Full reference with all available options
 
 ### CLI Options
@@ -378,6 +378,7 @@ LLMProc implements Unix-like process system calls:
 - **spawn**: Create new processes from linked programs (analogous to exec()) - ✅ Implemented
 - **fork**: Duplicate an existing process with its state (analogous to fork()) - ✅ Implemented
 - **read_fd**: Read content from file descriptors (analogous to read()) - ✅ Implemented
+- **fd_to_file**: Export file descriptor content to a file - ✅ Implemented
 - **read_file**: Simple file reading capability (for demonstration) - ✅ Implemented
 
 Reference: [forking-an-agent](https://github.com/cccntu/forking-an-agent)
@@ -411,7 +412,7 @@ The file descriptor system provides a Unix-like solution for handling large tool
 ```toml
 # Enable file descriptor tools
 [tools]
-enabled = ["read_fd"]
+enabled = ["read_fd", "fd_to_file"]  # Enable both reading and file export
 
 # Configure the file descriptor system
 [file_descriptor]
@@ -426,6 +427,8 @@ Key features:
 - XML-formatted responses with metadata
 - Preservation of FDs during fork operations
 - Read interface via read_fd system call
+- File export via fd_to_file system call
+- Parent directory creation for file operations
 - "Userspace" tools are provided via MCP
 - MCP provides a standard protocol for tools that's independent of the LLMProc implementation
 
@@ -435,7 +438,7 @@ Key features:
 2. [x] Implement Fork System Call
 3. [ ] Implement Prompt Caching, Cost Tracking
 4. [x] Implement Environment Variables
-5. [ ] Implement File Descriptor
+5. [x] Implement File Descriptor System (Phase 1 & 2 complete)
 6. [ ] Implement Exec System Call for process replacement
 7. [ ] Implement GOTO for program flow control
 8. [ ] Improve OpenAI integration (MCP support)

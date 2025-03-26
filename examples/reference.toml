@@ -164,7 +164,7 @@ variables = ["working_directory", "platform", "date"]
 # File Descriptor Configuration
 #----------------------------------------
 [file_descriptor]
-# Enable file descriptor system explicitly (also enabled if read_fd in tools.enabled)
+# Enable file descriptor system explicitly (also enabled if read_fd or fd_to_file in tools.enabled)
 # enabled = true
 
 # Threshold for FD creation (larger than page size)
@@ -173,9 +173,18 @@ variables = ["working_directory", "platform", "date"]
 # Page size for pagination
 # default_page_size = 4000
 
-# Threshold for user input FD creation
+# Threshold for user input FD creation (Phase 3 feature)
 # max_input_chars = 8000
 
-# Enable/disable user input paging
+# Enable/disable user input paging (Phase 3 feature)
 # page_user_input = true
+
+# TOOLS:
+# - read_fd: Read file descriptor content with pagination support
+#   read_fd(fd="fd:1", page=2) - Read specific page
+#   read_fd(fd="fd:1", read_all=True) - Read all content
+#
+# - fd_to_file: Export file descriptor content to a file
+#   fd_to_file(fd="fd:1", file_path="/path/to/output.txt")
+#   Parent directories are created automatically if needed
 

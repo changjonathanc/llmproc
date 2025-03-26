@@ -8,12 +8,14 @@ for reading paginated content.
 The system includes:
 1. FileDescriptorManager - Core class managing FD creation and access
 2. read_fd tool - Standard interface for accessing paginated content
-3. Support functions for line-aware pagination and FD formatting
+3. fd_to_file tool - Export file descriptor content to a file
+4. Support functions for line-aware pagination and FD formatting
 """
 
 import logging
+import os
 import time
-import uuid
+from pathlib import Path
 from typing import Any, Optional, Dict, List, Tuple
 
 from llmproc.tools.tool_result import ToolResult
@@ -42,6 +44,23 @@ When to use this tool:
 - When you want to analyze content that was too large to include directly in the response
 """
 
+fd_to_file_tool_description = """
+Writes the content of a file descriptor to a file on disk.
+This tool is useful when you want to save large content for later use.
+
+Usage:
+  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt")
+  
+Parameters:
+  fd (str): The file descriptor ID to export (e.g., "fd:12345")
+  file_path (str): The path to the file to write (will be created or overwritten)
+
+When to use this tool:
+- When you need to save file descriptor content to disk
+- When you want to process the content with other tools that work with files
+- When you need to preserve large output for later reference
+"""
+
 # Tool definitions for Anthropic API
 read_fd_tool_def = {
     "name": "read_fd",
@@ -66,6 +85,25 @@ read_fd_tool_def = {
     },
 }
 
+fd_to_file_tool_def = {
+    "name": "fd_to_file",
+    "description": fd_to_file_tool_description,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "fd": {
+                "type": "string",
+                "description": "The file descriptor ID to export (e.g., 'fd:12345')",
+            },
+            "file_path": {
+                "type": "string",
+                "description": "The path to the file to write (will be created or overwritten)",
+            },
+        },
+        "required": ["fd", "file_path"],
+    },
+}
+
 # System prompt instructions for file descriptor usage
 file_descriptor_instructions = """
 <file_descriptor_instructions>
@@ -73,14 +111,17 @@ This system includes a file descriptor feature for handling large content:
 
 1. Large outputs are stored in file descriptors (fd:12345)
 2. Use read_fd to access content in pages or all at once
+3. Use fd_to_file to export content to disk files
 
 Key commands:
 - read_fd(fd="fd:12345", page=2) - Read page 2
 - read_fd(fd="fd:12345", read_all=True) - Read entire content
+- fd_to_file(fd="fd:12345", file_path="/path/to/output.txt") - Save to file
 
 Tips:
 - Check "truncated" and "continued" attributes for content continuation
 - When analyzing large content, consider reading all pages first
+- Use fd_to_file when you need to process content with other tools
 </file_descriptor_instructions>
 """
 
@@ -272,6 +313,63 @@ class FileDescriptorManager:
         
         # Format the response in standardized XML format
         return self._format_fd_content(fd_content)
+
+    def write_fd_to_file(self, fd_id: str, file_path: str) -> Dict[str, Any]:
+        """Write file descriptor content to a file.
+        
+        Args:
+            fd_id: The file descriptor ID
+            file_path: Path to the file to write
+            
+        Returns:
+            ToolResult with success or error message
+            
+        Raises:
+            FileNotFoundError: If the file descriptor doesn't exist
+            PermissionError: If the file can't be written due to permissions
+            IOError: If there's an I/O error writing the file
+        """
+        # Check if the file descriptor exists
+        if fd_id not in self.file_descriptors:
+            available_fds = ", ".join(sorted(self.file_descriptors.keys()))
+            error_msg = f"File descriptor {fd_id} not found. Available FDs: {available_fds or 'none'}"
+            logger.error(error_msg)
+            return self._format_fd_error("not_found", fd_id, error_msg)
+        
+        # Get the content
+        content = self.file_descriptors[fd_id]["content"]
+        
+        try:
+            # Ensure parent directory exists
+            file_path_obj = Path(file_path)
+            if not file_path_obj.parent.exists():
+                file_path_obj.parent.mkdir(parents=True, exist_ok=True)
+                
+            # Write the file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+                
+            # Create success message
+            success_msg = f"File descriptor {fd_id} content ({len(content)} chars) successfully written to {file_path}"
+            logger.info(success_msg)
+            
+            # Format successful result
+            result = {
+                "fd": fd_id,
+                "file_path": file_path,
+                "char_count": len(content),
+                "size_bytes": os.path.getsize(file_path),
+                "success": True,
+                "message": success_msg
+            }
+            
+            return self._format_fd_file_result(result)
+            
+        except Exception as e:
+            # Handle any errors
+            error_msg = f"Error writing file descriptor {fd_id} to {file_path}: {str(e)}"
+            logger.error(error_msg)
+            return self._format_fd_error("write_error", fd_id, error_msg)
 
     def _calculate_total_pages(self, fd_id: str) -> int:
         """Calculate the total number of pages in a file descriptor.
@@ -486,6 +584,27 @@ class FileDescriptorManager:
             )
         
         return ToolResult(content=xml, is_error=False)
+    
+    def _format_fd_file_result(self, result: Dict[str, Any]) -> "ToolResult":
+        """Format file descriptor file operation result in XML format.
+        
+        Args:
+            result: Dictionary with file operation result information
+            
+        Returns:
+            ToolResult instance with formatted XML content
+        """
+        from llmproc.tools.tool_result import ToolResult
+        
+        xml = (
+            f'<fd_file_result fd="{result["fd"]}" file_path="{result["file_path"]}" '
+            f'char_count="{result["char_count"]}" size_bytes="{result["size_bytes"]}" '
+            f'success="{str(result["success"]).lower()}">\n'
+            f'  <message>{result["message"]}</message>\n'
+            f'</fd_file_result>'
+        )
+        
+        return ToolResult(content=xml, is_error=False)
 
     def _format_fd_error(
         self, error_type: str, fd_id: str, message: str
@@ -548,5 +667,45 @@ async def read_fd_tool(
     except Exception as e:
         error_msg = f"Error reading file descriptor: {str(e)}"
         logger.error(f"READ_FD ERROR: {error_msg}")
+        logger.debug("Detailed traceback:", exc_info=True)
+        return ToolResult.from_error(error_msg)
+
+
+async def fd_to_file_tool(
+    fd: str,
+    file_path: str,
+    llm_process=None,
+) -> "ToolResult":
+    """Write file descriptor content to a file.
+    
+    This system call exports the content of a file descriptor to a file on disk,
+    making it accessible to other tools or processes.
+    
+    Args:
+        fd: The file descriptor ID to export (e.g., "fd:12345")
+        file_path: Path to the file to write (will be created or overwritten)
+        llm_process: The LLMProcess instance with FD manager
+        
+    Returns:
+        A ToolResult instance with success or error information
+        
+    Raises:
+        KeyError: If the file descriptor is not found
+        PermissionError: If the file can't be written due to permissions
+        IOError: If there's an I/O error writing the file
+    """
+    from llmproc.tools.tool_result import ToolResult
+    
+    if not llm_process or not hasattr(llm_process, "fd_manager"):
+        error_msg = "File descriptor operations require an LLMProcess with fd_manager"
+        logger.error(f"FD_TO_FILE ERROR: {error_msg}")
+        return ToolResult.from_error(error_msg)
+        
+    try:
+        # Write FD content to file - returns a ToolResult
+        return llm_process.fd_manager.write_fd_to_file(fd, file_path)
+    except Exception as e:
+        error_msg = f"Error writing file descriptor to file: {str(e)}"
+        logger.error(f"FD_TO_FILE ERROR: {error_msg}")
         logger.debug("Detailed traceback:", exc_info=True)
         return ToolResult.from_error(error_msg)
