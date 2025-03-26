@@ -308,14 +308,9 @@ To ensure the file descriptor system is secure:
 4. **Parent Directory Creation**: Parent directory creation is permitted to ease file operations but follows OS permissions
 5. **Error Handling**: File operation errors are properly caught and reported without exposing system details
 
-## 4. Implementation Location
+## 4. Code Organization
 
-The file descriptor system is implemented in these key files:
-
-- `src/llmproc/tools/file_descriptor.py`: Core implementation of FileDescriptorManager and FD tools
-- `src/llmproc/llm_process.py`: Integration with LLMProcess
-- `src/llmproc/providers/anthropic_process_executor.py`: Integration with AnthropicProcessExecutor for output wrapping
-- `src/llmproc/config/schema.py`: FileDescriptorConfig configuration schema
+For the current implementation location and file structure, please refer to [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md) which maintains the up-to-date implementation details.
 
 ## 5. Testing Approach
 
@@ -340,8 +335,8 @@ Integration tests focus on:
 
 ## 6. References
 
-- [RFC001: File Descriptor System for LLMProc](RFC001_file_descriptor_system.md) - Main specification document
-- [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md) - Implementation phases and status
-- [RFC005: File Descriptor Integration with Spawn Tool](RFC005_fd_spawn_integration.md) - Integration with spawn system
-- [RFC006: Response Reference ID System](RFC006_response_reference_id.md) - Integration with reference ID system
-- [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md) - Enhanced FD API design
+- [RFC001](RFC001_file_descriptor_system.md) - System Overview
+- [RFC004](RFC004_fd_implementation_phases.md) - Implementation Phases
+- [RFC005](RFC005_fd_spawn_integration.md) - Spawn Integration
+- [RFC006](RFC006_response_reference_id.md) - Response Reference ID System
+- [RFC007](RFC007_fd_enhanced_api_design.md) - Enhanced API Design

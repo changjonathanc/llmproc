@@ -163,66 +163,18 @@ We explicitly decided NOT to implement a close_fd system call for the following 
 
 File descriptors will naturally be cleaned up when a process ends, and any memory constraints would be addressed through the future disk offloading system rather than manual resource management.
 
-## 6. Implementation Details
+## 6. Implementation
 
-### 6.1 File Descriptor Structure
+For detailed implementation specifics, including data structures, class definitions, and algorithm details, see [RFC003: File Descriptor Implementation Details](RFC003_file_descriptor_implementation.md) and [RFC004: Implementation Phases](RFC004_fd_implementation_phases.md).
 
-```python
-{
-  "content": str,          # Full content
-  "lines": list[int],      # Start indices of each line
-  "total_lines": int,      # Total line count
-  "page_size": int,        # Characters per page
-  "creation_time": float,  # Creation timestamp (stored as Unix timestamp)
-  "source": str,           # Origin of content (e.g., "tool_result", "user_input")
-  "total_pages": int       # Total number of pages calculated from content
-}
-```
+Key implementation considerations include:
 
-*Note: For detailed implementation specifics, see [RFC003: File Descriptor Implementation Details](RFC003_file_descriptor_implementation.md).*
-
-### 6.2 Integration with LLMProcess
-
-1. Add FileDescriptorManager to LLMProcess state
-2. Update fork_process to copy file descriptors
-3. Add automatic wrapping of large tool outputs
-4. Add automatic wrapping of large user inputs (future)
-5. Register read_fd and fd_to_file tools
-6. Add system prompt instructions about file descriptor usage
-
-### 6.3 Persistence Model
-
-File descriptors are treated as persistent state:
-
-1. **Full Persistence**:
-   - FDs remain available indefinitely, just like conversation state
-   - No automatic expiration or cleanup
-   - FDs are only lost when the process ends
-
-2. **Future Enhancement: Disk Offloading**:
-   - Combined checkpoint system for both state and FDs
-   - Automatically offload to disk when memory pressure is high
-   - Create recovery points to restore full process state with FDs
-   - Enable process hibernation and restoration
-
-### 6.4 FD Management Strategy
-
-The file descriptor system treats file descriptors as first-class conversation state:
-
-1. **Persistence First**:
-   - FDs are persistent by default and remain available throughout process lifetime
-   - FDs form part of the process's "memory" just like conversation history
-   - This approach simplifies usage and avoids lost references
-
-2. **Process Lifecycle Integration**:
-   - FDs are fully copied during fork operations
-   - Shared FDs can be explicitly preloaded into child processes through spawn
-   - FDs naturally end with process termination
-
-3. **Future: Checkpointing and Recovery**:
-   - Combined checkpointing of conversation state and file descriptors
-   - Enable hibernation/resumption of processes with all their FDs
-   - Recovery from crashes with full context restoration
+1. **Persistence**: File descriptors persist throughout process lifetime, with no manual cleanup required
+2. **Cross-Process Behavior**: Automatic inheritance during fork operations and explicit sharing via spawn
+3. **Integration Points**:
+   - LLMProcess: Maintains FileDescriptorManager state
+   - Tool Results: Automatic wrapping of large outputs
+   - System Prompt: Automatic addition of usage instructions
 
 ## 7. Configuration
 
@@ -377,77 +329,23 @@ Tips:
 
 ## 12. Error Handling
 
-The FD system handles errors gracefully to avoid disrupting the conversation:
+The file descriptor system uses a standardized XML-based error format to ensure consistent error handling across all operations. All errors follow a structured format that includes:
 
-1. **Invalid FD References**:
-   ```python
-   # When referencing a non-existent FD
-   read_fd(fd="fd:nonexistent")
-   
-   # Returns error message in standardized XML format:
-   <fd_error fd="fd:nonexistent" type="not_found">
-     <message>File descriptor fd:nonexistent not found</message>
-   </fd_error>
-   ```
+- File descriptor identifier
+- Error type
+- Human-readable error message
+- Additional details when relevant
 
-2. **Pagination Errors**:
-   ```python
-   # When requesting a page beyond available content
-   read_fd(fd="fd:12345", page=100)  # But FD only has 5 pages
-   
-   # Returns error with available range:
-   <fd_error fd="fd:12345" type="invalid_page">
-     <message>Invalid page number. Valid range: 1-5</message>
-   </fd_error>
-   ```
+For specific error types and handling details, see [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md) section 5.
 
-3. **File Operation Errors**:
-   ```python
-   # When file operations fail (e.g., permission denied)
-   fd_to_file(fd="fd:12345", file_path="/root/protected.txt")
-   
-   # Returns detailed error:
-   <fd_error fd="fd:12345" type="file_operation">
-     <message>Cannot write to file: Permission denied</message>
-     <details>Operation: write, Path: /root/protected.txt</details>
-   </fd_error>
-   ```
+## 13. Testing and Implementation
 
-All errors follow a consistent XML format to make them easily identifiable and processable by the LLM.
+For detailed testing strategy and implementation plans, refer to:
 
-## 13. Testing Strategy
+- **Testing Approach**: [RFC003: File Descriptor Implementation Details](RFC003_file_descriptor_implementation.md) section 5
+- **Implementation Phases**: [RFC004: File Descriptor System Implementation Phases](RFC004_fd_implementation_phases.md)
 
-Testing for the FD system should focus on these key areas:
-
-1. **Threshold Boundaries**:
-   - Test content exactly at threshold values (max_direct_output_chars, max_input_chars)
-   - Test content just above and below thresholds
-
-2. **Content Variety**:
-   - Multi-line text (e.g., code, logs)
-   - Single-line content (e.g., long JSON)
-   - Binary data (should be handled correctly as base64)
-   - Unicode and special characters
-
-3. **Pagination Edge Cases**:
-   - Content with very long individual lines
-   - Content with line breaks at page boundaries
-   - Empty content or single-line content
-
-4. **Cross-Process Testing**:
-   - FD inheritance during fork
-   - FD preloading during spawn
-   - References to the same FD from different processes
-
-5. **Integration Testing**:
-   - End-to-end tests with real LLM interactions
-   - Conversation scenarios with multiple FD references
-
-## 14. Implementation Plan
-
-For detailed implementation phases, milestones, and current status, see [RFC004: File Descriptor System Implementation Phases](RFC004_fd_implementation_phases.md).
-
-## 15. Future Enhancements
+## 14. Future Enhancements
 
 For information about future enhancements such as:
 - Enhanced FD API Design - see [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md)
@@ -505,10 +403,10 @@ Additional planned enhancements include:
    - Section referencing system
    - Auto-summarization
 
-## 16. References
+## 15. References
 
-- [RFC003: File Descriptor Implementation](RFC003_file_descriptor_implementation.md) - Technical implementation details
-- [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md) - Phased implementation plan
-- [RFC005: File Descriptor Integration with Spawn Tool](RFC005_fd_spawn_integration.md) - Spawn integration
-- [RFC006: Response Reference ID System](RFC006_response_reference_id.md) - Reference ID system
-- [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md) - API enhancements
+- [RFC003](RFC003_file_descriptor_implementation.md) - Implementation Details
+- [RFC004](RFC004_fd_implementation_phases.md) - Implementation Phases
+- [RFC005](RFC005_fd_spawn_integration.md) - Spawn Integration
+- [RFC006](RFC006_response_reference_id.md) - Response Reference ID System
+- [RFC007](RFC007_fd_enhanced_api_design.md) - Enhanced API Design
