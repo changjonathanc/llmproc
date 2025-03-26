@@ -1,15 +1,31 @@
-# File Descriptor System for LLMProc
+# RFC001: File Descriptor System for LLMProc
 
-## Background & Problem
+## 1. Background & Problem Statement
 
-Tools can return large outputs, which can lead to contex exhaustion, and affecting the focus of the model.
-
-Previously, we observed:
+Large Language Models (LLMs) frequently interact with tools that produce substantial outputs:
+- Web search results return multiple pages of content
+- File reading operations on large documents
 - Tool use can return long results, especially with MCP tools
+- System diagnostics with verbose output
+- Tool chains where intermediate results are extensive
 - Certain files and other content can be too large for direct inclusion in context
-- Agent frameworks like Cursor and Claude Code implement custom paged file reading
 
-## Solution: File Descriptor System
+Agent frameworks like Cursor and Claude Code implement custom paged file reading, but when outputs exceed context length limits, we face two problematic approaches:
+1. **Truncation**: Losing potentially critical information
+2. **Tool-specific pagination**: Each tool reimplements pagination logic
+
+## 2. Goals 
+
+- Provide a kernel-level solution for handling large outputs
+- Create a Unix-like file descriptor abstraction for LLM processes
+- Enable seamless pagination across all tools
+- Support efficient state transfer during fork operations
+- Allow for flexible reading patterns (sequential or random access)
+- No truncation of large tool outputs or user inputs
+- Consistent interface for accessing large content
+- Tools don't need custom pagination logic
+
+## 3. Solution: File Descriptor System
 
 A kernel-level file descriptor system for managing large tool outputs:
 
@@ -17,22 +33,53 @@ A kernel-level file descriptor system for managing large tool outputs:
 2. A summary with the fd reference and preview is returned instead of full content
 3. Content can be read in pages or accessed in full via read_fd tool
 
-## Core Components
+This provides a unified approach to handling large outputs that:
+- Maintains context efficiency
+- Preserves complete information
+- Provides a standard interface for pagination
+- Integrates consistently with process model
+
+## 4. Architecture
+
+### 4.1 File Descriptor Abstraction
+
+File descriptors in LLMProc are kernel-managed references to content too large to fit directly in the LLM's context. Like Unix file descriptors, they:
+- Are represented by unique identifiers
+- Persist until the process terminates
+- Can be passed between parent/child processes during fork operations
+- Provide a standard interface for accessing paginated content
+
+### 4.2 Core Components
 
 1. **File Descriptor Manager** - Maintains references to stored content
-2. **Read System Call** - Standard interface for accessing paginated content
-3. **Automatic Resource Management** - Handles expiration and cleanup of unused descriptors
+   - Maintains a registry of active file descriptors
+   - Handles creation, reading, and management of FDs
+   - Manages pagination and content access
 
-## Key Features
+2. **File Descriptor State**:
+   - Embedded in LLMProcess as part of process state
+   - Preserved and copied during fork operations
+   - Referenced in the kernel rather than LLM context
+
+3. **Read System Call** - Standard interface for accessing paginated content
+   - System calls for FD operations (read_fd)
+   - Tool result wrapping for automatic FD creation
+
+4. **Automatic Resource Management** - Handles lifecycle of descriptors
+   - FDs remain available indefinitely, just like conversation state
+   - No automatic expiration or cleanup
+   - FDs are only lost when the process ends
+
+### 4.3 Key Features
 
 1. **Line-Aware Pagination**: Breaks content at line boundaries when possible
 2. **Continuation Indicators**: Clear markers when content continues across pages
 3. **Character-Based Fallback**: Falls back to character-based pagination for long lines
 4. **XML Formatting**: Structured format with metadata for pagination status
 
-## API Design
+## 5. API Design
 
-### 1. File Descriptor Creation (Automatic)
+### 5.1 File Descriptor Creation (Automatic)
 
 When a tool returns large output:
 
@@ -49,17 +96,14 @@ When a tool returns large output:
 """
 ```
 
-### 2. Read File Descriptor
+### 5.2 Read File Descriptor
 
 ```python
-# Input with page number
+# Read a specific page
 read_fd(fd="fd:12345", page=2)
 
 # Read the entire file content
 read_fd(fd="fd:12345", read_all=True)
-
-# Alternative (for specific line ranges - optional)
-read_fd(fd="fd:12345", start_line=45, end_line=90)
 
 # Output - XML-formatted response
 """
@@ -71,9 +115,25 @@ continues on the next page, the "truncated" attribute will be true.
 """
 ```
 
-The XML format clearly separates content from metadata and makes it easy for the LLM to understand the structure of the response. The attributes provide all necessary information without cluttering the response.
+### 5.3 FD to File Operation
 
-### Note on File Descriptor Lifecycle
+```python
+# Write FD content to a file
+fd_to_file(fd="fd:12345", file_path="/path/to/output.txt")
+
+# Output - XML-formatted response
+"""
+<fd_write fd="fd:12345" file_path="/path/to/output.txt" success="true">
+  <message>Content from fd:12345 successfully written to /path/to/output.txt</message>
+  <stats>
+    <bytes>25600</bytes>
+    <lines>320</lines>
+  </stats>
+</fd_write>
+"""
+```
+
+### 5.4 Note on File Descriptor Lifecycle
 
 We explicitly decided NOT to implement a close_fd system call for the following reasons:
 
@@ -85,39 +145,9 @@ We explicitly decided NOT to implement a close_fd system call for the following 
 
 File descriptors will naturally be cleaned up when a process ends, and any memory constraints would be addressed through the future disk offloading system rather than manual resource management.
 
-### 3. FD to File Operation
+## 6. Implementation Details
 
-```python
-# Write FD content to a file
-fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="write")
-
-# Write specific page
-fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", page=2, mode="write")
-
-# Write specific line range
-fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", start_line=45, end_line=90, mode="write")
-
-# Append content to existing file
-fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append")
-
-# Insert at specific line
-fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", insert_at_line=100, mode="insert")
-
-# Output - XML-formatted response
-"""
-<fd_write fd="fd:12345" file_path="/path/to/output.txt" success="true" mode="write">
-  <message>Content from fd:12345 successfully written to /path/to/output.txt</message>
-  <stats>
-    <bytes>25600</bytes>
-    <lines>320</lines>
-  </stats>
-</fd_write>
-"""
-```
-
-## Implementation Details
-
-### File Descriptor Structure
+### 6.1 File Descriptor Structure
 
 ```python
 {
@@ -130,23 +160,23 @@ fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", insert_at_line=100, m
 }
 ```
 
-### Integration with LLMProcess
+### 6.2 Integration with LLMProcess
 
 1. Add FileDescriptorManager to LLMProcess state
 2. Update fork_process to copy file descriptors
 3. Add automatic wrapping of large tool outputs
-4. Add automatic wrapping of large user inputs (stdin)
+4. Add automatic wrapping of large user inputs (future)
 5. Register read_fd and fd_to_file tools
 6. Add system prompt instructions about file descriptor usage
 
-### Persistence Model
+### 6.3 Persistence Model
 
 File descriptors are treated as persistent state:
 
 1. **Full Persistence**:
    - FDs remain available indefinitely, just like conversation state
    - No automatic expiration or cleanup
-   - FDs are only lost if explicitly cleared or when the process ends
+   - FDs are only lost when the process ends
 
 2. **Future Enhancement: Disk Offloading**:
    - Combined checkpoint system for both state and FDs
@@ -154,7 +184,7 @@ File descriptors are treated as persistent state:
    - Create recovery points to restore full process state with FDs
    - Enable process hibernation and restoration
 
-## FD Management Strategy
+### 6.4 FD Management Strategy
 
 The file descriptor system treats file descriptors as first-class conversation state:
 
@@ -173,7 +203,7 @@ The file descriptor system treats file descriptors as first-class conversation s
    - Enable hibernation/resumption of processes with all their FDs
    - Recovery from crashes with full context restoration
 
-## Configuration
+## 7. Configuration
 
 Simple TOML configuration:
 
@@ -186,7 +216,7 @@ max_input_chars = 8000              # Threshold for creating FD from user input
 page_user_input = true              # Whether to enable paging for user inputs
 ```
 
-### Sizing Strategy
+### 7.1 Sizing Strategy
 
 The relationship between configuration values is important:
 
@@ -198,110 +228,7 @@ The relationship between configuration values is important:
    - Lower values improve memory usage but increase pagination frequency
    - Higher values preserve more context in a single turn but use more memory
 
-## Example Usage
-
-```
-Human> Search for quantum computing papers
-
-Assistant> I'll search for quantum computing papers.
-
-[Uses web_search tool and gets a large result]
-
-I found information about quantum computing papers. The results are extensive,
-so they've been stored in a file descriptor.
-
-<fd_result fd="fd:12345" pages="5" truncated="false" lines="1-42" total_lines="210">
-  <message>Output exceeds 4000 characters. Use read_fd to read more pages.</message>
-  <preview>
-  Recent papers in quantum computing have shown remarkable progress in several areas...
-  [preview content]
-  </preview>
-</fd_result>
-
-I'll read more information to provide a complete answer.
-
-read_fd(fd="fd:12345", page=2)
-
-<fd_content fd="fd:12345" page="2" pages="5" continued="false" truncated="false" lines="43-84" total_lines="210">
-Quantum algorithms have also seen significant improvements...
-[page 2 content]
-</fd_content>
-
-Based on all the information I've found, here's a summary of key quantum computing papers...
-```
-
-For more detailed examples and advanced usage patterns, see `fd_implementation_phases.md`.
-
-## User Input Handling
-
-The file descriptor system automatically manages large user inputs:
-
-1. When a user inputs content exceeding the `max_input_chars` threshold:
-   - The content is stored in a file descriptor
-   - The message is replaced with an FD reference and preview
-
-2. Example:
-   ```
-   Human> [Sends a 15,000 character log file]
-
-   # Automatically transformed to:
-   <fd_result fd="fd:9876" pages="4" truncated="false" lines="1-320" total_lines="320">
-     <message>Large user input has been stored in a file descriptor.</message>
-     <preview>[First few lines of content...]</preview>
-   </fd_result>
-
-   Assistant> I see you've shared a log file. Let me read it.
-   read_fd(fd="fd:9876", page=1)
-   ```
-
-For more detailed implementation plans, see `fd_implementation_phases.md`.
-
-## Cross-Process Behavior
-
-File descriptors work with multi-process features:
-
-1. **Automatic Inheritance with Fork**:
-   - FDs are automatically inherited during `fork`
-   - Child processes access parent's FDs with the same IDs
-
-2. **Explicit Sharing with Spawn**:
-   - Parent can use `additional_preload_fds` parameter to share specific FDs
-   - Content appears in child's enriched system prompt
-
-## Benefits
-
-- No truncation of large tool outputs or user inputs
-- Consistent interface for accessing large content
-- Tools don't need custom pagination logic
-- XML format clearly communicates pagination status
-- LLM can choose how much content to read
-- Efficient cross-process content sharing
-
-## System Prompt Additions
-
-Instructions added to system prompt when enabled:
-
-```
-<file_descriptor_instructions>
-This system includes a file descriptor feature for handling large content:
-
-1. Large outputs are stored in file descriptors (fd:12345)
-2. Use read_fd to access content in pages or all at once
-3. Use fd_to_file to export content to files
-
-Key commands:
-- read_fd(fd="fd:12345", page=2) - Read page 2
-- read_fd(fd="fd:12345", read_all=True) - Read entire content
-- fd_to_file(fd="fd:12345", file_path="output.txt") - Write to file
-
-Tips:
-- Check "truncated" and "continued" attributes for content continuation
-- When analyzing large content, consider reading all pages first
-- For very large content, consider using fork to delegate analysis
-</file_descriptor_instructions>
-```
-
-## Feature Configuration
+### 7.2 Feature Configuration
 
 The file descriptor system is configured through two complementary mechanisms:
 
@@ -337,7 +264,97 @@ Configuration notes:
 - Additional features like "fd_to_file" follow the same pattern as other tools
 - Security-sensitive features can be disabled by omitting them from enabled tools
 
-## Error Handling
+## 8. Example Usage
+
+```
+Human> Search for quantum computing papers
+
+Assistant> I'll search for quantum computing papers.
+
+[Uses web_search tool and gets a large result]
+
+I found information about quantum computing papers. The results are extensive,
+so they've been stored in a file descriptor.
+
+<fd_result fd="fd:12345" pages="5" truncated="false" lines="1-42" total_lines="210">
+  <message>Output exceeds 4000 characters. Use read_fd to read more pages.</message>
+  <preview>
+  Recent papers in quantum computing have shown remarkable progress in several areas...
+  [preview content]
+  </preview>
+</fd_result>
+
+I'll read more information to provide a complete answer.
+
+read_fd(fd="fd:12345", page=2)
+
+<fd_content fd="fd:12345" page="2" pages="5" continued="false" truncated="false" lines="43-84" total_lines="210">
+Quantum algorithms have also seen significant improvements...
+[page 2 content]
+</fd_content>
+
+Based on all the information I've found, here's a summary of key quantum computing papers...
+```
+
+## 9. User Input Handling
+
+The file descriptor system automatically manages large user inputs:
+
+1. When a user inputs content exceeding the `max_input_chars` threshold:
+   - The content is stored in a file descriptor
+   - The message is replaced with an FD reference and preview
+
+2. Example:
+   ```
+   Human> [Sends a 15,000 character log file]
+
+   # Automatically transformed to:
+   <fd_result fd="fd:9876" pages="4" truncated="false" lines="1-320" total_lines="320">
+     <message>Large user input has been stored in a file descriptor.</message>
+     <preview>[First few lines of content...]</preview>
+   </fd_result>
+
+   Assistant> I see you've shared a log file. Let me read it.
+   read_fd(fd="fd:9876", page=1)
+   ```
+
+## 10. Cross-Process Behavior
+
+File descriptors work with multi-process features:
+
+1. **Automatic Inheritance with Fork**:
+   - FDs are automatically inherited during `fork`
+   - Child processes access parent's FDs with the same IDs
+
+2. **Explicit Sharing with Spawn**:
+   - Parent can use `additional_preload_fds` parameter to share specific FDs
+   - Content appears in child's enriched system prompt
+
+## 11. System Prompt Additions
+
+Instructions added to system prompt when enabled:
+
+```
+<file_descriptor_instructions>
+This system includes a file descriptor feature for handling large content:
+
+1. Large outputs are stored in file descriptors (fd:12345)
+2. Use read_fd to access content in pages or all at once
+3. Use fd_to_file to export content to files
+
+Key commands:
+- read_fd(fd="fd:12345", page=2) - Read page 2
+- read_fd(fd="fd:12345", read_all=True) - Read entire content
+- fd_to_file(fd="fd:12345", file_path="output.txt") - Write to file
+
+Tips:
+- Check "truncated" and "continued" attributes for content continuation
+- When analyzing large content, consider reading all pages first
+- For very large content, consider using fork to delegate analysis
+</file_descriptor_instructions>
+```
+
+## 12. Error Handling
 
 The FD system handles errors gracefully to avoid disrupting the conversation:
 
@@ -377,7 +394,7 @@ The FD system handles errors gracefully to avoid disrupting the conversation:
 
 All errors follow a consistent XML format to make them easily identifiable and processable by the LLM.
 
-## Testing Strategy
+## 13. Testing Strategy
 
 Testing for the FD system should focus on these key areas:
 
@@ -405,32 +422,18 @@ Testing for the FD system should focus on these key areas:
    - End-to-end tests with real LLM interactions
    - Conversation scenarios with multiple FD references
 
-## Extension Strategy
+## 14. Implementation Plan
 
-Guidelines for future extensions:
+For detailed implementation phases, milestones, and current status, see [RFC004: File Descriptor System Implementation Phases](RFC004_fd_implementation_phases.md).
 
-1. **Feature Detection**:
-   - LLMs should detect available features based on system prompt instructions
-   - New capabilities should be clearly documented in system prompt
-   - Tools should be explicitly enabled in the [tools] section
+## 15. Future Enhancements
 
-2. **Compatibility**:
-   - New parameters should be optional with reasonable defaults
-   - New operations should have distinct names rather than overloading existing ones
-   - XML formats should maintain backward compatibility
+For information about future enhancements such as:
+- Enhanced FD API Design - see [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md)
+- Spawn Integration - see [RFC005: File Descriptor Integration with Spawn Tool](RFC005_fd_spawn_integration.md)
+- Response Reference IDs - see [RFC006: Response Reference ID System](RFC006_response_reference_id.md)
 
-## Implementation Plan
-
-See `fd_implementation_phases.md` for a detailed phased implementation plan that breaks down the work into clear milestones.
-
-1. Basic file descriptor management (create, read)
-2. Line-aware pagination 
-3. Large user input detection and wrapping
-4. Automatic wrapping for large tool outputs
-5. System prompt enrichment with FD instructions
-6. Integration with fork system call
-
-## Future Enhancements (TODO)
+Additional planned enhancements include:
 
 1. **Disk Offloading and Checkpointing**: Implement combined checkpointing system for both state and FDs
    ```python
@@ -473,89 +476,18 @@ See `fd_implementation_phases.md` for a detailed phased implementation plan that
    - Enables precise referencing of specific parts of the conversation history
    - Makes all conversation history addressable through a consistent interface
 
-2. **Search Capability**: Add `search_fd(fd, query)` function to find specific text patterns without reading the entire content
-   ```python
-   search_fd(fd="fd-12345", query="ERROR", case_sensitive=False)
-   # Returns matching lines with context and position information
-   ```
+3. Other planned features:
+   - Search capabilities
+   - User message paging configuration
+   - Semantic navigation
+   - Named references
+   - Section referencing system
+   - Auto-summarization
 
-3. **User Message Paging Configuration**:
-   ```toml
-   [file_descriptor]
-   # ...
-   page_user_input = true  # Allow disabling user input paging
-   ```
+## 16. References
 
-4. **Semantic Navigation**: Support navigation by semantic units
-   ```python
-   read_fd(fd="fd-12345", unit="paragraph", index=3)  # Read third paragraph
-   read_fd(fd="fd-12345", unit="function", name="process_data")  # For code files
-   ```
-
-5. **Named References**: Allow descriptive naming of file descriptors
-   ```python
-   rename_fd(fd="fd-12345", name="error_logs")
-   read_fd(name="error_logs", page=2)  # Use name instead of fd ID
-   ```
-
-<!-- Batch operations removed as they rely on close_fd which has been deprecated -->
-
-7. **Section Referencing System**: Allow marking and retrieving specific sections of content
-   ```python
-   # Mark a section with a reference ID for later access
-   mark_fd_section(fd="fd-12345", start_line=45, end_line=52, ref_id="bug_details")
-   
-   # Retrieve a specific section
-   get_fd_section(fd="fd-12345", ref_id="bug_details")
-   
-   # List all marked sections in a file descriptor
-   list_fd_sections(fd="fd-12345")
-   
-   # Delete a section reference
-   delete_fd_section(fd="fd-12345", ref_id="bug_details")
-   ```
-   
-   **Enhanced Process Communication with File Descriptors**:
-   ```python
-   # Extended spawn tool with support for different preloading options
-   spawn(
-     program="sql_expert", 
-     query="Optimize the SQL query in the logs (see preloaded content)",
-     additional_preload_files=["data/queries.sql"],  # Regular files from filesystem
-     additional_preload_fds=["fd-12345"]            # Content from FDs preloaded as full text
-   )
-   
-   # For fork, FDs are automatically inherited by child processes
-   fork([
-     "Review the error logs in fd-12345, focusing on lines 100-150",
-     "Check the config file in fd-67890, looking for security settings"
-   ])
-   ```
-   
-   **Advanced Cross-Process FD Features**:
-   - Automatic FD inheritance for child processes
-   - Options for selective FD sharing with child processes
-   - Support for FD metadata that explains content type and structure to child processes
-
-8. **Auto-Summarization**: Generate automatic summaries of file descriptor content
-   - Would require an additional LLM call to create the summary
-   - Could provide immediate high-level understanding of large content
-   
-9. **Temporary Shared File System**: Create temporary files accessible to multiple processes
-   ```python
-   # Create a temporary file that persists for the kernel session
-   temp_file_id = create_temp_file("This is shared content for multiple children")
-   
-   # Use in spawn to provide to multiple children
-   spawn(program="child1", query="Analyze this data", additional_preload_temp_files=[temp_file_id])
-   spawn(program="child2", query="Summarize this data", additional_preload_temp_files=[temp_file_id])
-   
-   # Read from a temp file
-   read_temp_file(temp_file_id)
-   
-   # Delete when no longer needed
-   delete_temp_file(temp_file_id)
-   ```
-   - Provides a mechanism for sharing writable content between multiple processes
-   - Separate and complementary to the read-only file descriptor system
-   - More appropriate for collaborative content creation between processes
+- [RFC003: File Descriptor Implementation](RFC003_file_descriptor_implementation.md) - Technical implementation details
+- [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md) - Phased implementation plan
+- [RFC005: File Descriptor Integration with Spawn Tool](RFC005_fd_spawn_integration.md) - Spawn integration
+- [RFC006: Response Reference ID System](RFC006_response_reference_id.md) - Reference ID system
+- [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md) - API enhancements

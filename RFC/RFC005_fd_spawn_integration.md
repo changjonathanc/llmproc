@@ -1,8 +1,12 @@
-# File Descriptor Integration with Spawn Tool
+# RFC005: File Descriptor Integration with Spawn Tool
 
-This document details how the file descriptor system integrates with the spawn tool to enable efficient sharing of large content between processes.
+This document details how the file descriptor system integrates with the spawn tool to enable efficient sharing of large content between processes. For the complete system overview, see [RFC001: File Descriptor System for LLMProc](RFC001_file_descriptor_system.md).
 
-## Current Spawn Tool Interface
+## 1. Background
+
+The spawn tool allows an LLM to delegate tasks to other specialized LLM processes. When working with large content, sending the entire content in the query parameter can be inefficient and may exceed context limits. File descriptors provide an elegant solution for sharing large content between processes.
+
+## 2. Current Spawn Tool Interface
 
 The current spawn tool has a simple interface:
 
@@ -12,7 +16,7 @@ spawn(program_name="expert", query="Analyze this data")
 
 This basic interface creates a new process from a linked program and sends a query to it, but has no way to share large content between processes other than including it in the query text.
 
-## Enhanced Interface with FD Support
+## 3. Enhanced Interface with FD Support
 
 When file descriptors are enabled, the spawn tool interface is enhanced to support sharing FDs:
 
@@ -25,14 +29,14 @@ spawn(
 )
 ```
 
-### Parameters
+### 3.1 Parameters
 
 1. **program_name**: (Required) The linked program to spawn
 2. **query**: (Required) The query to send to the linked program
 3. **additional_preload_files**: (Optional) Files from the filesystem to preload into the child's context
 4. **additional_preload_fds**: (Optional) File descriptors whose content should be preloaded into the child's context
 
-## Implementation Approach
+## 4. Implementation Approach
 
 To avoid showing unavailable parameters when FDs are disabled, we use conditional tool schema registration:
 
@@ -81,7 +85,7 @@ SPAWN_TOOL_SCHEMA_WITH_FD = {
 }
 ```
 
-### Registration Logic
+### 4.1 Registration Logic
 
 ```python
 def register_spawn_tool(registry, process):
@@ -120,7 +124,7 @@ def register_spawn_tool(registry, process):
     registry.register_tool("spawn", spawn_handler, tool_schema)
 ```
 
-### Tool Implementation
+### 4.2 Tool Implementation
 
 ```python
 async def spawn_tool(
@@ -175,9 +179,73 @@ async def spawn_tool(
         return ToolResult.from_error(f"Error in spawn: {str(e)}")
 ```
 
-## Benefits
+## 5. Usage Patterns
+
+### 5.1 Basic Usage
+
+```python
+# Parent process has a large file descriptor 
+fd_id = "fd:12345"  # Contains a large log file
+
+# Spawn a child process with the FD preloaded
+spawn(
+  program_name="log_analyzer", 
+  query="Analyze the log file for errors. The log is available as preloaded content.",
+  additional_preload_fds=[fd_id]
+)
+```
+
+### 5.2 Multiple FDs
+
+```python
+# Parent has multiple file descriptors
+fd_code = "fd:1001"  # Contains source code
+fd_error = "fd:1002"  # Contains error logs
+
+# Spawn a child process with both FDs preloaded
+spawn(
+  program_name="debug_expert", 
+  query="Fix the bug in the code that caused the errors in the logs.",
+  additional_preload_fds=[fd_code, fd_error]
+)
+```
+
+### 5.3 Mixing Files and FDs
+
+```python
+# Spawn a child process with both filesystem files and FDs
+spawn(
+  program_name="requirements_analyzer", 
+  query="Compare the requirements.txt with the actual imports in the code.",
+  additional_preload_files=["requirements.txt"],
+  additional_preload_fds=["fd:3001"]  # Contains source code
+)
+```
+
+## 6. Benefits
 
 1. **Cleaner Tool Interface**: Only shows parameters that are actually available
 2. **File Sharing**: Enables sharing both filesystem files and FD content
 3. **Consistent Experience**: Maintains a single tool name with enhanced functionality when available
 4. **Future Extensibility**: Can easily add more parameters as needed
+5. **Context Efficiency**: Avoids duplicating large content in the query
+6. **Cross-Process Communication**: Enables efficient sharing of large content between processes
+
+## 7. Implementation Plan
+
+The integration with spawn will be implemented in phases as outlined in [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md):
+
+1. **Phase 2.2.0**: Basic spawn enhancements
+   - Implement additional_preload_files parameter
+   - Update tool registration and schema
+
+2. **Phase 2.2.1**: FD-specific enhancements
+   - Implement additional_preload_fds parameter
+   - Add conditional schema based on FD feature status
+   - Update tool handler to process FDs
+
+## 8. References
+
+- [RFC001: File Descriptor System for LLMProc](RFC001_file_descriptor_system.md) - Main specification document
+- [RFC003: File Descriptor Implementation Details](RFC003_file_descriptor_implementation.md) - Technical implementation details
+- [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md) - Implementation phases and status
