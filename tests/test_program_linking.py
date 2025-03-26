@@ -9,6 +9,7 @@ import pytest
 
 from llmproc.llm_process import LLMProcess
 from llmproc.tools.spawn import spawn_tool
+from llmproc.tools.tool_result import ToolResult
 
 
 class TestProgramLinking:
@@ -198,8 +199,6 @@ class TestProgramLinking:
         )
 
         # Check that an error was returned
-        from llmproc.tools.tool_result import ToolResult
-
         assert isinstance(result, ToolResult)
         assert result.is_error is True
         assert "not found" in result.content
@@ -218,3 +217,81 @@ class TestProgramLinking:
         assert isinstance(result, ToolResult)
         assert result.is_error is True
         assert "Test error" in result.content
+        
+    @pytest.mark.asyncio
+    async def test_spawn_tool_with_preloaded_files(self):
+        """Test the spawn tool with file preloading."""
+        # Create temporary files for testing
+        tmp_dir = Path("tmp_test_preload")
+        tmp_dir.mkdir(exist_ok=True)
+        
+        try:
+            # Create test files
+            test_file1 = tmp_dir / "test1.txt"
+            test_file2 = tmp_dir / "test2.txt"
+            
+            with open(test_file1, "w") as f:
+                f.write("Test content 1")
+            with open(test_file2, "w") as f:
+                f.write("Test content 2")
+            
+            # Create mock linked program
+            mock_expert = MagicMock()
+            
+            # Create a mock for preload_files to verify it's called correctly
+            mock_expert.preload_files = MagicMock()
+            
+            # Mock the run method to return a RunResult
+            from llmproc.results import RunResult
+            mock_run_result = RunResult()
+            mock_expert.run = AsyncMock(return_value=mock_run_result)
+            
+            # Mock get_last_message to return the expected response
+            mock_expert.get_last_message = MagicMock(return_value="Expert response")
+            
+            # Mock the client creation to avoid API calls
+            with patch(
+                "llmproc.providers.providers.get_provider_client"
+            ) as mock_get_client:
+                mock_client = MagicMock()
+                mock_get_client.return_value = mock_client
+                
+                # Create a process with linked programs
+                from llmproc.program import LLMProgram
+                
+                program = LLMProgram(
+                    model_name="test-model",
+                    provider="anthropic",
+                    system_prompt="Test prompt",
+                )
+                process = LLMProcess(
+                    program=program, linked_programs_instances={"expert": mock_expert}
+                )
+            
+            # Call spawn_tool with additional_preload_files
+            file_paths = [str(test_file1), str(test_file2)]
+            result = await spawn_tool(
+                program_name="expert", 
+                query="Test query with preloaded files", 
+                additional_preload_files=file_paths,
+                llm_process=process
+            )
+            
+            # Verify preload_files was called with the correct paths
+            mock_expert.preload_files.assert_called_once_with(file_paths)
+            
+            # Check that run was called with the query
+            mock_expert.run.assert_called_once_with("Test query with preloaded files")
+            
+            # Check the result
+            assert isinstance(result, ToolResult)
+            assert result.is_error is False
+            assert result.content == "Expert response"
+            
+        finally:
+            # Clean up test files
+            for file_path in [test_file1, test_file2]:
+                if file_path.exists():
+                    file_path.unlink()
+            if tmp_dir.exists():
+                tmp_dir.rmdir()
