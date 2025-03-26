@@ -19,20 +19,23 @@ Unlike fork (which creates a copy of the current process), spawn creates a compl
 2. Its own separate conversation history
 3. Potentially different tools or capabilities
 
-spawn(program_name, query)
+spawn(program_name, query, additional_preload_files=None)
 - program_name: The name of the linked program to call (must be one of the available linked programs)
 - query: The query to send to the linked program
+- additional_preload_files: Optional list of file paths to preload into the child process's context
 
 The spawn system call will:
 1. Create a new process from the specified linked program
-2. Send your query to that process
-3. Return the process's response to you
+2. Preload any specified files into the child process's context (if specified)
+3. Send your query to that process
+4. Return the process's response to you
 
 When to use this tool:
 - When you need specialized expertise that a different system prompt provides
 - When you need to delegate a task to a more specialized assistant
 - When you need different tools or capabilities than what you currently have
 - When you want to keep the current conversation focused on the main task while delegating subtasks
+- When you need to share specific file content with the child process
 
 Available programs:
 The list of available programs depends on your configuration and will be shown to you when the tool is registered.
@@ -53,6 +56,13 @@ spawn_tool_def = {
                 "type": "string",
                 "description": "The query to send to the linked program",
             },
+            "additional_preload_files": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "description": "Optional list of file paths to preload into the child process's context",
+            },
         },
         "required": ["program_name", "query"],
     },
@@ -62,16 +72,18 @@ spawn_tool_def = {
 async def spawn_tool(
     program_name: str,
     query: str,
+    additional_preload_files: list[str] = None,
     llm_process=None,
 ) -> dict[str, Any]:
     """Create a new process from a linked program to handle a specific query.
 
     This system call allows one LLM process to create a new process from a linked program
-    to handle specialized tasks.
+    to handle specialized tasks, with optional file preloading for context.
 
     Args:
         program_name: The name of the linked program to call
         query: The query to send to the linked program
+        additional_preload_files: Optional list of file paths to preload into the child's context
         llm_process: The parent LLMProcess instance with access to linked programs
 
     Returns:
@@ -110,13 +122,16 @@ async def spawn_tool(
 
             linked_process = LLMProcess(program=linked_program)
 
+        # Preload additional files if provided
+        if additional_preload_files:
+            logger.debug(f"Preloading files for child process: {additional_preload_files}")
+            linked_process.preload_files(additional_preload_files)
+
         # Execute the query on the process
         await linked_process.run(query)
 
         # Get the actual text response from the process
         response_text = linked_process.get_last_message()
-
-        # Create a result dictionary with detailed information
 
         # Return a successful ToolResult with the response text as content
         from llmproc.tools.tool_result import ToolResult
