@@ -200,8 +200,16 @@ def register_spawn_tool(registry: ToolRegistry, process) -> None:
         registry: The ToolRegistry to register the tool with
         process: The LLMProcess instance to bind to the tool
     """
-    # Get tool definition
-    api_tool_def = spawn_tool_def.copy()
+    # Check if FD system is enabled
+    fd_enabled = getattr(process, "file_descriptor_enabled", False)
+    
+    # Choose appropriate schema based on FD support
+    if fd_enabled:
+        from llmproc.tools.spawn import SPAWN_TOOL_SCHEMA_WITH_FD
+        api_tool_def = SPAWN_TOOL_SCHEMA_WITH_FD.copy()
+    else:
+        from llmproc.tools.spawn import SPAWN_TOOL_SCHEMA_BASE
+        api_tool_def = SPAWN_TOOL_SCHEMA_BASE.copy()
 
     # Customize description with available programs if any
     if hasattr(process, "linked_programs") and process.linked_programs:
@@ -210,16 +218,23 @@ def register_spawn_tool(registry: ToolRegistry, process) -> None:
 
     # Create a handler function that binds to the process
     async def spawn_handler(args):
+        # Process additional_preload_fds if FD system is enabled
+        additional_preload_fds = None
+        if fd_enabled:
+            additional_preload_fds = args.get("additional_preload_fds")
+            
         return await spawn_tool(
             program_name=args.get("program_name"),
             query=args.get("query"),
+            additional_preload_files=args.get("additional_preload_files"),
+            additional_preload_fds=additional_preload_fds,
             llm_process=process,
         )
 
     # Register with the registry
     registry.register_tool("spawn", spawn_handler, api_tool_def)
 
-    logger.info("Registered spawn tool for process")
+    logger.info(f"Registered spawn tool for process (with FD support: {fd_enabled})")
 
 
 def register_fork_tool(registry: ToolRegistry, process) -> None:

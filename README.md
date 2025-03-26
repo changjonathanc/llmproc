@@ -429,8 +429,30 @@ Key features:
 - Read interface via read_fd system call
 - File export via fd_to_file system call
 - Parent directory creation for file operations
+- Spawn tool integration for cross-process FD sharing
 - "Userspace" tools are provided via MCP
 - MCP provides a standard protocol for tools that's independent of the LLMProc implementation
+
+#### File Descriptor and Spawn Integration
+
+File descriptors can be shared between processes using the spawn tool's `additional_preload_fds` parameter:
+
+```python
+# Share a file descriptor with a specialized process
+spawn(
+  program_name="log_analyzer",
+  query="Analyze this log file for errors",
+  additional_preload_fds=["fd:12345"]
+)
+```
+
+This allows:
+- Efficient sharing of large content between processes
+- Delegation of specialized analysis to child processes
+- Preloading of file descriptor content in child context
+- Cross-process access to large outputs
+
+For a complete example, see `examples/fd_spawn_integration.toml` and `examples/log_analyzer.toml`.
 
 ## Roadmap
 
