@@ -1,5 +1,17 @@
 # RFC001: File Descriptor System for LLMProc
 
+## Terminology and Conventions
+
+This document uses the following standardized terminology and conventions:
+
+- **File Descriptor (FD)**: Abbreviated as "FD" in prose descriptions. Specific file descriptor identifiers use the format `fd:12345`.
+- **XML Attribute Ordering**: All XML elements start with `fd` attribute, followed by functional attributes like `type` or `page`.
+- **Code Examples**: All code examples use Python syntax with 4-space indentation. String literals use triple quotes for multi-line strings.
+- **API Parameters**: All parameter names use snake_case. Parameter names are consistent across all RFCs.
+- **Implementation Status**: Features are marked with ✅ (implemented), 🔄 (in progress), or ❌ (not implemented).
+
+For complete technical implementation details, see [RFC003: File Descriptor Implementation Details](RFC003_file_descriptor_implementation.md).
+
 ## 1. Background & Problem Statement
 
 Large Language Models (LLMs) frequently interact with tools that produce substantial outputs:
