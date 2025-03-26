@@ -155,10 +155,13 @@ File descriptors will naturally be cleaned up when a process ends, and any memor
   "lines": list[int],      # Start indices of each line
   "total_lines": int,      # Total line count
   "page_size": int,        # Characters per page
-  "creation_time": str,    # Creation timestamp
-  "source": str            # Origin of content (e.g., "tool:github_search", "user_input")
+  "creation_time": float,  # Creation timestamp (stored as Unix timestamp)
+  "source": str,           # Origin of content (e.g., "tool_result", "user_input")
+  "total_pages": int       # Total number of pages calculated from content
 }
 ```
+
+*Note: For detailed implementation specifics, see [RFC003: File Descriptor Implementation Details](RFC003_file_descriptor_implementation.md).*
 
 ### 6.2 Integration with LLMProcess
 
