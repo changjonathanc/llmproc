@@ -205,4 +205,17 @@ page_user_input = true
 #   - mode="append", create=False, exist_ok=True: Append to existing only
 #   
 #   Parent directories are created automatically if needed
+#
+# REFERENCE ID SYSTEM:
+# Enable the reference ID system to allow LLMs to mark sections of their responses:
+# enable_references = true
+#
+# When enabled, the LLM can mark content with reference tags:
+# <ref id="example_id">content</ref>
+#
+# These references can be accessed using standard FD tools:
+# - read_fd(fd="ref:example_id", read_all=true)
+# - fd_to_file(fd="ref:example_id", file_path="output.txt")
+#
+# References are stored in the file descriptor system with the "ref:" prefix.
 

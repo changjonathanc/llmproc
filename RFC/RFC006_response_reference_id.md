@@ -137,7 +137,25 @@ The implementation will:
 3. Store the content in the file descriptor system with the `ref:` prefix
 4. Leave the original message unchanged for display
 
-### 5.3 System Prompt Instructions
+### 5.3 Error Handling
+
+The implementation incorporates these error handling mechanisms:
+
+1. **Non-existent References**
+   - If an LLM attempts to use a non-existent reference (e.g., `fd_to_file(fd="ref:nonexistent", ...)`)
+   - Standard file descriptor error handling applies, returning a "not_found" error
+   - Example: `<fd_error type="not_found" fd="ref:nonexistent"><message>File descriptor ref:nonexistent not found</message></fd_error>`
+
+2. **Duplicate References**
+   - If multiple references use the same ID, the last one processed will be stored
+   - This follows the principle of last-write-wins
+   - No explicit warning is provided to avoid complexity
+
+3. **Malformed References**
+   - Improperly formatted references simply won't be extracted
+   - No errors are generated for malformed or unclosed tags
+
+### 5.4 System Prompt Instructions
 
 When enabled, these simple instructions are added to the system prompt:
 

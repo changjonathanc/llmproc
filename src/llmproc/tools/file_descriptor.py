@@ -1066,25 +1066,31 @@ class FileDescriptorManager:
             fd_id = f"ref:{ref_id}"
             
             # Create a file descriptor with the reference ID as the FD ID
-            # We'll manually create it rather than using create_fd to set a custom FD ID
-            if fd_id not in self.file_descriptors:
-                lines, total_lines = self._index_lines(content)
-                page_size = self.default_page_size
-                
-                # Store the file descriptor entry
-                self.file_descriptors[fd_id] = {
-                    "content": content,
-                    "lines": lines,
-                    "total_lines": total_lines,
-                    "page_size": page_size,
-                    "creation_time": time.time(),
-                    "source": "reference",
-                    "total_pages": 1  # Will be recalculated
-                }
-                
-                # Calculate the actual number of pages
-                num_pages = self._calculate_total_pages(fd_id)
-                self.file_descriptors[fd_id]["total_pages"] = num_pages
+            # Note: Even if the reference already exists, we override it with the new content
+            # following a "last one wins" policy for duplicate references
+            
+            # Check if we're overwriting an existing reference
+            if fd_id in self.file_descriptors:
+                logger.warning(f"Overwriting existing reference '{ref_id}' with new content")
+            
+            # Index the content for line-aware pagination
+            lines, total_lines = self._index_lines(content)
+            page_size = self.default_page_size
+            
+            # Store or update the file descriptor entry
+            self.file_descriptors[fd_id] = {
+                "content": content,
+                "lines": lines,
+                "total_lines": total_lines,
+                "page_size": page_size,
+                "creation_time": time.time(),
+                "source": "reference",
+                "total_pages": 1  # Will be recalculated
+            }
+            
+            # Calculate the actual number of pages
+            num_pages = self._calculate_total_pages(fd_id)
+            self.file_descriptors[fd_id]["total_pages"] = num_pages
             
             # Store information about the reference
             references.append({
