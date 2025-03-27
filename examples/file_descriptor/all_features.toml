@@ -73,9 +73,9 @@ EXAMPLES OF USAGE:
 When you see a file descriptor in user input, always read it first before responding.
 """
 
-# Enable all file descriptor tools
+# Enable all file descriptor tools and process control tools
 [tools]
-enabled = ["read_fd", "fd_to_file", "read_file"]
+enabled = ["read_fd", "fd_to_file", "read_file", "spawn", "fork"]
 
 # Configure the file descriptor system with ALL features enabled
 [file_descriptor]
