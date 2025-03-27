@@ -502,7 +502,7 @@ For a complete example, see `examples/fd_spawn_integration.toml` and `examples/l
 6. [ ] Implement Exec System Call for process replacement
 7. [ ] Implement GOTO for program flow control
 8. [ ] Improve OpenAI integration (MCP support)
-9. [ ] Add support for reasoning models
+9. [x] Add support for reasoning models
 10. [ ] Add Process State Serialization & Restoration
 11. [ ] Implement retry mechanism with exponential backoff for API calls
 12. [ ] Enhance error handling and reporting across providers
