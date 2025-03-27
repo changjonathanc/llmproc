@@ -165,19 +165,19 @@ variables = ["working_directory", "platform", "date"]
 #----------------------------------------
 [file_descriptor]
 # Enable file descriptor system explicitly (also enabled if read_fd or fd_to_file in tools.enabled)
-# enabled = true
+enabled = true
 
 # Threshold for FD creation (larger than page size)
-# max_direct_output_chars = 8000
+max_direct_output_chars = 8000
 
 # Page size for pagination
-# default_page_size = 4000
+default_page_size = 4000
 
 # Threshold for user input FD creation (Phase 3 feature)
-# max_input_chars = 8000
+max_input_chars = 8000
 
 # Enable/disable user input paging (Phase 3 feature)
-# page_user_input = true
+page_user_input = true
 
 # TOOLS:
 # - read_fd: Read file descriptor content with pagination support
