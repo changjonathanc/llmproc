@@ -7,15 +7,16 @@ function correctly and produce outputs reflecting their respective reasoning cap
 import os
 import pytest
 import time
+import asyncio
 from typing import Dict, List, Tuple
 
 from llmproc import LLMProcess, LLMProgram
 
 
-def load_reasoning_model(config_path: str) -> LLMProcess:
+async def load_reasoning_model(config_path: str) -> LLMProcess:
     """Load a reasoning model from a TOML configuration file."""
     program = LLMProgram.from_toml(config_path)
-    return program.start_sync()
+    return await program.start()
 
 
 @pytest.mark.llm_api
@@ -46,16 +47,16 @@ def test_reasoning_models_configuration():
 
 
 @pytest.mark.llm_api
-def test_reasoning_models_parameter_transformation():
+async def test_reasoning_models_parameter_transformation():
     """Test that the API parameters are correctly transformed for reasoning models."""
     # Skip if no OpenAI API key
     if not os.environ.get("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY environment variable not set")
     
     # Load all three reasoning model configurations
-    high_process = load_reasoning_model("examples/basic/o3-mini-high.toml")
-    medium_process = load_reasoning_model("examples/basic/o3-mini-medium.toml")
-    low_process = load_reasoning_model("examples/basic/o3-mini-low.toml")
+    high_process = await load_reasoning_model("examples/basic/o3-mini-high.toml")
+    medium_process = await load_reasoning_model("examples/basic/o3-mini-medium.toml")
+    low_process = await load_reasoning_model("examples/basic/o3-mini-low.toml")
     
     # Verify high reasoning API parameters
     assert "reasoning_effort" in high_process.api_params
@@ -77,7 +78,7 @@ def test_reasoning_models_parameter_transformation():
 
 
 @pytest.mark.llm_api
-def test_reasoning_models_response_quality():
+async def test_reasoning_models_response_quality():
     """Test that reasoning models with different reasoning levels produce 
     different quality responses for complex problems."""
     # Skip if no OpenAI API key
@@ -93,14 +94,14 @@ def test_reasoning_models_response_quality():
     """
     
     # Load all three reasoning model configurations
-    high_process = load_reasoning_model("examples/basic/o3-mini-high.toml")
-    medium_process = load_reasoning_model("examples/basic/o3-mini-medium.toml")
-    low_process = load_reasoning_model("examples/basic/o3-mini-low.toml")
+    high_process = await load_reasoning_model("examples/basic/o3-mini-high.toml")
+    medium_process = await load_reasoning_model("examples/basic/o3-mini-medium.toml")
+    low_process = await load_reasoning_model("examples/basic/o3-mini-low.toml")
     
     # Run the models with the same prompt
-    high_result = high_process.run(complex_problem)
-    medium_result = medium_process.run(complex_problem)
-    low_result = low_process.run(complex_problem)
+    high_result = await high_process.run(complex_problem)
+    medium_result = await medium_process.run(complex_problem)
+    low_result = await low_process.run(complex_problem)
     
     # Verify we got responses from all models
     assert high_result
@@ -126,7 +127,7 @@ def test_reasoning_models_response_quality():
 
 
 @pytest.mark.llm_api
-def test_reasoning_models_response_time():
+async def test_reasoning_models_response_time():
     """Test the response time differences between different reasoning levels."""
     # Skip if no OpenAI API key
     if not os.environ.get("OPENAI_API_KEY"):
@@ -136,9 +137,9 @@ def test_reasoning_models_response_time():
     simple_problem = "What is 24 * 7?"
     
     # Load all three reasoning model configurations
-    high_process = load_reasoning_model("examples/basic/o3-mini-high.toml")
-    medium_process = load_reasoning_model("examples/basic/o3-mini-medium.toml")
-    low_process = load_reasoning_model("examples/basic/o3-mini-low.toml")
+    high_process = await load_reasoning_model("examples/basic/o3-mini-high.toml")
+    medium_process = await load_reasoning_model("examples/basic/o3-mini-medium.toml")
+    low_process = await load_reasoning_model("examples/basic/o3-mini-low.toml")
     
     # Measure response times
     high_times = []
@@ -149,17 +150,17 @@ def test_reasoning_models_response_time():
     for _ in range(3):
         # High reasoning
         start_time = time.time()
-        high_process.run(simple_problem)
+        await high_process.run(simple_problem)
         high_times.append(time.time() - start_time)
         
         # Medium reasoning
         start_time = time.time()
-        medium_process.run(simple_problem)
+        await medium_process.run(simple_problem)
         medium_times.append(time.time() - start_time)
         
         # Low reasoning
         start_time = time.time()
-        low_process.run(simple_problem)
+        await low_process.run(simple_problem)
         low_times.append(time.time() - start_time)
     
     # Calculate average times
@@ -178,7 +179,7 @@ def test_reasoning_models_response_time():
 
 
 @pytest.mark.llm_api
-def test_reasoning_models_complex_coding():
+async def test_reasoning_models_complex_coding():
     """Test reasoning models with a complex coding task."""
     # Skip if no OpenAI API key
     if not os.environ.get("OPENAI_API_KEY"):
@@ -194,10 +195,10 @@ def test_reasoning_models_complex_coding():
     """
     
     # Load high reasoning model (we only use high for complex coding)
-    high_process = load_reasoning_model("examples/basic/o3-mini-high.toml")
+    high_process = await load_reasoning_model("examples/basic/o3-mini-high.toml")
     
     # Run the model
-    high_result = high_process.run(coding_problem)
+    high_result = await high_process.run(coding_problem)
     
     # Verify we got a response
     assert high_result
