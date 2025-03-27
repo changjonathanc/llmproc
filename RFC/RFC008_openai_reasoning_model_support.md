@@ -1,5 +1,9 @@
 # RFC008: OpenAI Reasoning Model Support
 
+## Status
+- **Implemented**: Yes
+- **Date**: March 27, 2025
+
 ## Terminology and Conventions
 
 This document uses the following standardized terminology and conventions:

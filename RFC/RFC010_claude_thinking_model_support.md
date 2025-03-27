@@ -1,5 +1,9 @@
 # RFC010: Claude 3.7 Thinking Model Support
 
+## Status
+- **Implemented**: Yes
+- **Date**: March 27, 2025
+
 ## Overview
 This RFC proposes adding support for Claude 3.7 Sonnet's extended thinking capability to the llmproc library, similar to how the library currently supports OpenAI's reasoning models.
 
