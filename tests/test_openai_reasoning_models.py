@@ -103,7 +103,7 @@ def test_openai_reasoning_model_config():
     assert program.model_name == "o3-mini"
     assert program.provider == "openai"
     assert "reasoning_effort" in program.parameters
-    assert program.parameters["reasoning_effort"] == "medium"
+    assert program.parameters["reasoning_effort"] == "high"
     
     # Check for correct token parameter
     assert "max_completion_tokens" in program.parameters
