@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""CLI tool for printing the enriched system prompt for a program."""
+
+import sys
+from llmproc.tools.print_system_prompt import main
+
+if __name__ == "__main__":
+    main()

@@ -101,3 +101,4 @@ dev = [
 
 [project.scripts]
 llmproc-demo = "llmproc.cli:main"
+llmproc-prompt = "llmproc.tools.print_system_prompt:main"

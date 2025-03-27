@@ -346,7 +346,11 @@ The `examples/` directory contains ready-to-use program files:
   - `references.toml` - Response reference ID system for marking content
 - `reference.toml` - Full reference with all available options
 
-### CLI Options
+### CLI Tools
+
+#### llmproc-demo
+
+The main CLI interface for interacting with LLM models:
 
 ```
 Usage: llmproc-demo [OPTIONS] [PROGRAM_PATH]
@@ -367,6 +371,27 @@ Options:
                      prompt provided)
   --help             Show this message and exit
 ```
+
+#### llmproc-prompt
+
+Examine the enriched system prompt for a program without making API calls:
+
+```
+Usage: llmproc-prompt [OPTIONS] PROGRAM_PATH
+
+  Print the enriched system prompt for a program
+
+Positional arguments:
+  program_path         Path to the program TOML file
+
+Options:
+  -o, --output FILE   File to write output to (default: stdout)
+  -E, --no-env        Don't include environment information
+  -C, --no-color      Don't colorize the output
+  -h, --help          Show this help message and exit
+```
+
+See [System Prompt Tool](docs/system-prompt-tool.md) for more details on examining system prompts.
 
 ## Implementation Details
 
