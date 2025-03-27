@@ -223,8 +223,7 @@ Your content here (code, text, data, etc.)
 These references can be:
 - Exported to files using: fd_to_file(fd="ref:example_id", file_path="output.txt")
 - Read using standard file descriptor tools: read_fd(fd="ref:example_id", read_all=true)
-- Passed to child processes via spawn or fork tools (automatically inherited)
-- Used for extremely long content not suitable for direct preloading
+- Passed to child processes (automatically inherited, or via additional preload fd)
 
 Child processes will automatically inherit references from their parent process
 and can access them using the same read_fd tool with the reference ID.

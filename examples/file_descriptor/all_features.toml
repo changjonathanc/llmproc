@@ -37,8 +37,7 @@ The file descriptor system provides robust handling for large content with these
      <ref id="python_example">print("Hello world")</ref>
    - Reference IDs can be used with file descriptor tools:
      fd_to_file(fd="ref:python_example", file_path="example.py")
-   - References are automatically inherited by child processes via spawn or fork
-   - References can store extremely long content not suitable for direct preloading
+   - References are passed to child processes (automatically inherited, or via additional preload fd)
    - Reference content is stored efficiently in the file descriptor system
    - Provide descriptive IDs that reflect the content
 
