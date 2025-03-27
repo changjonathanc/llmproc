@@ -4,8 +4,10 @@ This directory contains TOML configuration files and example scripts demonstrati
 
 ## Example Directories
 
-- **basic/** - Simple model configurations and basic feature demonstrations.
-  - See [Basic Examples README](basic/README.md) for details.
+- **basic/** - Simple model configurations including:
+  - OpenAI models: GPT-4o, GPT-4.5, GPT-4o-mini, o3-mini (low/medium/high reasoning)
+  - Anthropic models: Claude Haiku, Claude 3.5 Sonnet, Claude 3.7 Sonnet, Claude 3.5 Haiku Vertex
+  - Special features: environment variables and file preloading
 
 - **file_descriptor/** - Examples demonstrating the file descriptor system.
   - See [File Descriptor README](file_descriptor/README.md) for details.
