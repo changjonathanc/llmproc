@@ -1,0 +1,11 @@
+# OpenAI o3-mini model with high reasoning effort
+
+[model]
+name = "o3-mini"
+provider = "openai"
+display_name = "O3-mini (High Reasoning)"
+
+[parameters]
+temperature = 0.2  # Lower temperature for more deterministic reasoning
+max_completion_tokens = 4000  # High token limit for comprehensive reasoning chains
+reasoning_effort = "high"  # Maximum reasoning thoroughness

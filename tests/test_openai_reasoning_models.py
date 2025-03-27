@@ -110,6 +110,30 @@ def test_openai_reasoning_model_config():
     assert "max_tokens" not in program.parameters
 
 
+def test_config_validation():
+    """Test configuration validation for reasoning models."""
+    from llmproc.config.schema import LLMProgramConfig, ModelConfig
+    
+    # Test invalid reasoning_effort value
+    with pytest.raises(ValueError) as excinfo:
+        LLMProgramConfig(
+            model=ModelConfig(name="o3-mini", provider="openai"),
+            parameters={"reasoning_effort": "invalid"}
+        )
+    assert "Invalid reasoning_effort value" in str(excinfo.value)
+    
+    # Test conflicting max_tokens and max_completion_tokens
+    with pytest.raises(ValueError) as excinfo:
+        LLMProgramConfig(
+            model=ModelConfig(name="o3-mini", provider="openai"),
+            parameters={
+                "max_tokens": 1000,
+                "max_completion_tokens": 2000
+            }
+        )
+    assert "Cannot specify both 'max_tokens' and 'max_completion_tokens'" in str(excinfo.value)
+
+
 @pytest.mark.llm_api
 async def test_openai_reasoning_model_api():
     """Test with real OpenAI API.

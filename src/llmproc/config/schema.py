@@ -162,6 +162,27 @@ class LLMProgramConfig(BaseModel):
         "extra": "forbid"  # Forbid extra fields
     }
     
+    @field_validator("parameters")
+    def validate_reasoning_parameters(cls, v):
+        """Validate that reasoning parameters have valid values."""
+        # Check reasoning_effort values
+        if "reasoning_effort" in v:
+            valid_values = {"low", "medium", "high"}
+            if v["reasoning_effort"] not in valid_values:
+                raise ValueError(
+                    f"Invalid reasoning_effort value '{v['reasoning_effort']}'. "
+                    f"Must be one of: {', '.join(valid_values)}"
+                )
+        
+        # Check for token parameter conflicts
+        if "max_tokens" in v and "max_completion_tokens" in v:
+            raise ValueError(
+                "Cannot specify both 'max_tokens' and 'max_completion_tokens'. "
+                "Use 'max_tokens' for standard models and 'max_completion_tokens' for reasoning models."
+            )
+        
+        return v
+    
     @model_validator(mode="after")
     def validate_file_descriptor(self):
         """Validate file descriptor configuration is consistent with tools.
@@ -235,21 +256,39 @@ class LLMProgramConfig(BaseModel):
                         stacklevel=2
                     )
             
-            # Validate reasoning_effort values if present
-            if "reasoning_effort" in self.parameters:
-                valid_values = {"low", "medium", "high"}
-                if self.parameters["reasoning_effort"] not in valid_values:
+            # Check if using OpenAI reasoning model - in this case we need special parameter handling
+            is_reasoning_model = False
+            if hasattr(self, "model") and self.model.provider == "openai":
+                is_reasoning_model = self.model.name.startswith(("o1", "o3"))
+                
+                # If using a reasoning model, suggest recommended parameters
+                if is_reasoning_model and "reasoning_effort" not in self.parameters:
                     warnings.warn(
-                        f"Invalid reasoning_effort value '{self.parameters['reasoning_effort']}'. "
-                        f"Must be one of: {', '.join(valid_values)}",
+                        "OpenAI reasoning model detected (o1, o3). For better results, "
+                        "consider adding the 'reasoning_effort' parameter (low, medium, high).",
                         stacklevel=2
                     )
                 
-                # Check if used with non-OpenAI provider
-                if hasattr(self, "model") and self.model.provider != "openai":
+            # Check if used with non-OpenAI provider
+            if "reasoning_effort" in self.parameters and hasattr(self, "model") and self.model.provider != "openai":
+                warnings.warn(
+                    "The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. "
+                    "It will be ignored for other providers.",
+                    stacklevel=2
+                )
+                
+            # Validate that reasoning models use max_completion_tokens
+            if hasattr(self, "model") and self.model.provider == "openai":
+                if is_reasoning_model and "max_tokens" in self.parameters:
                     warnings.warn(
-                        "The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. "
-                        "It will be ignored for other providers.",
+                        "OpenAI reasoning models (o1, o3) should use 'max_completion_tokens' instead of 'max_tokens'. "
+                        "Your configuration may fail at runtime.",
+                        stacklevel=2
+                    )
+                elif not is_reasoning_model and "max_completion_tokens" in self.parameters:
+                    warnings.warn(
+                        "'max_completion_tokens' is only for OpenAI reasoning models (o1, o3). "
+                        "Standard models should use 'max_tokens' instead.",
                         stacklevel=2
                     )
 
