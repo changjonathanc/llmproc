@@ -44,8 +44,11 @@ The file descriptor system provides robust handling for large content with these
 5. USER INPUT HANDLING
    - Large user inputs are automatically converted to file descriptors
    - You'll see a preview: <fd:1 preview="First few hundred chars..." type="user_input" size="10000">
-   - Access full content with: read_fd(fd="fd:1", read_all=true)
-   - Read in chunks with: read_fd(fd="fd:1", start=0, count=3)
+   - For moderately sized inputs: read_fd(fd="fd:1", read_all=true)
+   - For extremely large inputs:
+     * Read only relevant sections: read_fd(fd="fd:1", mode="line", start=10, count=5)
+     * Delegate processing to child processes via spawn or fork
+     * Extract specific sections to new FDs for targeted analysis
 
 EXAMPLES OF USAGE:
 

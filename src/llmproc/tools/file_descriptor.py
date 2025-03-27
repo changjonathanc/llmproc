@@ -203,8 +203,11 @@ This system can handle large user inputs through file descriptors:
 
 - When a user sends a very large message, it is automatically converted to a file descriptor
 - You'll see a preview like: <fd:12345 preview="first few characters..." type="user_input" size="10000">
-- Always use read_fd to read the full content before responding to such messages
-- Example: read_fd(fd="fd:1", read_all=true)
+- For moderately sized inputs, read the full content: read_fd(fd="fd:1", read_all=true)
+- For extremely large inputs:
+  * Read select sections using page/line modes: read_fd(fd="fd:1", mode="line", start=10, count=5)
+  * Delegate processing to child processes: spawn(program="analyzer.toml", prompt="Analyze this content", input_fd="fd:1")
+  * Extract relevant sections: read_fd(fd="fd:1", mode="line", start=10, count=5, extract_to_new_fd=true)
 </fd_user_input_instructions>
 """
 
