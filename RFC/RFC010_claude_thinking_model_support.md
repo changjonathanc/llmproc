@@ -6,6 +6,10 @@ This RFC proposes adding support for Claude 3.7 Sonnet's extended thinking capab
 ## Background
 Claude 3.7 Sonnet introduces an extended thinking feature that enables the model to show its reasoning process before delivering a final answer. This is conceptually similar to OpenAI's "reasoning_effort" parameter in o1/o3 models, but with a different API implementation.
 
+## Documentation References
+- [Building with extended thinking](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking)
+- [Extended thinking models](https://docs.anthropic.com/en/docs/about-claude/models/extended-thinking-models)
+
 ## Thinking Budget Guidelines
 According to Anthropic's official documentation:
 
