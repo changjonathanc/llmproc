@@ -219,6 +219,7 @@ class LLMProgramConfig(BaseModel):
             # OpenAI specific
             "top_k",
             "stop",
+            "reasoning_effort",  # For OpenAI reasoning models
             # Anthropic specific
             "max_tokens_to_sample",
             "stop_sequences",
@@ -230,6 +231,24 @@ class LLMProgramConfig(BaseModel):
                     warnings.warn(
                         f"Unknown API parameter '{param_name}' in configuration. "
                         f"This may be a typo or a newer parameter not yet recognized.",
+                        stacklevel=2
+                    )
+            
+            # Validate reasoning_effort values if present
+            if "reasoning_effort" in self.parameters:
+                valid_values = {"low", "medium", "high"}
+                if self.parameters["reasoning_effort"] not in valid_values:
+                    warnings.warn(
+                        f"Invalid reasoning_effort value '{self.parameters['reasoning_effort']}'. "
+                        f"Must be one of: {', '.join(valid_values)}",
+                        stacklevel=2
+                    )
+                
+                # Check if used with non-OpenAI provider
+                if hasattr(self, "model") and self.model.provider != "openai":
+                    warnings.warn(
+                        "The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. "
+                        "It will be ignored for other providers.",
                         stacklevel=2
                     )
 

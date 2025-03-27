@@ -1,0 +1,14 @@
+[model]
+name = "o3-mini"
+provider = "openai"
+display_name = "O3-mini Reasoning Model"
+
+[prompt]
+system_prompt = """You are a helpful assistant with strong reasoning capabilities.
+When solving complex problems, think step-by-step and explain your reasoning clearly.
+"""
+
+[parameters]
+temperature = 0.7
+max_tokens = 1000
+reasoning_effort = "medium"  # Options: "low", "medium", "high"

@@ -78,10 +78,18 @@ class OpenAIProcessExecutor:
 
         try:
             # Make the API call
+            # Check if this is a reasoning model (o1, o1-mini, o3, o3-mini)
+            api_params = process.api_params.copy()
+            
+            # Only pass reasoning_effort for reasoning models
+            is_reasoning_model = process.model_name.startswith(("o1", "o3"))
+            if not is_reasoning_model and "reasoning_effort" in api_params:
+                del api_params["reasoning_effort"]
+                
             response = await process.client.chat.completions.create(
                 model=process.model_name,
                 messages=formatted_messages,
-                **process.api_params,
+                **api_params,
             )
 
             # Track API call in the run result
