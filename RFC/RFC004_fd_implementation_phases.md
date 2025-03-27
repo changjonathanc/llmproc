@@ -2,11 +2,11 @@
 
 This document outlines the implementation plan for the File Descriptor system, breaking down the work into distinct phases with clear milestones. For the complete system overview, see [RFC001: File Descriptor System for LLMProc](RFC001_file_descriptor_system.md).
 
-## Implementation Status (As of 2025-03-25)
+## Implementation Status (As of 2025-03-26)
 
 - ✅ **Phase 1**: Core Functionality - Completed
-- 🔄 **Phase 2**: Process Integration - Partially Completed (Fork support implemented)
-- 🔄 **Phase 2.5**: API Enhancements - Planned (See [RFC007](RFC007_fd_enhanced_api_design.md) for details)
+- ✅ **Phase 2**: Process Integration - Completed (Fork and Spawn integration implemented)
+- 🔄 **Phase 2.5**: API Enhancements - Partially Completed (Phase 1 of RFC007 implemented)
 - 🔄 **Phase 3**: Optional Features - Partially Completed (FD to File Operations implemented)
 
 ## Phase 1: Core Functionality _(Implemented)_
@@ -48,35 +48,35 @@ The initial phase focuses on essential functionality to establish the basic file
    - Continuation handling guidance
    - Added automatically when FD system is enabled
 
-## Phase 2: Process Integration
+## Phase 2: Process Integration _(Implemented)_
 
 This phase focuses on integrating with the process model in two steps:
 
-### Phase 2.1: Fork & Spawn Integration _(Partially Implemented)_
+### Phase 2.1: Fork & Spawn Integration _(Implemented)_
 
 1. **Fork Integration** _(Implemented)_
    - Automatic FD copying during fork
    - Deep copy of all descriptors and metadata
    - Full inheritance of parent's FDs by child processes
 
-2. **Cross-Process FD Access** _(Planned)_
+2. **Cross-Process FD Access** _(Implemented)_
    - Consistent FD referencing across forked / spawned processes
    - Inherited FDs remain accessible with same IDs
    - Support usage patterns with delegated reading (ask children to read a large fd)
-   - Spawned processes inherit FDs from parent, but don't have knowledge of the fd, so the parent needs to provide the fd to the child
+   - Forked processes inherit FDs from parent automatically
 
-### Phase 2.2: Spawn Enhancements _(Planned)_
+### Phase 2.2: Spawn Enhancements _(Implemented)_
 
-We need to implement the following:
+The following features have been implemented:
 
-1. **Spawn File Preloading**
-   - Add `additional_preload_files` parameter to spawn
+1. **Spawn File Preloading** _(Implemented)_
+   - Added `additional_preload_files` parameter to spawn
    - Support filesystem file preloading in child processes
-   - Implement regardless of FD feature status
-   - Update spawn tool schema and handler
+   - Implemented regardless of FD feature status
+   - Updated spawn tool schema and handler
 
-2. **Spawn FD Preloading**
-   - Add `additional_preload_fds` parameter for spawn
+2. **Spawn FD Preloading** _(Implemented)_
+   - Added `additional_preload_fds` parameter for spawn
    - FD content inclusion in child enriched system prompt
    - Conditional schema based on FD feature status
    - Selective sharing of specific FDs with spawn
@@ -103,18 +103,27 @@ These features can be individually implemented and toggled:
    fd_to_file(fd="fd:12345", file_path="/path/to/output.txt")
    ```
 
-3. **Enhanced FD API** _(Planned - See [RFC007](RFC007_fd_enhanced_api_design.md))_
-   - Improved read_fd with create_fd parameter for content slicing
-   - Enhanced fd_to_file with clear write/append modes
-   - Explicit file creation control parameters
+3. **Enhanced FD API** _(Partially Implemented - See [RFC007](RFC007_fd_enhanced_api_design.md))_
+   - Phase 1 (Implemented):
+     - Added `extract_to_new_fd` parameter to read_fd for content slicing (renamed from create_fd)
+     - Added mode parameter to fd_to_file with write/append options
+   - Phase 2 (Planned):
+     - Add explicit file creation control parameters (create, fail_if_exists)
+   - Phase 3 (Planned):
+     - Add line and character-based positioning (mode, start, count parameters)
+   
    ```python
-   # Planned enhancements
-   new_fd = read_fd(fd="fd:12345", page=2, create_fd=True)
+   # Implemented enhancements
+   new_fd = read_fd(fd="fd:12345", page=2, extract_to_new_fd=True)
    fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append")
+   
+   # Planned enhancements
    fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", fail_if_exists=True)
+   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False)
+   new_fd = read_fd(fd="fd:12345", mode="line", start=10, count=5, extract_to_new_fd=True)
    ```
    
-   _Note: The previous plan for page-specific export has been replaced with a more comprehensive API design in [RFC007](RFC007_fd_enhanced_api_design.md) that favors content slicing via read_fd with create_fd=True followed by fd_to_file operations._
+   _Note: The parameter was renamed from `create_fd` to `extract_to_new_fd` to more clearly indicate its purpose._
 
 4. **Response Reference ID System** _(Planned)_
    - Allow LLMs to mark sections of their responses with reference IDs
@@ -218,9 +227,20 @@ The file descriptor system is implemented in the following files:
 - `src/llmproc/llm_process.py`: Integration with LLMProcess
 - `src/llmproc/providers/anthropic_process_executor.py`: Integration with AnthropicProcessExecutor for output wrapping
 - `src/llmproc/config/schema.py`: FileDescriptorConfig configuration schema
+- `src/llmproc/tools/spawn.py`: Integration with spawn tool for FD sharing
+- `src/llmproc/tools/__init__.py`: Registration of FD tools and conditional schema
+
+Tests:
 - `tests/test_file_descriptor.py`: Basic unit tests
 - `tests/test_file_descriptor_integration.py`: Integration tests with process model
 - `tests/test_fd_to_file_tool.py`: Tests for FD export functionality
+- `tests/test_fd_spawn_integration.py`: Tests for spawn integration with FDs
+- `tests/test_enhanced_fd_api.py`: Tests for enhanced API features
+
+Examples:
+- `examples/file_descriptor.toml`: Basic FD system usage
+- `examples/fd_spawn_integration.toml`: Cross-process FD sharing
+- `examples/enhanced_fd_api.toml`: Enhanced API features
 
 The implementation follows the design outlined in this document, with a focus on modularity and clean interfaces. The FileDescriptorManager class is the central component responsible for FD creation, access, and pagination.
 
