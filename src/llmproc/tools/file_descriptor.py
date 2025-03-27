@@ -217,16 +217,22 @@ class FileDescriptorManager:
         self,
         default_page_size: int = 4000,
         max_direct_output_chars: int = 8000,
+        max_input_chars: int = 8000,
+        page_user_input: bool = False,
     ):
         """Initialize the FileDescriptorManager.
 
         Args:
             default_page_size: Default number of characters per page
             max_direct_output_chars: Threshold for automatic FD creation
+            max_input_chars: Threshold for automatic user input FD creation
+            page_user_input: Whether to automatically page large user inputs
         """
         self.file_descriptors: Dict[str, Dict[str, Any]] = {}
         self.default_page_size = default_page_size
         self.max_direct_output_chars = max_direct_output_chars
+        self.max_input_chars = max_input_chars
+        self.page_user_input = page_user_input
         self.fd_related_tools = self._FD_RELATED_TOOLS.copy()
         self.next_fd_id = 1  # Counter for sequential FD IDs
     

@@ -285,8 +285,14 @@ llmproc-demo ./examples/calculator.toml
 # Try using the fork feature
 llmproc-demo ./examples/fork.toml
 
-# Try the file descriptor system with read_fd and fd_to_file tools
-llmproc-demo ./examples/file_descriptor.toml
+# Try the file descriptor system
+llmproc-demo ./examples/file_descriptor/main.toml
+
+# Try file descriptor with spawn integration
+llmproc-demo ./examples/file_descriptor/spawn_integration.toml
+
+# Try handling large user inputs
+llmproc-demo ./examples/file_descriptor/user_input.toml
 ```
 
 Example program linking session:
@@ -330,7 +336,10 @@ The `examples/` directory contains ready-to-use program files:
 - `program_linking/main.toml` - Demonstrates LLM-to-LLM communication
 - `fork.toml` - Shows the fork system call in action
 - `preload.toml` - Demonstrates file preloading feature
-- `file_descriptor.toml` - Shows the file descriptor system with read_fd and fd_to_file tools
+- `file_descriptor/` - Directory with examples for the file descriptor system:
+  - `main.toml` - Core file descriptor features
+  - `spawn_integration.toml` - Sharing file descriptors between processes
+  - `user_input.toml` - Handling large user inputs
 - `reference.toml` - Full reference with all available options
 
 ### CLI Options

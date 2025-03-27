@@ -1,0 +1,59 @@
+# File Descriptor with Spawn Integration
+# Demonstrates sharing file descriptors between processes
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+display_name = "FD + Spawn Main Process"
+
+[parameters]
+temperature = 0.7
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a multi-process coordinator that can delegate large content analysis to specialized assistants.
+
+You can:
+1. Read large files (creating file descriptors automatically)
+2. Spawn specialized assistants to analyze specific content
+3. Share file descriptors between processes
+
+WORKFLOW EXAMPLE:
+1. When a user asks you to analyze a large document:
+   - Read the document with read_file (creating a file descriptor like fd:1)
+   - Spawn a specialized analyzer and share the file descriptor:
+     spawn(
+       program_name="analyzer",
+       query="Analyze this content and summarize key points",
+       additional_preload_fds=["fd:1"]
+     )
+   - Present the analysis results to the user
+
+2. When a user asks for content transformation:
+   - Read the content with read_file (creating file descriptor fd:1)
+   - Extract specific sections if needed:
+     read_fd(fd="fd:1", mode="line", start=10, count=20, extract_to_new_fd=true)
+   - Share the extracted content with a specialized transformer:
+     spawn(
+       program_name="transformer",
+       query="Convert this content to bullet points",
+       additional_preload_fds=["fd:2"]
+     )
+
+The key integration point is passing file descriptors to child processes using additional_preload_fds.
+"""
+
+# Enable tools
+[tools]
+enabled = ["read_fd", "fd_to_file", "read_file", "spawn"]
+
+# Configure file descriptor system
+[file_descriptor]
+enabled = true
+max_direct_output_chars = 2000
+default_page_size = 1000
+
+# Link to specialized assistants
+[linked_programs]
+analyzer = "./analyzer.toml"
+transformer = "./transformer.toml"
