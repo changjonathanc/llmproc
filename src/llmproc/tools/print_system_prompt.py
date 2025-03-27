@@ -37,8 +37,49 @@ def print_system_prompt(
         # Load the program file
         program = LLMProgram.compile(program_path)
 
-        # Get the enriched system prompt
-        enriched_prompt = program.get_enriched_system_prompt(include_env=include_env)
+        # Create a simple process-like object to pass the necessary flags
+        process_info = type('ProcessInfo', (), {})()
+        
+        # Set file descriptor and reference flags based on program configuration
+        fd_enabled = False
+        ref_enabled = False
+        preloaded_content = {}
+        
+        # Check if file descriptor is enabled either explicitly or by having read_fd in tools
+        if hasattr(program, "file_descriptor") and program.file_descriptor:
+            fd_config = program.file_descriptor
+            fd_enabled = getattr(fd_config, "enabled", False)
+            ref_enabled = getattr(fd_config, "enable_references", False)
+            
+        if not fd_enabled and hasattr(program, "tools") and program.tools:
+            tools = program.tools.get("enabled", [])
+            if "read_fd" in tools:
+                fd_enabled = True
+        
+        # Handle preloaded files
+        if hasattr(program, "preload_files") and program.preload_files:
+            from pathlib import Path
+            
+            # Simple mock preloading - just use file names
+            for file_path in program.preload_files:
+                path = Path(file_path)
+                if path.exists():
+                    try:
+                        preloaded_content[str(path)] = path.read_text()
+                    except Exception:
+                        # Just ignore errors for the preview tool
+                        pass
+                
+        # Set the flags and content on the process info object
+        process_info.file_descriptor_enabled = fd_enabled
+        process_info.references_enabled = ref_enabled
+        process_info.preloaded_content = preloaded_content
+        
+        # Get the enriched system prompt with process info
+        enriched_prompt = program.get_enriched_system_prompt(
+            process_instance=process_info, 
+            include_env=include_env
+        )
 
         # Print header
         output_file.write("\n===== ENRICHED SYSTEM PROMPT =====\n\n")
