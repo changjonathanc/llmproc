@@ -54,24 +54,24 @@ Done! The iterative Fibonacci function has been saved to fibonacci.py.
 
 ## 3. Key Features
 
-1. **Response Marking with `<ref>` Tags**:
-   - LLMs can wrap content in `<ref id="unique_id">content</ref>` tags
-   - IDs are unique within a conversation
+1. **Simple Syntax with `<ref>` Tags**:
+   - LLMs use familiar XML-style syntax: `<ref id="unique_id">content</ref>`
+   - IDs are descriptive and unique within a conversation
    - Content is displayed normally to the user
 
-2. **Reference System**:
-   - References persist in the conversation state
-   - Can be accessed by the LLM in subsequent turns
-   - Are fully copied during fork operations
+2. **Seamless Integration with File Descriptor System**:
+   - References use the existing file descriptor infrastructure
+   - All file descriptor operations work with references
+   - Unified access pattern via `ref:` namespace prefix
 
-3. **File Operations with References**:
-   - Export referenced content to files
-   - Append referenced content to existing files
-   - Insert referenced content at specific points in files
+3. **Core Use Cases**:
+   - Export specific sections of a response to files
+   - Reference previously generated content without repetition
+   - Process subsets of responses independently
 
-## 4. API Design
+## 4. Implementation Design
 
-### 4.1 Reference Tagging (LLM Output Format)
+### 4.1 Simple Reference Syntax
 
 ```xml
 <ref id="example_code">
@@ -80,131 +80,96 @@ def hello_world():
 </ref>
 ```
 
-### 4.2 Reference and File Descriptor Unified Interface
+The syntax is:
+- Familiar for LLMs (similar to HTML/XML)
+- Clear to human readers
+- Easy to parse programmatically
+- Optional type attribute for specialized handling: `<ref id="hello" type="code">`
 
-References are automatically stored as file descriptors with the reference ID serving as the descriptor ID:
+### 4.2 Unified Interface with File Descriptors
+
+References integrate directly with the existing file descriptor system:
 
 ```python
-# Use references directly with fd_to_file
-fd_to_file(fd="ref:example_code", file_path="/path/to/hello.py", mode="write")
+# Export a reference to a file
+fd_to_file(fd="ref:example_code", file_path="hello.py")
 
-# Use any file descriptor operation with references
-read_fd(fd="ref:example_code", page=1)
+# Read a reference using standard FD tools
+read_fd(fd="ref:example_code", read_all=True)
 ```
 
 References use a namespaced identifier format:
 - System-generated FDs: `fd:12345`
 - LLM-generated references: `ref:example_code`
 
-This prevents namespace collisions while providing a unified interface for all content operations. LLMs can use the same tools for both system-generated FDs and their own references.
-
-### 4.3 List Available References
-
-```python
-# List all references in the conversation
-list_refs()
-
-# Output - XML-formatted response
-"""
-<ref_list count="3">
-  <ref id="example_code" created="2025-03-24T14:30:00" lines="3" chars="48" />
-  <ref id="fibonacci" created="2025-03-24T14:35:00" lines="10" chars="156" />
-  <ref id="data_analysis" created="2025-03-24T14:40:00" lines="25" chars="820" />
-</ref_list>
-"""
-```
-
-### 4.4 Get Reference Content
-
-Getting reference content uses the file descriptor system under the hood:
-
-```python
-# Get a reference's content for reuse
-get_ref(ref_id="example_code")
-
-# Output - XML-formatted response
-"""
-<ref_content id="example_code">
-def hello_world():
-    print("Hello, world!")
-</ref_content>
-"""
-```
-
-This operation internally:
-1. Gets the file descriptor associated with the reference
-2. Uses read_fd with read_all=True to retrieve content
-3. Formats the response with reference-specific metadata
+This prevents namespace collisions while providing a unified interface for all content operations.
 
 ## 5. Implementation Details
 
 ### 5.1 Reference Storage
 
-References are stored directly in the file descriptor system:
+References are automatically detected and stored in the file descriptor system:
 
 ```python
-# When extracting references from LLM output, the system:
+# When extracting references from LLM output:
 reference_id = "example_code"
 reference_content = "def hello_world():\n    print(\"Hello, world!\")"
 
-# Creates an FD with the reference namespace prefix
-fd_id = f"ref:{reference_id}"  # "ref:example_code"
-
-# Stores in the FD manager alongside system-generated FDs
-self.fd_manager.create_fd(fd_id, content=reference_content)
+# Store in the FD manager with reference namespace prefix
+self.fd_manager.create_fd(
+    content=reference_content, 
+    source="reference",
+    reference_id=reference_id
+)
 ```
 
-This integration avoids duplicate storage mechanisms and makes all content management functions available for references.
+The system handles all the details:
+- Automatically extracts references from LLM responses
+- Creates file descriptors with proper namespacing
+- Ensures content is displayed normally to the user
 
-### 5.2 Message Processing
+### 5.2 Reference Extraction
 
-The LLM output post-processor:
+The implementation will:
 
-1. Scans messages for `<ref>` tags
-2. Extracts and stores references in the process state
-3. Leaves the content intact in the displayed message
+1. Scan each assistant message for `<ref>` tags
+2. Extract the ID and content from each reference
+3. Store the content in the file descriptor system with the `ref:` prefix
+4. Leave the original message unchanged for display
 
-### 5.3 System Prompt Additions
+### 5.3 System Prompt Instructions
 
-When reference ID system is enabled, these instructions are added to the system prompt:
+When enabled, these simple instructions are added to the system prompt:
 
 ```
-<reference_id_instructions>
-This system includes a reference ID feature for marking and referencing parts of your responses:
+<reference_instructions>
+You can mark sections of your responses using reference tags:
 
-1. You can mark important parts of your response with <ref id="unique_id">content</ref> tags
-2. These references can later be exported to files or reused without repetition
-3. Choose descriptive IDs for your references (e.g., "recursive_search_function")
-4. References persist throughout the conversation
+<ref id="example_id">
+Your content here (code, text, data, etc.)
+</ref>
 
-Key commands:
-- fd_to_file(fd="ref:example_code", file_path="hello.py") - Write to file
-- list_refs() - List all available references
-- read_fd(fd="ref:example_code", read_all=True) - Read reference content
+These references can be:
+- Exported to files using: fd_to_file(fd="ref:example_id", file_path="output.txt")
+- Read using standard file descriptor tools: read_fd(fd="ref:example_id", read_all=true)
 
-This feature is particularly useful for code, structured data, or any content that might
-need to be exported to a file or referenced later.
-</reference_id_instructions>
+Choose clear, descriptive IDs for your references.
+</reference_instructions>
 ```
 
-## 6. Integration with File Descriptors
+## 6. Integration with File Descriptor System
 
-The reference ID system is tightly integrated with the file descriptor system:
+The reference ID system leverages the file descriptor infrastructure:
 
-1. **File Descriptors**: Handle large **input** content (tool outputs, user input)
-2. **Reference IDs**: Handle specific parts of **output** content (LLM responses)
-3. **Unified Storage**: References are stored as file descriptors internally
+1. **Unified Storage**: References and file descriptors share the same backing store
+2. **Consistent Tools**: All FD tools work with references using the `ref:` prefix
+3. **Simple Implementation**: No need for a separate system just for references
 
-When a reference is created, the system:
-1. Creates a file descriptor with the referenced content
-2. Maintains a mapping between reference IDs and their corresponding FD IDs
-3. Uses the existing FD infrastructure for content storage and retrieval
+Benefits of this integration:
 
-This provides:
-- Unified storage and pagination system for both input and output content
-- Consistent APIs for working with large content
-- Reuse of file operation tools (fd_to_file) for references
-- Resource optimization through shared infrastructure
+- **Efficiency**: Reuses existing pagination and storage mechanisms
+- **Simplicity**: LLMs only need to learn one basic tag format
+- **Flexibility**: All file descriptor operations work with references
 
 ## 7. Usage Scenarios
 
@@ -366,23 +331,22 @@ fd_to_file(fd="ref:csv_module_full", file_path="csv_utils.py")
 The complete CSV module has been saved to csv_utils.py successfully.
 ```
 
-## 8. Implementation Plan
+## 8. Implementation Steps
 
-This feature will be implemented according to the timeline outlined in [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md):
+The reference ID system will be implemented in two simple phases:
 
-1. **Basic Functionality**
-   - Reference extraction and storage
-   - System prompt instructions
-   - Integration with fd_to_file tool
+### Phase 1: Core Functionality
+1. Add reference extraction in the LLMProcess._async_run method
+2. Integrate with the file descriptor system for storage
+3. Update system prompt with reference instructions
+4. Test with basic use cases (creating and exporting references)
 
-2. **Enhanced Features**
-   - list_refs and get_ref tool implementation
-   - Integration with fork for reference inheritance
-   - Advanced file operations (append, insert)
+### Phase 2: Refinements
+1. Ensure references are properly preserved during fork operations
+2. Add reference tracking to display created references
+3. Fine-tune the format of referenced content in file descriptor system
 
 ## 9. References
 
 - [RFC001: File Descriptor System for LLMProc](RFC001_file_descriptor_system.md) - Main specification document
-- [RFC003: File Descriptor Implementation Details](RFC003_file_descriptor_implementation.md) - Technical implementation details
 - [RFC004: File Descriptor Implementation Phases](RFC004_fd_implementation_phases.md) - Implementation phases and status
-- [RFC007: Enhanced File Descriptor API Design](RFC007_fd_enhanced_api_design.md) - Enhanced API features that will also benefit references
