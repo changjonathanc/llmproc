@@ -48,8 +48,10 @@ def print_system_prompt(
         # Check if file descriptor is enabled either explicitly or by having read_fd in tools
         if hasattr(program, "file_descriptor") and program.file_descriptor:
             fd_config = program.file_descriptor
-            fd_enabled = getattr(fd_config, "enabled", False)
-            ref_enabled = getattr(fd_config, "enable_references", False)
+            # Use dictionary get method instead of getattr
+            fd_enabled = fd_config.get("enabled", False)
+            ref_enabled = fd_config.get("enable_references", False)
+            page_user_input = fd_config.get("page_user_input", False)
             
         if not fd_enabled and hasattr(program, "tools") and program.tools:
             tools = program.tools.get("enabled", [])
@@ -74,6 +76,12 @@ def print_system_prompt(
         process_info.file_descriptor_enabled = fd_enabled
         process_info.references_enabled = ref_enabled
         process_info.preloaded_content = preloaded_content
+        
+        # Create a mock fd_manager to enable user input paging
+        if fd_enabled:
+            fd_manager = type('MockFDManager', (), {})()
+            fd_manager.page_user_input = page_user_input
+            process_info.fd_manager = fd_manager
         
         # Get the enriched system prompt with process info
         enriched_prompt = program.get_enriched_system_prompt(
@@ -187,12 +195,12 @@ def print_system_prompt(
         if hasattr(program, "file_descriptor") and program.file_descriptor:
             fd_config = program.file_descriptor
             output_file.write("\nFile Descriptor Configuration:\n")
-            output_file.write(f"  Enabled: {getattr(fd_config, 'enabled', False)}\n")
-            output_file.write(f"  Max Direct Output Chars: {getattr(fd_config, 'max_direct_output_chars', 8000)}\n")
-            output_file.write(f"  Default Page Size: {getattr(fd_config, 'default_page_size', 4000)}\n")
-            output_file.write(f"  Max Input Chars: {getattr(fd_config, 'max_input_chars', 8000)}\n")
-            output_file.write(f"  Page User Input: {getattr(fd_config, 'page_user_input', True)}\n")
-            output_file.write(f"  Enable References: {getattr(fd_config, 'enable_references', False)}\n")
+            output_file.write(f"  Enabled: {fd_config.get('enabled', False)}\n")
+            output_file.write(f"  Max Direct Output Chars: {fd_config.get('max_direct_output_chars', 8000)}\n")
+            output_file.write(f"  Default Page Size: {fd_config.get('default_page_size', 4000)}\n")
+            output_file.write(f"  Max Input Chars: {fd_config.get('max_input_chars', 8000)}\n")
+            output_file.write(f"  Page User Input: {fd_config.get('page_user_input', True)}\n")
+            output_file.write(f"  Enable References: {fd_config.get('enable_references', False)}\n")
             
         # Print tools configuration if available
         if hasattr(program, "tools") and program.tools:
