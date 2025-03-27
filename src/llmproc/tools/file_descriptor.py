@@ -206,7 +206,7 @@ This system can handle large user inputs through file descriptors:
 - For moderately sized inputs, read the full content: read_fd(fd="fd:1", read_all=true)
 - For extremely large inputs:
   * Read select sections using page/line modes: read_fd(fd="fd:1", mode="line", start=10, count=5)
-  * Delegate processing to child processes: spawn(program="analyzer.toml", prompt="Analyze this content", input_fd="fd:1")
+  * Delegate processing to child processes: spawn(program_name="analyzer", query="Analyze this content", additional_preload_fds=["fd:1"])
   * Extract relevant sections: read_fd(fd="fd:1", mode="line", start=10, count=5, extract_to_new_fd=true)
 </fd_user_input_instructions>
 """
