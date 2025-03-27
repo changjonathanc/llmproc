@@ -296,9 +296,11 @@ def register_file_descriptor_tools(registry: ToolRegistry, process) -> None:
     async def read_fd_handler(args):
         return await read_fd_tool(
             fd=args.get("fd"),
-            page=args.get("page", 1),
             read_all=args.get("read_all", False),
             extract_to_new_fd=args.get("extract_to_new_fd", False),
+            mode=args.get("mode", "page"),
+            start=args.get("start", 1),
+            count=args.get("count", 1),
             llm_process=process,
         )
         

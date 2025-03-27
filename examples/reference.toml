@@ -181,9 +181,11 @@ variables = ["working_directory", "platform", "date"]
 
 # TOOLS:
 # - read_fd: Read file descriptor content with pagination support
-#   read_fd(fd="fd:1", page=2) - Read specific page
+#   read_fd(fd="fd:1", start=2) - Read specific page
 #   read_fd(fd="fd:1", read_all=True) - Read all content
-#   read_fd(fd="fd:1", page=2, extract_to_new_fd=True) - Extract page to new FD
+#   read_fd(fd="fd:1", start=2, extract_to_new_fd=True) - Extract page to new FD
+#   read_fd(fd="fd:1", mode="line", start=10, count=5) - Read lines 10-14
+#   read_fd(fd="fd:1", mode="char", start=100, count=50) - Read 50 characters starting at position 100
 #
 # - fd_to_file: Export file descriptor content to a file
 #   Basic usage:

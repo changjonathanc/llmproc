@@ -11,7 +11,122 @@ from llmproc.tools.tool_result import ToolResult
 
 class TestEnhancedFileDescriptorAPI:
     """Tests for the enhanced file descriptor API."""
-
+    
+    def test_advanced_positioning_line_mode(self):
+        """Test line-based positioning with mode, start, and count parameters."""
+        manager = FileDescriptorManager()
+        
+        # Create a multi-line content file
+        content = "\n".join([f"Line {i+1}: This is test content line {i+1}" for i in range(20)])
+        
+        # Create the file descriptor
+        fd_result = manager.create_fd(content)
+        fd_id = fd_result.content.split('fd="')[1].split('"')[0]
+        
+        # Read specific lines using line mode
+        result = manager.read_fd(
+            fd_id, 
+            mode="line", 
+            start=5, 
+            count=3
+        )
+        
+        # Extract the content
+        content_text = result.content.split('>\n')[1].split('\n</fd_content')[0]
+        
+        # Verify the content
+        assert "Line 5:" in content_text
+        assert "Line 6:" in content_text
+        assert "Line 7:" in content_text
+        assert "Line 4:" not in content_text
+        assert "Line 8:" not in content_text
+        
+        # Check metadata
+        assert 'mode="line"' in result.content
+        assert 'start="5"' in result.content
+        assert 'count="3"' in result.content
+        assert 'lines="5-7"' in result.content
+    
+    def test_advanced_positioning_char_mode(self):
+        """Test character-based positioning with mode, start, and count parameters."""
+        manager = FileDescriptorManager()
+        
+        # Create content with a known structure
+        content = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" * 4  # 104 characters
+        
+        # Create the file descriptor
+        fd_result = manager.create_fd(content)
+        fd_id = fd_result.content.split('fd="')[1].split('"')[0]
+        
+        # Read specific characters using char mode
+        result = manager.read_fd(
+            fd_id, 
+            mode="char", 
+            start=10, 
+            count=15
+        )
+        
+        # Extract the content
+        content_text = result.content.split('>\n')[1].split('\n</fd_content')[0]
+        
+        # Verify the content - should be "KLMNOPQRSTUVWXY"
+        assert content_text == "KLMNOPQRSTUVWXY"
+        assert len(content_text) == 15
+        
+        # Check metadata
+        assert 'mode="char"' in result.content
+        assert 'start="10"' in result.content
+        assert 'count="15"' in result.content
+    
+    def test_advanced_positioning_with_extraction(self):
+        """Test combining advanced positioning with extraction to a new FD."""
+        manager = FileDescriptorManager()
+        
+        # Create a multi-line content file with structured data
+        content = "# Document Title\n\n"
+        content += "## Section 1\n\n"
+        content += "\n".join([f"Data point 1.{i}: Value {i*10}" for i in range(1, 6)])
+        content += "\n\n## Section 2\n\n"
+        content += "\n".join([f"Data point 2.{i}: Value {i*100}" for i in range(1, 6)])
+        content += "\n\n## Section 3\n\n"
+        content += "\n".join([f"Data point 3.{i}: Value {i*1000}" for i in range(1, 6)])
+        
+        # Create the file descriptor
+        fd_result = manager.create_fd(content)
+        fd_id = fd_result.content.split('fd="')[1].split('"')[0]
+        
+        # First locate the section boundaries using line mode
+        result = manager.read_fd(fd_id, read_all=True)
+        content_all = result.content.split('>\n')[1].split('\n</fd_content')[0]
+        lines = content_all.split('\n')
+        
+        # Find the Section 2 start and end
+        section2_start = next((i+1 for i, line in enumerate(lines) if line.strip() == "## Section 2"), 0)
+        section3_start = next((i for i, line in enumerate(lines) if line.strip() == "## Section 3"), len(lines))
+        
+        # Now extract just Section 2 using line mode
+        result = manager.read_fd(
+            fd_id,
+            mode="line",
+            start=section2_start,
+            count=section3_start - section2_start,
+            extract_to_new_fd=True
+        )
+        
+        # Get the new FD ID
+        new_fd_id = result.content.split('new_fd="')[1].split('"')[0]
+        
+        # Read the extracted content
+        extracted_result = manager.read_fd(new_fd_id, read_all=True)
+        extracted_content = extracted_result.content.split('>\n')[1].split('\n</fd_content')[0]
+        
+        # Verify section 2 was extracted
+        assert "## Section 2" in extracted_content
+        assert "Data point 2.1:" in extracted_content
+        assert "Data point 2.5:" in extracted_content
+        assert "## Section 1" not in extracted_content
+        assert "## Section 3" not in extracted_content
+    
     def test_extract_to_new_fd(self):
         """Test extracting content to a new file descriptor."""
         manager = FileDescriptorManager()
@@ -27,7 +142,7 @@ class TestEnhancedFileDescriptorAPI:
         fd_id = fd_result.content.split('fd="')[1].split('"')[0]
         
         # Extract page 2 to a new file descriptor
-        extract_result = manager.read_fd(fd_id, page=2, extract_to_new_fd=True)
+        extract_result = manager.read_fd(fd_id, mode="page", start=2, extract_to_new_fd=True)
         
         # Check that the result has the right format
         assert "<fd_extraction " in extract_result.content
@@ -43,7 +158,7 @@ class TestEnhancedFileDescriptorAPI:
         new_fd_content = manager.read_fd(new_fd_id, read_all=True)
         
         # Verify content from new FD is similar to what we'd get from reading page 2
-        page2_content = manager.read_fd(fd_id, page=2)
+        page2_content = manager.read_fd(fd_id, mode="page", start=2)
         
         # Extract actual content from XML result
         page2_text = page2_content.content.split('>\n')[1].split('\n</fd_content')[0]
@@ -95,7 +210,7 @@ async def test_read_fd_tool_with_extraction():
     # Call the tool with extract_to_new_fd=True
     result = await read_fd_tool(
         fd="fd:1", 
-        page=2, 
+        start=2, 
         extract_to_new_fd=True, 
         llm_process=process
     )
@@ -103,9 +218,11 @@ async def test_read_fd_tool_with_extraction():
     # Verify fd_manager.read_fd was called with correct args
     process.fd_manager.read_fd.assert_called_once_with(
         "fd:1", 
-        page=2, 
         read_all=False, 
-        extract_to_new_fd=True
+        extract_to_new_fd=True,
+        mode="page",
+        start=2,
+        count=1
     )
     
     # Check result
@@ -349,7 +466,7 @@ async def test_fd_integration_end_to_end():
         # Call the handler with extract_to_new_fd=True
         result = await handler({
             "fd": fd_id,
-            "page": 1,
+            "start": 1,
             "extract_to_new_fd": True
         })
         
@@ -398,7 +515,7 @@ async def test_enhanced_fd_workflow():
         # Step 1: Read the content
         read_result = await read_handler({
             "fd": fd_id,
-            "page": 1
+            "start": 1
         })
         
         # Verify we got some content
@@ -407,7 +524,7 @@ async def test_enhanced_fd_workflow():
         # Step 2: Extract content to new FD
         extract_result = await read_handler({
             "fd": fd_id,
-            "page": 1,
+            "start": 1,
             "extract_to_new_fd": True
         })
         

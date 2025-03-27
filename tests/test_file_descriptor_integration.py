@@ -127,7 +127,7 @@ def test_fd_pagination_with_very_long_lines():
     assert manager.file_descriptors[fd_id]["total_pages"] > 1
     
     # Read first page and verify it contains content
-    result1 = manager.read_fd(fd_id, page=1)
+    result1 = manager.read_fd(fd_id, mode="page", start=1)
     page1_content = result1.content.split('>\n')[1].split('\n</fd_content')[0]
     assert len(page1_content) > 0
     assert len(page1_content) <= manager.default_page_size  # Should be limited by page size
@@ -162,7 +162,7 @@ def test_fd_pagination_with_mixed_line_lengths():
     # Read each page and collect line information
     all_lines_info = []
     for page in range(1, total_pages + 1):
-        result = manager.read_fd(fd_id, page=page)
+        result = manager.read_fd(fd_id, mode="page", start=page)
         
         # Extract line range
         lines_attr = result.content.split('lines="')[1].split('"')[0]

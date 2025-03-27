@@ -49,12 +49,12 @@ class TestFileDescriptorManager:
         manager.create_fd(content)
         
         # Read first page
-        result1 = manager.read_fd("fd:1", page=1)
+        result1 = manager.read_fd("fd:1", mode="page", start=1)
         assert "<fd_content fd=\"fd:1\" page=\"1\"" in result1.content
         assert "Line 1" in result1.content
         
         # Read second page
-        result2 = manager.read_fd("fd:1", page=2)
+        result2 = manager.read_fd("fd:1", mode="page", start=2)
         assert "<fd_content fd=\"fd:1\" page=\"2\"" in result2.content
         
         # Read all content
@@ -77,13 +77,13 @@ class TestFileDescriptorManager:
         manager.create_fd(content)
         
         # Read first page
-        result1 = manager.read_fd("fd:1", page=1)
+        result1 = manager.read_fd("fd:1", mode="page", start=1)
         
         # Check if truncated flag is set
         assert "truncated=\"true\"" in result1.content
         
         # Read second page
-        result2 = manager.read_fd("fd:1", page=2)
+        result2 = manager.read_fd("fd:1", mode="page", start=2)
         
         # Check if continued flag is set
         assert "continued=\"true\"" in result2.content
@@ -104,7 +104,7 @@ class TestFileDescriptorManager:
         manager.create_fd(content)
         
         # Try to read invalid page
-        result = manager.read_fd("fd:1", page=999)
+        result = manager.read_fd("fd:1", mode="page", start=999)
         
         # Check that proper error is returned
         assert "<fd_error type=\"invalid_page\"" in result.content
@@ -120,10 +120,17 @@ async def test_read_fd_tool():
     process.fd_manager.read_fd.return_value = ToolResult(content="Test result")
     
     # Call the tool
-    result = await read_fd_tool(fd="fd:1", page=2, llm_process=process)
+    result = await read_fd_tool(fd="fd:1", start=2, llm_process=process)
     
     # Verify fd_manager.read_fd was called with correct args
-    process.fd_manager.read_fd.assert_called_once_with("fd:1", page=2, read_all=False)
+    process.fd_manager.read_fd.assert_called_once_with(
+        "fd:1", 
+        read_all=False, 
+        extract_to_new_fd=False,
+        mode="page",
+        start=2,
+        count=1
+    )
     
     # Check result
     assert result.content == "Test result"

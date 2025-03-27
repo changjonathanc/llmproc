@@ -30,21 +30,32 @@ When tool outputs exceed the context limit, they are stored in a file descriptor
 and you'll need to use this tool to read the content in pages.
 
 Usage:
-  read_fd(fd="fd:12345", page=2) - Read page 2 from the file descriptor
+  read_fd(fd="fd:12345", start=2) - Read page 2 from the file descriptor
   read_fd(fd="fd:12345", read_all=True) - Read the entire content (use cautiously with very large content)
-  read_fd(fd="fd:12345", page=2, extract_to_new_fd=True) - Create a new FD containing just page 2
+  read_fd(fd="fd:12345", start=2, extract_to_new_fd=True) - Create a new FD containing just page 2
+  
+  # Advanced positioning:
+  read_fd(fd="fd:12345", mode="line", start=10, count=5) - Read lines 10-14
+  read_fd(fd="fd:12345", mode="char", start=100, count=200) - Read 200 characters starting at position 100
+  read_fd(fd="fd:12345", mode="line", start=10, count=5, extract_to_new_fd=True) - Extract lines 10-14 to a new FD
+  read_fd(fd="fd:12345", mode="page", start=2, count=3) - Read pages 2, 3, and 4 combined
   
 Parameters:
   fd (str): The file descriptor ID to read from (e.g., "fd:12345")
-  page (int, optional): The page number to read (starting from 1)
   read_all (bool, optional): If true, returns the entire content (may be very large)
   extract_to_new_fd (bool, optional): If true, extracts the content to a new file descriptor and returns the new FD ID
+  
+  # Positioning parameters:
+  mode (str, optional): Positioning mode: "page" (default), "line", or "char"
+  start (int, optional): Starting position in the specified mode's units (page number, line number, or character position)
+  count (int, optional): Number of units to read (pages, lines, or characters)
 
 When to use this tool:
 - When you see a file descriptor reference (fd:12345) in a tool result
 - When you need to read more pages from large content
 - When you want to analyze content that was too large to include directly in the response
 - When you need to extract a specific part of a large content into a new FD (use extract_to_new_fd=True)
+- When you need to read specific lines or character ranges (use mode="line" or mode="char")
 """
 
 fd_to_file_tool_description = """
@@ -91,10 +102,6 @@ read_fd_tool_def = {
                 "type": "string",
                 "description": "The file descriptor ID to read from (e.g., 'fd:12345')",
             },
-            "page": {
-                "type": "integer",
-                "description": "The page number to read (starting from 1)",
-            },
             "read_all": {
                 "type": "boolean",
                 "description": "If true, returns the entire content (use cautiously with very large content)",
@@ -102,6 +109,19 @@ read_fd_tool_def = {
             "extract_to_new_fd": {
                 "type": "boolean",
                 "description": "If true, extracts the content to a new file descriptor and returns the new FD ID",
+            },
+            "mode": {
+                "type": "string",
+                "enum": ["page", "line", "char"],
+                "description": "Positioning mode: 'page' (default), 'line', or 'char'",
+            },
+            "start": {
+                "type": "integer",
+                "description": "Starting position in the specified mode's units (page number, line number, or character position)",
+            },
+            "count": {
+                "type": "integer",
+                "description": "Number of units to read (pages, lines, or characters)",
             },
         },
         "required": ["fd"],
@@ -150,18 +170,25 @@ This system includes a file descriptor feature for handling large content:
 3. Use fd_to_file to export content to disk files
 
 Key commands:
-- read_fd(fd="fd:12345", page=2) - Read page 2
+- read_fd(fd="fd:12345", start=2) - Read page 2
 - read_fd(fd="fd:12345", read_all=True) - Read entire content
-- read_fd(fd="fd:12345", extract_to_new_fd=True) - Extract content to a new FD
+- read_fd(fd="fd:12345", start=2, extract_to_new_fd=True) - Extract page 2 to a new FD
+- read_fd(fd="fd:12345", mode="line", start=10, count=5) - Read lines 10-14
+- read_fd(fd="fd:12345", mode="char", start=100, count=200) - Read 200 characters
+- read_fd(fd="fd:12345", mode="page", start=2, count=3) - Read pages 2, 3, and 4 combined
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt") - Save to file
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append") - Append to file
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", exist_ok=False) - Create new file only
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False) - Update existing file only
 
 Tips:
+- Use the start parameter to specify page number, line number, or character position
 - Check "truncated" and "continued" attributes for content continuation
 - When analyzing large content, consider reading all pages first
 - Use extract_to_new_fd=True when you need to extract specific content
+- Use mode="line" to read specific lines of content
+- Use mode="char" to read specific character ranges
+- Use mode="page" with count>1 to read multiple pages at once
 - Use mode="append" when adding to existing files
 - Use exist_ok=False to avoid overwriting existing files
 - Use create=False when you want to update only existing files
@@ -258,7 +285,7 @@ class FileDescriptorManager:
         }
         
         # Generate preview content (first page)
-        preview_content, preview_info = self._get_page_content(fd_id, page=1)
+        preview_content, preview_info = self._get_page_content(fd_id, start_pos=1)
         
         # Calculate the actual number of pages by simulating pagination
         num_pages = self._calculate_total_pages(fd_id)
@@ -285,24 +312,28 @@ class FileDescriptorManager:
     def read_fd(
         self, 
         fd_id: str, 
-        page: int = 1, 
         read_all: bool = False,
-        extract_to_new_fd: bool = False
+        extract_to_new_fd: bool = False,
+        mode: str = "page",
+        start: int = 1,
+        count: int = 1
     ) -> Dict[str, Any]:
         """Read content from a file descriptor.
 
         Args:
             fd_id: The file descriptor ID to read from
-            page: The page number to read (starting from 1)
             read_all: If True, returns the entire content
             extract_to_new_fd: If True, creates a new file descriptor with the content and returns its ID
+            mode: Positioning mode: "page" (default), "line", or "char"
+            start: Starting position in the specified mode's units (page number, line number, or character position)
+            count: Number of units to read (pages, lines, or characters)
 
         Returns:
             Dictionary with content and metadata, or a new file descriptor ID if extract_to_new_fd=True
 
         Raises:
             KeyError: If the file descriptor is not found
-            ValueError: If the page number is invalid
+            ValueError: If the start position is invalid or if the range parameters are invalid
         """
         # Validate file descriptor exists
         if fd_id not in self.file_descriptors:
@@ -318,9 +349,15 @@ class FileDescriptorManager:
         content_to_return = None
         content_metadata = {}
         
-        # Handle read_all case
+        # Validate mode parameter
+        if mode not in ["page", "line", "char"]:
+            error_msg = f"Invalid mode: {mode}. Valid options are 'page', 'line', or 'char'."
+            logger.error(error_msg)
+            return self._format_fd_error("invalid_parameter", fd_id, error_msg)
+        
+        # Handle read_all case (highest priority)
         if read_all:
-            # Use stored total pages value
+            # Read the entire content regardless of other positioning parameters
             total_pages = fd_entry["total_pages"]
             
             content_to_return = fd_entry["content"]
@@ -332,33 +369,169 @@ class FileDescriptorManager:
                 "truncated": False,
                 "lines": f"1-{fd_entry['total_lines']}",
                 "total_lines": fd_entry["total_lines"],
+                "mode": "all",
             }
-        else:
-            # Use stored total pages value
-            total_pages = fd_entry["total_pages"]
             
-            # Validate page number
-            if page < 1 or page > total_pages:
-                error_msg = f"Invalid page number. Valid range: 1-{total_pages}"
+            logger.debug(f"Read all content from {fd_id}")
+            
+        # Handle positioning modes
+        elif mode == "line":
+            # Line-based positioning
+            lines = fd_entry["lines"]
+            total_lines = fd_entry["total_lines"]
+            
+            # Validate line range
+            if start < 1 or start > total_lines:
+                error_msg = f"Invalid line start position. Valid range: 1-{total_lines}"
                 logger.error(error_msg)
-                return self._format_fd_error("invalid_page", fd_id, error_msg)
+                return self._format_fd_error("invalid_range", fd_id, error_msg)
             
-            # Get content for the requested page
-            content, page_info = self._get_page_content(fd_id, page)
-            content_to_return = content
+            end_line = min(start + count - 1, total_lines)
+            
+            # Get content by line range
+            line_start_index = lines[start - 1]  # Convert to 0-indexed 
+            
+            # Handle the end line index
+            if end_line >= len(lines):
+                # Read to the end of the content
+                line_end_index = len(fd_entry["content"])
+            else:
+                line_end_index = lines[end_line]  # End index is start of next line
+            
+            content_to_return = fd_entry["content"][line_start_index:line_end_index]
             
             # Create the response metadata
             content_metadata = {
                 "fd": fd_id,
-                "page": page,
-                "pages": total_pages,
-                "continued": page_info.get("continued", False),
-                "truncated": page_info.get("truncated", False),
-                "lines": f"{page_info.get('start_line', 1)}-{page_info.get('end_line', 1)}",
-                "total_lines": fd_entry["total_lines"],
+                "pages": fd_entry["total_pages"],
+                "continued": False,
+                "truncated": False,
+                "lines": f"{start}-{end_line}",
+                "total_lines": total_lines,
+                "mode": "line",
+                "start": start,
+                "count": end_line - start + 1,
             }
             
-            logger.debug(f"Read page {page}/{total_pages} from {fd_id}")
+            logger.debug(f"Read lines {start}-{end_line} from {fd_id}")
+            
+        elif mode == "char":
+            # Character-based positioning
+            content = fd_entry["content"]
+            content_length = len(content)
+            
+            # Validate char range
+            if start < 0 or start >= content_length:
+                error_msg = f"Invalid character start position. Valid range: 0-{content_length-1}"
+                logger.error(error_msg)
+                return self._format_fd_error("invalid_range", fd_id, error_msg)
+            
+            end_char = min(start + count, content_length)
+            
+            # Extract the content range
+            content_to_return = content[start:end_char]
+            
+            # For line numbering in metadata, find the lines that contain these characters
+            lines = fd_entry["lines"]
+            total_lines = fd_entry["total_lines"]
+            
+            # Find the line number for the start character
+            start_line_num = 1
+            for i, line_start in enumerate(lines):
+                if line_start > start:
+                    start_line_num = i  # Previous line contains the start character
+                    break
+                start_line_num = i + 1
+            
+            # Find the line number for the end character
+            end_line_num = start_line_num
+            for i in range(start_line_num - 1, len(lines)):
+                if i + 1 < len(lines) and lines[i + 1] > end_char:
+                    end_line_num = i + 1
+                    break
+                if i + 1 == len(lines):
+                    end_line_num = total_lines
+            
+            # Create the response metadata
+            content_metadata = {
+                "fd": fd_id,
+                "pages": fd_entry["total_pages"],
+                "continued": False,
+                "truncated": False,
+                "lines": f"{start_line_num}-{end_line_num}",
+                "total_lines": total_lines,
+                "mode": "char",
+                "start": start,
+                "count": end_char - start,
+            }
+            
+            logger.debug(f"Read characters {start}-{end_char-1} from {fd_id}")
+            
+        else:
+            # Default page-based positioning (mode=="page")
+            total_pages = fd_entry["total_pages"]
+            
+            # Validate page number
+            if start < 1 or start > total_pages:
+                error_msg = f"Invalid page number. Valid range: 1-{total_pages}"
+                logger.error(error_msg)
+                return self._format_fd_error("invalid_page", fd_id, error_msg)
+            
+            # Handle multi-page ranges
+            if count > 1:
+                end_page = min(start + count - 1, total_pages)
+                
+                # Collect content from all pages in the range
+                all_content = []
+                first_page_info = None
+                last_page_info = None
+                
+                for p in range(start, end_page + 1):
+                    section_content, position_info = self._get_page_content(fd_id, start_pos=p)
+                    all_content.append(section_content)
+                    
+                    if p == start:
+                        first_page_info = position_info
+                    if p == end_page:
+                        last_page_info = position_info
+                
+                content_to_return = "".join(all_content)
+                
+                # Create the response metadata for multi-page
+                content_metadata = {
+                    "fd": fd_id,
+                    "pages": total_pages,
+                    "continued": first_page_info.get("continued", False),
+                    "truncated": last_page_info.get("truncated", False),
+                    "lines": f"{first_page_info.get('start_line', 1)}-{last_page_info.get('end_line', 1)}",
+                    "total_lines": fd_entry["total_lines"],
+                    "mode": "page",
+                    "start": start,
+                    "count": count,
+                }
+                
+                logger.debug(f"Read pages {start}-{end_page} from {fd_id}")
+                
+            else:
+                # Single page case
+                content, position_info = self._get_page_content(fd_id, start_pos=start)
+                content_to_return = content
+                
+                # Create the response metadata
+                content_metadata = {
+                    "fd": fd_id,
+                    "page": start,
+                    "pages": total_pages,
+                    "continued": position_info.get("continued", False),
+                    "truncated": position_info.get("truncated", False),
+                    "lines": f"{position_info.get('start_line', 1)}-{position_info.get('end_line', 1)}",
+                    "total_lines": fd_entry["total_lines"],
+                    "mode": "page",
+                    "start": start,
+                    "count": 1,
+                }
+                
+                logger.debug(f"Read page {start}/{total_pages} from {fd_id}")
         
         # Check if we should extract the content to a new FD
         if extract_to_new_fd and content_to_return:
@@ -369,13 +542,22 @@ class FileDescriptorManager:
             new_fd_id = new_fd_result.content.split('fd="')[1].split('"')[0]
             
             # Return a special response indicating the content was extracted to a new FD
-            return self._format_fd_extraction({
+            extraction_result = {
                 "source_fd": fd_id,
                 "new_fd": new_fd_id,
-                "page": page if not read_all else "all",
+                "mode": mode,
                 "content_size": len(content_to_return),
                 "message": f"Content from {fd_id} has been extracted to {new_fd_id}",
-            })
+            }
+            
+            # Add mode-specific attributes based on the access mode
+            if read_all:
+                extraction_result["position"] = "all"
+            else:
+                extraction_result["start"] = start
+                extraction_result["count"] = count
+                
+            return self._format_fd_extraction(extraction_result)
         
         # Add content to metadata and create the response
         content_metadata["content"] = content_to_return
@@ -557,16 +739,16 @@ class FileDescriptorManager:
         return lines, len(lines)
 
     def _get_page_content(
-        self, fd_id: str, page: int
+        self, fd_id: str, start_pos: int
     ) -> Tuple[str, Dict[str, Any]]:
-        """Get content for a specific page with line-aware pagination.
+        """Get content for a specific page position with line-aware pagination.
 
         Args:
             fd_id: The file descriptor ID
-            page: The page number (1-based)
+            start_pos: The starting page position (1-based)
 
         Returns:
-            Tuple of (page content, page information)
+            Tuple of (content, position information)
         """
         fd_entry = self.file_descriptors[fd_id]
         content = fd_entry["content"]
@@ -574,7 +756,7 @@ class FileDescriptorManager:
         lines = fd_entry["lines"]
         
         # Calculate page boundaries
-        start_char = (page - 1) * page_size
+        start_char = (start_pos - 1) * page_size
         
         # Handle case where start_char is beyond the content length
         if start_char >= len(content):
@@ -621,18 +803,18 @@ class FileDescriptorManager:
         if end_char < next_line_start:
             truncated = True
         
-        # Extract the actual content for this page
-        page_content = content[start_char:end_char]
+        # Extract the actual content for this section
+        section_content = content[start_char:end_char]
         
         # Return content and metadata
-        page_info = {
+        position_info = {
             "start_line": start_line,
             "end_line": end_line,
             "continued": continued,
             "truncated": truncated,
         }
         
-        return page_content, page_info
+        return section_content, position_info
 
     def _format_fd_result(self, result: Dict[str, Any]) -> "ToolResult":
         """Format a file descriptor result in XML format.
@@ -669,22 +851,42 @@ class FileDescriptorManager:
         """
         from llmproc.tools.tool_result import ToolResult
         
+        # Add additional attributes for mode, start, and count if present
+        mode_attr = f' mode="{content["mode"]}"' if "mode" in content else ""
+        start_attr = f' start="{content["start"]}"' if "start" in content else ""
+        count_attr = f' count="{content["count"]}"' if "count" in content else ""
+        
         # Handle the all-pages case differently
-        if content["page"] == "all":
+        if content.get("page") == "all":
             xml = (
                 f'<fd_content fd="{content["fd"]}" page="all" pages="{content["pages"]}" '
                 f'continued="false" truncated="false" '
-                f'lines="{content["lines"]}" total_lines="{content["total_lines"]}">\n'
+                f'lines="{content["lines"]}" total_lines="{content["total_lines"]}"'
+                f'{mode_attr}{start_attr}{count_attr}>\n'
                 f'{content["content"]}\n'
                 f'</fd_content>'
             )
-        else:
+        elif "page" in content:
+            # Page-based positioning
             xml = (
                 f'<fd_content fd="{content["fd"]}" page="{content["page"]}" '
                 f'pages="{content["pages"]}" '
                 f'continued="{str(content["continued"]).lower()}" '
                 f'truncated="{str(content["truncated"]).lower()}" '
-                f'lines="{content["lines"]}" total_lines="{content["total_lines"]}">\n'
+                f'lines="{content["lines"]}" total_lines="{content["total_lines"]}"'
+                f'{mode_attr}{start_attr}{count_attr}>\n'
+                f'{content["content"]}\n'
+                f'</fd_content>'
+            )
+        else:
+            # Line or char based positioning
+            xml = (
+                f'<fd_content fd="{content["fd"]}" '
+                f'pages="{content["pages"]}" '
+                f'continued="{str(content.get("continued", False)).lower()}" '
+                f'truncated="{str(content.get("truncated", False)).lower()}" '
+                f'lines="{content["lines"]}" total_lines="{content["total_lines"]}"'
+                f'{mode_attr}{start_attr}{count_attr}>\n'
                 f'{content["content"]}\n'
                 f'</fd_content>'
             )
@@ -728,9 +930,29 @@ class FileDescriptorManager:
         """
         from llmproc.tools.tool_result import ToolResult
         
+        # Common attributes for all extraction results
+        attributes = [
+            f'source_fd="{result["source_fd"]}"',
+            f'new_fd="{result["new_fd"]}"',
+            f'mode="{result["mode"]}"',
+            f'content_size="{result["content_size"]}"'
+        ]
+        
+        # Add position/range information based on provided data
+        if "position" in result:
+            attributes.append(f'position="{result["position"]}"')
+        if "start" in result:
+            attributes.append(f'start="{result["start"]}"')
+        if "count" in result:
+            attributes.append(f'count="{result["count"]}"')
+            
+        # For backwards compatibility, if we're in page mode, also include page attribute
+        if result["mode"] == "page" and "start" in result:
+            attributes.append(f'page="{result["start"]}"')
+            
+        # Combine attributes and create the XML
         xml = (
-            f'<fd_extraction source_fd="{result["source_fd"]}" new_fd="{result["new_fd"]}" '
-            f'page="{result["page"]}" content_size="{result["content_size"]}">\n'
+            f'<fd_extraction {" ".join(attributes)}>\n'
             f'  <message>{result["message"]}</message>\n'
             f'</fd_extraction>'
         )
@@ -763,9 +985,11 @@ class FileDescriptorManager:
 
 async def read_fd_tool(
     fd: str,
-    page: int = 1,
     read_all: bool = False,
     extract_to_new_fd: bool = False,
+    mode: str = "page",
+    start: int = 1,
+    count: int = 1,
     llm_process=None,
 ) -> "ToolResult":
     """Read content from a file descriptor.
@@ -775,9 +999,11 @@ async def read_fd_tool(
 
     Args:
         fd: The file descriptor ID to read from (e.g., "fd:12345")
-        page: The page number to read (starting from 1)
         read_all: If true, returns the entire content
         extract_to_new_fd: If true, extracts the content to a new file descriptor
+        mode: Positioning mode: "page" (default), "line", or "char"
+        start: Starting position in the specified mode's units (page number, line number, or character position)
+        count: Number of units to read (pages, lines, or characters)
         llm_process: The LLMProcess instance with FD manager
 
     Returns:
@@ -786,7 +1012,7 @@ async def read_fd_tool(
 
     Raises:
         KeyError: If the file descriptor is not found
-        ValueError: If the page number is invalid
+        ValueError: If the start position is invalid or if the range parameters are invalid
     """
     from llmproc.tools.tool_result import ToolResult
     
@@ -798,10 +1024,12 @@ async def read_fd_tool(
     try:
         # Read from the file descriptor - should now return a ToolResult directly
         return llm_process.fd_manager.read_fd(
-            fd, 
-            page=page, 
+            fd,
             read_all=read_all,
-            extract_to_new_fd=extract_to_new_fd
+            extract_to_new_fd=extract_to_new_fd,
+            mode=mode,
+            start=start,
+            count=count
         )
     except Exception as e:
         error_msg = f"Error reading file descriptor: {str(e)}"

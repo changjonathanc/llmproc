@@ -30,18 +30,25 @@ While functional, this API can be enhanced to provide more flexibility and power
 ```python
 read_fd(
     fd="fd:1234",           # Source file descriptor
-    page=1,                 # Page number (starting from 1)
     read_all=False,         # Read entire content
     extract_to_new_fd=False,# Extract content to a new file descriptor
     
-    # Alternative positioning (optional in future)
+    # Positioning system with unified parameters
     mode="page",            # "page" (default), "line", "char"
-    start=None,             # Starting position in specified units
-    count=None              # Number of units to read
+    start=1,                # Starting position in the specified mode's units
+                            # (page number, line number, or character position)
+    count=1,                # Number of units to read (pages, lines, or characters)
 )
 ```
 
-### 3.1 Key Improvements
+### 3.1 Parameter Naming Rationale
+
+For the positioning parameters, we consulted Claude (an LLM that will be using this API):
+- **start/count** was chosen as most intuitive for LLMs to reason with
+- Alternative options like **offset/limit** and **position/count** were considered
+- Claude confirmed that **start/count** maps most naturally to how LLMs think about content positioning
+
+### 3.2 Key Improvements
 
 1. **New `extract_to_new_fd` parameter**:
    - When `extract_to_new_fd=True`, returns a new file descriptor containing only the requested content
@@ -62,16 +69,20 @@ read_fd(
 ### 3.2 Examples
 
 ```python
-# Current usage (unchanged)
-read_fd(fd="fd:1234", page=2)
+# Current usage (transitioning to unified parameters)
+read_fd(fd="fd:1234", start=2)  # Read page 2 (mode="page" by default)
 
 # New functionality
-new_fd = read_fd(fd="fd:1234", page=2, extract_to_new_fd=True)
+new_fd = read_fd(fd="fd:1234", start=2, extract_to_new_fd=True)
 # Returns new fd:1235 containing just page 2
 
-# Future extension (Phase 3)
+# Advanced positioning (Phase 3)
 new_fd = read_fd(fd="fd:1234", mode="line", start=10, count=5, extract_to_new_fd=True)
 # Returns new fd with just lines 10-14
+
+# Reading multiple pages
+content = read_fd(fd="fd:1234", mode="page", start=2, count=3)
+# Returns pages 2, 3, and 4 combined
 ```
 
 ## 4. Enhanced fd_to_file API
@@ -189,9 +200,11 @@ This system includes a file descriptor feature for handling large content:
 3. Use fd_to_file to export content to disk files
 
 Key commands:
-- read_fd(fd="fd:1234", page=2) - Read page 2
+- read_fd(fd="fd:1234", start=2) - Read page 2
 - read_fd(fd="fd:1234", read_all=True) - Read entire content
-- read_fd(fd="fd:1234", extract_to_new_fd=True) - Extract content to a new FD
+- read_fd(fd="fd:1234", start=2, extract_to_new_fd=True) - Extract page 2 to a new FD
+- read_fd(fd="fd:1234", mode="line", start=10, count=5) - Read lines 10-14
+- read_fd(fd="fd:1234", mode="char", start=100, count=200) - Read 200 characters starting at position 100
 - fd_to_file(fd="fd:1234", file_path="/path/to/output.txt") - Save to file
 - fd_to_file(fd="fd:1234", file_path="/path/to/output.txt", mode="append") - Append to file
 - fd_to_file(fd="fd:1234", file_path="/path/to/output.txt", exist_ok=False) - Create only if file doesn't exist
@@ -214,7 +227,7 @@ Tips:
 ```python
 # Parent process has a large log file in fd:12345
 # Extract just the error section
-error_section_fd = read_fd(fd="fd:12345", page=3, extract_to_new_fd=True)  # This creates fd:12346
+error_section_fd = read_fd(fd="fd:12345", start=3, extract_to_new_fd=True)  # This creates fd:12346
 
 # Now send just the error section to a specialized process
 spawn(
