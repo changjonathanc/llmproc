@@ -230,3 +230,142 @@ async def test_fd_integration_end_to_end():
         
         # Verify the new FD exists
         assert new_fd_id in process.fd_manager.file_descriptors
+        
+        
+@pytest.mark.asyncio
+async def test_enhanced_fd_workflow():
+    """Test a complete enhanced FD workflow with typical operations sequence."""
+    import tempfile
+    import os
+    
+    # Create a temporary directory for file operations
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Setup a process with FD manager
+        process = Mock()
+        process.fd_manager = FileDescriptorManager(default_page_size=100)
+        process.file_descriptor_enabled = True
+        
+        # Create registry and register tools
+        from llmproc.tools import ToolRegistry
+        registry = ToolRegistry()
+        from llmproc.tools import register_file_descriptor_tools
+        register_file_descriptor_tools(registry, process)
+        
+        # 1. Create sample content with multiple pages
+        content = "# Sample Document\n\n"
+        # Add introduction section
+        content += "## Introduction\n" + ("This is introduction content.\n" * 20)
+        # Add methodology section
+        content += "\n## Methodology\n" + ("This is methodology content.\n" * 20)
+        # Add results section
+        content += "\n## Results\n" + ("This is results content.\n" * 20)
+        # Add conclusion section
+        content += "\n## Conclusion\n" + ("This is conclusion content.\n" * 20)
+        
+        # 2. Create initial file descriptor
+        fd_result = process.fd_manager.create_fd(content)
+        original_fd_id = fd_result.content.split('fd="')[1].split('"')[0]
+        
+        # 3. Typical workflow - first READ to examine
+        # Get handler for read_fd
+        read_handler = registry.get_handler("read_fd")
+        
+        # Read the first page to explore content
+        page1_result = await read_handler({
+            "fd": original_fd_id,
+            "page": 1
+        })
+        
+        # Verify page 1 contains introduction
+        assert "Introduction" in page1_result.content
+        
+        # Read additional pages to find content of interest
+        page2_result = await read_handler({
+            "fd": original_fd_id,
+            "page": 2
+        })
+        
+        # Check if page 2 contains methodology
+        page2_has_methodology = "Methodology" in page2_result.content
+        
+        # Read page 3 if needed
+        page3_result = await read_handler({
+            "fd": original_fd_id,
+            "page": 3
+        })
+        
+        # Determine which page has results section
+        target_page = 3  # Assume page 3 has results
+        if "Results" in page2_result.content:
+            target_page = 2
+        elif "Results" in page1_result.content:
+            target_page = 1
+        
+        # 4. Next step in workflow - EXTRACT the page with results to a new FD
+        extract_result = await read_handler({
+            "fd": original_fd_id,
+            "page": target_page,
+            "extract_to_new_fd": True
+        })
+        
+        # Verify extraction occurred and get new FD ID
+        assert "<fd_extraction" in extract_result.content
+        results_fd_id = extract_result.content.split('new_fd="')[1].split('"')[0]
+        assert results_fd_id in process.fd_manager.file_descriptors
+        
+        # 5. Read the extracted content to verify
+        extracted_content_result = await read_handler({
+            "fd": results_fd_id,
+            "read_all": True
+        })
+        
+        # Verify extracted content has results section
+        assert "Results" in extracted_content_result.content
+        
+        # 6. Write the extracted content to a file
+        get_fd_to_file_handler = registry.get_handler("fd_to_file")
+        output_file = os.path.join(temp_dir, "results_section.md")
+        
+        write_result = await get_fd_to_file_handler({
+            "fd": results_fd_id,
+            "file_path": output_file
+        })
+        
+        # Verify file was written
+        assert os.path.exists(output_file)
+        with open(output_file, 'r') as f:
+            file_content = f.read()
+            assert "Results" in file_content
+            
+        # 7. Create a combined report by extracting and appending multiple sections
+        
+        # Extract conclusion section (assumed to be on the last page)
+        last_page = process.fd_manager.file_descriptors[original_fd_id]["total_pages"]
+        conclusion_extract_result = await read_handler({
+            "fd": original_fd_id,
+            "page": last_page,
+            "extract_to_new_fd": True
+        })
+        
+        conclusion_fd_id = conclusion_extract_result.content.split('new_fd="')[1].split('"')[0]
+        
+        # Create report file with results first
+        report_file = os.path.join(temp_dir, "report.md")
+        await get_fd_to_file_handler({
+            "fd": results_fd_id,
+            "file_path": report_file
+        })
+        
+        # Append conclusion
+        append_result = await get_fd_to_file_handler({
+            "fd": conclusion_fd_id,
+            "file_path": report_file,
+            "mode": "append"
+        })
+        
+        # Verify combined report
+        assert "mode=\"append\"" in append_result.content
+        with open(report_file, 'r') as f:
+            report_content = f.read()
+            assert "Results" in report_content
+            assert "Conclusion" in report_content

@@ -45,8 +45,14 @@ read_fd(
 
 1. **New `extract_to_new_fd` parameter**:
    - When `extract_to_new_fd=True`, returns a new file descriptor containing only the requested content
+   - Returns only the new FD identifier (not the content itself)
    - Enables "dup"-like functionality to slice and manage content
    - Supports creation of smaller, more manageable content units
+   
+   Typical workflow:
+   1. First read the content using `read_fd` to examine it
+   2. Then decide to extract a specific portion to a new FD using `extract_to_new_fd=True`
+   3. The new FD ID is returned for future operations
 
 2. **Future extensibility** with mode/start/count parameters:
    - Can be added in future phases without breaking changes
