@@ -1,0 +1,12 @@
+[model]
+name = "claude-3-5-sonnet-20241022"
+provider = "anthropic"
+display_name = "Claude 3.5 Sonnet"
+
+[prompt]
+system_prompt = """You are Claude 3.5 Sonnet, Anthropic's powerful AI assistant with advanced reasoning capabilities and computer interface understanding. Provide detailed, well-structured responses while maintaining clarity and helpfulness."""
+
+[parameters]
+temperature = 0.7
+max_tokens = 4096
+top_p = 0.95

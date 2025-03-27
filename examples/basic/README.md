@@ -5,6 +5,7 @@ This directory contains simple examples of LLMProc configurations that demonstra
 ## OpenAI Models
 
 - **gpt-4o.toml**: OpenAI GPT-4o configuration
+- **gpt-4-5.toml**: OpenAI GPT-4.5 (using GPT-4 Turbo) configuration
 - **gpt-4o-mini.toml**: OpenAI GPT-4o-mini configuration
 - **o3-mini-low.toml**: OpenAI o3-mini with low reasoning effort
 - **o3-mini-medium.toml**: OpenAI o3-mini with medium reasoning effort
@@ -13,8 +14,8 @@ This directory contains simple examples of LLMProc configurations that demonstra
 ## Anthropic Models
 
 - **claude-haiku.toml**: Basic Claude Haiku configuration
-- **claude-3-sonnet.toml**: Claude 3 Sonnet for balanced performance and depth
-- **claude-3-opus.toml**: Claude 3 Opus for maximum capability and depth
+- **claude-3-5-sonnet.toml**: Claude 3.5 Sonnet with advanced capabilities
+- **claude-3-7-sonnet.toml**: Claude 3.7 Sonnet with extended thinking
 - **claude-3-5-haiku-vertex.toml**: Claude 3.5 Haiku on Google Vertex AI
 
 ## Special Features
