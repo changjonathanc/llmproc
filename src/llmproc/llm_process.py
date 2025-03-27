@@ -353,7 +353,7 @@ class LLMProcess:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
 
         # Process any references in the last assistant message for reference ID system
-        if self.file_descriptor_enabled and self.fd_manager:
+        if self.file_descriptor_enabled and self.fd_manager and self.references_enabled:
             # Get the last assistant message if available
             if self.state and len(self.state) > 0 and self.state[-1].get("role") == "assistant":
                 assistant_message = self.state[-1].get("content", "")
@@ -595,6 +595,9 @@ class LLMProcess:
         if self.file_descriptor_enabled and self.fd_manager:
             forked_process.file_descriptor_enabled = True
             forked_process.fd_manager = copy.deepcopy(self.fd_manager)
+            
+            # Copy references_enabled setting
+            forked_process.references_enabled = getattr(self, "references_enabled", False)
             
             # Ensure user input handling settings are copied correctly
             if not hasattr(forked_process.fd_manager, "page_user_input"):
