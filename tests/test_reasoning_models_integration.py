@@ -108,11 +108,16 @@ async def test_reasoning_models_response_quality():
     assert medium_result
     assert low_result
     
+    # Get the text content from the RunResult objects
+    high_text = high_process.get_last_message()
+    medium_text = medium_process.get_last_message()
+    low_text = low_process.get_last_message()
+    
     # Check that high reasoning model provides more detailed reasoning
     # (We can't check exact content, but we can check length as a proxy for detail)
-    high_length = len(high_result)
-    medium_length = len(medium_result)
-    low_length = len(low_result)
+    high_length = len(high_text)
+    medium_length = len(medium_text)
+    low_length = len(low_text)
     
     # Log the response lengths for diagnostics
     print(f"High reasoning response length: {high_length}")
@@ -121,9 +126,9 @@ async def test_reasoning_models_response_quality():
     
     # The actual response lengths will vary, but we verify that all responses
     # contain the correct answer (600 square meters)
-    assert "600" in high_result
-    assert "600" in medium_result
-    assert "600" in low_result
+    assert "600" in high_text
+    assert "600" in medium_text
+    assert "600" in low_text
 
 
 @pytest.mark.llm_api
@@ -146,22 +151,21 @@ async def test_reasoning_models_response_time():
     medium_times = []
     low_times = []
     
-    # Run each model 3 times and average (reducing noise)
-    for _ in range(3):
-        # High reasoning
-        start_time = time.time()
-        await high_process.run(simple_problem)
-        high_times.append(time.time() - start_time)
-        
-        # Medium reasoning
-        start_time = time.time()
-        await medium_process.run(simple_problem)
-        medium_times.append(time.time() - start_time)
-        
-        # Low reasoning
-        start_time = time.time()
-        await low_process.run(simple_problem)
-        low_times.append(time.time() - start_time)
+    # Run each model once (to reduce test time)
+    # High reasoning
+    start_time = time.time()
+    await high_process.run(simple_problem)
+    high_times.append(time.time() - start_time)
+    
+    # Medium reasoning
+    start_time = time.time()
+    await medium_process.run(simple_problem)
+    medium_times.append(time.time() - start_time)
+    
+    # Low reasoning
+    start_time = time.time()
+    await low_process.run(simple_problem)
+    low_times.append(time.time() - start_time)
     
     # Calculate average times
     avg_high_time = sum(high_times) / len(high_times)
@@ -203,8 +207,11 @@ async def test_reasoning_models_complex_coding():
     # Verify we got a response
     assert high_result
     
+    # Get the text content from the RunResult object
+    high_text = high_process.get_last_message()
+    
     # Check for key indicators of a valid solution
-    assert "def" in high_result  # Function definition
-    assert "fibonacci" in high_result.lower()  # Fibonacci logic
-    assert "prime" in high_result.lower()  # Prime checking logic
-    assert "#" in high_result  # Comments for reasoning
+    assert "def" in high_text  # Function definition
+    assert "fibonacci" in high_text.lower()  # Fibonacci logic
+    assert "prime" in high_text.lower()  # Prime checking logic
+    assert "#" in high_text  # Comments for reasoning
