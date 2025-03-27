@@ -10,6 +10,15 @@ system_prompt_file = "../prompts/claude-code-dispatch-agent-system-prompt.md"
 temperature = 1
 max_tokens = 20000
 
+# Enable token-efficient tool use for reduced token usage and lower latency
+[parameters.extra_headers]
+anthropic-beta = "token-efficient-tools-2025-02-19"
+
+# Enable medium thinking capacity for balanced search performance
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 4000
+
 [mcp]
 config_path = "../config/mcp_servers.json"
 

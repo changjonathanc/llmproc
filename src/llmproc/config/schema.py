@@ -174,23 +174,7 @@ class LLMProgramConfig(BaseModel):
                     f"Must be one of: {', '.join(valid_values)}"
                 )
         
-        # Validate thinking_budget for Claude 3.7
-        if "thinking_budget" in v:
-            thinking_budget = v["thinking_budget"]
-            # 0 is allowed to explicitly disable thinking
-            if thinking_budget < 0:
-                raise ValueError(
-                    f"Invalid thinking_budget value '{thinking_budget}'. "
-                    f"Must be 0 (to disable) or at least 1024."
-                )
-            # Warn if thinking_budget is between 1-1023 as Claude requires minimum 1024
-            elif 0 < thinking_budget < 1024:
-                import warnings
-                warnings.warn(
-                    f"thinking_budget set to {thinking_budget}, but Claude requires minimum 1024. "
-                    f"This will likely fail at runtime.",
-                    stacklevel=2
-                )
+        # Remove validation for deprecated thinking_budget parameter
         
         # Check for token parameter conflicts
         if "max_tokens" in v and "max_completion_tokens" in v:
@@ -198,6 +182,35 @@ class LLMProgramConfig(BaseModel):
                 "Cannot specify both 'max_tokens' and 'max_completion_tokens'. "
                 "Use 'max_tokens' for standard models and 'max_completion_tokens' for reasoning models."
             )
+        
+        # Validate extra_headers structure if present
+        if "extra_headers" in v and not isinstance(v["extra_headers"], dict):
+            raise ValueError(f"parameters.extra_headers must be a dictionary of header key-value pairs")
+        
+        # Validate thinking structure if present
+        if "thinking" in v:
+            thinking = v["thinking"]
+            if not isinstance(thinking, dict):
+                raise ValueError(f"parameters.thinking must be a dictionary")
+            
+            # Check for required fields
+            if "type" in thinking and thinking["type"] not in ["enabled", "disabled"]:
+                raise ValueError(f"parameters.thinking.type must be 'enabled' or 'disabled'")
+            
+            # Check budget_tokens if present
+            if "budget_tokens" in thinking:
+                budget = thinking["budget_tokens"]
+                if not isinstance(budget, int):
+                    raise ValueError(f"parameters.thinking.budget_tokens must be an integer")
+                if budget < 0:
+                    raise ValueError(f"parameters.thinking.budget_tokens must be non-negative")
+                if budget > 0 and budget < 1024:
+                    import warnings
+                    warnings.warn(
+                        f"parameters.thinking.budget_tokens set to {budget}, but Claude requires minimum 1024. "
+                        f"This will likely fail at runtime.",
+                        stacklevel=2
+                    )
         
         return v
     
@@ -263,7 +276,9 @@ class LLMProgramConfig(BaseModel):
             # Anthropic specific
             "max_tokens_to_sample",
             "stop_sequences",
-            "thinking_budget",  # For Claude 3.7+ thinking models
+            "thinking_budget",  # For Claude 3.7+ thinking models (legacy format)
+            "thinking",         # For Claude 3.7+ thinking models (new nested format)
+            "extra_headers",    # For API-specific headers like beta features
         }
 
         if self.parameters:
@@ -294,10 +309,10 @@ class LLMProgramConfig(BaseModel):
                 is_claude_thinking_model = self.model.name.startswith("claude-3-7")
                 
                 # If using a Claude thinking model, suggest recommended parameters
-                if is_claude_thinking_model and "thinking_budget" not in self.parameters:
+                if is_claude_thinking_model and "thinking" not in self.parameters:
                     warnings.warn(
                         "Claude 3.7+ thinking model detected. For better results, "
-                        "consider adding the 'thinking_budget' parameter (minimum 1024).",
+                        "consider adding the '[parameters.thinking]' section with 'type' and 'budget_tokens'.",
                         stacklevel=2
                     )
                 
@@ -309,11 +324,11 @@ class LLMProgramConfig(BaseModel):
                     stacklevel=2
                 )
                 
-            # Check if thinking_budget used with non-Claude provider or non-3.7 Claude
-            if "thinking_budget" in self.parameters and hasattr(self, "model") and \
+            # Check if thinking parameters used with non-Claude provider or non-3.7 Claude
+            if "thinking" in self.parameters and hasattr(self, "model") and \
                (self.model.provider != "anthropic" or not self.model.name.startswith("claude-3-7")):
                 warnings.warn(
-                    "The 'thinking_budget' parameter is only supported with Claude 3.7+ models. "
+                    "The 'thinking' parameter is only supported with Claude 3.7+ models. "
                     "It will be ignored for other providers.",
                     stacklevel=2
                 )

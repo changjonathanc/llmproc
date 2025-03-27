@@ -8,4 +8,7 @@ display_name = "Claude 3.7 Sonnet (High Thinking)"
 
 [parameters]
 max_tokens = 32768  # Reserve sufficient tokens for thinking and outputs
-thinking_budget = 16000  # High thinking budget for complex problems
+
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 16000  # High thinking budget for complex problems

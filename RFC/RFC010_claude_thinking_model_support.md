@@ -31,8 +31,8 @@ Based on these guidelines, we recommend the following configurations:
 - High thinking: 16,000 tokens (for complex tasks)
 - Very high thinking: 32,000 tokens (for extremely complex tasks, consider batch processing)
 
-## API Parameters
-Claude 3.7 Sonnet's thinking parameters differ from OpenAI's reasoning parameters:
+## API Parameters and Configuration Structure
+Claude 3.7 Sonnet's thinking parameters use a nested structure that differs from OpenAI's reasoning parameters:
 
 ```python
 # Claude 3.7 Thinking API format
@@ -44,17 +44,28 @@ Claude 3.7 Sonnet's thinking parameters differ from OpenAI's reasoning parameter
 }
 ```
 
+This nested structure should be reflected in the TOML configuration:
+
+```toml
+[parameters]
+max_tokens = 32768
+
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 16000  # High thinking budget
+```
+
 ## Implementation Details
 
-1. Add support in `anthropic_process_executor.py` to detect Claude 3.7 models and transform the API parameters:
+1. Add support in `anthropic_process_executor.py` to handle the nested parameters structure:
    - Detect models starting with "claude-3-7"
-   - Transform a `thinking_budget` parameter into the required Claude format
-   - Support zero value to disable thinking (if explicitly set)
+   - Pass the nested `thinking` parameter directly to the API
+   - Support disabling thinking with `type = "disabled"`
 
 2. Update `config/schema.py` to:
-   - Add `thinking_budget` to the list of known parameters
-   - Add validation and warnings for Claude thinking parameters
-   - Provide appropriate guidance for Claude 3.7 models
+   - Add `thinking` to the list of known parameters
+   - Add validation for the nested structure
+   - Verify values are within required ranges
 
 3. Create example configuration files:
    - `examples/basic/claude-3-7-thinking-high.toml` (16,000 tokens)
@@ -75,8 +86,34 @@ provider = "anthropic"
 display_name = "Claude 3.7 Sonnet (High Thinking)"
 
 [parameters]
-max_tokens = 32768  # Maximum response length (includes thinking_budget)
-thinking_budget = 16000  # High thinking budget for complex tasks
+max_tokens = 32768  # Maximum response length (includes thinking budget)
+
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 16000  # High thinking budget for complex tasks
+```
+
+### Combined with Token-Efficient Tools
+
+```toml
+# Claude 3.7 Sonnet with high thinking and token-efficient tools
+[model]
+name = "claude-3-7-sonnet-20250219"
+provider = "anthropic"
+display_name = "Claude 3.7 Sonnet (Advanced Features)"
+
+[parameters]
+max_tokens = 32768
+
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 16000  # High thinking budget
+
+[parameters.extra_headers]
+anthropic-beta = "token-efficient-tools-2025-02-19"  # Enable token-efficient tool use
+
+[tools]
+enabled = ["calculator", "web_search"]
 ```
 
 ## Compatibility Notes

@@ -10,6 +10,15 @@ system_prompt_file = "../prompts/claude-code-system-prompt.md"
 temperature = 1
 max_tokens = 20000
 
+# Enable token-efficient tool use for reduced token usage and lower latency
+[parameters.extra_headers]
+anthropic-beta = "token-efficient-tools-2025-02-19"
+
+# Enable high thinking capacity for complex coding tasks
+#[parameters.thinking]
+#type = "disabled"
+#budget_tokens = 16000
+
 [preload]
 files = ["CLAUDE.md"]
 

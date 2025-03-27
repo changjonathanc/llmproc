@@ -8,4 +8,7 @@ display_name = "Claude 3.7 Sonnet (Medium Thinking)"
 
 [parameters]
 max_tokens = 16384  # Balanced token limit for thinking and outputs
-thinking_budget = 4000  # Medium thinking budget for balanced performance
+
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 4000  # Medium thinking budget for balanced performance
