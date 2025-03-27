@@ -161,15 +161,14 @@ fd_to_file_tool_def = {
 }
 
 # System prompt instructions for file descriptor usage
-# Instructions for file descriptor usage
-file_descriptor_instructions = """
+# Instructions for file descriptor usage (base)
+file_descriptor_base_instructions = """
 <file_descriptor_instructions>
 This system includes a file descriptor feature for handling large content:
 
 1. Large tool outputs are stored in file descriptors (fd:12345)
-2. Large user inputs may also be stored in file descriptors automatically
-3. Use read_fd to access content in pages or all at once
-4. Use fd_to_file to export content to disk files
+2. Use read_fd to access content in pages or all at once
+3. Use fd_to_file to export content to disk files
 
 Key commands:
 - read_fd(fd="fd:12345", start=2) - Read page 2
@@ -182,11 +181,6 @@ Key commands:
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append") - Append to file
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", exist_ok=False) - Create new file only
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False) - Update existing file only
-
-User Input Handling:
-- When a user sends a very large message, it may be automatically converted to a file descriptor
-- You'll see a preview like: <fd:12345 preview="first few characters..." type="user_input" size="10000">
-- Always use read_fd to read the full content before responding to such messages
 
 Tips:
 - Use the start parameter to specify page number, line number, or character position
@@ -201,6 +195,21 @@ Tips:
 - Use create=False when you want to update only existing files
 </file_descriptor_instructions>
 """
+
+# Instructions for FD user input paging
+fd_user_input_instructions = """
+<fd_user_input_instructions>
+This system can handle large user inputs through file descriptors:
+
+- When a user sends a very large message, it is automatically converted to a file descriptor
+- You'll see a preview like: <fd:12345 preview="first few characters..." type="user_input" size="10000">
+- Always use read_fd to read the full content before responding to such messages
+- Example: read_fd(fd="fd:1", read_all=true)
+</fd_user_input_instructions>
+"""
+
+# Combined file descriptor instructions (for backward compatibility)
+file_descriptor_instructions = file_descriptor_base_instructions
 
 # Instructions for reference ID system
 reference_instructions = """

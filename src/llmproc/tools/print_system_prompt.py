@@ -115,6 +115,9 @@ def print_system_prompt(
                     elif section_name == "<file_descriptor_instructions>":
                         # File descriptor instructions in magenta
                         output_file.write(f"\033[35m{line}\033[0m\n")
+                    elif section_name == "<fd_user_input_instructions>":
+                        # User input instructions in bright magenta
+                        output_file.write(f"\033[95m{line}\033[0m\n")
                     elif section_name == "<reference_instructions>":
                         # Reference instructions in blue
                         output_file.write(f"\033[34m{line}\033[0m\n")
@@ -153,6 +156,12 @@ def print_system_prompt(
             summary.append("- File Descriptor Instructions ✅")
         else:
             summary.append("- File Descriptor Instructions ❌")
+            
+        # Check for FD user input instructions
+        if "<fd_user_input_instructions>" in enriched_prompt:
+            summary.append("- FD User Input Paging Instructions ✅")
+        else:
+            summary.append("- FD User Input Paging Instructions ❌")
             
         # Check for reference instructions
         if "<reference_instructions>" in enriched_prompt:

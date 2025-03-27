@@ -12,7 +12,8 @@ from . import mcp
 from .calculator import calculator_tool, calculator_tool_def
 from .file_descriptor import (
     fd_to_file_tool, fd_to_file_tool_def,
-    file_descriptor_instructions, 
+    file_descriptor_instructions, file_descriptor_base_instructions,
+    fd_user_input_instructions, reference_instructions,
     read_fd_tool, read_fd_tool_def
 )
 from .fork import fork_tool, fork_tool_def

@@ -414,6 +414,7 @@ class LLMProgram:
         preloaded_content = {}
         file_descriptor_enabled = False
         references_enabled = False
+        page_user_input = False
         
         if process_instance:
             if hasattr(process_instance, "preloaded_content"):
@@ -422,6 +423,10 @@ class LLMProgram:
                 file_descriptor_enabled = process_instance.file_descriptor_enabled
             if hasattr(process_instance, "references_enabled"):
                 references_enabled = process_instance.references_enabled
+                
+            # Check if user input paging is enabled
+            if hasattr(process_instance, "fd_manager"):
+                page_user_input = getattr(process_instance.fd_manager, "page_user_input", False)
 
         return EnvInfoBuilder.get_enriched_system_prompt(
             base_prompt=self.system_prompt,
@@ -429,7 +434,8 @@ class LLMProgram:
             preloaded_content=preloaded_content,
             include_env=include_env,
             file_descriptor_enabled=file_descriptor_enabled,
-            references_enabled=references_enabled
+            references_enabled=references_enabled,
+            page_user_input=page_user_input
         )
 
     @classmethod
