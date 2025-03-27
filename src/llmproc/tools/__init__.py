@@ -307,6 +307,8 @@ def register_file_descriptor_tools(registry: ToolRegistry, process) -> None:
             fd=args.get("fd"),
             file_path=args.get("file_path"),
             mode=args.get("mode", "write"),
+            create=args.get("create", True),
+            exist_ok=args.get("exist_ok", True),
             llm_process=process,
         )
 

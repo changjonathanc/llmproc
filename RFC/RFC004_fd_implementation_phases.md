@@ -6,7 +6,7 @@ This document outlines the implementation plan for the File Descriptor system, b
 
 - ✅ **Phase 1**: Core Functionality - Completed
 - ✅ **Phase 2**: Process Integration - Completed (Fork and Spawn integration implemented)
-- 🔄 **Phase 2.5**: API Enhancements - Partially Completed (Phase 1 of RFC007 implemented)
+- ✅ **Phase 2.5**: API Enhancements - Completed (Phase 1 and 2 of RFC007 implemented)
 - 🔄 **Phase 3**: Optional Features - Partially Completed (FD to File Operations implemented)
 
 ## Phase 1: Core Functionality _(Implemented)_
@@ -107,8 +107,10 @@ These features can be individually implemented and toggled:
    - Phase 1 (Implemented):
      - Added `extract_to_new_fd` parameter to read_fd for content slicing (renamed from create_fd)
      - Added mode parameter to fd_to_file with write/append options
-   - Phase 2 (Planned):
-     - Add explicit file creation control parameters (create, fail_if_exists)
+   - Phase 2 (Implemented):
+     - Added explicit file creation control parameters (create, exist_ok)
+     - Implemented full behavior matrix for file operations
+     - Added specific error types (file_exists, file_not_found)
    - Phase 3 (Planned):
      - Add line and character-based positioning (mode, start, count parameters)
    
@@ -116,14 +118,16 @@ These features can be individually implemented and toggled:
    # Implemented enhancements
    new_fd = read_fd(fd="fd:12345", page=2, extract_to_new_fd=True)
    fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append")
+   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", exist_ok=False)
+   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False)
    
    # Planned enhancements
-   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", fail_if_exists=True)
-   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False)
    new_fd = read_fd(fd="fd:12345", mode="line", start=10, count=5, extract_to_new_fd=True)
    ```
    
-   _Note: The parameter was renamed from `create_fd` to `extract_to_new_fd` to more clearly indicate its purpose._
+   _Note 1: The parameter was renamed from `create_fd` to `extract_to_new_fd` to more clearly indicate its purpose._
+   
+   _Note 2: The parameter was renamed from `fail_if_exists` to `exist_ok` to match Python's standard library patterns like os.makedirs(exist_ok=True) and make the API more intuitive with consistent boolean logic._
 
 4. **Response Reference ID System** _(Planned)_
    - Allow LLMs to mark sections of their responses with reference IDs

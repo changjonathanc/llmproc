@@ -82,7 +82,7 @@ fd_to_file(
     file_path="/path/to/file.txt",    # Destination file path
     mode="write",                     # "write" (default) or "append"
     create=True,                      # Create file if doesn't exist (default: True)
-    fail_if_exists=False              # Fail if file exists (default: False)
+    exist_ok=True                    # Allow file to exist (default: True)
 )
 ```
 
@@ -97,19 +97,19 @@ fd_to_file(
    - `create=False`: Fail if file doesn't exist
 
 3. **Safety parameter**:
-   - `fail_if_exists=True`: Fail if target file already exists
-   - `fail_if_exists=False`: Allow overwriting existing files (default)
+   - `exist_ok=False`: Fail if target file already exists
+   - `exist_ok=True`: Allow overwriting existing files (default)
 
 ### 4.2 Behavior Matrix
 
-| mode    | create | fail_if_exists | Behavior                                     |
-|---------|--------|----------------|----------------------------------------------|
-| "write" | True   | False          | Create or overwrite (current default)        |
-| "write" | True   | True           | Create only if doesn't exist                 |
-| "write" | False  | False          | Update existing only                         |
-| "append"| True   | False          | Append, create if needed                     |
-| "append"| True   | True           | Append only if exists, else create new       |
-| "append"| False  | False          | Append to existing only                      |
+| mode    | create | exist_ok | Behavior                                     |
+|---------|--------|---------|----------------------------------------------|
+| "write" | True   | True    | Create or overwrite (current default)        |
+| "write" | True   | False   | Create only if doesn't exist                 |
+| "write" | False  | True    | Update existing only                         |
+| "append"| True   | True    | Append, create if needed                     |
+| "append"| True   | False   | Append only if exists, else create new       |
+| "append"| False  | True    | Append to existing only                      |
 
 ### 4.3 Examples
 
@@ -124,7 +124,7 @@ fd_to_file(fd="fd:1234", file_path="/path/to/file.txt", mode="append")
 fd_to_file(fd="fd:1234", file_path="/path/to/file.txt", create=False)
 
 # Create new file only (fail if exists)
-fd_to_file(fd="fd:1234", file_path="/path/to/file.txt", fail_if_exists=True)
+fd_to_file(fd="fd:1234", file_path="/path/to/file.txt", exist_ok=False)
 ```
 
 ## 5. Error Handling
@@ -135,7 +135,7 @@ The enhanced API will use the existing error format with specific error types:
 # Error types for fd_to_file
 "not_found"       # File descriptor not found
 "write_error"     # General file writing error
-"file_exists"     # File exists and fail_if_exists=True
+"file_exists"     # File exists and exist_ok=False
 "file_not_found"  # File doesn't exist and create=False
 "permission_error"# Permission denied writing file
 
@@ -194,12 +194,16 @@ Key commands:
 - read_fd(fd="fd:1234", extract_to_new_fd=True) - Extract content to a new FD
 - fd_to_file(fd="fd:1234", file_path="/path/to/output.txt") - Save to file
 - fd_to_file(fd="fd:1234", file_path="/path/to/output.txt", mode="append") - Append to file
+- fd_to_file(fd="fd:1234", file_path="/path/to/output.txt", exist_ok=False) - Create only if file doesn't exist
+- fd_to_file(fd="fd:1234", file_path="/path/to/output.txt", create=False) - Update existing file only
 
 Tips:
 - Check "truncated" and "continued" attributes for content continuation
 - When analyzing large content, consider reading all pages first
 - Use extract_to_new_fd=True when you need to extract specific content
 - Use mode="append" when adding to existing files
+- Use exist_ok=False to avoid overwriting existing files
+- Use create=False when you want to update only existing files
 </file_descriptor_instructions>
 ```
 
@@ -235,7 +239,7 @@ fd_to_file(fd="ref:main_function", file_path="module.py", mode="append")
 ```python
 # Create a new configuration file, but don't overwrite existing one
 try:
-    fd_to_file(fd="ref:default_config", file_path="config.json", fail_if_exists=True)
+    fd_to_file(fd="ref:default_config", file_path="config.json", exist_ok=False)
     print("Created new configuration file")
 except:
     print("Configuration file already exists, not overwriting")

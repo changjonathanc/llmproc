@@ -32,19 +32,19 @@ and you'll need to use this tool to read the content in pages.
 Usage:
   read_fd(fd="fd:12345", page=2) - Read page 2 from the file descriptor
   read_fd(fd="fd:12345", read_all=True) - Read the entire content (use cautiously with very large content)
-  read_fd(fd="fd:12345", page=2, create_fd=True) - Create a new FD containing just page 2
+  read_fd(fd="fd:12345", page=2, extract_to_new_fd=True) - Create a new FD containing just page 2
   
 Parameters:
   fd (str): The file descriptor ID to read from (e.g., "fd:12345")
   page (int, optional): The page number to read (starting from 1)
   read_all (bool, optional): If true, returns the entire content (may be very large)
-  create_fd (bool, optional): If true, creates a new file descriptor with the selected content
+  extract_to_new_fd (bool, optional): If true, extracts the content to a new file descriptor and returns the new FD ID
 
 When to use this tool:
 - When you see a file descriptor reference (fd:12345) in a tool result
 - When you need to read more pages from large content
 - When you want to analyze content that was too large to include directly in the response
-- When you need to extract a specific part of a large content into a new FD (use create_fd=True)
+- When you need to extract a specific part of a large content into a new FD (use extract_to_new_fd=True)
 """
 
 fd_to_file_tool_description = """
@@ -55,14 +55,22 @@ Usage:
   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt") - Write content to a file (create or overwrite)
   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append") - Append content to existing file
   fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False) - Write only if file exists
-  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", fail_if_exists=True) - Create only if file doesn't exist
+  fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", exist_ok=False) - Create only if file doesn't exist
   
 Parameters:
   fd (str): The file descriptor ID to export (e.g., "fd:12345")
   file_path (str): The path to the file to write
   mode (str, optional): "write" (default) or "append" - Whether to overwrite or append to file
   create (bool, optional): True (default) or False - Whether to create the file if it doesn't exist
-  fail_if_exists (bool, optional): False (default) or True - Whether to fail if file already exists
+  exist_ok (bool, optional): True (default) or False - Whether it's ok if the file already exists
+
+Behavior matrix:
+  - mode="write", create=True, exist_ok=True: Create or overwrite (default)
+  - mode="write", create=True, exist_ok=False: Create only if doesn't exist
+  - mode="write", create=False, exist_ok=True: Update existing only
+  - mode="append", create=True, exist_ok=True: Append, create if needed
+  - mode="append", create=True, exist_ok=False: Append only if exists, else create new
+  - mode="append", create=False, exist_ok=True: Append to existing only
 
 When to use this tool:
 - When you need to save file descriptor content to disk
@@ -119,6 +127,14 @@ fd_to_file_tool_def = {
                 "enum": ["write", "append"],
                 "description": "Whether to overwrite ('write', default) or append ('append') to the file",
             },
+            "create": {
+                "type": "boolean",
+                "description": "Whether to create the file if it doesn't exist (default: true)",
+            },
+            "exist_ok": {
+                "type": "boolean",
+                "description": "Whether it's ok if the file already exists (default: true)",
+            },
         },
         "required": ["fd", "file_path"],
     },
@@ -139,12 +155,16 @@ Key commands:
 - read_fd(fd="fd:12345", extract_to_new_fd=True) - Extract content to a new FD
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt") - Save to file
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append") - Append to file
+- fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", exist_ok=False) - Create new file only
+- fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False) - Update existing file only
 
 Tips:
 - Check "truncated" and "continued" attributes for content continuation
 - When analyzing large content, consider reading all pages first
 - Use extract_to_new_fd=True when you need to extract specific content
 - Use mode="append" when adding to existing files
+- Use exist_ok=False to avoid overwriting existing files
+- Use create=False when you want to update only existing files
 </file_descriptor_instructions>
 """
 
@@ -367,7 +387,9 @@ class FileDescriptorManager:
         self, 
         fd_id: str, 
         file_path: str,
-        mode: str = "write"
+        mode: str = "write",
+        create: bool = True,
+        exist_ok: bool = True
     ) -> Dict[str, Any]:
         """Write file descriptor content to a file.
         
@@ -375,6 +397,8 @@ class FileDescriptorManager:
             fd_id: The file descriptor ID
             file_path: Path to the file to write
             mode: "write" (default, overwrite) or "append" (add to existing file)
+            create: Whether to create the file if it doesn't exist (default: True)
+            exist_ok: Whether it's ok if the file already exists (default: True)
             
         Returns:
             ToolResult with success or error message
@@ -401,8 +425,22 @@ class FileDescriptorManager:
                 logger.error(error_msg)
                 return self._format_fd_error("invalid_parameter", fd_id, error_msg)
             
-            # Ensure parent directory exists
+            # Check file existence
             file_path_obj = Path(file_path)
+            file_exists = file_path_obj.exists()
+            
+            # Handle file existence according to parameters
+            if file_exists and not exist_ok:
+                error_msg = f"File {file_path} already exists and exist_ok=False"
+                logger.error(error_msg)
+                return self._format_fd_error("file_exists", fd_id, error_msg)
+            
+            if not file_exists and not create:
+                error_msg = f"File {file_path} doesn't exist and create=False"
+                logger.error(error_msg)
+                return self._format_fd_error("file_not_found", fd_id, error_msg)
+            
+            # Ensure parent directory exists
             if not file_path_obj.parent.exists():
                 file_path_obj.parent.mkdir(parents=True, exist_ok=True)
                 
@@ -423,6 +461,8 @@ class FileDescriptorManager:
                 "fd": fd_id,
                 "file_path": file_path,
                 "mode": mode,
+                "create": create,
+                "exist_ok": exist_ok,
                 "char_count": len(content),
                 "size_bytes": os.path.getsize(file_path),
                 "success": True,
@@ -662,10 +702,15 @@ class FileDescriptorManager:
         """
         from llmproc.tools.tool_result import ToolResult
         
+        # Include create and exist_ok attributes if present
+        create_attr = f' create="{str(result.get("create", True)).lower()}"' if "create" in result else ""
+        exist_ok_attr = f' exist_ok="{str(result.get("exist_ok", True)).lower()}"' if "exist_ok" in result else ""
+        
         xml = (
             f'<fd_file_result fd="{result["fd"]}" file_path="{result["file_path"]}" '
             f'mode="{result["mode"]}" char_count="{result["char_count"]}" '
-            f'size_bytes="{result["size_bytes"]}" success="{str(result["success"]).lower()}">\n'
+            f'size_bytes="{result["size_bytes"]}" success="{str(result["success"]).lower()}"'
+            f'{create_attr}{exist_ok_attr}>\n'
             f'  <message>{result["message"]}</message>\n'
             f'</fd_file_result>'
         )
@@ -769,6 +814,8 @@ async def fd_to_file_tool(
     fd: str,
     file_path: str,
     mode: str = "write",
+    create: bool = True,
+    exist_ok: bool = True,
     llm_process=None,
 ) -> "ToolResult":
     """Write file descriptor content to a file.
@@ -778,8 +825,10 @@ async def fd_to_file_tool(
     
     Args:
         fd: The file descriptor ID to export (e.g., "fd:12345")
-        file_path: Path to the file to write (will be created or overwritten)
+        file_path: Path to the file to write
         mode: "write" (default, overwrite) or "append" (add to existing file)
+        create: Whether to create the file if it doesn't exist (default: True)
+        exist_ok: Whether it's ok if the file already exists (default: True)
         llm_process: The LLMProcess instance with FD manager
         
     Returns:
@@ -799,7 +848,13 @@ async def fd_to_file_tool(
         
     try:
         # Write FD content to file - returns a ToolResult
-        return llm_process.fd_manager.write_fd_to_file(fd, file_path, mode=mode)
+        return llm_process.fd_manager.write_fd_to_file(
+            fd, 
+            file_path, 
+            mode=mode,
+            create=create,
+            exist_ok=exist_ok
+        )
     except Exception as e:
         error_msg = f"Error writing file descriptor to file: {str(e)}"
         logger.error(f"FD_TO_FILE ERROR: {error_msg}")

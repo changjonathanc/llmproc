@@ -18,20 +18,32 @@ Key features to demonstrate:
    - Creates a new FD with selected content
    - Particularly useful for extracting specific pages or sections
    
-2. File operations with append mode
+2. Enhanced file operations:
    - Standard mode="write" for overwriting files (default)
    - mode="append" for adding to existing files
-   - Great for building files incrementally
+   - create=True/False for controlling file creation
+   - fail_if_exists=True/False for safe file operations
+   - Full behavior matrix for different combinations
+
+Example usage patterns for file operations:
+- Create or overwrite (default): fd_to_file(fd="fd:1234", file_path="output.txt")
+- Create only if doesn't exist: fd_to_file(fd="fd:1234", file_path="output.txt", exist_ok=False)
+- Update existing only: fd_to_file(fd="fd:1234", file_path="output.txt", create=False)
+- Append to existing: fd_to_file(fd="fd:1234", file_path="output.txt", mode="append")
+- Append or create: fd_to_file(fd="fd:1234", file_path="output.txt", mode="append", create=True)
+- Append to existing only: fd_to_file(fd="fd:1234", file_path="output.txt", mode="append", create=False)
+
+Error handling:
+- If exist_ok=False and file exists: file_exists error
+- If create=False and file doesn't exist: file_not_found error
 
 Example workflows to demonstrate:
 - Extract parts of large content to new FDs
 - Use extracted content in specialized analysis
 - Build composite files by appending from multiple FDs
 - Create organized reports from distributed content
-
-Remember to show both basic and advanced usage patterns:
-- Basic: Reading pages, creating new FDs, writing files
-- Advanced: Extracting specific pages to new FDs, appending to files
+- Safely create new files without overwriting existing ones
+- Update only existing files to avoid accidental file creation
 """
 
 # Enable the file descriptor system, all FD tools

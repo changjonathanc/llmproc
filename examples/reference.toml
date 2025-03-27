@@ -183,8 +183,24 @@ variables = ["working_directory", "platform", "date"]
 # - read_fd: Read file descriptor content with pagination support
 #   read_fd(fd="fd:1", page=2) - Read specific page
 #   read_fd(fd="fd:1", read_all=True) - Read all content
+#   read_fd(fd="fd:1", page=2, extract_to_new_fd=True) - Extract page to new FD
 #
 # - fd_to_file: Export file descriptor content to a file
+#   Basic usage:
 #   fd_to_file(fd="fd:1", file_path="/path/to/output.txt")
+#   
+#   Enhanced options:
+#   fd_to_file(fd="fd:1", file_path="file.txt", mode="append") - Append to file
+#   fd_to_file(fd="fd:1", file_path="file.txt", exist_ok=False) - Create only if doesn't exist
+#   fd_to_file(fd="fd:1", file_path="file.txt", create=False) - Update existing only
+#   
+#   Behavior matrix:
+#   - mode="write", create=True, exist_ok=True: Create or overwrite (default)
+#   - mode="write", create=True, exist_ok=False: Create only if doesn't exist
+#   - mode="write", create=False, exist_ok=True: Update existing only
+#   - mode="append", create=True, exist_ok=True: Append, create if needed
+#   - mode="append", create=True, exist_ok=False: Append only if exists, else create new
+#   - mode="append", create=False, exist_ok=True: Append to existing only
+#   
 #   Parent directories are created automatically if needed
 
