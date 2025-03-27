@@ -7,6 +7,5 @@ provider = "openai"
 display_name = "O3-mini (Medium Reasoning)"
 
 [parameters]
-temperature = 0.2  # Low temperature for more consistent reasoning
-max_completion_tokens = 4000  # Generous token limit for detailed reasoning outputs
+max_completion_tokens = 10000  # Balanced token limit for reasoning and outputs
 reasoning_effort = "medium"  # Default balanced reasoning level

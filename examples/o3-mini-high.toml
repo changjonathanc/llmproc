@@ -1,5 +1,5 @@
 # OpenAI o3-mini model with high reasoning effort 
-# Optimized for complex logical, mathematical, and scientific reasoning tasks
+# Optimized for complex STEM problems, particularly math, coding, and science
 
 [model]
 name = "o3-mini"
@@ -7,7 +7,5 @@ provider = "openai"
 display_name = "O3-mini (High Reasoning)"
 
 [parameters]
-temperature = 0.0  # Zero temperature for maximum determinism in reasoning tasks
-max_completion_tokens = 8000  # Very high token limit for complex reasoning chains
+max_completion_tokens = 25000  # Reserve at least 25,000 tokens for reasoning and outputs
 reasoning_effort = "high"  # Maximum reasoning thoroughness for complex problems
-top_p = 0.95  # Slightly reduced from default (1.0) to focus the model's reasoning
