@@ -1,0 +1,12 @@
+# OpenAI o3-mini model with medium reasoning effort
+# Balanced for general-purpose reasoning with good performance and latency
+
+[model]
+name = "o3-mini"
+provider = "openai"
+display_name = "O3-mini (Medium Reasoning)"
+
+[parameters]
+temperature = 0.2  # Low temperature for more consistent reasoning
+max_completion_tokens = 4000  # Generous token limit for detailed reasoning outputs
+reasoning_effort = "medium"  # Default balanced reasoning level

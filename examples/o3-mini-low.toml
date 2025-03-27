@@ -1,0 +1,12 @@
+# OpenAI o3-mini model with low reasoning effort
+# Optimized for faster responses when lower latency is required
+
+[model]
+name = "o3-mini"
+provider = "openai"
+display_name = "O3-mini (Low Reasoning)"
+
+[parameters]
+temperature = 0.5  # Moderate temperature for faster responses
+max_completion_tokens = 2000  # Lower token limit for quicker processing
+reasoning_effort = "low"  # Minimal reasoning for faster response times
