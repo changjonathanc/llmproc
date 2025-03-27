@@ -1,0 +1,11 @@
+[model]
+name = "gpt-4o"
+provider = "openai"
+
+[prompt]
+system_prompt_file = "../prompts/example_prompt.md"
+
+[parameters]
+max_tokens = 150
+frequency_penalty = 0.0
+presence_penalty = 0.0

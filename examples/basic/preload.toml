@@ -19,7 +19,6 @@ Use the preloaded project files to answer questions about LLMProc functionality 
 # Generation Parameters
 #----------------------------------------
 [parameters]
-temperature = 0.7
 max_tokens = 500
 
 #----------------------------------------

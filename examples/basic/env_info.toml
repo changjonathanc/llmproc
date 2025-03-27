@@ -32,7 +32,6 @@ Always be transparent about which environment information you're using in your r
 # Model Parameters
 #-------------------------------------------
 [parameters]
-temperature = 0.7
 max_tokens = 1000
 
 #-------------------------------------------

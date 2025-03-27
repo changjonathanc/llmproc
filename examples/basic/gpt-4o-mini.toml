@@ -6,5 +6,4 @@ provider = "openai"
 system_prompt = "You are a helpful assistant. Always keep your responses brief and to the point."
 
 [parameters]
-temperature = 0.7
 max_tokens = 150

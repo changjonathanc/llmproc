@@ -7,6 +7,4 @@ display_name = "GPT-4o"
 system_prompt = "You are a helpful assistant powered by OpenAI's GPT-4o model. Provide accurate, helpful responses that are tailored to the user's needs."
 
 [parameters]
-temperature = 0.7
 max_tokens = 1000
-top_p = 0.95

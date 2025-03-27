@@ -7,9 +7,7 @@ display_name = "Claude Haiku (Vertex AI)"
 system_prompt = "You are Claude on Vertex AI, a helpful AI assistant. Keep all responses under 3 sentences for brevity."
 
 [parameters]
-temperature = 0.7
 max_tokens = 150
-top_p = 0.95
 
 # These are used for Vertex AI authentication
 # Will be loaded from environment variables if not specified
