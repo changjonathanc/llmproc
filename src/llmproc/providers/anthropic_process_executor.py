@@ -74,12 +74,38 @@ class AnthropicProcessExecutor:
             logger.debug(f"Making API call {iterations}/{max_iterations}")
 
             # Make the API call
+            # Check if this is a Claude thinking model (Claude 3.7+)
+            api_params = process.api_params.copy()
+            
+            # Determine if this is a Claude 3.7 model that supports thinking
+            is_thinking_model = process.model_name.startswith("claude-3-7")
+            
+            # Handle thinking model specific parameters
+            if is_thinking_model and "thinking_budget" in api_params:
+                # Create thinking parameter structure for Claude 3.7
+                thinking_budget = api_params.pop("thinking_budget")
+                
+                # Only enable thinking if budget is greater than zero
+                if thinking_budget > 0:
+                    api_params["thinking"] = {
+                        "type": "enabled",
+                        "budget_tokens": thinking_budget
+                    }
+                # If explicitly set to zero, disable thinking
+                elif thinking_budget == 0:
+                    api_params["thinking"] = {
+                        "type": "disabled"
+                    }
+                # If negative, remove it entirely (should not happen due to validation)
+                else:
+                    logger.warning(f"Invalid thinking_budget value: {thinking_budget}")
+            
             response = await process.client.messages.create(
                 model=process.model_name,
                 system=process.enriched_system_prompt,
                 messages=process.state,
                 tools=process.tools,
-                **process.api_params,
+                **api_params,
             )
 
             # Track API call in the run result if available

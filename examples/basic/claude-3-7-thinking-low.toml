@@ -1,0 +1,11 @@
+# Claude 3.7 Sonnet model with low thinking budget
+# Optimized for faster responses when lower latency is required
+
+[model]
+name = "claude-3-7-sonnet-20250219" 
+provider = "anthropic"
+display_name = "Claude 3.7 Sonnet (Low Thinking)"
+
+[parameters]
+max_tokens = 8192  # Lower token limit for faster processing
+thinking_budget = 1024  # Minimum thinking budget for faster response times

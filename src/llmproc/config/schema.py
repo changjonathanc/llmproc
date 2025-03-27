@@ -174,6 +174,24 @@ class LLMProgramConfig(BaseModel):
                     f"Must be one of: {', '.join(valid_values)}"
                 )
         
+        # Validate thinking_budget for Claude 3.7
+        if "thinking_budget" in v:
+            thinking_budget = v["thinking_budget"]
+            # 0 is allowed to explicitly disable thinking
+            if thinking_budget < 0:
+                raise ValueError(
+                    f"Invalid thinking_budget value '{thinking_budget}'. "
+                    f"Must be 0 (to disable) or at least 1024."
+                )
+            # Warn if thinking_budget is between 1-1023 as Claude requires minimum 1024
+            elif 0 < thinking_budget < 1024:
+                import warnings
+                warnings.warn(
+                    f"thinking_budget set to {thinking_budget}, but Claude requires minimum 1024. "
+                    f"This will likely fail at runtime.",
+                    stacklevel=2
+                )
+        
         # Check for token parameter conflicts
         if "max_tokens" in v and "max_completion_tokens" in v:
             raise ValueError(
@@ -245,6 +263,7 @@ class LLMProgramConfig(BaseModel):
             # Anthropic specific
             "max_tokens_to_sample",
             "stop_sequences",
+            "thinking_budget",  # For Claude 3.7+ thinking models
         }
 
         if self.parameters:
@@ -268,11 +287,33 @@ class LLMProgramConfig(BaseModel):
                         "consider adding the 'reasoning_effort' parameter (low, medium, high).",
                         stacklevel=2
                     )
+            
+            # Check if using Claude 3.7 thinking model
+            is_claude_thinking_model = False
+            if hasattr(self, "model") and self.model.provider == "anthropic":
+                is_claude_thinking_model = self.model.name.startswith("claude-3-7")
                 
-            # Check if used with non-OpenAI provider
+                # If using a Claude thinking model, suggest recommended parameters
+                if is_claude_thinking_model and "thinking_budget" not in self.parameters:
+                    warnings.warn(
+                        "Claude 3.7+ thinking model detected. For better results, "
+                        "consider adding the 'thinking_budget' parameter (minimum 1024).",
+                        stacklevel=2
+                    )
+                
+            # Check if reasoning_effort used with non-OpenAI provider
             if "reasoning_effort" in self.parameters and hasattr(self, "model") and self.model.provider != "openai":
                 warnings.warn(
                     "The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. "
+                    "It will be ignored for other providers.",
+                    stacklevel=2
+                )
+                
+            # Check if thinking_budget used with non-Claude provider or non-3.7 Claude
+            if "thinking_budget" in self.parameters and hasattr(self, "model") and \
+               (self.model.provider != "anthropic" or not self.model.name.startswith("claude-3-7")):
+                warnings.warn(
+                    "The 'thinking_budget' parameter is only supported with Claude 3.7+ models. "
                     "It will be ignored for other providers.",
                     stacklevel=2
                 )

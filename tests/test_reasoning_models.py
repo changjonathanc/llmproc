@@ -1,7 +1,7 @@
-"""Unit tests for O3-mini reasoning models configuration and parameter transformation.
+"""Unit tests for reasoning models configuration and parameter transformation.
 
-These tests validate the handling of reasoning-specific parameters and configuration
-validation without requiring API access.
+These tests validate the handling of reasoning-specific parameters for both OpenAI
+reasoning models and Claude thinking models without requiring API access.
 """
 
 import pytest
