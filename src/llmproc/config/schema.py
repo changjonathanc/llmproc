@@ -128,6 +128,7 @@ class FileDescriptorConfig(BaseModel):
     default_page_size: int = 4000
     max_input_chars: int = 8000
     page_user_input: bool = True
+    enable_references: bool = False
     
     @classmethod
     @field_validator("max_direct_output_chars", "default_page_size", "max_input_chars")

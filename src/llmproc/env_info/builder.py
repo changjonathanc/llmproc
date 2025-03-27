@@ -104,7 +104,8 @@ class EnvInfoBuilder:
     @staticmethod
     def get_enriched_system_prompt(
         base_prompt: str, env_config: dict, preloaded_content: dict = None, 
-        include_env: bool = True, file_descriptor_enabled: bool = False
+        include_env: bool = True, file_descriptor_enabled: bool = False,
+        references_enabled: bool = False
     ) -> str:
         """Get enhanced system prompt with preloaded files and environment info.
 
@@ -114,6 +115,7 @@ class EnvInfoBuilder:
             preloaded_content: Dictionary mapping file paths to content
             include_env: Whether to include environment information
             file_descriptor_enabled: Whether file descriptor system is enabled
+            references_enabled: Whether reference ID system is enabled
 
         Returns:
             Complete system prompt ready for API calls
@@ -130,6 +132,11 @@ class EnvInfoBuilder:
         if file_descriptor_enabled:
             from llmproc.tools import file_descriptor_instructions
             parts.append(file_descriptor_instructions)
+            
+        # Add reference instructions if enabled
+        if references_enabled:
+            from llmproc.tools import reference_instructions
+            parts.append(reference_instructions)
 
         # Add preloaded content if available
         if preloaded_content:

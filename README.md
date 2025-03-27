@@ -293,6 +293,9 @@ llmproc-demo ./examples/file_descriptor/spawn_integration.toml
 
 # Try handling large user inputs
 llmproc-demo ./examples/file_descriptor/user_input.toml
+
+# Try the reference ID system
+llmproc-demo ./examples/file_descriptor/references.toml
 ```
 
 Example program linking session:
@@ -340,6 +343,7 @@ The `examples/` directory contains ready-to-use program files:
   - `main.toml` - Core file descriptor features
   - `spawn_integration.toml` - Sharing file descriptors between processes
   - `user_input.toml` - Handling large user inputs
+  - `references.toml` - Response reference ID system for marking content
 - `reference.toml` - Full reference with all available options
 
 ### CLI Options

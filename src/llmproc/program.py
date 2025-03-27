@@ -413,19 +413,23 @@ class LLMProgram:
         # Use the EnvInfoBuilder to handle environment information and preloaded content
         preloaded_content = {}
         file_descriptor_enabled = False
+        references_enabled = False
         
         if process_instance:
             if hasattr(process_instance, "preloaded_content"):
                 preloaded_content = process_instance.preloaded_content
             if hasattr(process_instance, "file_descriptor_enabled"):
                 file_descriptor_enabled = process_instance.file_descriptor_enabled
+            if hasattr(process_instance, "references_enabled"):
+                references_enabled = process_instance.references_enabled
 
         return EnvInfoBuilder.get_enriched_system_prompt(
             base_prompt=self.system_prompt,
             env_config=self.env_info,
             preloaded_content=preloaded_content,
             include_env=include_env,
-            file_descriptor_enabled=file_descriptor_enabled
+            file_descriptor_enabled=file_descriptor_enabled,
+            references_enabled=references_enabled
         )
 
     @classmethod

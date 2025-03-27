@@ -142,6 +142,7 @@ class LLMProcess:
         # Initialize file descriptor system
         self.file_descriptor_enabled = False
         self.fd_manager = None
+        self.references_enabled = False
         
         # Check for file descriptor configuration in program
         if hasattr(program, "file_descriptor"):
@@ -161,6 +162,9 @@ class LLMProcess:
                 max_input_chars = getattr(fd_config, "max_input_chars", 8000)
                 page_user_input = getattr(fd_config, "page_user_input", True)
                 
+                # Check if references are enabled
+                self.references_enabled = getattr(fd_config, "enable_references", False)
+                
                 # Initialize the file descriptor manager
                 self.fd_manager = FileDescriptorManager(
                     default_page_size=default_page_size,
@@ -171,7 +175,8 @@ class LLMProcess:
                 
                 logger.info(
                     f"File descriptor system enabled with page size {default_page_size}, "
-                    f"user input paging: {page_user_input}"
+                    f"user input paging: {page_user_input}, "
+                    f"references: {self.references_enabled}"
                 )
         
         # If read_fd is in tools but no configuration provided, still enable with defaults
@@ -346,6 +351,27 @@ class LLMProcess:
             )
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
+
+        # Process any references in the last assistant message for reference ID system
+        if self.file_descriptor_enabled and self.fd_manager:
+            # Get the last assistant message if available
+            if self.state and len(self.state) > 0 and self.state[-1].get("role") == "assistant":
+                assistant_message = self.state[-1].get("content", "")
+                
+                # Check if we have a string message or a structured message (Anthropic)
+                if isinstance(assistant_message, list):
+                    # Process each text block in the message
+                    for i, block in enumerate(assistant_message):
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text_content = block.get("text", "")
+                            references = self.fd_manager.extract_references(text_content)
+                            if references:
+                                logger.info(f"Extracted {len(references)} references from assistant message")
+                else:
+                    # Process the simple string message
+                    references = self.fd_manager.extract_references(assistant_message)
+                    if references:
+                        logger.info(f"Extracted {len(references)} references from assistant message")
 
         # Mark the run as complete and calculate duration
         run_result.complete()

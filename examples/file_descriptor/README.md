@@ -17,6 +17,7 @@ The file descriptor system enables:
 - `analyzer.toml`: Child process for content analysis (used with spawn_integration)
 - `transformer.toml`: Child process for content transformation (used with spawn_integration)
 - `user_input.toml`: Handling large user inputs with automatic FD creation
+- `references.toml`: Response reference ID system for marking and exporting content
 
 ## Running Examples
 
@@ -29,6 +30,9 @@ llmproc-demo ./examples/file_descriptor/spawn_integration.toml
 
 # User input handling
 llmproc-demo ./examples/file_descriptor/user_input.toml
+
+# Response reference ID system
+llmproc-demo ./examples/file_descriptor/references.toml
 ```
 
 ## Key Features Demonstrated
@@ -54,3 +58,9 @@ llmproc-demo ./examples/file_descriptor/user_input.toml
 5. **User Input Handling**
    - Automatic FD creation for large inputs
    - Preview with metadata for large inputs
+
+6. **Response References**
+   - Marking specific content with `<ref id="example">content</ref>` tags
+   - Automatically creating file descriptors from references
+   - Accessing references using standard FD tools: `read_fd(fd="ref:example")`
+   - Exporting to files: `fd_to_file(fd="ref:example", file_path="output.txt")`

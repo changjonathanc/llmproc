@@ -161,6 +161,7 @@ fd_to_file_tool_def = {
 }
 
 # System prompt instructions for file descriptor usage
+# Instructions for file descriptor usage
 file_descriptor_instructions = """
 <file_descriptor_instructions>
 This system includes a file descriptor feature for handling large content:
@@ -199,6 +200,23 @@ Tips:
 - Use exist_ok=False to avoid overwriting existing files
 - Use create=False when you want to update only existing files
 </file_descriptor_instructions>
+"""
+
+# Instructions for reference ID system
+reference_instructions = """
+<reference_instructions>
+You can mark sections of your responses using reference tags:
+
+<ref id="example_id">
+Your content here (code, text, data, etc.)
+</ref>
+
+These references can be:
+- Exported to files using: fd_to_file(fd="ref:example_id", file_path="output.txt")
+- Read using standard file descriptor tools: read_fd(fd="ref:example_id", read_all=true)
+
+Choose clear, descriptive IDs for your references.
+</reference_instructions>
 """
 
 
@@ -1020,6 +1038,65 @@ class FileDescriptorManager:
         )
         
         return formatted_message
+        
+    def extract_references(self, assistant_message: str) -> list[dict[str, str]]:
+        """Extract references from an assistant message and store them in the FD system.
+        
+        Args:
+            assistant_message: The message from the assistant to process
+            
+        Returns:
+            A list of dictionaries containing reference information (id, content)
+        """
+        import re
+        
+        # Regular expression to find reference tags
+        # Matches <ref id="example"> content </ref>
+        # Group 1: id value
+        # Group 2: content
+        pattern = r'<ref\s+id="([^"]+)"[^>]*>(.*?)</ref>'
+        
+        # Find all reference tags
+        matches = re.findall(pattern, assistant_message, re.DOTALL)
+        references = []
+        
+        for ref_id, content in matches:
+            # Store the reference in the file descriptor system
+            # with the ref: prefix to distinguish it from regular file descriptors
+            fd_id = f"ref:{ref_id}"
+            
+            # Create a file descriptor with the reference ID as the FD ID
+            # We'll manually create it rather than using create_fd to set a custom FD ID
+            if fd_id not in self.file_descriptors:
+                lines, total_lines = self._index_lines(content)
+                page_size = self.default_page_size
+                
+                # Store the file descriptor entry
+                self.file_descriptors[fd_id] = {
+                    "content": content,
+                    "lines": lines,
+                    "total_lines": total_lines,
+                    "page_size": page_size,
+                    "creation_time": time.time(),
+                    "source": "reference",
+                    "total_pages": 1  # Will be recalculated
+                }
+                
+                # Calculate the actual number of pages
+                num_pages = self._calculate_total_pages(fd_id)
+                self.file_descriptors[fd_id]["total_pages"] = num_pages
+            
+            # Store information about the reference
+            references.append({
+                "id": ref_id,
+                "fd_id": fd_id,
+                "content": content,
+                "length": len(content)
+            })
+            
+            logger.info(f"Created reference '{ref_id}' with {len(content)} characters")
+            
+        return references
     
     def _format_fd_error(
         self, error_type: str, fd_id: str, message: str
