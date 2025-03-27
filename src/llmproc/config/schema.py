@@ -220,6 +220,7 @@ class LLMProgramConfig(BaseModel):
             "top_k",
             "stop",
             "reasoning_effort",  # For OpenAI reasoning models
+            "max_completion_tokens",  # For OpenAI reasoning models (replaces max_tokens)
             # Anthropic specific
             "max_tokens_to_sample",
             "stop_sequences",
