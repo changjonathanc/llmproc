@@ -150,20 +150,20 @@ class LLMProcess:
             fd_config = program.file_descriptor
             
             # Enable if explicitly enabled in config or if read_fd is in enabled tools
-            explicit_enabled = getattr(fd_config, "enabled", False)
+            explicit_enabled = fd_config.get("enabled", False)
             implicit_enabled = "read_fd" in self.enabled_tools
             
             if explicit_enabled or implicit_enabled:
                 self.file_descriptor_enabled = True
                 
-                # Get configuration values with defaults
-                default_page_size = getattr(fd_config, "default_page_size", 4000)
-                max_direct_output_chars = getattr(fd_config, "max_direct_output_chars", 8000)
-                max_input_chars = getattr(fd_config, "max_input_chars", 8000)
-                page_user_input = getattr(fd_config, "page_user_input", True)
+                # Get configuration values with defaults - fd_config is a dictionary, not an object
+                default_page_size = fd_config.get("default_page_size", 4000)
+                max_direct_output_chars = fd_config.get("max_direct_output_chars", 8000)
+                max_input_chars = fd_config.get("max_input_chars", 8000)
+                page_user_input = fd_config.get("page_user_input", True)
                 
-                # Check if references are enabled
-                self.references_enabled = getattr(fd_config, "enable_references", False)
+                # Check if references are enabled - fd_config is a dictionary, not an object
+                self.references_enabled = fd_config.get("enable_references", False)
                 
                 # Initialize the file descriptor manager
                 self.fd_manager = FileDescriptorManager(
