@@ -10,5 +10,5 @@ When solving complex problems, think step-by-step and explain your reasoning cle
 
 [parameters]
 temperature = 0.7
-max_tokens = 1000
+max_completion_tokens = 1000  # For reasoning models, use max_completion_tokens instead of max_tokens
 reasoning_effort = "medium"  # Options: "low", "medium", "high"

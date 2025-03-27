@@ -81,10 +81,18 @@ class OpenAIProcessExecutor:
             # Check if this is a reasoning model (o1, o1-mini, o3, o3-mini)
             api_params = process.api_params.copy()
             
-            # Only pass reasoning_effort for reasoning models
+            # Determine if this is a reasoning model
             is_reasoning_model = process.model_name.startswith(("o1", "o3"))
-            if not is_reasoning_model and "reasoning_effort" in api_params:
-                del api_params["reasoning_effort"]
+            
+            # Handle reasoning model specific parameters
+            if is_reasoning_model:
+                # Reasoning models use max_completion_tokens instead of max_tokens
+                if "max_tokens" in api_params:
+                    api_params["max_completion_tokens"] = api_params.pop("max_tokens")
+            else:
+                # Remove reasoning_effort for non-reasoning models
+                if "reasoning_effort" in api_params:
+                    del api_params["reasoning_effort"]
                 
             response = await process.client.chat.completions.create(
                 model=process.model_name,
