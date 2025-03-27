@@ -48,3 +48,4 @@ Thumbs.db
 # Local development files
 local/
 forking-an-agent/
+session_summaries/
