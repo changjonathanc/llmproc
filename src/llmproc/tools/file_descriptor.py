@@ -165,9 +165,10 @@ file_descriptor_instructions = """
 <file_descriptor_instructions>
 This system includes a file descriptor feature for handling large content:
 
-1. Large outputs are stored in file descriptors (fd:12345)
-2. Use read_fd to access content in pages or all at once
-3. Use fd_to_file to export content to disk files
+1. Large tool outputs are stored in file descriptors (fd:12345)
+2. Large user inputs may also be stored in file descriptors automatically
+3. Use read_fd to access content in pages or all at once
+4. Use fd_to_file to export content to disk files
 
 Key commands:
 - read_fd(fd="fd:12345", start=2) - Read page 2
@@ -180,6 +181,11 @@ Key commands:
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", mode="append") - Append to file
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", exist_ok=False) - Create new file only
 - fd_to_file(fd="fd:12345", file_path="/path/to/output.txt", create=False) - Update existing file only
+
+User Input Handling:
+- When a user sends a very large message, it may be automatically converted to a file descriptor
+- You'll see a preview like: <fd:12345 preview="first few characters..." type="user_input" size="10000">
+- Always use read_fd to read the full content before responding to such messages
 
 Tips:
 - Use the start parameter to specify page number, line number, or character position
@@ -255,12 +261,13 @@ class FileDescriptorManager:
         """
         self.fd_related_tools.add(tool_name)
 
-    def create_fd(self, content: str, page_size: Optional[int] = None) -> Dict[str, Any]:
+    def create_fd(self, content: str, page_size: Optional[int] = None, source: str = "tool_result") -> Dict[str, Any]:
         """Create a new file descriptor for large content.
 
         Args:
             content: The content to store in the file descriptor
             page_size: Characters per page (defaults to default_page_size)
+            source: Source of the content (e.g., "tool_result", "user_input")
 
         Returns:
             Dictionary with file descriptor information
@@ -287,7 +294,7 @@ class FileDescriptorManager:
             "total_lines": total_lines,
             "page_size": page_size,
             "creation_time": time.time(),
-            "source": "tool_result",  # Default source, can be overridden
+            "source": source,  # Source of the content
         }
         
         # Generate preview content (first page)
@@ -308,9 +315,10 @@ class FileDescriptorManager:
             "total_lines": total_lines,
             "message": f"Output exceeds {self.max_direct_output_chars} characters. Use read_fd to read more pages.",
             "preview": preview_content,
+            "source": source,
         }
         
-        logger.debug(f"Created file descriptor {fd_id} with {num_pages} pages, {total_lines} lines")
+        logger.debug(f"Created file descriptor {fd_id} with {num_pages} pages, {total_lines} lines, source: {source}")
         
         # Format the response in standardized XML format
         return self._format_fd_result(fd_result)
@@ -833,10 +841,14 @@ class FileDescriptorManager:
         """
         from llmproc.tools.tool_result import ToolResult
         
+        # Add source attribute if present
+        source_attr = f' source="{result["source"]}"' if "source" in result else ""
+        
         xml = (
             f'<fd_result fd="{result["fd"]}" pages="{result["pages"]}" '
             f'truncated="{str(result["truncated"]).lower()}" '
-            f'lines="{result["lines"]}" total_lines="{result["total_lines"]}">\n'
+            f'lines="{result["lines"]}" total_lines="{result["total_lines"]}"'
+            f'{source_attr}>\n'
             f'  <message>{result["message"]}</message>\n'
             f'  <preview>\n'
             f'  {result["preview"]}\n'
@@ -965,6 +977,50 @@ class FileDescriptorManager:
         
         return ToolResult(content=xml, is_error=False)
         
+    def handle_user_input(self, user_input: str) -> str:
+        """Handle large user input by creating a file descriptor if needed.
+        
+        Args:
+            user_input: The user input to process
+            
+        Returns:
+            The original user input if not paged, or a formatted FD reference 
+            if the input exceeds the threshold and paging is enabled
+        """
+        # Check if we should page this input
+        if not self.page_user_input or len(user_input) <= self.max_input_chars:
+            # No need to page this input
+            return user_input
+            
+        # Create a file descriptor for the large user input
+        fd_result = self.create_fd(
+            content=user_input, 
+            source="user_input"
+        )
+        
+        # Extract the FD ID from the result
+        fd_id = fd_result.content.split('fd="')[1].split('"')[0]
+        
+        # Generate a preview with approximately 100-150 characters
+        preview_length = min(150, self.max_input_chars // 20)
+        preview = user_input[:preview_length].strip()
+        if len(user_input) > preview_length:
+            preview += "..."
+            
+        # Format a user message that references the file descriptor
+        formatted_message = (
+            f'<fd:{fd_id} preview="{preview}" type="user_input" size="{len(user_input)}">\n'
+            f'This large user input has been stored in file descriptor {fd_id}. '
+            f'Use read_fd(fd="{fd_id}") to access the content.'
+        )
+        
+        logger.info(
+            f"Large user input ({len(user_input)} chars) stored in {fd_id}. "
+            f"Preview: {preview[:50]}..."
+        )
+        
+        return formatted_message
+    
     def _format_fd_error(
         self, error_type: str, fd_id: str, message: str
     ) -> "ToolResult":

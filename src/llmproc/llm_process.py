@@ -158,14 +158,21 @@ class LLMProcess:
                 # Get configuration values with defaults
                 default_page_size = getattr(fd_config, "default_page_size", 4000)
                 max_direct_output_chars = getattr(fd_config, "max_direct_output_chars", 8000)
+                max_input_chars = getattr(fd_config, "max_input_chars", 8000)
+                page_user_input = getattr(fd_config, "page_user_input", True)
                 
                 # Initialize the file descriptor manager
                 self.fd_manager = FileDescriptorManager(
                     default_page_size=default_page_size,
-                    max_direct_output_chars=max_direct_output_chars
+                    max_direct_output_chars=max_direct_output_chars,
+                    max_input_chars=max_input_chars,
+                    page_user_input=page_user_input
                 )
                 
-                logger.info(f"File descriptor system enabled with page size {default_page_size}")
+                logger.info(
+                    f"File descriptor system enabled with page size {default_page_size}, "
+                    f"user input paging: {page_user_input}"
+                )
         
         # If read_fd is in tools but no configuration provided, still enable with defaults
         elif "read_fd" in self.enabled_tools:
@@ -307,9 +314,21 @@ class LLMProcess:
             self.enriched_system_prompt = self.program.get_enriched_system_prompt(
                 process_instance=self, include_env=True
             )
+            
+        # Process user input through file descriptor manager if enabled
+        processed_user_input = user_input
+        if self.file_descriptor_enabled and self.fd_manager:
+            # Handle large user input (convert to file descriptor if needed)
+            processed_user_input = self.fd_manager.handle_user_input(user_input)
+            
+            # Log if input was converted to a file descriptor
+            if processed_user_input != user_input:
+                logger.info(
+                    f"Large user input ({len(user_input)} chars) converted to file descriptor"
+                )
 
-        # Add user input to state
-        self.state.append({"role": "user", "content": user_input})
+        # Add processed user input to state
+        self.state.append({"role": "user", "content": processed_user_input})
 
         # Create provider-specific process executors
         if self.provider == "openai":
@@ -392,7 +411,9 @@ class LLMProcess:
             # Create a new manager but preserve the settings
             self.fd_manager = FileDescriptorManager(
                 default_page_size=self.fd_manager.default_page_size,
-                max_direct_output_chars=self.fd_manager.max_direct_output_chars
+                max_direct_output_chars=self.fd_manager.max_direct_output_chars,
+                max_input_chars=self.fd_manager.max_input_chars,
+                page_user_input=self.fd_manager.page_user_input
             )
             # Copy over the FD-related tools registry
             self.fd_manager.fd_related_tools = self.fd_manager.fd_related_tools.union(
@@ -548,6 +569,12 @@ class LLMProcess:
         if self.file_descriptor_enabled and self.fd_manager:
             forked_process.file_descriptor_enabled = True
             forked_process.fd_manager = copy.deepcopy(self.fd_manager)
+            
+            # Ensure user input handling settings are copied correctly
+            if not hasattr(forked_process.fd_manager, "page_user_input"):
+                forked_process.fd_manager.page_user_input = getattr(self.fd_manager, "page_user_input", False)
+            if not hasattr(forked_process.fd_manager, "max_input_chars"):
+                forked_process.fd_manager.max_input_chars = getattr(self.fd_manager, "max_input_chars", 8000)
 
         # Prevent forked processes from forking again
         forked_process.allow_fork = False
