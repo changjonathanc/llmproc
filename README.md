@@ -39,6 +39,7 @@ The LLMProc library functions as a kernel:
 - Program Linking for LLM-to-LLM communication via spawn tool (like `dispatch_agent` in Claude Code)
 - Program Compiler for robust validation and preprocessing of configurations
 - File Descriptor system for handling large tool outputs with pagination
+- Automatic prompt caching for Anthropic models, providing up to 90% token savings
 
 ## Installation
 
@@ -496,7 +497,7 @@ For a complete example, see `examples/fd_spawn_integration.toml` and `examples/l
 
 1. [x] Implement Program Linking via Spawn Tool
 2. [x] Implement Fork System Call
-3. [ ] Implement Prompt Caching, Cost Tracking
+3. [x] Implement Prompt Caching, Cost Tracking
 4. [x] Implement Environment Variables
 5. [x] Implement File Descriptor System (Phase 1 & 2 complete)
 6. [ ] Implement Exec System Call for process replacement

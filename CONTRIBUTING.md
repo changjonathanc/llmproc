@@ -44,6 +44,18 @@ uv lock
 
 Note: We don't use requirements.txt for dependency management. All dependencies should be defined in pyproject.toml.
 
+## Design Principles
+
+### Make the Right Thing the Easy Thing
+
+We follow the principle of making the right thing the easy thing. This means:
+- Features with no functional downsides should be enabled by default
+- Performance optimizations should be opt-out rather than opt-in
+- Users shouldn't need to know implementation details to get optimal results
+- The library should handle as much complexity as possible on behalf of users
+
+Example: Prompt caching is automatically enabled for all Anthropic models without requiring any configuration, while still allowing users to disable it if needed.
+
 ## Code Standards
 
 - Follow [Google's Python Style Guide](https://google.github.io/styleguide/pyguide.html)
