@@ -1,6 +1,7 @@
 """Anthropic provider tools implementation for LLMProc."""
 
 import asyncio
+import copy
 import json
 import logging
 
@@ -79,12 +80,20 @@ class AnthropicProcessExecutor:
             # Extract extra headers if present
             extra_headers = api_params.pop("extra_headers", {})
             
+            # Check if caching should be used
+            use_caching = not getattr(process, "disable_automatic_caching", False)
+            
+            # Transform internal state to API-ready format with caching
+            api_messages = self._state_to_api_messages(process.state, add_cache=use_caching)
+            api_system = self._system_to_api_format(process.enriched_system_prompt, add_cache=use_caching)
+            api_tools = self._tools_to_api_format(process.tools, add_cache=use_caching)
+            
             # Make the API call with any extra headers
             response = await process.client.messages.create(
                 model=process.model_name,
-                system=process.enriched_system_prompt,
-                messages=process.state,
-                tools=process.tools,
+                system=api_system,
+                messages=api_messages,
+                tools=api_tools,
                 extra_headers=extra_headers if extra_headers else None,
                 **api_params,
             )
@@ -321,6 +330,110 @@ class AnthropicProcessExecutor:
         master_run_result.complete()
         return "Maximum iterations reached without final response."
 
+    def _state_to_api_messages(self, state, add_cache=True):
+        """
+        Transform conversation state to API-ready messages, optionally adding cache control points.
+
+        Args:
+            state: The conversation state to transform
+            add_cache: Whether to add cache control points
+
+        Returns:
+            List of API-ready messages with cache_control added at strategic points
+        """
+        # Create a deep copy to avoid modifying the original state
+        messages = copy.deepcopy(state)
+
+        if not add_cache or not messages:
+            return messages
+
+        # Add cache to the last message regardless of type
+        if messages:
+            self._add_cache_to_message(messages[-1])
+
+        # Find non-tool user messages
+        non_tool_user_indices = []
+        for i, msg in enumerate(messages):
+            if msg["role"] == "user":
+                # Check if this is not a tool result message
+                is_tool_message = False
+                if isinstance(msg.get("content"), list):
+                    for content in msg["content"]:
+                        if isinstance(content, dict) and content.get("type") == "tool_result":
+                            is_tool_message = True
+                            break
+                
+                if not is_tool_message:
+                    non_tool_user_indices.append(i)
+        
+        # Add cache to the message before the most recent non-tool user message
+        if len(non_tool_user_indices) > 1:
+            before_last_user_index = non_tool_user_indices[-2]
+            if before_last_user_index > 0:  # Ensure there's a message before this one
+                self._add_cache_to_message(messages[before_last_user_index - 1])
+
+        return messages
+    
+    def _system_to_api_format(self, system_prompt, add_cache=True):
+        """
+        Transform system prompt to API-ready format with cache control.
+
+        Args:
+            system_prompt: The enriched system prompt
+            add_cache: Whether to add cache control
+
+        Returns:
+            API-ready system prompt with cache_control
+        """
+        if not add_cache:
+            return system_prompt
+
+        if isinstance(system_prompt, str):
+            # Add cache to the entire system prompt
+            return [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+        elif isinstance(system_prompt, list):
+            # Already in structured format, assume correctly configured
+            return system_prompt
+        else:
+            # Fallback for unexpected formats
+            return system_prompt
+    
+    def _tools_to_api_format(self, tools, add_cache=True):
+        """
+        Transform tools to API-ready format with cache control.
+        
+        Args:
+            tools: The tool definitions
+            add_cache: Whether to add cache control
+            
+        Returns:
+            API-ready tools with cache_control
+        """
+        if not add_cache or not tools:
+            return tools
+            
+        tools_copy = copy.deepcopy(tools)
+        
+        # Add cache_control to the last tool in the array
+        if isinstance(tools_copy, list) and tools_copy:
+            # Find the last tool and add cache_control to it
+            # This caches all tools up to this point, using just one cache point
+            if isinstance(tools_copy[-1], dict):
+                tools_copy[-1]["cache_control"] = {"type": "ephemeral"}
+                
+        return tools_copy
+    
+    def _add_cache_to_message(self, message):
+        """Add cache control to a message."""
+        if isinstance(message.get("content"), list):
+            for content in message["content"]:
+                if isinstance(content, dict) and content.get("type") in ["text", "tool_result"]:
+                    content["cache_control"] = {"type": "ephemeral"}
+                    return  # Only add to the first eligible content
+        elif isinstance(message.get("content"), str):
+            # Convert string content to structured format with cache
+            message["content"] = [{"type": "text", "text": message["content"], "cache_control": {"type": "ephemeral"}}]
+    
     @staticmethod
     async def _fork(process, params, tool_id, last_assistant_response):
         """Fork a conversation."""

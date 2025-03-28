@@ -69,6 +69,7 @@ class LLMProgram:
         env_info: dict[str, Any] | None = None,
         file_descriptor: dict[str, Any] | None = None,
         base_dir: Path | None = None,
+        disable_automatic_caching: bool = False,
     ):
         """Initialize a program.
 
@@ -86,6 +87,7 @@ class LLMProgram:
             env_info: Environment information configuration
             file_descriptor: File descriptor configuration
             base_dir: Base directory for resolving relative paths in files
+            disable_automatic_caching: Whether to disable automatic prompt caching for Anthropic models
         """
         # Flag to track if this program has been fully compiled (including linked programs)
         self.compiled = False
@@ -98,6 +100,7 @@ class LLMProgram:
         self.display_name = display_name or f"{provider.title()} {model_name}"
         self.preload_files = preload_files or []
         self.mcp_config_path = mcp_config_path
+        self.disable_automatic_caching = disable_automatic_caching
         self.mcp_tools = mcp_tools or {}
         self.tools = tools or {}
         self.linked_programs = linked_programs or {}
@@ -393,6 +396,7 @@ class LLMProgram:
             env_info=env_info,
             file_descriptor=file_descriptor,
             base_dir=base_dir,
+            disable_automatic_caching=config.model.disable_automatic_caching,
         )
 
         return program

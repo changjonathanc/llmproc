@@ -16,6 +16,7 @@ class ModelConfig(BaseModel):
     name: str
     provider: str
     display_name: str | None = None
+    disable_automatic_caching: bool = False
 
     @classmethod
     @field_validator("provider")
@@ -27,6 +28,18 @@ class ModelConfig(BaseModel):
                 f"Provider '{v}' not supported. Must be one of: {', '.join(supported_providers)}"
             )
         return v
+        
+    @model_validator(mode="after")
+    def validate_caching_config(self):
+        """Validate that automatic caching is only disabled for Anthropic providers."""
+        if self.disable_automatic_caching and "anthropic" not in self.provider:
+            import warnings
+            warnings.warn(
+                f"'disable_automatic_caching' is set to true, but the provider is '{self.provider}'. "
+                f"Automatic caching is only supported for Anthropic providers, so this setting will have no effect.",
+                stacklevel=2
+            )
+        return self
 
 
 class PromptConfig(BaseModel):
