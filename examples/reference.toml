@@ -6,48 +6,60 @@
 #----------------------------------------
 [model]
 # Model name (Required)
-name = "gpt-4o"  # OpenAI example
-# provider = "anthropic"  # For Claude models directly via Anthropic API
-# provider = "anthropic_vertex"  # For Claude models via Google Vertex AI (uses ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION env vars)
+name = "claude-3-7-sonnet-20250219"  # Default Anthropic model
+# name = "claude-3-5-sonnet-20241022"  # Alternative Claude model
+# name = "claude-3-haiku-20240307"  # Faster, cheaper Claude model
+# name = "gpt-4o"  # OpenAI example
 
 # Provider (Required)
-provider = "openai"  # Options: "openai", "anthropic", "anthropic_vertex"
+provider = "anthropic"  # Options: "anthropic", "anthropic_vertex", "openai"
+# provider = "anthropic_vertex"  # For Claude models via Google Vertex AI (uses ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION env vars)
+# provider = "openai"  # For OpenAI models
 
 # Optional: User-facing display name for the model
 # This is used in CLI interfaces and doesn't affect API calls
 # If not provided, defaults to "{provider} {model_name}"
-display_name = "GPT-4o Assistant"
+display_name = "Claude 3.7 Sonnet"
 
 # Optional: Disable automatic prompt caching (Anthropic models only)
-# When using Anthropic models, prompt caching is automatically enabled when the
-# "anthropic-beta" header is set (see extra_headers below)
-# disable_automatic_caching = false  # Set to true to disable automatic caching
+# Prompt caching is automatically enabled for all Anthropic models
+# This can reduce token usage by up to 90% and improve response times
+# Set to true only if you need to explicitly disable caching
+disable_automatic_caching = false
 
 #----------------------------------------
 # Generation Parameters
 #----------------------------------------
 [parameters]
-# Controls randomness (0.0-2.0 for OpenAI, 0.0-1.0 for Anthropic)
+# Controls randomness (0.0-1.0 for Anthropic, 0.0-2.0 for OpenAI)
 temperature = 0.7
 
 # Maximum tokens to generate
-max_tokens = 150
+max_tokens = 4096  # Claude 3.7 supports up to 32,768 tokens
 
 # Nucleus sampling parameter (0.0-1.0)
 top_p = 0.95
 
 # Top-K sampling (Anthropic only)
-# top_k = 40
+top_k = 40
 
-# Frequency penalty (OpenAI only, -2.0 to 2.0)
-frequency_penalty = 0.0
+# Claude 3.7 thinking parameter (controls depth of reasoning, Anthropic only)
+# Configure how Claude uses its thinking capability to solve complex problems
+[parameters.thinking]
+type = "enabled"  # "enabled" or "disabled"
+budget_tokens = 4096  # Budget for thinking in tokens (min 1024, recommended 4096-8192)
 
-# Presence penalty (OpenAI only, -2.0 to 2.0)
-presence_penalty = 0.0
+# Token-efficient tool use for Claude 3.7 (Anthropic only)
+# Automatically added for appropriate models to reduce token usage
+[parameters.extra_headers]
+# anthropic-beta = "token-efficient-tools-2025-02-19"  # Uncomment for token-efficient tool calls
 
-# Extra headers for API requests (provider-specific)
-# extra_headers = { "anthropic-beta" = "token-efficient-tools-2025-02-19" }  # For specific beta features
-# Note: Prompt caching is automatically enabled for all Anthropic models for Anthropic
+# OpenAI-specific parameters (only used with OpenAI provider)
+# frequency_penalty = 0.0  # -2.0 to 2.0, penalizes repeated tokens
+# presence_penalty = 0.0  # -2.0 to 2.0, penalizes tokens already present
+
+# Note: Prompt caching is automatically enabled for Anthropic models
+# No extra configuration needed - reduces token usage by up to 90%
 
 #----------------------------------------
 # Prompt Configuration
@@ -140,19 +152,22 @@ variables = ["working_directory", "platform", "date"]
 #----------------------------------------
 [tools]
 # List of enabled tools
-# enabled = ["spawn"]  # Enable the spawn tool for program linking
-# enabled = ["fork"]   # Enable the fork tool for creating copies of the current process
-# enabled = ["read_fd"]  # Enable the file descriptor reading tool
-# enabled = ["read_fd", "fd_to_file"]  # Enable both file descriptor tools
-# enabled = ["spawn", "fork", "read_fd"]  # Enable multiple tools
+enabled = ["calculator", "fork", "spawn", "read_fd"]  # Enable multiple tools
+
+# Available tools:
+# - calculator: Perform mathematical calculations
+# - fork: Create process copies with the same state for parallel exploration
+# - spawn: Create new processes from linked programs for specialized tasks
+# - read_fd: Read content from file descriptors with pagination
+# - fd_to_file: Export file descriptor content to local files
 
 #----------------------------------------
 # Program Linking Configuration
 #----------------------------------------
 [linked_programs]
 # Map program names to their TOML program files
-# repo_expert = "./repo_expert.toml"
-# code_helper = "./code_helper.toml"
+repo_expert = "./program_linking/repo_expert.toml"  # Program for repo expertise
+code_assistant = "./basic/claude-3-haiku.toml"      # Program for coding help
 
 #----------------------------------------
 # MCP (Model Context Protocol) Configuration
@@ -165,9 +180,10 @@ variables = ["working_directory", "platform", "date"]
 # Users must explicitly specify which tools to import from each server
 [mcp.tools]
 # Server name = List of specific tools to import OR "all" to import all tools
-# github = ["search_repositories", "get_file_contents"]
-# codemcp = ["ReadFile"]
-# github = "all"  # Import all tools from GitHub server
+github = ["search_repositories", "get_file_contents"]  # Specific GitHub tools
+exa = ["search"]                                      # Exa search tool
+code_tools = "all"                                    # All code tools
+# webfetch = ["fetch"]                                # Web fetch tools
 
 #----------------------------------------
 # File Descriptor Configuration
@@ -217,14 +233,15 @@ page_user_input = true
 #
 # REFERENCE ID SYSTEM:
 # Enable the reference ID system to allow LLMs to mark sections of their responses:
-# enable_references = true
-#
-# When enabled, the LLM can mark content with reference tags:
-# <ref id="example_id">content</ref>
-#
-# These references can be accessed using standard FD tools:
-# - read_fd(fd="ref:example_id", read_all=true)
-# - fd_to_file(fd="ref:example_id", file_path="output.txt")
-#
-# References are stored in the file descriptor system with the "ref:" prefix.
+enable_references = true
+
+# Reference ID System Features:
+# - LLM can mark important sections with <ref id="unique_id">content</ref> tags
+# - References are automatically stored in the file descriptor system
+# - References can be accessed using "ref:" prefix (e.g., "ref:code_example")
+# - Standard FD tools can be used with references:
+#   * read_fd(fd="ref:code_example", read_all=true)
+#   * fd_to_file(fd="ref:code_example", file_path="code.py")
+# - References persist across conversation turns
+# - References can be shared with other processes via spawn
 
