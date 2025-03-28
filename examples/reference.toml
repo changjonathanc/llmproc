@@ -18,6 +18,11 @@ provider = "openai"  # Options: "openai", "anthropic", "anthropic_vertex"
 # If not provided, defaults to "{provider} {model_name}"
 display_name = "GPT-4o Assistant"
 
+# Optional: Disable automatic prompt caching (Anthropic models only)
+# When using Anthropic models, prompt caching is automatically enabled when the
+# "anthropic-beta" header is set (see extra_headers below)
+# disable_automatic_caching = false  # Set to true to disable automatic caching
+
 #----------------------------------------
 # Generation Parameters
 #----------------------------------------
@@ -39,6 +44,10 @@ frequency_penalty = 0.0
 
 # Presence penalty (OpenAI only, -2.0 to 2.0)
 presence_penalty = 0.0
+
+# Extra headers for API requests (provider-specific)
+# extra_headers = { "anthropic-beta" = "token-efficient-tools-2025-02-19" }  # For specific beta features
+# Note: Prompt caching is automatically enabled for all Anthropic models for Anthropic
 
 #----------------------------------------
 # Prompt Configuration

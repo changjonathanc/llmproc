@@ -80,8 +80,16 @@ class AnthropicProcessExecutor:
             # Extract extra headers if present
             extra_headers = api_params.pop("extra_headers", {})
             
-            # Check if caching should be used
+            # Automatically enable prompt caching if using Anthropic and not explicitly disabled
+            # This will significantly reduce token usage (~90% savings on cached tokens)
             use_caching = not getattr(process, "disable_automatic_caching", False)
+            if use_caching and "anthropic" in process.provider.lower():
+                # Add caching beta header if not already present
+                if "anthropic-beta" not in extra_headers:
+                    extra_headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+                elif "prompt-caching" not in extra_headers["anthropic-beta"]:
+                    # If there are other beta features, append the caching beta
+                    extra_headers["anthropic-beta"] += ",prompt-caching-2024-07-31"
             
             # Transform internal state to API-ready format with caching
             api_messages = self._state_to_api_messages(process.state, add_cache=use_caching)
