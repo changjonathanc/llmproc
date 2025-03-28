@@ -135,7 +135,8 @@ class TestProgramLinking:
 
         # Create a mock RunResult for the expert's response
         mock_run_result = RunResult()
-        mock_run_result.api_calls = 1
+        # Add a mock API call instead of setting api_calls directly
+        mock_run_result.add_api_call({"model": "test-model"})
         mock_expert.run = AsyncMock(return_value=mock_run_result)
 
         # Mock get_last_message to return the expected response
@@ -159,6 +160,9 @@ class TestProgramLinking:
             process = LLMProcess(
                 program=program, linked_programs_instances={"expert": mock_expert}
             )
+            
+            # Set empty api_params to avoid None error
+            process.api_params = {}
 
         # Test the spawn tool
         result = await spawn_tool(

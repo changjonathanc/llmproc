@@ -82,7 +82,8 @@ class TestProgramLinkingRobust:
 
             # Create a mock RunResult for the expert's response
             mock_run_result = RunResult()
-            mock_run_result.api_calls = 1
+            # Add a mock API call instead of setting api_calls directly
+            mock_run_result.add_api_call({"model": "test-model"})
             expert_process.run = AsyncMock(return_value=mock_run_result)
 
             # Mock get_last_message to return the expected response
@@ -100,6 +101,9 @@ class TestProgramLinkingRobust:
                 program=main_program,
                 linked_programs_instances={"expert": expert_process},
             )
+            
+            # Set empty api_params to avoid None error
+            main_process.api_params = {}
 
             # Set mcp_enabled to allow tool registration
             main_process.mcp_enabled = True
@@ -165,7 +169,8 @@ class TestProgramLinkingRobust:
             from llmproc.results import RunResult
 
             mock_run_result = RunResult()
-            mock_run_result.api_calls = 1
+            # Add a mock API call instead of setting api_calls directly
+            mock_run_result.add_api_call({"model": "test-model"})
             mock_expert.run = AsyncMock(return_value=mock_run_result)
 
             # Mock get_last_message to return the expected response
@@ -216,6 +221,9 @@ class TestProgramLinkingRobust:
                 program=main_program,
                 linked_programs_instances={"error_expert": mock_expert},
             )
+            
+            # Set empty api_params to avoid None error
+            main_process.api_params = {}
 
             # Call the spawn tool directly
             from llmproc.tools.spawn import spawn_tool

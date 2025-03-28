@@ -146,6 +146,9 @@ def test_llm_process_with_time_tool(
         mcp_tools={"time": ["current"]},
     )
     process = LLMProcess(program=program)
+    
+    # Set empty api_params to avoid None error
+    process.api_params = {}
 
     # Set mcp_enabled for testing
     process.mcp_enabled = True
@@ -192,7 +195,8 @@ async def test_run_with_time_tool(
 
     # Create a mock RunResult
     mock_run_result = RunResult()
-    mock_run_result.api_calls = 1
+    # Add a mock API call instead of setting api_calls directly
+    mock_run_result.add_api_call({"model": "test-model"})
 
     # Patch the _async_run method directly to return the mock RunResult
     process._async_run = AsyncMock(return_value=mock_run_result)

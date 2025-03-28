@@ -1,7 +1,7 @@
 """Tests for file descriptor integration with spawn system."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 
 from llmproc.program import LLMProgram
 from llmproc.llm_process import LLMProcess
@@ -47,6 +47,9 @@ async def test_spawn_with_fd_sharing(mock_get_provider_client):
     parent_process.linked_programs = {"child": child_program}
     parent_process.has_linked_programs = True
     
+    # Set empty api_params to avoid None error
+    parent_process.api_params = {}
+    
     # Manually enable file descriptors
     parent_process.file_descriptor_enabled = True
     parent_process.fd_manager = FileDescriptorManager(max_direct_output_chars=100)
@@ -60,6 +63,20 @@ async def test_spawn_with_fd_sharing(mock_get_provider_client):
     assert fd_id == "fd:1"
     assert fd_id in parent_process.fd_manager.file_descriptors
     
+    # Create a child process mock instead of relying on linked_programs
+    from llmproc.results import RunResult
+    
+    # Create a child process that will be returned when linked_programs is accessed
+    child_process = Mock()
+    child_process.run = AsyncMock()
+    child_process.get_last_message = Mock(return_value="Successfully processed FD content")
+    child_process.file_descriptor_enabled = True
+    child_process.fd_manager = FileDescriptorManager(max_direct_output_chars=100)
+    child_process.preloaded_content = {}
+    
+    # Update the linked_programs with the mock child process
+    parent_process.linked_programs["child"] = child_process
+    
     # Call spawn_tool with FD sharing
     result = await spawn_tool(
         program_name="child",
@@ -71,21 +88,15 @@ async def test_spawn_with_fd_sharing(mock_get_provider_client):
     # Verify result is not an error
     assert not result.is_error
     
-    # We should be able to access the child process that was spawned
-    child_process = None
-    for call_args in mock_client.create_message.call_args_list:
-        args, kwargs = call_args
-        if "Content processed successfully" in str(args) or "Content processed successfully" in str(kwargs):
-            # This would be the child process
-            child_process = args[0] if args else kwargs.get("model")
-            break
+    # Verify the content matches our mock response
+    assert result.content == "Successfully processed FD content"
     
-    # Verify child process has the FD content in its preloaded content
+    # Verify that run was called on the child process
+    child_process.run.assert_called_once_with("Process the shared FD content")
+    
+    # Verify child process has been properly set up
     assert hasattr(parent_process, "linked_programs")
-    
-    # Since we're mocking, we can't directly verify child process state
-    # But we can verify the spawn tool function correctly parsed the FD args
-    assert fd_id in result.content or "successfully" in result.content
+    assert "child" in parent_process.linked_programs
 
 
 @pytest.mark.asyncio
