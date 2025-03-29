@@ -91,6 +91,15 @@ class AnthropicProcessExecutor:
                     # If there are other beta features, append the caching beta
                     extra_headers["anthropic-beta"] += ",prompt-caching-2024-07-31"
             
+            # Check for token-efficient tool use header and validate model compatibility
+            if ("anthropic-beta" in extra_headers and 
+                "token-efficient-tools" in extra_headers["anthropic-beta"] and
+                not process.model_name.startswith("claude-3-7")):
+                logger.warning(
+                    f"Token-efficient tools header is only supported by Claude 3.7 models. "
+                    f"Currently using {process.model_name}. The header will be ignored."
+                )
+            
             # Transform internal state to API-ready format with caching
             api_messages = self._state_to_api_messages(process.state, add_cache=use_caching)
             api_system = self._system_to_api_format(process.enriched_system_prompt, add_cache=use_caching)

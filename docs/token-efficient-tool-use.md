@@ -50,12 +50,12 @@ from llmproc import LLMProgram
 
 async def main():
     # Load a configuration with token-efficient tool use enabled
-    program = LLMProgram.from_toml('examples/basic/claude-3-7-token-efficient-tools.toml')
+    program = LLMProgram.from_toml('examples/anthropic/claude-3-7-sonnet-token-efficient-tools.toml')
     process = await program.start()
     
     # Use tools as you normally would
     result = await process.run(
-        "What is the square root of 256? Also, what is the current weather in San Francisco?"
+        "What is the square root of 256? Also, tell me about the token-efficient tool use feature."
     )
     
     print(process.get_last_message())
@@ -76,7 +76,11 @@ provider = "anthropic"
 
 [parameters]
 max_tokens = 32768
-thinking_budget = 16000  # Enable high thinking
+
+# Enable high thinking capability
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 16000
 
 # Enable token-efficient tool use
 [parameters.extra_headers]
@@ -104,4 +108,4 @@ As Anthropic continues to develop this feature, we expect:
 - Additional optimization options
 - Integration with other efficiency-focused features
 
-See the example configuration in [examples/basic/claude-3-7-token-efficient-tools.toml](../examples/basic/claude-3-7-token-efficient-tools.toml) for a complete implementation.
+See the example configuration in [examples/anthropic/claude-3-7-sonnet-token-efficient-tools.toml](../examples/anthropic/claude-3-7-sonnet-token-efficient-tools.toml) for a complete implementation.

@@ -1,0 +1,28 @@
+# Claude 3.7 Sonnet with high thinking budget and token-efficient tool use
+# Combines two optimization features for complex reasoning tasks
+
+[model]
+name = "claude-3-7-sonnet-20250219"
+provider = "anthropic"
+display_name = "Claude 3.7 Sonnet (High Thinking + Token-Efficient Tools)"
+
+[prompt]
+system_prompt = """You are a helpful assistant that uses tools effectively and has extensive thinking capabilities.
+When appropriate, use available tools to provide the most accurate and helpful responses.
+For complex problems, use your thinking capability to reason through multiple possibilities."""
+
+[parameters]
+max_tokens = 32768
+
+# Enable high thinking capability
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 16000
+
+# Enable token-efficient tool use - this reduces token usage and latency for tool calls
+[parameters.extra_headers]
+anthropic-beta = "token-efficient-tools-2025-02-19"
+
+# Enable calculator and read_file tools
+[tools]
+enabled = ["calculator", "read_file"]
