@@ -32,13 +32,9 @@ def test_compile_all_example_programs():
     failed_files = []
     success_count = 0
     
-    # Known files that require external resources and will be skipped
+    # Known files that still require external resources (usually from API integrations)
     skip_files = [
-        "claude-code.toml",
-        "dispatch-agent.toml",
-        "fork.toml",
-        "mcp.toml",
-        "mcp_time.toml"
+        # Empty - we've fixed the path issues!
     ]
     
     # Try to compile each file

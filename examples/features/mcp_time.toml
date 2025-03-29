@@ -1,0 +1,22 @@
+# Example configuration for testing the MCP time tool
+# This simplified example only includes the time tool for reliable testing
+
+[model]
+name = "claude-3-haiku-20240307"
+provider = "anthropic"
+display_name = "MCP Time Tool Example"
+
+[prompt]
+system_prompt = """You are a helpful assistant with access to the time tool.
+When asked about the current time, always use the time tool to get accurate information.
+"""
+
+[parameters]
+max_tokens = 1000
+
+[mcp]
+config_path = "../../config/mcp_servers.json"
+
+[mcp.tools]
+# Only configure the time tool for reliable testing
+time = ["current"]

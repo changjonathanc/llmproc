@@ -4,7 +4,7 @@ provider = "anthropic"
 display_name = "Claude Code"
 
 [prompt]
-system_prompt_file = "../prompts/claude-code-system-prompt.md"
+system_prompt_file = "../../prompts/claude-code-system-prompt.md"
 
 [parameters]
 temperature = 1
@@ -23,7 +23,7 @@ anthropic-beta = "token-efficient-tools-2025-02-19"
 files = ["CLAUDE.md"]
 
 [mcp]
-config_path = "../config/mcp_servers.json"
+config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
 # this is the full list of tools

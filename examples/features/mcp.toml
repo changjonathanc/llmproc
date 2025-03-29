@@ -11,7 +11,7 @@ max_tokens = 300
 system_prompt = "You are a helpful assistant with access to tools. Use tools whenever appropriate to answer user queries accurately."
 
 [mcp]
-config_path = "../config/mcp_servers.json"
+config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
 # Only configure servers that are available in your config/mcp_servers.json

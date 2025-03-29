@@ -20,7 +20,7 @@ enabled = ["fork"]
 
 
 [mcp]
-config_path = "../config/mcp_servers.json"
+config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
 # Only configure servers that are available in your config/mcp_servers.json

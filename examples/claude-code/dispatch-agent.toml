@@ -4,7 +4,7 @@ provider = "anthropic"
 display_name = "Claude Code Dispatch Agent"
 
 [prompt]
-system_prompt_file = "../prompts/claude-code-dispatch-agent-system-prompt.md"
+system_prompt_file = "../../prompts/claude-code-dispatch-agent-system-prompt.md"
 
 [parameters]
 temperature = 1
@@ -20,7 +20,7 @@ type = "enabled"
 budget_tokens = 4000
 
 [mcp]
-config_path = "../config/mcp_servers.json"
+config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
 # this is the full list of tools
