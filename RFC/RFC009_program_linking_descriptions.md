@@ -1,4 +1,4 @@
-# RFC009: Enhancing Program Linking with Descriptions
+# RFC009: Enhancing Program Linking with Descriptions [IMPLEMENTED]
 
 ## Summary
 This RFC proposes adding a simple mechanism for parent programs to provide descriptions of linked programs, making it easier for LLMs to understand when to use each linked program.
@@ -74,9 +74,13 @@ This proposal maintains backward compatibility with existing configurations by s
 3. System tests to confirm the spawn tool correctly presents descriptions
 4. Backward compatibility tests with existing TOML files
 
-## Next Steps
-1. Update schema to support structured linked program definitions
-2. Modify the program compiler to extract and store descriptions
-3. Enhance the spawn tool to include descriptions in its help text
-4. Update documentation and examples to demonstrate the feature
-5. Add tests to verify the implementation
+## Implementation Status
+This RFC has been fully implemented on 2025-03-28. The implementation includes:
+
+1. ✅ Updated schema to support structured linked program definitions
+2. ✅ Modified the program compiler to extract and store descriptions
+3. ✅ Enhanced the spawn tool to include descriptions in its help text and error messages
+4. ✅ Updated documentation and examples to demonstrate the feature
+5. ✅ Added tests to verify the implementation
+
+This feature enables more intuitive program linking by allowing LLMs to better understand when to use each linked program.

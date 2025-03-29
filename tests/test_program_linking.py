@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llmproc.llm_process import LLMProcess
+from llmproc.program import LLMProgram
 from llmproc.tools.spawn import spawn_tool
 from llmproc.tools.tool_result import ToolResult
 
@@ -222,6 +223,99 @@ class TestProgramLinking:
         assert result.is_error is True
         assert "Test error" in result.content
         
+    def test_program_linking_descriptions(self):
+        """Test program linking with descriptions using enhanced syntax."""
+        # Create a temporary directory for test files
+        tmp_dir = Path("tmp_test_linked_desc")
+        tmp_dir.mkdir(exist_ok=True)
+
+        try:
+            # Create test files for different experts
+            math_expert_toml = tmp_dir / "math_expert.toml"
+            code_expert_toml = tmp_dir / "code_expert.toml"
+            
+            with open(math_expert_toml, "w") as f:
+                f.write("""
+                [model]
+                name = "math-expert-model"
+                provider = "anthropic"
+                
+                [prompt]
+                system_prompt = "You are a math expert"
+                """)
+                
+            with open(code_expert_toml, "w") as f:
+                f.write("""
+                [model]
+                name = "code-expert-model"
+                provider = "anthropic"
+                
+                [prompt]
+                system_prompt = "You are a coding expert"
+                """)
+
+            # Create a main toml that links to both experts with descriptions
+            main_toml = tmp_dir / "main_with_descriptions.toml"
+            with open(main_toml, "w") as f:
+                f.write(f"""
+                [model]
+                name = "main-model"
+                provider = "anthropic"
+                
+                [prompt]
+                system_prompt = "Main prompt"
+                
+                [tools]
+                enabled = ["spawn"]
+                
+                [linked_programs]
+                math_expert = {{ path = "{math_expert_toml.name}", description = "Expert specialized in mathematics and statistics" }}
+                code_expert = {{ path = "{code_expert_toml.name}", description = "Expert specialized in software development" }}
+                """)
+
+            # Mock the client creation to avoid API calls
+            with patch(
+                "llmproc.providers.providers.get_provider_client"
+            ) as mock_get_client:
+                mock_client = MagicMock()
+                mock_get_client.return_value = mock_client
+
+                # Compile the main program with linked programs
+                main_program = LLMProgram.compile(main_toml, include_linked=True)
+
+                # Verify the program has linked_program_descriptions
+                assert hasattr(main_program, "linked_program_descriptions")
+                assert "math_expert" in main_program.linked_program_descriptions
+                assert "code_expert" in main_program.linked_program_descriptions
+                
+                # Verify descriptions match what was provided
+                assert main_program.linked_program_descriptions["math_expert"] == "Expert specialized in mathematics and statistics"
+                assert main_program.linked_program_descriptions["code_expert"] == "Expert specialized in software development"
+                
+                # Create a process from the program
+                process = LLMProcess(program=main_program)
+                
+                # Verify the process has the linked program descriptions
+                assert hasattr(process, "linked_program_descriptions")
+                assert "math_expert" in process.linked_program_descriptions
+                assert "code_expert" in process.linked_program_descriptions
+                
+                # Check that tool descriptions include the program descriptions
+                assert any("spawn" in tool["name"] for tool in process.tools)
+                spawn_tool_desc = next(tool["description"] for tool in process.tools if tool["name"] == "spawn")
+                assert "math_expert" in spawn_tool_desc
+                assert "code_expert" in spawn_tool_desc
+                assert "mathematics" in spawn_tool_desc
+                assert "software" in spawn_tool_desc
+
+        finally:
+            # Clean up test files
+            for file_path in [math_expert_toml, code_expert_toml, main_toml]:
+                if file_path and file_path.exists():
+                    file_path.unlink()
+            if tmp_dir.exists():
+                tmp_dir.rmdir()
+
     @pytest.mark.asyncio
     async def test_spawn_tool_with_preloaded_files(self):
         """Test the spawn tool with file preloading."""

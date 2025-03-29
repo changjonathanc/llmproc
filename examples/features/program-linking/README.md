@@ -49,4 +49,4 @@ thinking_expert = { path = "../../anthropic/claude-3-7-thinking-high.toml", desc
 gpt_judge = { path = "../../openai/gpt-4-5.toml", description = "GPT-4.5, excellent at providing different insights and judging alternatives" }
 ```
 
-With the enhanced description system, we don't need to manually list each expert in the system prompt. The spawn tool automatically makes the descriptions available to the model.
+With the enhanced description system, you don't need to manually list each expert in the system prompt. The spawn tool automatically makes the descriptions available to the model.

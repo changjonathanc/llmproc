@@ -66,6 +66,7 @@ class LLMProgram:
         mcp_tools: dict[str, list[str]] | None = None,
         tools: dict[str, Any] | None = None,
         linked_programs: dict[str, Union[str, "LLMProgram"]] | None = None,
+        linked_program_descriptions: dict[str, str] | None = None,
         env_info: dict[str, Any] | None = None,
         file_descriptor: dict[str, Any] | None = None,
         base_dir: Path | None = None,
@@ -104,6 +105,7 @@ class LLMProgram:
         self.mcp_tools = mcp_tools or {}
         self.tools = tools or {}
         self.linked_programs = linked_programs or {}
+        self.linked_program_descriptions = linked_program_descriptions or {}
         self.env_info = env_info or {
             "variables": []
         }  # Default to empty list (disabled)
@@ -251,6 +253,13 @@ class LLMProgram:
                     # Get the compiled program from the registry
                     linked_program = registry.get(linked_path)
                     if linked_program:
+                        # Copy the description from the parent to the linked program
+                        if (hasattr(program, "linked_program_descriptions") and 
+                            linked_name in program.linked_program_descriptions):
+                            # Only set the description if the linked program doesn't already have one
+                            if not hasattr(linked_program, "description"):
+                                linked_program.description = program.linked_program_descriptions[linked_name]
+                        
                         updated_links[linked_name] = linked_program
                     else:
                         # Should never happen if Stage 1 completed successfully
@@ -366,10 +375,19 @@ class LLMProgram:
 
         # Process linked programs
         linked_programs = None
+        linked_program_descriptions = None
         if config.linked_programs:
             linked_programs = {}
-            for program_name, program_path in config.linked_programs.root.items():
-                linked_programs[program_name] = program_path
+            linked_program_descriptions = {}
+            for program_name, program_config in config.linked_programs.root.items():
+                # Handle both string paths and LinkedProgramItem objects
+                if isinstance(program_config, str):
+                    linked_programs[program_name] = program_config
+                    linked_program_descriptions[program_name] = ""
+                else:
+                    # It's a LinkedProgramItem
+                    linked_programs[program_name] = program_config.path
+                    linked_program_descriptions[program_name] = program_config.description
 
         # Extract environment info configuration
         env_info = (
@@ -393,6 +411,7 @@ class LLMProgram:
             mcp_tools=mcp_tools,
             tools=config.tools.model_dump() if config.tools else None,
             linked_programs=linked_programs,
+            linked_program_descriptions=linked_program_descriptions,
             env_info=env_info,
             file_descriptor=file_descriptor,
             base_dir=base_dir,
@@ -491,5 +510,9 @@ class LLMProgram:
         # Ensure linked programs are properly registered if they exist
         if hasattr(self, "linked_programs") and self.linked_programs:
             process.has_linked_programs = True
+            
+        # Pass along linked program descriptions if they exist
+        if hasattr(self, "linked_program_descriptions") and self.linked_program_descriptions:
+            process.linked_program_descriptions = self.linked_program_descriptions
 
         return process

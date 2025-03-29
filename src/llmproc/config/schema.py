@@ -152,10 +152,16 @@ class FileDescriptorConfig(BaseModel):
         return v
 
 
+class LinkedProgramItem(BaseModel):
+    """Configuration for a single linked program."""
+    
+    path: str
+    description: str = ""
+    
 class LinkedProgramsConfig(RootModel):
     """Linked programs configuration section."""
 
-    root: dict[str, str] = {}
+    root: dict[str, str | LinkedProgramItem] = {}
 
 
 class LLMProgramConfig(BaseModel):

@@ -212,10 +212,27 @@ def register_spawn_tool(registry: ToolRegistry, process) -> None:
         from llmproc.tools.spawn import SPAWN_TOOL_SCHEMA_BASE
         api_tool_def = SPAWN_TOOL_SCHEMA_BASE.copy()
 
-    # Customize description with available programs if any
+    # Customize description with available programs and their descriptions if any
     if hasattr(process, "linked_programs") and process.linked_programs:
-        available_programs = ", ".join(process.linked_programs.keys())
-        api_tool_def["description"] += f"\n\nAvailable programs: {available_programs}"
+        # Build a list of available programs with descriptions
+        available_programs_list = []
+        for name, program in process.linked_programs.items():
+            description = ""
+            # Try to get the description from various possible sources
+            if hasattr(process, "linked_program_descriptions") and name in process.linked_program_descriptions:
+                description = process.linked_program_descriptions[name]
+            elif hasattr(program, "description") and program.description:
+                description = program.description
+                
+            if description:
+                available_programs_list.append(f"'{name}': {description}")
+            else:
+                available_programs_list.append(f"'{name}'")
+                
+        # Format the list with a header
+        if available_programs_list:
+            formatted_programs = "\n- " + "\n- ".join(available_programs_list)
+            api_tool_def["description"] += f"\n\nAvailable programs: {formatted_programs}"
 
     # Create a handler function that binds to the process
     async def spawn_handler(args):

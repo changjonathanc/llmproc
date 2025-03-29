@@ -99,6 +99,7 @@ class LLMProcess:
         # Linked Programs Configuration
         self.linked_programs = {}
         self.has_linked_programs = False
+        self.linked_program_descriptions = {}
 
         # Initialize linked programs if provided in constructor
         if linked_programs_instances:
@@ -108,6 +109,10 @@ class LLMProcess:
         elif hasattr(program, "linked_programs") and program.linked_programs:
             self.has_linked_programs = True
             self.linked_programs = program.linked_programs
+            
+        # Get linked program descriptions if available
+        if hasattr(program, "linked_program_descriptions") and program.linked_program_descriptions:
+            self.linked_program_descriptions = program.linked_program_descriptions
 
         # Initialize system tools
         self._initialize_tools()

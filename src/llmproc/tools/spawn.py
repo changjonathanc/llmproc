@@ -160,7 +160,22 @@ async def spawn_tool(
 
     linked_programs = llm_process.linked_programs
     if program_name not in linked_programs:
-        available_programs = ", ".join(linked_programs.keys())
+        # Create a formatted list of available programs with descriptions
+        available_programs_list = []
+        for name, program in linked_programs.items():
+            description = ""
+            # Try to get the description from various possible sources
+            if hasattr(llm_process, "linked_program_descriptions") and name in llm_process.linked_program_descriptions:
+                description = llm_process.linked_program_descriptions[name]
+            elif hasattr(program, "description") and program.description:
+                description = program.description
+                
+            if description:
+                available_programs_list.append(f"'{name}': {description}")
+            else:
+                available_programs_list.append(f"'{name}'")
+                
+        available_programs = "\n- " + "\n- ".join(available_programs_list)
         error_msg = f"Program '{program_name}' not found. Available programs: {available_programs}"
         logger.error(f"SPAWN ERROR: {error_msg}")
         from llmproc.tools.tool_result import ToolResult
