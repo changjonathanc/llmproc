@@ -246,21 +246,15 @@ Options:
 
 ## Feature Status
 
-The following table shows the status of features described in our Request for Comments (RFC) documents:
+LLMProc implements a wide range of advanced features to enhance your LLM applications, including:
 
-| Feature | RFC | Status | Description |
-|---------|-----|--------|-------------|
-| File Descriptor System | RFC001 | ✅ Implemented | Unix-like file descriptor system for LLM outputs |
-| File Descriptor Implementation | RFC003 | ✅ Implemented | Technical implementation details |
-| File Descriptor Phases | RFC004 | ✅ Implemented | Phased implementation approach |
-| FD-Spawn Integration | RFC005 | ✅ Implemented | Integration with spawn tool |
-| Response Reference ID | RFC006 | ✅ Implemented | Reference system for responses |
-| Enhanced FD API | RFC007 | ✅ Implemented | Improved file descriptor API |
-| OpenAI Reasoning Models | RFC008 | ✅ Implemented | Support for o1/o3 reasoning models |
-| Program Linking Descriptions | RFC009 | ✅ Implemented | Enhanced program linking with descriptions |
-| Claude Thinking Models | RFC010 | ✅ Implemented | Support for Claude 3.7 thinking models |
-| Token-Efficient Tool Use | RFC011 | ❌ Planned | Efficient tool handling for Claude 3.7 |
-| Prompt Caching | RFC013 | ✅ Implemented | Automatic prompt caching for Anthropic API |
+- ✅ File Descriptor System: Unix-like file descriptor system for LLM outputs
+- ✅ Program Linking: Communication between specialized LLM processes
+- ✅ OpenAI Reasoning Models: Support for o1/o3 reasoning models
+- ✅ Claude Thinking Models: Support for Claude 3.7 thinking capabilities
+- ✅ Prompt Caching: Automatic caching for Anthropic API with up to 90% token savings
+- ✅ Response References: System for referencing previous outputs
+- ✅ Enhanced APIs: Improved interfaces for file descriptors and other features
 
 ## Roadmap
 
