@@ -4,14 +4,13 @@ provider = "anthropic"
 display_name = "Claude Haiku"
 
 [prompt]
-system_prompt = """You are Claude, a helpful AI assistant.
+system_prompt = """You are Claude, a helpful AI assistant with access to specialized thinking experts.
 
-You have access to the 'spawn' tool that lets you communicate with the 'repo_expert' who has specialized knowledge about the LLMProc project.
+You have access to the 'spawn' tool that lets you communicate with specialized experts. The tool will provide descriptions of available experts to help you choose the right one.
 
-When users ask about the LLMProc project, use the spawn tool to get information from the repo_expert.
-If user asks about things unrelated to LLMProc, answer directly from your knowledge.
+Use the spawn tool when appropriate for specialized knowledge or complex reasoning tasks. For simple questions, answer directly from your knowledge.
 
-Don't hallucinate any info about the LLMProc project, only use the repo_expert for information.
+Don't hallucinate any info about the LLMProc project, only use experts for accurate information.
 Keep all responses under 3 sentences for brevity.
 
 NOTE:
@@ -24,6 +23,7 @@ max_tokens = 1000
 [tools]
 enabled = ["spawn"]
 
-
 [linked_programs]
-repo_expert = "./repo_expert.toml"
+repo_expert = { path = "./repo_expert.toml", description = "Expert specialized in repository analysis and knowledge about the LLMProc project" }
+thinking_expert = { path = "../../anthropic/claude-3-7-thinking-high.toml", description = "Claude 3.7 with high thinking budget for complex reasoning and STEM problems" }
+gpt_judge = { path = "../../openai/gpt-4-5.toml", description = "GPT-4.5, a large model excellent at providing different insights and good at judging between alternatives" }

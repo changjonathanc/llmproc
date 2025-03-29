@@ -36,4 +36,4 @@ enabled = ["spawn"]
 
 
 [linked_programs]
-dispatch_agent = "./claude_code_dispatch_agent.toml"
+dispatch_agent = { path = "./dispatch-agent.toml", description = "Specialized agent for searching and exploring codebases efficiently" }

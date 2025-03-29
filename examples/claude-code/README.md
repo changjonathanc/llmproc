@@ -9,12 +9,28 @@ This directory contains examples for using Claude Code capabilities within LLMPr
 
 Claude Code provides code-related tools including file operations, search capabilities, and more.
 
+## Features
+
+- **Program Linking**: Uses the enhanced description system for linked programs
+- **Token-Efficient Tool Use**: Reduces token usage and improves latency
+- **Thinking Mode**: Optional thinking mode for complex coding tasks
+- **MCP Integration**: Uses Model Context Protocol for tool functionality
+
 ## Usage
 
 ```bash
-# Start a basic Claude Code session
+# Start a basic Claude Code session with dispatch agent available
 llmproc-demo ./examples/claude-code/claude-code.toml
-
-# Use Claude Code with dispatch agent
-llmproc-demo ./examples/claude-code/dispatch-agent.toml
 ```
+
+## Configuration Example
+
+```toml
+[tools]
+enabled = ["spawn"]
+
+[linked_programs]
+dispatch_agent = { path = "./dispatch-agent.toml", description = "Specialized agent for searching and exploring codebases efficiently" }
+```
+
+The dispatch agent is made available through program linking with descriptive metadata, allowing Claude Code to better understand when to use it.
