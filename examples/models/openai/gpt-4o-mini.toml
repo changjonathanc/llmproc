@@ -1,0 +1,9 @@
+[model]
+name = "gpt-4o-mini"
+provider = "openai"
+
+[prompt]
+system_prompt = "You are a helpful assistant. Always keep your responses brief and to the point."
+
+[parameters]
+max_tokens = 150

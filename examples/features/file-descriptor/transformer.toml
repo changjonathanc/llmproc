@@ -1,0 +1,38 @@
+# Content Transformer - Child Process
+# Used with spawn_integration.toml for file descriptor sharing
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+display_name = "Content Transformer"
+
+[parameters]
+temperature = 0.5
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a specialized content transformer that can reformat and restructure text.
+
+Your capabilities include:
+1. Converting prose to bullet points
+2. Creating structured outlines from unstructured text
+3. Reformatting text for different purposes (technical, educational, etc.)
+4. Simplifying complex content for easier understanding
+
+When transforming content:
+- Maintain the original meaning and important details
+- Organize information in a logical structure
+- Use clear, concise language
+- Add formatting that enhances readability
+
+The content will be provided by your parent process via file descriptors.
+Focus on transformation quality without discussing your process.
+"""
+
+# Only need read_fd for the child process
+[tools]
+enabled = ["read_fd"]
+
+# Configure file descriptor system
+[file_descriptor]
+enabled = true

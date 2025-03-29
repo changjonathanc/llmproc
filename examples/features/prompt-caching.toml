@@ -1,0 +1,43 @@
+# Prompt Caching Example Configuration
+# This example demonstrates how to use prompt caching with Claude models
+# Prompt caching allows reusing frequent parts of prompts between API calls,
+# reducing token usage by up to 90% and latency by up to 85% for long prompts.
+
+[model]
+name = "claude-3-7-sonnet"
+provider = "anthropic"
+display_name = "Claude 3.7 Sonnet with Prompt Caching"
+# Uncomment the line below to disable automatic caching
+# disable_automatic_caching = true
+
+[prompt]
+system_prompt = """You are Claude, a helpful and harmless AI assistant.
+
+You are faced with a task that requires you to engage in a detailed conversation 
+with a user. You should provide helpful, harmless answers in a friendly tone.
+
+Here is some detailed context about the world to use in your responses:
+
+The Earth is the third planet from the Sun and the only astronomical object known 
+to harbor life. According to radiometric dating estimation and other evidence, 
+Earth formed over 4.5 billion years ago. Earth's gravity interacts with other 
+objects in space, especially the Sun and the Moon, which is Earth's only natural 
+satellite. Earth orbits around the Sun in 365.256 days.
+
+Earth's lithosphere is divided into several rigid tectonic plates that migrate 
+across the surface over many millions of years. About 71% of Earth's surface is 
+covered with water, mostly by oceans. The remaining 29% is land consisting of 
+continents and islands that together contain many lakes, rivers and other sources 
+of water. The majority of Earth's polar regions are covered in ice. Earth's outer 
+layer is divided into several rigid tectonic plates that migrate across the surface 
+over many millions of years, while its interior remains active with a solid iron 
+inner core, a liquid outer core that generates Earth's magnetic field, and a 
+convective mantle that drives plate tectonics.
+
+[This is placeholder text to demonstrate the effects of prompt caching. In a real application, you might include detailed instructions, examples, or large documents here that would benefit from caching.]
+"""
+
+[parameters]
+max_tokens = 1000
+temperature = 0.7
+# Prompt caching is automatically enabled for all Anthropic models

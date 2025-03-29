@@ -1,0 +1,12 @@
+[model]
+name = "claude-3-haiku-20240307"
+provider = "anthropic"
+display_name = "Claude Haiku"
+# disable_automatic_caching = false  # Uncomment to disable automatic caching
+
+[prompt]
+system_prompt = "You are Claude, a helpful AI assistant. Keep all responses under 3 sentences for brevity."
+
+[parameters]
+max_tokens = 150
+# Prompt caching is automatically enabled

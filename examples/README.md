@@ -1,72 +1,58 @@
-# LLMProc Example Programs
+# LLMProc Examples
 
-This directory contains TOML configuration files and example scripts demonstrating various features of the LLMProc framework.
+This directory contains examples demonstrating LLMProc features and configurations.
 
-## Example Directories
+## Quick Start
 
-- **basic/** - Simple model configurations including:
-  - OpenAI models: GPT-4o, GPT-4.5, GPT-4o-mini, o3-mini (low/medium/high reasoning)
-  - Anthropic models: Claude Haiku, Claude 3.5 Sonnet, Claude 3.7 Sonnet, Claude 3.5 Haiku Vertex
-  - Special features: environment variables and file preloading
+- [**reference.toml**](./reference.toml): Comprehensive reference with all configuration options
+- [**models/minimal.toml**](./models/minimal.toml): Simplest possible configuration
 
-- **file_descriptor/** - Examples demonstrating the file descriptor system.
-  - See [File Descriptor README](file_descriptor/README.md) for details.
+## Directory Structure
 
-- **program_linking/** - Examples demonstrating program linking (LLM-to-LLM communication).
-  - See [Program Linking README](program_linking/README.md) for details.
+- [**models/**](./models/): Model configurations for different providers
+  - **openai/**: OpenAI models (GPT-4o, GPT-4o-mini, etc.)
+  - **anthropic/**: Anthropic models (Claude 3 Haiku, Sonnet, etc.)
 
-- **openai_reasoning/** - Examples for OpenAI reasoning models with different configuration profiles.
-  - See [OpenAI Reasoning README](openai_reasoning/README.md) for details.
+- [**features/**](./features/): Feature demonstrations
+  - **preload.toml**: File preloading
+  - **env-info.toml**: Environment variables
+  - **prompt-caching.toml**: Prompt caching
+  - **mcp.toml**: MCP protocol support
+  - **fork.toml**: Fork system call
+  - **file-descriptor/**: File descriptor system
+  - **program-linking/**: Program linking (LLM-to-LLM communication)
 
-## Core Reference
+- [**claude-code/**](./claude-code/): Claude Code examples
+  - **claude-code.toml**: Basic Claude Code
+  - **dispatch-agent.toml**: Claude Code with dispatch agent
 
-- **reference.toml** - Comprehensive reference with all available configuration options and documentation.
-
-## Feature Examples
-
-- **calculator.toml** - Demonstrates the calculator tool for performing mathematical operations.
-- **claude_code.toml** - Configuration for Claude models with code-related tools.
-- **claude_code_dispatch_agent.toml** - Configuration using Claude Code's dispatch agent functionality.
-- **fork.toml** - Shows the fork system call for creating process copies with inherited state.
-- **mcp.toml** - Basic Model Context Protocol (MCP) configuration for tool usage.
-- **mcp_time.toml** - Demonstrates MCP time server tool integration.
-
-## Example Scripts
-
-- **callback_demo.py** - Demonstrates using callbacks with LLMProcess.
-- **program_compiler_example.py** - Shows how to use the program compiler programmatically.
-
-## Example Directories
-
-- **file_descriptor/** - Examples demonstrating the file descriptor system.
-  - See [File Descriptor README](file_descriptor/README.md) for details.
-
-- **program_linking/** - Examples demonstrating program linking (LLM-to-LLM communication).
-  - See [Program Linking README](program_linking/README.md) for details.
+- [**scripts/**](./scripts/): Python script examples
+  - **program-compiler-example.py**: Program compiler usage
+  - **callback-demo.py**: Callback demonstrations
 
 ## Running Examples
 
-Use the `llmproc-demo` command-line tool to run the example programs:
+Use the `llmproc-demo` command-line tool:
 
 ```bash
 # Basic examples
-llmproc-demo ./examples/basic/gpt-4o-mini.toml
-llmproc-demo ./examples/basic/claude-haiku.toml
+llmproc-demo ./examples/models/minimal.toml
+llmproc-demo ./examples/models/openai/gpt-4o-mini.toml
+llmproc-demo ./examples/models/anthropic/claude-3-haiku.toml
 
 # Feature examples
-llmproc-demo ./examples/calculator.toml
-llmproc-demo ./examples/fork.toml
+llmproc-demo ./examples/features/preload.toml
+llmproc-demo ./examples/features/fork.toml
 
-# Directory examples
-llmproc-demo ./examples/file_descriptor/main.toml
-llmproc-demo ./examples/program_linking/main.toml
-llmproc-demo ./examples/basic/o3-mini-medium.toml
+# Advanced examples
+llmproc-demo ./examples/features/file-descriptor/main.toml
+llmproc-demo ./examples/features/program-linking/main.toml
 ```
 
 ## Examining System Prompts
 
-To see what the enriched system prompt would look like for an example program:
+To see what the enriched system prompt looks like for an example:
 
 ```bash
-llmproc-prompt ./examples/file_descriptor/references.toml
+llmproc-prompt ./examples/features/file-descriptor/references.toml
 ```
