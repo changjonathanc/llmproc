@@ -5,7 +5,7 @@ This example demonstrates how to use the program linking feature with specialize
 ## Files
 
 - `main.toml`: Primary LLM configuration with spawn tool enabled
-- `repo_expert.toml`: Specialized LLM with LLMProc project knowledge pre-loaded into the enriched system prompt
+- `repo_expert.toml`: Specialized LLM with LLMProc project knowledge pre-loaded into the enriched system prompt.
 - Links to external models:
   - Claude 3.7 with high thinking budget
   - GPT-4.5 model for different insights
