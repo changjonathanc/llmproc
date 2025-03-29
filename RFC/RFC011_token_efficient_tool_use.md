@@ -1,8 +1,9 @@
 # RFC011: Token-Efficient Tool Use for Claude 3.7
 
 ## Status
-- **Implemented**: No
+- **Implemented**: Yes
 - **Date**: March 27, 2025
+- **Implementation Date**: March 29, 2025
 
 ## Overview
 This RFC proposes adding support for Claude 3.7 Sonnet's token-efficient tool use capability to the llmproc library, reducing token consumption and latency for tool-enabled conversations.
@@ -33,8 +34,8 @@ The token-efficient tool use feature requires:
    - Issue appropriate warnings when headers are used with incompatible models
 
 3. Create example configuration files:
-   - `examples/basic/claude-3-7-token-efficient-tools.toml`
-   - Optionally combine with thinking model examples
+   - `examples/features/token-efficient-tools.toml`
+   - Enable in Claude Code configuration
 
 4. Add documentation for token-efficient tool use
 
@@ -78,62 +79,52 @@ This configuration will only have an effect when:
 2. Tools are enabled in the configuration
 
 ## Implementation Approach
-The main challenge is that this feature requires setting HTTP headers rather than just modifying the request body parameters. We have two implementation options:
+The main challenge is that this feature requires setting HTTP headers rather than just modifying the request body parameters. We implemented Option 1 from the proposed solutions:
 
-### Option 1: Extra Headers Parameter
-Modify the `anthropic_process_executor.py` to extract the `extra_headers` from parameters and pass them when making API calls. This approach keeps the configuration structure clean and is more extensible.
-
-```python
-# Extract any extra headers from the parameters
-extra_headers = {}
-if "extra_headers" in api_params:
-    extra_headers = api_params.pop("extra_headers")
-    
-    # Add validation for Claude 3.7-specific headers
-    if "anthropic-beta" in extra_headers and "token-efficient-tools" in extra_headers["anthropic-beta"]:
-        if not process.model_name.startswith("claude-3-7"):
-            logger.warning(f"Token-efficient tools header is only supported by Claude 3.7 models. Currently using {process.model_name}")
-
-# Make the API call with extra headers if present
-if extra_headers:
-    response = await process.client.messages.create(
-        model=process.model_name,
-        system=process.enriched_system_prompt,
-        messages=process.state,
-        tools=process.tools,
-        extra_headers=extra_headers,
-        **api_params,
-    )
-else:
-    # Standard API call without extra headers
-    response = await process.client.messages.create(
-        model=process.model_name,
-        system=process.enriched_system_prompt,
-        messages=process.state,
-        tools=process.tools,
-        **api_params,
-    )
-```
-
-### Option 2: Client Factory
-Create a factory function that constructs an appropriate Anthropic client with the necessary headers based on configuration. This would be a more significant change but might be more maintainable if we need different client configurations frequently.
+### Implemented Solution: Extra Headers Parameter
+Modified the `anthropic_process_executor.py` to extract the `extra_headers` from parameters and pass them when making API calls. This approach keeps the configuration structure clean and is more extensible.
 
 ```python
-def create_anthropic_client(config):
-    """Create an Anthropic client with appropriate configuration."""
-    # Extract API key from environment or config
-    api_key = os.environ.get("ANTHROPIC_API_KEY", config.get("api_key"))
-    
-    # Base client arguments
-    client_args = {"api_key": api_key}
-    
-    # Extract and set extra headers if present
-    if "extra_headers" in config.get("parameters", {}):
-        client_args["default_headers"] = config["parameters"]["extra_headers"]
-    
-    # Create and return the client
-    return AsyncAnthropic(**client_args)
+# Extract extra headers if present
+extra_headers = api_params.pop("extra_headers", {})
+
+# Automatically enable prompt caching if using Anthropic and not explicitly disabled
+# This will significantly reduce token usage (~90% savings on cached tokens)
+use_caching = not getattr(process, "disable_automatic_caching", False)
+if use_caching and "anthropic" in process.provider.lower():
+    # Add caching beta header if not already present
+    if "anthropic-beta" not in extra_headers:
+        extra_headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+    elif "prompt-caching" not in extra_headers["anthropic-beta"]:
+        # If there are other beta features, append the caching beta
+        extra_headers["anthropic-beta"] += ",prompt-caching-2024-07-31"
+
+# Check for token-efficient tool use header and validate model compatibility
+if ("anthropic-beta" in extra_headers and 
+    "token-efficient-tools" in extra_headers["anthropic-beta"] and
+    not process.model_name.startswith("claude-3-7")):
+    logger.warning(
+        f"Token-efficient tools header is only supported by Claude 3.7 models. "
+        f"Currently using {process.model_name}. The header will be ignored."
+    )
+
+# Make the API call with extra headers
+response = await process.client.messages.create(
+    model=process.model_name,
+    system=api_system,
+    messages=api_messages,
+    tools=api_tools,
+    extra_headers=extra_headers if extra_headers else None,
+    **api_params,
+)
 ```
+
+This implementation:
+1. Extracts `extra_headers` from API parameters
+2. Validates compatibility with the model being used
+3. Issues warnings for incompatible configurations
+4. Integrates with prompt caching for combined optimization
+5. Passes headers to the API call
 
 ## Compatibility Notes
 - Token-efficient tool use is in beta and may change
@@ -141,11 +132,15 @@ def create_anthropic_client(config):
 - Compatible with all standard Claude parameters
 - Can be combined with thinking_budget
 
-## Testing Approach
-1. Unit tests for parameter validation
-2. Tests for header inclusion in API calls (using mocks)
-3. Integration tests with the actual API (marked with `@pytest.mark.llm_api`)
-4. Optionally: benchmarks to verify token savings
+## Testing Implementation
+1. Unit tests for header validation logic (`test_token_efficient_tools.py`)
+   - `test_header_validation`: Validates warning is produced for non-Claude 3.7 models
+   - `test_extra_headers_passing`: Verifies headers are passed correctly to API
+   - `test_beta_headers_combination`: Tests compatibility with prompt caching headers
+
+2. Integration tests with the actual API (`test_token_efficient_tools_integration.py`)
+   - Marked with `@pytest.mark.llm_api`
+   - Tests actual API behavior (skipped by default)
 
 ## Future Enhancements
 - Support for additional models when Anthropic expands availability
