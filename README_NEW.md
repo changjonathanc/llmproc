@@ -79,7 +79,7 @@ asyncio.run(main())
 ### CLI usage
 
 ```bash
-# Start interactive session
+# Start interactive session - program path is required
 llmproc-demo ./examples/openai/gpt-4o-mini.toml
 
 # Single prompt
@@ -212,7 +212,7 @@ The package includes two main CLI tools:
 The main interface for interacting with LLM models:
 
 ```bash
-Usage: llmproc-demo [OPTIONS] [PROGRAM_PATH]
+Usage: llmproc-demo [OPTIONS] PROGRAM_PATH
 
   Run CLI for LLMProc with the specified TOML program.
 
@@ -225,8 +225,6 @@ Options:
 #### Interactive Commands
 
 - `exit` or `quit` - End the session
-- `reset` - Clear conversation history
-- `verbose` - Toggle detailed logging
 
 ### llmproc-prompt
 
