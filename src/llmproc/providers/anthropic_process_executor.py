@@ -12,6 +12,7 @@ except ImportError:
     AsyncAnthropic = None
     AsyncAnthropicVertex = None
 
+from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 from llmproc.results import RunResult
 from llmproc.tools.tool_result import ToolResult
 
@@ -87,7 +88,7 @@ class AnthropicProcessExecutor:
             
             # Apply token-efficient tool use if appropriate (for Claude 3.7+ on both direct Anthropic API and Vertex AI)
             # Testing confirmed it works on both providers
-            if "anthropic" in process.provider.lower() and process.model_name.startswith("claude-3-7"):
+            if process.provider in ANTHROPIC_PROVIDERS and process.model_name.startswith("claude-3-7"):
                 # Add token-efficient tools beta header if appropriate
                 if "anthropic-beta" not in extra_headers:
                     extra_headers["anthropic-beta"] = "token-efficient-tools-2025-02-19"
@@ -96,7 +97,7 @@ class AnthropicProcessExecutor:
                     extra_headers["anthropic-beta"] += ",token-efficient-tools-2025-02-19"
             elif ("anthropic-beta" in extra_headers and 
                   "token-efficient-tools" in extra_headers["anthropic-beta"] and
-                  (not "anthropic" in process.provider.lower() or not process.model_name.startswith("claude-3-7"))):
+                  (process.provider not in ANTHROPIC_PROVIDERS or not process.model_name.startswith("claude-3-7"))):
                 # Warning if token-efficient tools header is present but not supported
                 logger.warning(
                     f"Token-efficient tools header is only supported by Claude 3.7 models. "

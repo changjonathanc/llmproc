@@ -3,6 +3,14 @@
 import os
 from typing import Any
 
+# Import provider constants
+from llmproc.providers.constants import (
+    PROVIDER_OPENAI,
+    PROVIDER_ANTHROPIC,
+    PROVIDER_ANTHROPIC_VERTEX,
+    SUPPORTED_PROVIDERS
+)
+
 # Import API clients
 from openai import AsyncOpenAI as OpenAI  # Use async client for OpenAI
 
@@ -39,17 +47,20 @@ def get_provider_client(
         NotImplementedError: If the provider is not supported
         ImportError: If the required package for a provider is not installed
     """
-    if provider == "openai":
+    # Normalize provider name
+    provider = provider.lower()
+    
+    if provider == PROVIDER_OPENAI:
         return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    elif provider == "anthropic":
+    elif provider == PROVIDER_ANTHROPIC:
         if anthropic is None or Anthropic is None:
             raise ImportError(
                 "The 'anthropic' package is required for Anthropic provider. Install it with 'pip install anthropic'."
             )
         return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    elif provider == "anthropic_vertex":
+    elif provider == PROVIDER_ANTHROPIC_VERTEX:
         if anthropic is None or AnthropicVertex is None:
             raise ImportError(
                 "The 'anthropic' package with vertex support is required. Install it with 'pip install \"anthropic[vertex]\"'."
@@ -67,4 +78,7 @@ def get_provider_client(
         return AnthropicVertex(project_id=project, region=reg)
 
     else:
-        raise NotImplementedError(f"Provider {provider} not implemented.")
+        raise NotImplementedError(
+            f"Provider '{provider}' not implemented. "
+            f"Supported providers: {', '.join(SUPPORTED_PROVIDERS)}"
+        )
