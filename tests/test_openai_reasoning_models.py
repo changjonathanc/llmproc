@@ -97,7 +97,7 @@ def test_reasoning_model_detection():
 def test_openai_reasoning_model_config():
     """Test that the example configuration file loads correctly."""
     # Load example program from existing example file instead of an undefined one
-    program = LLMProgram.from_toml("examples/basic/o3-mini-high.toml")
+    program = LLMProgram.from_toml("examples/openai/o3-mini-high.toml")
     
     # Verify configuration
     assert program.model_name == "o3-mini"

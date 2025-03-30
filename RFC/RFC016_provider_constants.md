@@ -1,4 +1,4 @@
-# RFC016: Provider Constants for Improved Provider Detection
+# RFC016: Provider Constants for Improved Provider Detection (Implemented)
 
 ## Summary
 
@@ -79,7 +79,7 @@ if provider == PROVIDER_ANTHROPIC_VERTEX:
 
 ### 3. Update `get_provider_client` Function
 
-Keep the existing lazy-loading approach in `get_provider_client` but use the constants:
+Improved the existing lazy-loading approach in `get_provider_client` by using constants and a cleaner try-import pattern at the module level:
 
 ```python
 from llmproc.providers.constants import (
@@ -88,6 +88,24 @@ from llmproc.providers.constants import (
     PROVIDER_ANTHROPIC_VERTEX,
     SUPPORTED_PROVIDERS
 )
+
+# Try importing providers, set to None if packages aren't installed
+try:
+    from openai import AsyncOpenAI
+except ImportError:
+    AsyncOpenAI = None
+
+try:
+    import anthropic
+    from anthropic import AsyncAnthropic
+except ImportError:
+    anthropic = None
+    AsyncAnthropic = None
+
+try:
+    from anthropic import AsyncAnthropicVertex
+except ImportError:
+    AsyncAnthropicVertex = None
 
 def get_provider_client(
     provider: str,
@@ -101,20 +119,25 @@ def get_provider_client(
     
     # Handle OpenAI
     if provider == PROVIDER_OPENAI:
-        return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        if AsyncOpenAI is None:
+            raise ImportError(
+                "The 'openai' package is required for OpenAI provider. "
+                "Install it with 'pip install openai'."
+            )
+        return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
     # Handle Anthropic
     elif provider == PROVIDER_ANTHROPIC:
-        if anthropic is None or Anthropic is None:
+        if AsyncAnthropic is None:
             raise ImportError(
                 "The 'anthropic' package is required for Anthropic provider. "
                 "Install it with 'pip install anthropic'."
             )
-        return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        return AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     
     # Handle Anthropic Vertex AI
     elif provider == PROVIDER_ANTHROPIC_VERTEX:
-        if anthropic is None or AnthropicVertex is None:
+        if AsyncAnthropicVertex is None:
             raise ImportError(
                 "The 'anthropic' package with vertex support is required. "
                 "Install it with 'pip install \"anthropic[vertex]\"'."
@@ -130,11 +153,13 @@ def get_provider_client(
                 "ANTHROPIC_VERTEX_PROJECT_ID environment variable"
             )
         
-        return AnthropicVertex(project_id=project, region=reg)
+        return AsyncAnthropicVertex(project_id=project, region=reg)
     
     else:
-        raise NotImplementedError(f"Provider {provider} not implemented. "
-                                 f"Supported providers: {', '.join(SUPPORTED_PROVIDERS)}")
+        raise NotImplementedError(
+            f"Provider '{provider}' not implemented. "
+            f"Supported providers: {', '.join(SUPPORTED_PROVIDERS)}"
+        )
 ```
 
 ### 4. Update Feature Checks
@@ -177,11 +202,14 @@ This change is fully backward compatible as it affects only the internal impleme
 
 2. **Provider class hierarchy**: We considered creating a provider class hierarchy with a base Provider class and provider-specific subclasses, but this would be a more significant refactoring that might break backward compatibility.
 
-## Next Steps
+## Implementation Status
 
-If this RFC is approved, we will:
+This RFC has been implemented as of March 30, 2025:
 
-1. Implement the provider constants module
-2. Refactor the codebase to use these constants
-3. Add appropriate tests
-4. Update documentation to reference the new constants
+1. ✅ Created the provider constants module in `src/llmproc/providers/constants.py`
+2. ✅ Refactored the provider client code to use these constants
+3. ✅ Updated the lazy import pattern to be more maintainable with explicit try-except blocks
+4. ✅ Added clear AsyncX client names rather than using aliases
+5. ✅ Added and updated tests to verify the implementation works correctly
+
+All tests are passing, and the code is now more maintainable with a consistent approach to provider identification.

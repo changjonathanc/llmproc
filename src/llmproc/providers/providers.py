@@ -11,19 +11,23 @@ from llmproc.providers.constants import (
     SUPPORTED_PROVIDERS
 )
 
-# Import API clients
-from openai import AsyncOpenAI as OpenAI  # Use async client for OpenAI
+# Try importing providers, set to None if packages aren't installed
+try:
+    from openai import AsyncOpenAI
+except ImportError:
+    AsyncOpenAI = None
 
 try:
     import anthropic
-    from anthropic import AsyncAnthropic as Anthropic  # Use async client for Anthropic
-    from anthropic import (
-        AsyncAnthropicVertex as AnthropicVertex,
-    )  # Use async client for Vertex
+    from anthropic import AsyncAnthropic
 except ImportError:
     anthropic = None
-    Anthropic = None
-    AnthropicVertex = None
+    AsyncAnthropic = None
+
+try:
+    from anthropic import AsyncAnthropicVertex
+except ImportError:
+    AsyncAnthropicVertex = None
 
 
 def get_provider_client(
@@ -51,21 +55,25 @@ def get_provider_client(
     provider = provider.lower()
     
     if provider == PROVIDER_OPENAI:
-        return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        if AsyncOpenAI is None:
+            raise ImportError(
+                "The 'openai' package is required for OpenAI provider. Install it with 'pip install openai'."
+            )
+        return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     elif provider == PROVIDER_ANTHROPIC:
-        if anthropic is None or Anthropic is None:
+        if AsyncAnthropic is None:
             raise ImportError(
                 "The 'anthropic' package is required for Anthropic provider. Install it with 'pip install anthropic'."
             )
-        return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        return AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     elif provider == PROVIDER_ANTHROPIC_VERTEX:
-        if anthropic is None or AnthropicVertex is None:
+        if AsyncAnthropicVertex is None:
             raise ImportError(
                 "The 'anthropic' package with vertex support is required. Install it with 'pip install \"anthropic[vertex]\"'."
             )
-
+            
         # Use provided project_id/region or get from environment variables
         project = project_id or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID")
         reg = region or os.getenv("CLOUD_ML_REGION", "us-central1")
@@ -75,7 +83,7 @@ def get_provider_client(
                 "Project ID must be provided either as parameter or via ANTHROPIC_VERTEX_PROJECT_ID environment variable"
             )
 
-        return AnthropicVertex(project_id=project, region=reg)
+        return AsyncAnthropicVertex(project_id=project, region=reg)
 
     else:
         raise NotImplementedError(

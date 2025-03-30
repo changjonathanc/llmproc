@@ -21,7 +21,7 @@ def mock_env():
     os.environ.update(original_env)
 
 
-@patch("llmproc.providers.providers.OpenAI")
+@patch("llmproc.providers.providers.AsyncOpenAI")
 def test_get_openai_provider(mock_openai, mock_env):
     """Test getting OpenAI provider."""
     mock_client = MagicMock()
@@ -33,16 +33,21 @@ def test_get_openai_provider(mock_openai, mock_env):
     assert client == mock_client
 
 
-@patch("llmproc.providers.providers.Anthropic")
-@patch("llmproc.providers.providers.anthropic", None)
-def test_get_anthropic_provider_missing_import(mock_anthropic, mock_env):
+@patch("llmproc.providers.providers.AsyncOpenAI", None)
+def test_get_openai_provider_missing_import(mock_env):
+    """Test getting OpenAI provider when import fails."""
+    with pytest.raises(ImportError):
+        get_provider_client("openai", "gpt-4o")
+
+
+@patch("llmproc.providers.providers.AsyncAnthropic", None)
+def test_get_anthropic_provider_missing_import(mock_env):
     """Test getting Anthropic provider when import fails."""
     with pytest.raises(ImportError):
         get_provider_client("anthropic", "claude-3-sonnet-20240229")
 
 
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_get_anthropic_provider(mock_anthropic, mock_env):
     """Test getting Anthropic provider."""
     mock_client = MagicMock()
@@ -54,16 +59,14 @@ def test_get_anthropic_provider(mock_anthropic, mock_env):
     assert client == mock_client
 
 
-@patch("llmproc.providers.providers.AnthropicVertex")
-@patch("llmproc.providers.providers.anthropic", None)
-def test_get_anthropic_vertex_provider_missing_import(mock_vertex, mock_env):
+@patch("llmproc.providers.providers.AsyncAnthropicVertex", None)
+def test_get_anthropic_vertex_provider_missing_import(mock_env):
     """Test getting Anthropic Vertex provider when import fails."""
     with pytest.raises(ImportError):
         get_provider_client("anthropic_vertex", "claude-3-haiku@20240307")
 
 
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.AnthropicVertex")
+@patch("llmproc.providers.providers.AsyncAnthropicVertex")
 def test_get_anthropic_vertex_provider(mock_vertex, mock_env):
     """Test getting Anthropic Vertex provider."""
     mock_client = MagicMock()
@@ -75,8 +78,7 @@ def test_get_anthropic_vertex_provider(mock_vertex, mock_env):
     assert client == mock_client
 
 
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.AnthropicVertex")
+@patch("llmproc.providers.providers.AsyncAnthropicVertex")
 def test_get_anthropic_vertex_provider_with_params(mock_vertex, mock_env):
     """Test getting Anthropic Vertex provider with explicit parameters."""
     mock_client = MagicMock()

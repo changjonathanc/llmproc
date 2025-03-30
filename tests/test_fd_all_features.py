@@ -10,7 +10,7 @@ from llmproc.llm_process import LLMProcess
 @pytest.fixture
 def all_features_program():
     """Load the all_features.toml example program."""
-    program_path = Path(__file__).parent.parent / "examples" / "file_descriptor" / "all_features.toml"
+    program_path = Path(__file__).parent.parent / "examples" / "features" / "file-descriptor" / "all_features.toml"
     return LLMProgram.from_toml(program_path)
 
 

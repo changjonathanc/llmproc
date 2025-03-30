@@ -2,9 +2,9 @@
 
 # Import from providers.py
 from llmproc.providers.providers import (
-    Anthropic,
-    AnthropicVertex,
-    OpenAI,
+    AsyncAnthropic,
+    AsyncAnthropicVertex,
+    AsyncOpenAI,
     get_provider_client,
 )
 
@@ -24,9 +24,9 @@ except ImportError:
 
 __all__ = [
     "get_provider_client",
-    "OpenAI",
-    "Anthropic",
-    "AnthropicVertex",
+    "AsyncOpenAI",
+    "AsyncAnthropic",
+    "AsyncAnthropicVertex",
     "AnthropicProcessExecutor",
     "OpenAIProcessExecutor",
 ]

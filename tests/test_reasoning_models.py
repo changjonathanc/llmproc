@@ -80,9 +80,9 @@ def test_reasoning_model_parameter_transformation():
 def test_reasoning_model_configs():
     """Test that the reasoning model configuration files load correctly."""
     # Load the three reasoning model configurations
-    high_program = LLMProgram.from_toml("examples/basic/o3-mini-high.toml")
-    medium_program = LLMProgram.from_toml("examples/basic/o3-mini-medium.toml")
-    low_program = LLMProgram.from_toml("examples/basic/o3-mini-low.toml")
+    high_program = LLMProgram.from_toml("examples/openai/o3-mini-high.toml")
+    medium_program = LLMProgram.from_toml("examples/openai/o3-mini-medium.toml")
+    low_program = LLMProgram.from_toml("examples/openai/o3-mini-low.toml")
     
     # Verify high reasoning configuration
     assert high_program.model_name == "o3-mini"
@@ -144,9 +144,9 @@ def test_reasoning_model_validation():
 def test_reasoning_model_display_names():
     """Test that reasoning model display names are set correctly."""
     # Load the three reasoning model configurations
-    high_program = LLMProgram.from_toml("examples/basic/o3-mini-high.toml")
-    medium_program = LLMProgram.from_toml("examples/basic/o3-mini-medium.toml")
-    low_program = LLMProgram.from_toml("examples/basic/o3-mini-low.toml")
+    high_program = LLMProgram.from_toml("examples/openai/o3-mini-high.toml")
+    medium_program = LLMProgram.from_toml("examples/openai/o3-mini-medium.toml")
+    low_program = LLMProgram.from_toml("examples/openai/o3-mini-low.toml")
     
     # Verify display names
     assert high_program.display_name == "O3-mini (High Reasoning)"

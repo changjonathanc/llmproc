@@ -125,8 +125,7 @@ async def test_process_response_content(mock_mcp_registry, mock_time_response):
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("llmproc.llm_process.asyncio.run")
 def test_llm_process_with_time_tool(
     mock_asyncio_run, mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config
@@ -166,8 +165,7 @@ def test_llm_process_with_time_tool(
 
 @pytest.mark.asyncio
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 async def test_run_with_time_tool(
     mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config
 ):
@@ -243,8 +241,7 @@ def mock_mcp_config():
 
 @pytest.mark.asyncio
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
 async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
@@ -285,8 +282,7 @@ async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_
 
 @pytest.mark.asyncio
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
 async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
@@ -333,8 +329,7 @@ async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_an
 
 @pytest.mark.asyncio
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
 async def test_tool_not_found_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
@@ -374,8 +369,7 @@ async def test_tool_not_found_error(mock_server_registry, mock_aggregator, mock_
 
 @pytest.mark.asyncio
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
 @patch("llmproc.tools.mcp.register_mcp_tool")

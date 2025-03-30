@@ -19,15 +19,10 @@ def get_example_programs():
     base_dir = Path(__file__).parent.parent / "examples"
     programs = []
 
-    # Add standalone example programs
-    for program_file in base_dir.glob("*.toml"):
-        if program_file.name != "reference.toml":  # Skip reference file
-            programs.append(program_file.relative_to(base_dir.parent))
-
-    # Add program linking example programs
-    linking_dir = base_dir / "program_linking"
-    for program_file in linking_dir.glob("*.toml"):
-        if program_file.name != "README.md":  # Skip README
+    # Get all .toml files recursively
+    for program_file in base_dir.glob("**/*.toml"):
+        # Skip reference file and any scripts
+        if program_file.name not in ["reference.toml", "scripts"]:
             programs.append(program_file.relative_to(base_dir.parent))
 
     return programs

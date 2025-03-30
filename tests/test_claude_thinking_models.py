@@ -71,9 +71,9 @@ def test_thinking_model_parameter_transformation():
 def test_thinking_model_configs():
     """Test that the thinking model configuration files load correctly."""
     # Load the three thinking model configurations
-    high_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-high.toml")
-    medium_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-medium.toml")
-    low_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
+    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
+    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
     
     # Verify high thinking configuration
     assert high_program.model_name == "claude-3-7-sonnet-20250219"
@@ -158,9 +158,9 @@ def test_thinking_model_validation():
 def test_thinking_model_display_names():
     """Test that thinking model display names are set correctly."""
     # Load the three thinking model configurations
-    high_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-high.toml")
-    medium_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-medium.toml")
-    low_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
+    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
+    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
     
     # Verify display names
     assert high_program.display_name == "Claude 3.7 Sonnet (High Thinking)"

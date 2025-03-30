@@ -123,8 +123,7 @@ def mcp_config_file():
 
 @patch("llmproc.llm_process.HAS_MCP", True)
 @patch("llmproc.llm_process.asyncio.run")
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_mcp_initialization(
     mock_anthropic, mock_asyncio_run, mock_mcp_registry, mock_env, mcp_config_file
 ):
@@ -207,9 +206,8 @@ codemcp = ["ReadFile"]
 """)
 
         # Create and patch the instance
-        with patch("llmproc.providers.providers.anthropic", MagicMock()):
-            with patch("llmproc.providers.providers.Anthropic"):
-                with patch("llmproc.llm_process.asyncio.run"):
+        with patch("llmproc.providers.providers.AsyncAnthropic"):
+            with patch("llmproc.llm_process.asyncio.run"):
                     # Use the two-step pattern
                     from llmproc.program import LLMProgram
 
@@ -243,8 +241,7 @@ codemcp = ["ReadFile"]
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_mcp_with_no_tools(
     mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file
 ):
@@ -275,8 +272,7 @@ def test_mcp_with_no_tools(
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_mcp_with_all_tools(
     mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file
 ):
@@ -338,8 +334,7 @@ github = 123  # This is invalid, should be a list or "all"
 """)
 
         # Test that it raises a ValueError
-        with patch("llmproc.providers.providers.anthropic", MagicMock()):
-            with patch("llmproc.providers.providers.Anthropic"):
+        with patch("llmproc.providers.providers.AsyncAnthropic"):
                 with pytest.raises(ValueError):
                     # Use LLMProgram.from_toml instead
                     from llmproc.program import LLMProgram
@@ -348,8 +343,7 @@ github = 123  # This is invalid, should be a list or "all"
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_run_with_tools(mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file):
     """Test the run method with tool support."""
     # Use a completely different approach - create a simplified mock for demonstration
@@ -365,7 +359,7 @@ def test_run_with_tools(mock_anthropic, mock_mcp_registry, mock_env, mcp_config_
 @patch("llmproc.llm_process.HAS_MCP", True)
 def test_openai_with_mcp_raises_error(mock_mcp_registry, mock_env, mcp_config_file):
     """Test that using OpenAI with MCP raises an error (not yet supported)."""
-    with patch("llmproc.providers.providers.OpenAI", MagicMock()):
+    with patch("llmproc.providers.providers.AsyncOpenAI", MagicMock()):
         from llmproc.program import LLMProgram
 
         # Create program with OpenAI provider but MCP configuration
@@ -387,8 +381,7 @@ def test_openai_with_mcp_raises_error(mock_mcp_registry, mock_env, mcp_config_fi
 @patch("llmproc.llm_process.HAS_MCP", False)
 def test_mcp_import_error(mock_env, mcp_config_file):
     """Test that trying to use MCP when the package is not installed raises an ImportError."""
-    with patch("llmproc.providers.providers.anthropic", MagicMock()):
-        with patch("llmproc.providers.providers.Anthropic", MagicMock()):
+    with patch("llmproc.providers.providers.AsyncAnthropic", MagicMock()):
             from llmproc.program import LLMProgram
 
             # Create program with MCP configuration
