@@ -17,6 +17,7 @@ This directory contains Request for Comments (RFC) documents for LLMProc feature
 | [RFC010](RFC010_claude_thinking_model_support.md) | Claude 3.7 Thinking Model Support | ✅ Implemented | March 27, 2025 |
 | [RFC011](RFC011_token_efficient_tool_use.md) | Token-Efficient Tool Use for Claude 3.7 | ✅ Implemented | March 29, 2025 |
 | [RFC013](RFC013_prompt_caching_implementation.md) | Automatic Prompt Caching Implementation for Anthropic API | ✅ Implemented | March 27, 2025 |
+| [RFC014](RFC014_provider_specific_features.md) | Provider-Specific Feature Implementation for Anthropic Models | ✅ Implemented | March 29, 2025 |
 | [RFC015](RFC015_tool_name_error_handling.md) | Graceful Tool Name Error Handling | ✅ Implemented | March 30, 2025 |
 
 ## RFC Process
