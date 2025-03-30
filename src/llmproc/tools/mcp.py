@@ -36,6 +36,7 @@ async def initialize_mcp_tools(
 
     Raises:
         RuntimeError: If MCP registry initialization or tool listing fails
+        ValueError: If a server specified in mcp_tools_config is not found in available tools
     """
     try:
         # Import MCP registry here to avoid circular imports
@@ -53,10 +54,9 @@ async def initialize_mcp_tools(
 
         # Process each server and tool configuration
         for server_name, tool_config in mcp_tools_config.items():
-            # Skip servers that don't exist in the available tools
+            # Raise error when servers don't exist in the available tools
             if server_name not in server_tools_map:
-                logger.warning(f"Server '{server_name}' not found in available tools")
-                continue
+                raise ValueError(f"Server '{server_name}' not found in MCP configuration. Check your MCP servers configuration file and ensure it's properly configured.")
 
             server_tools = server_tools_map[server_name]
 
@@ -87,8 +87,9 @@ async def initialize_mcp_tools(
                             registered_tools,
                         )
                     else:
-                        logger.warning(
-                            f"Tool '{tool_name}' not found for server '{server_name}'"
+                        raise ValueError(
+                            f"Tool '{tool_name}' not found for server '{server_name}'. "
+                            f"Available tools for this server are: {', '.join(server_tool_map.keys())}"
                         )
 
                 logger.info(
@@ -97,7 +98,14 @@ async def initialize_mcp_tools(
 
         # Summarize registered tools
         if not tool_registry.get_definitions():
-            logger.warning("No MCP tools were registered. Check your configuration.")
+            # If there are mcp_tools_config entries but no tools registered, this is an error
+            if mcp_tools_config:
+                raise ValueError(
+                    "No MCP tools were registered despite configuration being provided. "
+                    "Check that the server names and tool names in your configuration are correct."
+                )
+            else:
+                logger.warning("No MCP tools were registered. Check your configuration.")
         else:
             logger.info(
                 f"Total MCP tools registered: {len(tool_registry.get_definitions())}"
@@ -105,7 +113,12 @@ async def initialize_mcp_tools(
 
         return True
 
+    except ValueError as e:
+        # Let validation errors propagate up to the caller
+        logger.error(f"Failed to initialize MCP tools: {str(e)}")
+        raise  # Re-raise the original ValueError
     except Exception as e:
+        # Log and return False for other types of errors
         logger.error(f"Failed to initialize MCP tools: {str(e)}")
         return False
 

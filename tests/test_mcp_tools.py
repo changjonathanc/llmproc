@@ -1,4 +1,4 @@
-"""Tests for MCP tool execution."""
+"""Tests for MCP tool execution and error handling."""
 
 import asyncio
 import json
@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llmproc import LLMProcess
+from llmproc.program import LLMProgram
 
 
 @pytest.fixture
@@ -218,3 +219,206 @@ async def test_run_with_time_tool(
 
     # In our new API design, get_last_message is not called inside the run method.
     # It's the responsibility of the caller to extract the message when needed.
+
+
+@pytest.fixture
+def mock_mcp_config():
+    """Create a temporary MCP config file for testing."""
+    with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+        config = {
+            "mcpServers": {
+                "existing-server": {
+                    "type": "stdio",
+                    "command": "/bin/echo",
+                    "args": ["mock server"]
+                }
+            }
+        }
+        json.dump(config, tmp)
+        tmp_path = tmp.name
+    
+    yield tmp_path
+    os.unlink(tmp_path)
+
+
+@pytest.mark.asyncio
+@patch("llmproc.llm_process.HAS_MCP", True)
+@patch("llmproc.providers.providers.anthropic", MagicMock())
+@patch("llmproc.providers.providers.Anthropic")
+@patch("mcp_registry.MCPAggregator")
+@patch("mcp_registry.ServerRegistry")
+async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
+    """Test that an error is raised when an unknown server is configured."""
+    # Setup mock client
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    
+    # Mock the MCP registry
+    mock_server_registry_instance = MagicMock()
+    mock_server_registry.from_config.return_value = mock_server_registry_instance
+    
+    mock_agg_instance = AsyncMock()
+    mock_aggregator.return_value = mock_agg_instance
+    
+    # Mock list_tools to return a server_tools_map that doesn't include our target server
+    mock_agg_instance.list_tools = AsyncMock(
+        return_value={"existing-server": []}
+    )
+    
+    # Create program with non-existent server
+    program = LLMProgram(
+        model_name="claude-3-haiku-20240307",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant with access to tools.",
+        mcp_config_path=mock_mcp_config,
+        mcp_tools={"non-existing-server": ["some-tool"]}
+    )
+    
+    # Test that initialization fails with ValueError
+    with pytest.raises(ValueError) as excinfo:
+        await LLMProcess.create(program)
+    
+    # Check that the error message contains the server name
+    assert "non-existing-server" in str(excinfo.value)
+    assert "not found in MCP configuration" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@patch("llmproc.llm_process.HAS_MCP", True)
+@patch("llmproc.providers.providers.anthropic", MagicMock())
+@patch("llmproc.providers.providers.Anthropic")
+@patch("mcp_registry.MCPAggregator")
+@patch("mcp_registry.ServerRegistry")
+async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
+    """Test that an error is raised when an unknown tool is configured."""
+    # Setup mock client
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    
+    # Mock the MCP registry
+    mock_server_registry_instance = MagicMock()
+    mock_server_registry.from_config.return_value = mock_server_registry_instance
+    
+    mock_agg_instance = AsyncMock()
+    mock_aggregator.return_value = mock_agg_instance
+    
+    # Create mock tool
+    mock_tool = MagicMock()
+    mock_tool.name = "existing-tool"
+    mock_tool.description = "A test tool"
+    mock_tool.inputSchema = {"type": "object", "properties": {}}
+    
+    # Mock list_tools to return a server_tools_map with our server but not the requested tool
+    mock_agg_instance.list_tools = AsyncMock(
+        return_value={"existing-server": [mock_tool]}
+    )
+    
+    # Create program with non-existent tool
+    program = LLMProgram(
+        model_name="claude-3-haiku-20240307",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant with access to tools.",
+        mcp_config_path=mock_mcp_config,
+        mcp_tools={"existing-server": ["non-existing-tool"]}
+    )
+    
+    # Test that initialization fails with ValueError
+    with pytest.raises(ValueError) as excinfo:
+        await LLMProcess.create(program)
+    
+    # Check that the error message contains the tool name
+    assert "non-existing-tool" in str(excinfo.value)
+    assert "not found for server" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@patch("llmproc.llm_process.HAS_MCP", True)
+@patch("llmproc.providers.providers.anthropic", MagicMock())
+@patch("llmproc.providers.providers.Anthropic")
+@patch("mcp_registry.MCPAggregator")
+@patch("mcp_registry.ServerRegistry")
+async def test_tool_not_found_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
+    """Test that an error is raised when an unknown tool is configured."""
+    # Setup mock client
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    
+    # Mock the MCP registry
+    mock_server_registry_instance = MagicMock()
+    mock_server_registry.from_config.return_value = mock_server_registry_instance
+    
+    mock_agg_instance = AsyncMock()
+    mock_aggregator.return_value = mock_agg_instance
+    
+    # Mock list_tools to return a server_tools_map with our server but no tools
+    mock_agg_instance.list_tools = AsyncMock(
+        return_value={"existing-server": []}
+    )
+    
+    # Create program with non-existent tool
+    program = LLMProgram(
+        model_name="claude-3-haiku-20240307",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant with access to tools.",
+        mcp_config_path=mock_mcp_config,
+        mcp_tools={"existing-server": ["non-existing-tool"]}
+    )
+    
+    # Test that initialization fails with ValueError
+    with pytest.raises(ValueError) as excinfo:
+        await LLMProcess.create(program)
+    
+    # Check that the error message is about the non-existing tool
+    assert "not found for server" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@patch("llmproc.llm_process.HAS_MCP", True)
+@patch("llmproc.providers.providers.anthropic", MagicMock())
+@patch("llmproc.providers.providers.Anthropic")
+@patch("mcp_registry.MCPAggregator")
+@patch("mcp_registry.ServerRegistry")
+@patch("llmproc.tools.mcp.register_mcp_tool")
+async def test_no_tools_registered_error(mock_register_tool, mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
+    """Test that an error is raised when no tools are registered despite configuration."""
+    # Setup mock client
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    
+    # Mock the MCP registry
+    mock_server_registry_instance = MagicMock()
+    mock_server_registry.from_config.return_value = mock_server_registry_instance
+    
+    mock_agg_instance = AsyncMock()
+    mock_aggregator.return_value = mock_agg_instance
+    
+    # Create a mock tool
+    mock_tool = MagicMock()
+    mock_tool.name = "existing-tool"
+    mock_tool.description = "A test tool"
+    mock_tool.inputSchema = {"type": "object", "properties": {}}
+    
+    # Mock list_tools to return a server_tools_map with our server and tool
+    mock_agg_instance.list_tools = AsyncMock(
+        return_value={"existing-server": [mock_tool]}
+    )
+    
+    # Make register_mcp_tool do nothing but don't actually register the tool
+    # This will make it pass the tool validation but have no tools registered
+    mock_register_tool.return_value = None
+    
+    # Create program with configuration that will pass validation but not register tools
+    program = LLMProgram(
+        model_name="claude-3-haiku-20240307",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant with access to tools.",
+        mcp_config_path=mock_mcp_config,
+        mcp_tools={"existing-server": ["existing-tool"]}
+    )
+    
+    # Test that initialization fails with ValueError
+    with pytest.raises(ValueError) as excinfo:
+        await LLMProcess.create(program)
+    
+    # Check that the error message indicates no tools were registered
+    assert "No MCP tools were registered" in str(excinfo.value)

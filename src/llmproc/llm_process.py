@@ -215,6 +215,7 @@ class LLMProcess:
         Raises:
             All exceptions from __init__, plus:
             RuntimeError: If MCP initialization fails
+            ValueError: If a server specified in mcp_tools is not found in available tools
         """
         # Create instance with basic initialization
         instance = cls(program, linked_programs_instances)
@@ -397,6 +398,10 @@ class LLMProcess:
         This sets up the MCP registry and filters tools based on user configuration.
         Only tools explicitly specified in the mcp_tools configuration will be enabled.
         Only servers that have tools configured will be initialized.
+        
+        Raises:
+            ValueError: If a server specified in mcp_tools is not found in available tools
+            RuntimeError: If MCP registry initialization or tool listing fails
         """
         if not self.mcp_enabled:
             return
@@ -406,9 +411,7 @@ class LLMProcess:
         )
 
         if not success:
-            logger.warning(
-                "Failed to initialize MCP tools. Some features may not work correctly."
-            )
+            raise RuntimeError("Failed to initialize MCP tools. Some tools may not be available.")
 
     def reset_state(
         self, keep_system_prompt: bool = True, keep_preloaded: bool = True,

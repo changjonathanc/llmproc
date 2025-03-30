@@ -15,5 +15,9 @@ config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
 # Only configure servers that are available in your config/mcp_servers.json
-codemcp = ["read_file"]
-time = ["current"]
+# This server is available in the default config
+sequential-thinking = "all"
+
+# NOTE: If you add servers or tools that aren't available in the configuration,
+# an error will be raised. For example, this line would cause an error:
+# invalid-server = ["some-tool"]
