@@ -1,9 +1,12 @@
 {
   "mcpServers": {
-     "codemcp": {
+    "sequential-thinking": {
       "type": "stdio",
       "command": "/bin/zsh",
-      "args": ["-c", "uvx --from git+https://github.com/ezyang/codemcp@main codemcp-multi"]
+      "args": [
+        "-c",
+        "npx -y @modelcontextprotocol/server-sequential-thinking "
+      ]
     }
   }
 }

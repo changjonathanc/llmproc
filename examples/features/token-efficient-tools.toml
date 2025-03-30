@@ -11,7 +11,7 @@ system_prompt = """You are a helpful assistant that uses tools effectively.
 When appropriate, use available tools to provide the most accurate and helpful responses."""
 
 [parameters]
-max_tokens = 32768
+max_tokens = 20000
 
 # Enable token-efficient tool use - this reduces token usage and latency for tool calls
 [parameters.extra_headers]

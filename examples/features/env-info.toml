@@ -5,8 +5,8 @@
 # Basic Model Configuration
 #-------------------------------------------
 [model]
-name = "claude-3-sonnet-20240229"
-provider = "anthropic" 
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
 display_name = "Environment-Aware Assistant"
 
 #-------------------------------------------
