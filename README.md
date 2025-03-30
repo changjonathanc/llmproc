@@ -40,6 +40,7 @@ The LLMProc library functions as a kernel:
 - Program Compiler for robust validation and preprocessing of configurations
 - File Descriptor system for handling large tool outputs with pagination
 - Automatic prompt caching for Anthropic models, providing up to 90% token savings
+- Graceful tool error handling to prevent conversation crashes when models use incorrect tool names
 
 ## Installation
 
@@ -506,8 +507,9 @@ For a complete example, see `examples/fd_spawn_integration.toml` and `examples/l
 9. [x] Add support for reasoning models
 10. [ ] Add Process State Serialization & Restoration
 11. [ ] Implement retry mechanism with exponential backoff for API calls
-12. [ ] Enhance error handling and reporting across providers
-13. [ ] Improve stream mode support for all providers
+12. [x] Implement graceful tool error handling
+13. [ ] Enhance error handling and reporting across providers
+14. [ ] Improve stream mode support for all providers
 
 ## License
 
