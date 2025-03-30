@@ -116,13 +116,38 @@ class ToolRegistry:
             args: The arguments to pass to the tool
 
         Returns:
-            The result of the tool execution
-
-        Raises:
-            ValueError: If the tool is not found
+            The result of the tool execution or an error ToolResult
         """
-        handler = self.get_handler(name)
-        return await handler(args)
+        # First check if the tool exists to handle "tool not found" errors
+        if name not in self.tool_handlers:
+            # Tool not found error
+            logger.warning(f"Tool not found error: Tool '{name}' not found")
+            
+            # Get list of available tools for the error message
+            available_tools = self.list_tools()
+            
+            # Create a helpful error message
+            from llmproc.tools.tool_result import ToolResult
+            formatted_msg = (
+                f"Error: Tool '{name}' not found.\n\n"
+                f"Available tools: {', '.join(available_tools)}\n\n"
+                f"Please try again with one of the available tools."
+            )
+            
+            # Return as an error ToolResult instead of raising an exception
+            return ToolResult.from_error(formatted_msg)
+            
+        # If the tool exists, try to execute it
+        try:
+            handler = self.tool_handlers[name]
+            return await handler(args)
+        except Exception as e:
+            # Handle errors during tool execution
+            error_msg = f"Error executing tool '{name}': {str(e)}"
+            logger.error(error_msg)
+            
+            from llmproc.tools.tool_result import ToolResult
+            return ToolResult.from_error(error_msg)
 
 
 # Registry of available system tools

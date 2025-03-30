@@ -509,16 +509,9 @@ class LLMProcess:
             args: The arguments to pass to the tool
 
         Returns:
-            The result of the tool execution
-
-        Raises:
-            ValueError: If the tool is not found
-            RuntimeError: If the tool execution fails
+            The result of the tool execution or an error ToolResult
         """
-        try:
-            return await self.tool_registry.call_tool(tool_name, args)
-        except Exception as e:
-            raise RuntimeError(f"Error executing tool '{tool_name}': {str(e)}")
+        return await self.tool_registry.call_tool(tool_name, args)
 
     def get_last_message(self) -> str:
         """Get the most recent message from the conversation.
