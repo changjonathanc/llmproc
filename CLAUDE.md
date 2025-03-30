@@ -8,8 +8,8 @@
 - `worktrees/`: Development branches as worktrees
 
 ## Session Procedures
-- Start of Session: Read README.md and repo-map.txt to get familiar with the codebase
-- End of Session: Update repo-map.txt with any changes made during the session
+- Start of Session: Read README.md to get familiar with the codebase
+- End of Session: Summarize the changes made during the session
 
 ## Key Commands
 - Install: `uv pip install -e ".[dev,all]"`
