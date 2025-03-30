@@ -80,24 +80,27 @@ class AnthropicProcessExecutor:
             # Extract extra headers if present
             extra_headers = api_params.pop("extra_headers", {})
             
-            # Automatically enable prompt caching if using Anthropic direct API (not Vertex) and not explicitly disabled
-            # This will significantly reduce token usage (~90% savings on cached tokens)
+            # Determine if we should use caching
+            # Prompt caching is implemented via cache_control parameters in content
+            # This works for both direct Anthropic API and Vertex AI as confirmed by testing
             use_caching = not getattr(process, "disable_automatic_caching", False)
-            if use_caching and "anthropic" in process.provider.lower() and "vertex" not in process.provider.lower():
-                # Add caching beta header if not already present
-                if "anthropic-beta" not in extra_headers:
-                    extra_headers["anthropic-beta"] = "prompt-caching-2024-07-31"
-                elif "prompt-caching" not in extra_headers["anthropic-beta"]:
-                    # If there are other beta features, append the caching beta
-                    extra_headers["anthropic-beta"] += ",prompt-caching-2024-07-31"
             
-            # Check for token-efficient tool use header and validate model compatibility
-            if ("anthropic-beta" in extra_headers and 
-                "token-efficient-tools" in extra_headers["anthropic-beta"] and
-                not process.model_name.startswith("claude-3-7")):
+            # Apply token-efficient tool use if appropriate (for Claude 3.7+ on both direct Anthropic API and Vertex AI)
+            # Testing confirmed it works on both providers
+            if "anthropic" in process.provider.lower() and process.model_name.startswith("claude-3-7"):
+                # Add token-efficient tools beta header if appropriate
+                if "anthropic-beta" not in extra_headers:
+                    extra_headers["anthropic-beta"] = "token-efficient-tools-2025-02-19"
+                elif "token-efficient-tools" not in extra_headers["anthropic-beta"]:
+                    # Append to existing beta features
+                    extra_headers["anthropic-beta"] += ",token-efficient-tools-2025-02-19"
+            elif ("anthropic-beta" in extra_headers and 
+                  "token-efficient-tools" in extra_headers["anthropic-beta"] and
+                  (not "anthropic" in process.provider.lower() or not process.model_name.startswith("claude-3-7"))):
+                # Warning if token-efficient tools header is present but not supported
                 logger.warning(
                     f"Token-efficient tools header is only supported by Claude 3.7 models. "
-                    f"Currently using {process.model_name}. The header will be ignored."
+                    f"Currently using {process.model_name} on {process.provider}. The header will be ignored."
                 )
             
             # Transform internal state to API-ready format with caching

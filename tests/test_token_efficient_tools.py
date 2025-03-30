@@ -66,39 +66,6 @@ class TestTokenEfficientTools:
         assert "extra_headers" in call_args
         assert call_args["extra_headers"] == extra_headers
         
-    def test_beta_headers_combination(self):
-        """Test that token-efficient tools and prompt caching beta headers can be combined."""
-        # Mock response
-        mock_response = MagicMock()
-        mock_response.content = []
-        mock_response.stop_reason = "end_turn"
-        
-        # Mock API client
-        mock_client = MagicMock()
-        mock_client.messages = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-        
-        # Start with token-efficient tools header
-        extra_headers = {"anthropic-beta": "token-efficient-tools-2025-02-19"}
-        
-        # Add prompt caching header
-        if "anthropic-beta" in extra_headers:
-            if "prompt-caching" not in extra_headers["anthropic-beta"]:
-                extra_headers["anthropic-beta"] += ",prompt-caching-2024-07-31"
-        
-        # Verify combined headers
-        mock_client.messages.create(
-            model="claude-3-7-sonnet-20250219",
-            system="test",
-            messages=[],
-            tools=[],
-            extra_headers=extra_headers,
-            max_tokens=1000
-        )
-        
-        mock_client.messages.create.assert_called_once()
-        call_args = mock_client.messages.create.call_args[1]
-        assert "extra_headers" in call_args
-        assert "anthropic-beta" in call_args["extra_headers"]
-        assert "token-efficient-tools-2025-02-19" in call_args["extra_headers"]["anthropic-beta"]
-        assert "prompt-caching-2024-07-31" in call_args["extra_headers"]["anthropic-beta"]
+    # Note: We no longer need to test combining with prompt caching beta header
+    # since we're now using the cache_control parameters approach which doesn't require
+    # any beta headers to function

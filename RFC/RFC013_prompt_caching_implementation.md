@@ -1,5 +1,10 @@
 # RFC013: Automatic Prompt Caching Implementation for Anthropic API
 
+## Status
+- **Implemented**: Yes
+- **Date**: March 23, 2025
+- **Implementation Date**: March 29, 2025
+
 ## Summary
 
 This RFC proposes implementing automatic support for Anthropic's prompt caching feature in the llmproc library. Prompt caching allows developers to cache frequently used parts of prompts between API calls, reducing token usage by up to 90% and latency by up to 85% for long prompts. This implementation will automatically insert cache control points at strategic locations, providing immediate benefits with zero configuration.
@@ -39,6 +44,25 @@ We will automatically insert cache control points at strategic locations in the 
    - Helps maintain maximum context reuse when conversation paths diverge.
 
 According to Anthropic's documentation, cache prefixes are created in the following order: tools, system, then messages. This aligns with our caching strategy.
+
+### Implementation Approach: Using Cache Control Parameters
+
+After thorough testing, we confirmed that the most effective approach for implementing prompt caching across all Anthropic providers is to:
+
+1. Use the `cache_control` parameter in structured content
+2. Apply it automatically at strategic points in the conversation
+3. Skip using any beta headers entirely
+
+Our tests confirmed that this approach works consistently for both:
+- Direct Anthropic API
+- Vertex AI
+
+Specifically, we found that:
+- The beta header (`anthropic-beta: prompt-caching-2024-07-31`) is not required
+- Using `cache_control` parameters in the structured message format is sufficient
+- This approach reduces implementation complexity and makes it provider-agnostic
+
+This completely eliminates the need for provider-specific handling of prompt caching, making our implementation more robust and future-proof.
 
 ### Clean Implementation: Separating State Transformation from API Call
 

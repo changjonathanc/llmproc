@@ -17,16 +17,13 @@ async def test_basic_caching():
     # Create a large system prompt that exceeds the minimum cacheable size (1024 tokens)
     long_system_prompt = "You are a helpful assistant. " + ("This is placeholder content. " * 1000)
     
-    # Create a program with the prompt caching beta header
+    # Create a program with automatic caching enabled (default)
     program = LLMProgram(
         model_name="claude-3-5-sonnet-20240620",  # Use correct model name
         provider="anthropic",
         system_prompt=long_system_prompt,
         parameters={
-            "max_tokens": 100,
-            "extra_headers": {
-                "anthropic-beta": "prompt-caching-2024-07-31"  # Enable caching beta
-            }
+            "max_tokens": 100
         }
     )
     

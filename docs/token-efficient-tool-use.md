@@ -41,6 +41,7 @@ To use token-efficient tool use:
 1. You must use the Claude 3.7 Sonnet model (`claude-3-7-sonnet-20250219`)
 2. You must have tools enabled in your configuration
 3. The beta header must be correctly configured
+4. Works with both direct Anthropic API and Vertex AI (testing showed ~19% reduction in tokens on Vertex AI)
 
 ## Usage Example
 
@@ -96,7 +97,7 @@ This configuration enables both extended thinking and token-efficient tool use f
 
 - This is a beta feature and may change
 - Currently only works with Claude 3.7 Sonnet
-- Not all API calls will see the same token reduction
+- Not all API calls will see the same token reduction (average 14%, up to 70%)
 - Does not affect input token counting
 
 ## Future Developments

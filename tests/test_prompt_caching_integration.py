@@ -14,16 +14,14 @@ def test_caching_integration():
         pytest.skip("ANTHROPIC_API_KEY environment variable not set")
     
     # Create a process with a large system prompt that will trigger caching
+    # No beta header needed - automatic caching works with cache_control parameters
     process = LLMProcess(
         model_name="claude-3-sonnet",
         provider="anthropic",
         system_prompt="You are a helpful assistant with the following long context to remember. " + 
                     ("This is some long placeholder content. " * 500),  # Make it long enough to trigger caching
         params={
-            "max_tokens": 500,
-            "extra_headers": {
-                "anthropic-beta": "prompt-caching-2024-07-31"  # Enable caching beta
-            }
+            "max_tokens": 500
         }
     )
     
@@ -63,10 +61,8 @@ def test_multi_turn_caching():
         system_prompt="You are a helpful assistant. " + 
                     ("This is some long placeholder content. " * 200),  # Make it long enough to trigger caching
         params={
-            "max_tokens": 500,
-            "extra_headers": {
-                "anthropic-beta": "prompt-caching-2024-07-31"  # Enable caching beta
-            }
+            "max_tokens": 500
+            # No beta header needed - automatic caching works with cache_control parameters
         }
     )
     
@@ -120,10 +116,8 @@ def test_disable_automatic_caching():
         system_prompt="You are a helpful assistant. " + 
                     ("This is some long placeholder content. " * 200),  # Make it long enough to trigger caching
         params={
-            "max_tokens": 500,
-            "extra_headers": {
-                "anthropic-beta": "prompt-caching-2024-07-31"  # Enable caching beta
-            }
+            "max_tokens": 500
+            # No beta header needed - automatic caching works with cache_control parameters
         },
         disable_automatic_caching=True  # Disable caching
     )
@@ -135,10 +129,8 @@ def test_disable_automatic_caching():
         system_prompt="You are a helpful assistant. " + 
                     ("This is some long placeholder content. " * 200),  # Make it long enough to trigger caching
         params={
-            "max_tokens": 500,
-            "extra_headers": {
-                "anthropic-beta": "prompt-caching-2024-07-31"  # Enable caching beta
-            }
+            "max_tokens": 500
+            # No beta header needed - automatic caching works with cache_control parameters
         },
         disable_automatic_caching=False  # Enable caching
     )
