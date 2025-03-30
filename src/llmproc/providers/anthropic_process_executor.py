@@ -80,10 +80,10 @@ class AnthropicProcessExecutor:
             # Extract extra headers if present
             extra_headers = api_params.pop("extra_headers", {})
             
-            # Automatically enable prompt caching if using Anthropic and not explicitly disabled
+            # Automatically enable prompt caching if using Anthropic direct API (not Vertex) and not explicitly disabled
             # This will significantly reduce token usage (~90% savings on cached tokens)
             use_caching = not getattr(process, "disable_automatic_caching", False)
-            if use_caching and "anthropic" in process.provider.lower():
+            if use_caching and "anthropic" in process.provider.lower() and "vertex" not in process.provider.lower():
                 # Add caching beta header if not already present
                 if "anthropic-beta" not in extra_headers:
                     extra_headers["anthropic-beta"] = "prompt-caching-2024-07-31"
