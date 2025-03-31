@@ -10,6 +10,7 @@ from pathlib import Path
 import click
 
 from llmproc import LLMProgram
+from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 
 # Set up logging
 logging.basicConfig(
@@ -72,6 +73,8 @@ def main(program_path, prompt=None, non_interactive=False) -> None:
         click.echo(f"  Model: {program.model_name}")
         click.echo(f"  Provider: {program.provider}")
         click.echo(f"  Display Name: {program.display_name or program.model_name}")
+        
+        # Initial token count will be displayed after initialization
 
         # Show brief system prompt summary
         if hasattr(program, "system_prompt") and program.system_prompt:
@@ -148,9 +151,28 @@ def main(program_path, prompt=None, non_interactive=False) -> None:
             click.echo(
                 "\nStarting interactive chat session. Type 'exit' or 'quit' to end."
             )
-
+            
+            # Show initial token count for Anthropic models
+            if process.provider in ANTHROPIC_PROVIDERS:
+                try:
+                    token_info = asyncio.run(process.count_tokens())
+                    if token_info and "input_tokens" in token_info:
+                        click.echo(f"Initial context size: {token_info['input_tokens']:,} tokens ({token_info['percentage']:.1f}% of {token_info['context_window']:,} token context window)")
+                except Exception as e:
+                    logger.warning(f"Failed to count initial tokens: {str(e)}")
+            
             while True:
-                user_input = click.prompt("\nYou", prompt_suffix="> ")
+                # Display token usage if available from the count_tokens method
+                token_display = ""
+                if process.provider in ANTHROPIC_PROVIDERS:
+                    try:
+                        token_info = asyncio.run(process.count_tokens())
+                        if token_info and "input_tokens" in token_info:
+                            token_display = f" [Tokens: {token_info['input_tokens']:,}/{token_info['context_window']:,}]"
+                    except Exception as e:
+                        logger.warning(f"Failed to count tokens for prompt: {str(e)}")
+                
+                user_input = click.prompt(f"\nYou{token_display}", prompt_suffix="> ")
 
                 if user_input.lower() in ("exit", "quit"):
                     click.echo("Ending session.")
@@ -171,6 +193,8 @@ def main(program_path, prompt=None, non_interactive=False) -> None:
                 # Clear the "Thinking..." text
                 click.echo("\r" + " " * 12 + "\r", nl=False)
 
+                # Token counting is now handled before each prompt using the count_tokens method
+
                 # Log basic info
                 if run_result.api_calls > 0:
                     logger.info(
@@ -182,6 +206,14 @@ def main(program_path, prompt=None, non_interactive=False) -> None:
 
                 # Display the response
                 click.echo(f"\n{process.display_name}> {response}")
+                
+                # Display token usage stats if available
+                if hasattr(run_result, 'total_tokens') and run_result.total_tokens > 0:
+                    click.echo(
+                        f"[API calls: {run_result.api_calls}, "
+                        f"Tool calls: {run_result.tool_calls}, "
+                        f"Tokens: {run_result.input_tokens}/{run_result.output_tokens}/{run_result.total_tokens} (in/out/total)]"
+                    )
 
     except Exception as e:
         import traceback

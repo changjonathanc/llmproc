@@ -513,6 +513,24 @@ class LLMProcess:
         """
         return await self.tool_registry.call_tool(tool_name, args)
 
+    async def count_tokens(self):
+        """Count tokens in the current conversation state.
+
+        Returns:
+            dict: Token count information for Anthropic models or None for others
+        """
+        # Only support Anthropic models for now
+        from llmproc.providers.constants import ANTHROPIC_PROVIDERS
+        if self.provider not in ANTHROPIC_PROVIDERS:
+            return None
+
+        # Import here to avoid circular imports
+        from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+
+        # Create executor and count tokens
+        executor = AnthropicProcessExecutor()
+        return await executor.count_tokens(self)
+        
     def get_last_message(self) -> str:
         """Get the most recent message from the conversation.
 

@@ -31,6 +31,16 @@ class AnthropicProcessExecutor:
     This class manages interactions with the Anthropic API, including
     handling conversation flow, tool calls, and response processing.
     """
+    
+    # Map of model names to context window sizes
+    CONTEXT_WINDOW_SIZES = {
+        "claude-3-5-sonnet": 200000,
+        "claude-3-5-haiku": 200000,
+        "claude-3-opus": 200000,
+        "claude-3-sonnet": 200000,
+        "claude-3-haiku": 200000,
+        "claude-3-7-sonnet": 200000,
+    }
     async def run(
         self,
         process: "Process",  # noqa: F821
@@ -455,6 +465,77 @@ class AnthropicProcessExecutor:
             # Convert string content to structured format with cache
             message["content"] = [{"type": "text", "text": message["content"], "cache_control": {"type": "ephemeral"}}]
     
+    async def count_tokens(self, process):
+        """Count tokens in the current conversation context using Anthropic's API.
+
+        Args:
+            process: The LLMProcess instance
+
+        Returns:
+            dict: Token count information or error message
+        """
+        try:
+            # Transform state and system prompt to API format
+            # Add a dummy message for empty state to ensure the API call works
+            if not process.state:
+                # Use a temporary copy to avoid modifying the actual state
+                temp_state = [{"role": "user", "content": "Hi"}]
+                api_messages = self._state_to_api_messages(temp_state, add_cache=False)
+            else:
+                api_messages = self._state_to_api_messages(process.state, add_cache=False)
+
+            # Handle system prompt format
+            system_prompt = process.enriched_system_prompt
+            
+            # Get tool definitions if available
+            api_tools = self._tools_to_api_format(process.tools, add_cache=False) if hasattr(process, "tools") else None
+            
+            # Call Anthropic's count_tokens API
+            params = {
+                "model": process.model_name,
+                "messages": api_messages,
+            }
+            
+            if system_prompt:
+                params["system"] = system_prompt
+                
+            if api_tools:
+                params["tools"] = api_tools
+            
+            # Use the messages.count_tokens endpoint
+            response = await process.client.messages.count_tokens(**params)
+
+            # Calculate context window percentage
+            window_size = self._get_context_window_size(process.model_name)
+            input_tokens = getattr(response, "input_tokens", 0)
+            percentage = (input_tokens / window_size * 100) if window_size > 0 else 0
+            remaining = max(0, window_size - input_tokens)
+
+            return {
+                "input_tokens": input_tokens,
+                "context_window": window_size,
+                "percentage": percentage,
+                "remaining_tokens": remaining
+            }
+
+        except Exception as e:
+            return {"error": str(e)}
+            
+    def _get_context_window_size(self, model_name):
+        """Get the context window size for the given model."""
+        # Handle models with timestamps in the name
+        base_model = model_name
+        if "-2" in model_name:
+            base_model = model_name.split("-2")[0]
+
+        # Extract model family without version
+        for prefix in self.CONTEXT_WINDOW_SIZES:
+            if base_model.startswith(prefix):
+                return self.CONTEXT_WINDOW_SIZES[prefix]
+
+        # Default fallback
+        return 100000
+            
     @staticmethod
     async def _fork(process, params, tool_id, last_assistant_response):
         """Fork a conversation."""
