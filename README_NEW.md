@@ -11,12 +11,11 @@ A flexible framework for building LLM applications with standardized configurati
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Feature Examples](#feature-examples)
-- [Advanced Features](#advanced-features)
+- [Features](#features)
 - [CLI Commands](#cli-commands)
-- [Model Support](#model-support)
 - [Documentation](#documentation)
 - [Design Philosophy](#design-philosophy)
+- [Feature Status](#feature-status)
 - [Roadmap](#roadmap)
 - [License](#license)
 
@@ -47,7 +46,7 @@ from llmproc import LLMProgram
 async def main():
     # Load a program from TOML config
     program = LLMProgram.from_toml('examples/anthropic/claude-3-5-haiku.toml')
-    
+
     # Start the LLM process
     process = await program.start()
 
@@ -75,27 +74,48 @@ llmproc-demo ./examples/anthropic/claude-3-5-sonnet.toml -p "What is Python?"
 cat questions.txt | llmproc-demo ./examples/anthropic/claude-3-7-sonnet.toml -n
 ```
 
-## Feature Examples
+## Features
 
-From basic to advanced, explore LLMProc's capabilities:
+LLMProc offers a complete toolkit for building sophisticated LLM applications:
 
-- **[Basic Configuration](./examples/anthropic/claude-3-5-haiku.toml)**: Start with a minimal Claude setup
-- **[File Preloading](./examples/features/preload.toml)**: Enhance context by loading files into system prompt
-- **[Program Linking](./examples/features/program-linking/main.toml)**: Spawn and delegate tasks to specialized LLM processes
+### Basic Configuration
+- **[Minimal Setup](./examples/anthropic/claude-3-5-haiku.toml)** - Start with a simple Claude configuration
+- **[File Preloading](./examples/features/preload.toml)** - Enhance context by loading files into system prompts
+- **[Environment Info](./examples/features/env-info.toml)** - Add runtime context like working directory and platform
 
-## Core Features
+### Process Management
+- **[Program Linking](./examples/features/program-linking/main.toml)** - Spawn and delegate tasks to specialized LLM processes
+- **[Fork Tool](./examples/features/fork.toml)** - Create process copies with shared conversation state
 
-- **Program Linking**: Spawn and delegate tasks to specialized LLM processes
-- **File Descriptor System**: Unix-like pagination for handling large outputs
-- **Fork Tool**: Create process copies with shared conversation state
-- **File Preloading**: Enhance context by loading files into system prompts
-- **Thinking Models**: Claude 3.7 with enhanced reasoning capabilities
+### Large Content Handling
+- **[File Descriptor System](./examples/features/file-descriptor/main.toml)** - Unix-like pagination for large outputs
 
-And more:
-- Multiple provider support (OpenAI, Anthropic, Vertex AI)
-- Automatic prompt caching (up to 90% token savings for Claude)
-- Environment variables and system prompt tools
-- MCP protocol integration for standardized tool usage
+### Performance & Advanced Models
+- **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
+- **[Thinking Models](./examples/anthropic/claude-3-7-thinking-high.toml)** - Claude 3.7 with enhanced reasoning
+- **[Claude Code](./examples/claude-code/claude-code.toml)** - Specialized configurations for code tasks
+
+### Cross-Provider Support
+- **Anthropic** - Claude 3.5/3.7 Haiku, Sonnet, Opus 
+- **OpenAI** - GPT-4o, GPT-4o-mini, GPT-4-5, o3-mini
+- **Vertex AI** - Claude models on Google Cloud
+
+### Program Linking Example
+
+```toml
+[tools]
+enabled = ["spawn"]
+
+[linked_programs]
+# Simple form
+expert = "expert.toml"
+
+# With descriptive metadata
+repo_expert = { 
+  path = "./repo_expert.toml", 
+  description = "Expert with LLMProc project knowledge" 
+}
+```
 
 ## CLI Commands
 
@@ -129,46 +149,6 @@ Options:
   -C, --no-color      Don't colorize the output
   -h, --help          Show this help message and exit
 ```
-
-## Advanced Features
-
-Beyond the basics, explore specialized capabilities:
-
-- **[File Descriptor System](./examples/features/file-descriptor/main.toml)**: Handle large outputs with Unix-like pagination
-- **[Fork Tool](./examples/features/fork.toml)**: Create process copies with shared state
-- **[Environment Info](./examples/features/env-info.toml)**: Add runtime context to system prompts
-- **Prompt Caching**: Automatically reduces token usage by up to 90% (enabled by default for Claude)
-- **[Claude Code](./examples/claude-code/claude-code.toml)**: Specialized configurations for code tasks
-- **[Thinking Models](./examples/anthropic/claude-3-7-thinking-high.toml)**: Claude models with enhanced reasoning
-
-### Program Linking Details
-
-Program linking allows models to spawn and delegate tasks to specialized LLM processes with descriptive metadata:
-
-```toml
-[tools]
-enabled = ["spawn"]
-
-[linked_programs]
-# Simple form
-expert = "expert.toml"
-
-# Enhanced form with descriptions
-repo_expert = { 
-  path = "./repo_expert.toml", 
-  description = "Expert with LLMProc project knowledge" 
-}
-```
-
-## Model Support
-
-LLMProc supports all major models:
-
-- **Anthropic**: Claude 3.5/3.7 Haiku, Sonnet, Opus with thinking capabilities
-- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-4-5, o3-mini with reasoning levels
-- **Vertex AI**: Claude models on Google Cloud
-
-Example configurations in the `examples/anthropic/` and `examples/openai/` directories.
 
 ## Documentation
 
@@ -219,6 +199,7 @@ Future development plans:
 4. Enhanced error handling and reporting
 5. Improved stream mode support
 6. File Descriptor System Phase 3 enhancements
+7. Gemini models support
 
 ## License
 
