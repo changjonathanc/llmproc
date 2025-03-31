@@ -12,7 +12,7 @@ A flexible framework for building LLM applications with standardized configurati
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Features](#features)
-- [CLI Commands](#cli-commands)
+- [Demo Tools](#demo-tools)
 - [Documentation](#documentation)
 - [Design Philosophy](#design-philosophy)
 - [Feature Status](#feature-status)
@@ -92,7 +92,7 @@ LLMProc offers a complete toolkit for building sophisticated LLM applications:
 
 ### Performance & Advanced Models
 - **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
-- **[Thinking Models](./examples/anthropic/claude-3-7-thinking-high.toml)** - Claude 3.7 with enhanced reasoning
+- **Enhanced Reasoning** - [Claude 3.7 Thinking](./examples/anthropic/claude-3-7-thinking-high.toml) and [OpenAI Reasoning](./examples/openai/o3-mini-high.toml) models
 - **[Claude Code](./examples/claude-code/claude-code.toml)** - Specialized configurations for code tasks
 
 ### Cross-Provider Support
@@ -100,54 +100,30 @@ LLMProc offers a complete toolkit for building sophisticated LLM applications:
 - **OpenAI** - GPT-4o, GPT-4o-mini, GPT-4-5, o3-mini
 - **Vertex AI** - Claude models on Google Cloud
 
-### Program Linking Example
+## Demo Tools
 
-```toml
-[tools]
-enabled = ["spawn"]
-
-[linked_programs]
-# Simple form
-expert = "expert.toml"
-
-# With descriptive metadata
-repo_expert = { 
-  path = "./repo_expert.toml", 
-  description = "Expert with LLMProc project knowledge" 
-}
-```
-
-## CLI Commands
-
-The package includes two main CLI tools:
+LLMProc includes demo command-line tools for quick experimentation:
 
 ### llmproc-demo
 
+Interactive CLI for testing LLM configurations:
+
 ```bash
-Usage: llmproc-demo [OPTIONS] PROGRAM_PATH
-
-  Run CLI for LLMProc with the specified TOML program.
-
-Options:
-  -p, --prompt TEXT     Run with a single prompt (non-interactive mode)
-  -n, --non-interactive Read from stdin (pipe mode)
-  --help                Show this message and exit
+llmproc-demo ./examples/anthropic/claude-3-5-haiku.toml  # Interactive session
+llmproc-demo ./config.toml -p "What is Python?"          # Single prompt
+cat questions.txt | llmproc-demo ./config.toml -n        # Pipe mode
 ```
 
-Interactive commands: `exit` or `quit` to end the session
+Commands: `exit` or `quit` to end the session
 
 ### llmproc-prompt
 
+View the compiled system prompt without making API calls:
+
 ```bash
-Usage: llmproc-prompt [OPTIONS] PROGRAM_PATH
-
-  Print the enriched system prompt for a program
-
-Options:
-  -o, --output FILE   File to write output to (default: stdout)
-  -E, --no-env        Don't include environment information
-  -C, --no-color      Don't colorize the output
-  -h, --help          Show this help message and exit
+llmproc-prompt ./config.toml                 # Display to stdout
+llmproc-prompt ./config.toml -o prompt.txt   # Save to file
+llmproc-prompt ./config.toml -E              # Without environment info
 ```
 
 ## Documentation
@@ -182,7 +158,7 @@ LLMProc's key features are production-ready:
 - ✅ File Descriptor System: Unix-like pagination for large outputs
 - ✅ Fork Tool: Create process copies with shared conversation state
 - ✅ File Preloading: Enhanced context from loaded files
-- ✅ Thinking Models: Claude 3.7 with optimized reasoning
+- ✅ Enhanced Reasoning: Claude 3.7 Thinking and OpenAI o3-mini reasoning models
 
 Additional stable features:
 - ✅ Prompt Caching: Automatic for Claude models (up to 90% token savings)
