@@ -1,69 +1,27 @@
-# Environment-Aware LLM Program Example
-# Demonstrates how to use environment information to make LLMs context-aware
-
-#-------------------------------------------
-# Basic Model Configuration
-#-------------------------------------------
+# Environment Info - Add runtime context to system prompts
 [model]
 name = "claude-3-5-haiku-20241022"
 provider = "anthropic"
-display_name = "Environment-Aware Assistant"
+display_name = "Claude with Env Info"
 
-#-------------------------------------------
-# System Prompt with Environment Awareness
-#-------------------------------------------
 [prompt]
-system_prompt = """You are a helpful assistant with access to environment information.
-When responding to questions about the user's environment, refer to the environment
-variables provided in the <env> tags in your system prompt.
+system_prompt = """You have access to environment information in <env> tags in your system prompt.
+Use this context to provide more relevant responses."""
 
-The environment information helps you understand the context of the user's queries
-and provide more relevant responses. You can use this information to:
-
-1. Provide system-specific advice (based on platform)
-2. Reference the user's working directory in file operations
-3. Make date-aware recommendations
-4. Reference custom contextual information about the user's project
-
-Always be transparent about which environment information you're using in your responses.
-"""
-
-#-------------------------------------------
-# Model Parameters
-#-------------------------------------------
 [parameters]
 max_tokens = 1000
 
-#-------------------------------------------
-# Environment Information Configuration
-#-------------------------------------------
 [env_info]
-# OPTION 1: Enable specific standard variables (list format)
-# This is the recommended approach - only include what you need
+# Selected environment variables to include
 variables = [
     "working_directory",  # Current directory path
-    "platform",           # Operating system (darwin, linux, windows)
-    "date",               # Current date (YYYY-MM-DD)
-    "python_version"      # Python interpreter version
+    "platform",           # Operating system
+    "date"                # Current date
 ]
 
-# OPTION 2: Enable all standard variables
-# Uncomment to include all available standard variables
-# variables = "all"
-
-# OPTION 3: Disable environment information (default behavior)
-# variables = []
-
-# NOTE: Only system-defined variables are supported.
-# Custom variables are not allowed in the env_info section.
-
-# NOTE: Environment information is added to the system prompt in an <env> XML block
-# It looks like this:
+# Environment info appears in system prompt as:
 # <env>
-# working_directory: /Users/username/projects/llmproc
+# working_directory: /path/to/dir
 # platform: darwin
-# date: 2025-03-19
-# python_version: 3.12.4
+# date: 2025-03-30
 # </env>
-
-# For full documentation, see docs/env_info.md

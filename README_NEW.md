@@ -64,11 +64,11 @@ async def main():
     # Load program from TOML
     program = LLMProgram.from_toml('examples/openai/gpt-4o-mini.toml')
     process = await program.start()
-    
+
     # Run with user input
     result = await process.run('Hello!')
     print(process.get_last_message())
-    
+
     # Continue conversation
     result = await process.run('Tell me more.')
     print(process.get_last_message())
@@ -119,30 +119,30 @@ Example configurations can be found in the `examples/openai/` and `examples/anth
 
 ## Feature Examples
 
-Examples of core features are in the `examples/features/` directory:
+From basic to advanced, explore LLMProc's capabilities:
 
-```bash
-# File preloading for context
-llmproc-demo ./examples/features/preload.toml
-
-# Environment information
-llmproc-demo ./examples/features/env-info.toml
-
-# Prompt caching for efficiency
-llmproc-demo ./examples/features/prompt-caching.toml
-
-# Basic MCP support
-llmproc-demo ./examples/features/mcp.toml
-```
+- **[Basic Configuration](./examples/anthropic/claude-3-5-haiku.toml)**: Start with a minimal Claude setup
+- **[File Preloading](./examples/features/preload.toml)**: Enhance context by loading files into system prompt
+- **[Program Linking](./examples/features/program-linking/main.toml)**: Connect specialized LLMs that collaborate
 
 ## Advanced Features
 
-### Program Linking (LLM-to-LLM communication)
+### Additional Capabilities
 
-Program linking allows one LLM process to communicate with other specialized LLMs. The system supports descriptive metadata for linked programs, making it easier for models to understand when to use each expert.
+Beyond the basic progression, explore more specialized features:
+
+- **[File Descriptor System](./examples/features/file-descriptor/main.toml)**: Handle large outputs with Unix-like pagination
+- **[Fork Tool](./examples/features/fork.toml)**: Create process copies with shared state for parallel exploration
+- **[Environment Info](./examples/features/env-info.toml)**: Add runtime context to system prompts
+- **Prompt Caching**: Automatically reduces token usage by up to 90% (enabled by default for all Anthropic models)
+- **[Claude Code](./examples/claude-code/claude-code.toml)**: Specialized configurations for code tasks
+- **[Thinking Models](./examples/anthropic/claude-3-7-thinking-high.toml)**: Claude models with enhanced reasoning
+
+### Program Linking Details
+
+Program linking connects specialized LLMs through descriptive metadata:
 
 ```toml
-# main.toml
 [tools]
 enabled = ["spawn"]
 
@@ -151,44 +151,13 @@ enabled = ["spawn"]
 expert = "expert.toml"
 
 # Enhanced form with descriptions
-math_expert = { path = "./math_expert.toml", description = "Expert specialized in mathematics and statistics" }
-code_expert = { path = "./code_expert.toml", description = "Expert specialized in software development" }
+repo_expert = { 
+  path = "./repo_expert.toml", 
+  description = "Expert with LLMProc project knowledge" 
+}
 ```
 
-The descriptions are automatically included in the spawn tool's help text, enabling models to make better decisions about which expert to use for specific tasks.
-
-Try it: `llmproc-demo ./examples/features/program-linking/main.toml`
-
-### File Descriptor System
-
-Handles large outputs with Unix-like pagination:
-
-```toml
-[file_descriptor]
-enabled = true
-max_direct_output_chars = 8000
-default_page_size = 4000
-```
-
-Try it: `llmproc-demo ./examples/features/file-descriptor/main.toml`
-
-### Fork System Call
-
-Create copies of LLM processes with state:
-
-Try it: `llmproc-demo ./examples/features/fork.toml`
-
-### Claude Code Support
-
-For code-related tasks, use Claude Code configurations:
-
-```bash
-# Basic Claude Code
-llmproc-demo ./examples/claude-code/claude-code.toml
-
-# With dispatch agent
-llmproc-demo ./examples/claude-code/dispatch-agent.toml
-```
+These descriptions help models choose the right expert for each task.
 
 
 ## Documentation

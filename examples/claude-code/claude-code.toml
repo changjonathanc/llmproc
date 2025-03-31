@@ -1,3 +1,5 @@
+# Claude Code - Specialized coding assistant
+
 [model]
 name = "claude-3-7-sonnet-20250219"
 provider = "anthropic"
@@ -7,31 +9,26 @@ display_name = "Claude Code"
 system_prompt_file = "../../prompts/claude-code-system-prompt.md"
 
 [parameters]
-temperature = 1
 max_tokens = 20000
 
-# Enable token-efficient tool use for reduced token usage and lower latency
+# Token-efficient tool use for better performance
 [parameters.extra_headers]
 anthropic-beta = "token-efficient-tools-2025-02-19"
 
-# Enable high thinking capacity for complex coding tasks
-#[parameters.thinking]
-#type = "disabled"
-#budget_tokens = 16000
-
 [preload]
-files = ["CLAUDE.md"]
+files = ["CLAUDE.md"]  # Load project preferences
 
 [mcp]
 config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
-# Use the sequential-thinking tool which provides reasoning capabilities
-sequential-thinking = "all"
+sequential-thinking = "all"  # Step-by-step reasoning
 
 [tools]
 enabled = ["spawn", "read_file"]
 
-
 [linked_programs]
-dispatch_agent = { path = "./dispatch-agent.toml", description = "Specialized agent for searching and exploring codebases efficiently" }
+dispatch_agent = { 
+  path = "./dispatch-agent.toml", 
+  description = "Agent for exploring codebases efficiently" 
+}

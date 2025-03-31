@@ -1,17 +1,13 @@
+# Fork Tool - Create process copies with shared conversation state
 [model]
 name = "claude-3-5-haiku-20241022"
 provider = "anthropic"
-display_name = "Claude Haiku"
+display_name = "Claude with Fork"
 
 [prompt]
-system_prompt = """You are Claude, a helpful AI assistant.
+system_prompt = """You can use the 'fork' tool to create copies of yourself with the same conversation history.
 
-You have access to the 'fork' tool that lets you create a copy of yourself.
-- if you need to call tools where the result can be large, you can use fork and delegate that task to your children
-
-NOTE:
-User can't see the tool call results. You must summarize the expert's response and relay it back to the user.
-"""
+Use fork to delegate tasks like reading large files, then summarize results for the user."""
 
 [parameters]
 max_tokens = 1000

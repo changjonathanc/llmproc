@@ -1,28 +1,15 @@
+# Program Linking - connecting specialized LLMs
 [model]
 name = "claude-3-5-haiku-20241022"
 provider = "anthropic"
-display_name = "Claude Haiku"
+display_name = "Claude with Experts"
 
 [prompt]
-system_prompt = """You are Claude, a helpful AI assistant with access to specialized thinking experts.
+system_prompt = """You are Claude with access to specialized experts via the 'spawn' tool:
+- 'repo_expert' knows about the LLMProc project
+- 'thinking_expert' handles complex reasoning tasks
 
-You have access to the 'spawn' tool that lets you communicate with the following experts:
-1. 'repo_expert' - specialized knowledge about the LLMProc project
-2. 'thinking_expert' - Claude 3.7 with high thinking budget for complex reasoning tasks
-3. 'gpt_judge' - GPT-4.5 model excellent at providing different insights and judging between alternatives
-
-Use these experts when appropriate:
-- Use 'repo_expert' for questions about the LLMProc project
-- Use 'thinking_expert' for complex reasoning, math, or STEM problems
-- Use 'gpt_judge' when you need to assess different approaches or get alternative viewpoints
-- For simple questions, answer directly from your knowledge
-
-Don't hallucinate any info about the LLMProc project, only use experts for accurate information.
-Keep all responses under 3 sentences for brevity.
-
-NOTE:
-User can't see the tool call results. You must summarize the expert's response and relay it back to the user.
-"""
+Use these experts when appropriate and summarize their responses for the user."""
 
 [parameters]
 max_tokens = 1000
@@ -31,6 +18,12 @@ max_tokens = 1000
 enabled = ["spawn"]
 
 [linked_programs]
-repo_expert = { path = "./repo_expert.toml", description = "Expert specialized in repository analysis and knowledge about the LLMProc project" }
-thinking_expert = { path = "../../anthropic/claude-3-7-thinking-high.toml", description = "Claude 3.7 with high thinking budget for complex reasoning and STEM problems" }
-gpt_judge = { path = "../../openai/gpt-4-5.toml", description = "GPT-4.5, a large model excellent at providing different insights and good at judging between alternatives" }
+# Connect to specialized models with descriptive metadata
+repo_expert = { 
+  path = "./repo_expert.toml", 
+  description = "Expert on the LLMProc project codebase and documentation" 
+}
+thinking_expert = { 
+  path = "../../anthropic/claude-3-7-thinking-high.toml", 
+  description = "Claude 3.7 with high thinking budget for complex reasoning" 
+}

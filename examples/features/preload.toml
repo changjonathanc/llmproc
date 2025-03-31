@@ -1,32 +1,20 @@
-# LLMProc Preload Example
-# This example demonstrates how to preload files into the conversation context
-
-#----------------------------------------
-# Model Configuration
-#----------------------------------------
+# File preloading example - enhances model with document knowledge
 [model]
-name = "gpt-4o"
-provider = "openai"
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+display_name = "LLMProc Expert"
 
-#----------------------------------------
-# Prompt Configuration
-#----------------------------------------
 [prompt]
-system_prompt = """You are a helpful assistant with knowledge of the LLMProc project.
-Use the preloaded project files to answer questions about LLMProc functionality and usage."""
+system_prompt = """You are an assistant with specialized knowledge of the LLMProc project.
+Use the preloaded files to answer questions accurately."""
 
-#----------------------------------------
-# Generation Parameters
-#----------------------------------------
 [parameters]
-max_tokens = 500
+max_tokens = 1000
 
-#----------------------------------------
-# Preload Configuration
-#----------------------------------------
 [preload]
-# Preload key project files for reference
+# Files are preloaded into system prompt with <preload> tags
+# Content remains available throughout the entire conversation
 files = [
-  "../README.md",
-  "../prompts/example_prompt.md"
+  "../../README.md",  # Project overview
+  "../../pyproject.toml"  # Package configuration
 ]
