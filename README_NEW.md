@@ -3,9 +3,9 @@
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Status](https://img.shields.io/badge/status-active-green)
 
-A flexible framework for building LLM applications with standardized configuration, focusing on the Unix-like "process" metaphor.
+A Unix-inspired framework for building powerful LLM applications that lets you spawn specialized models, manage large outputs, and enhance context with file preloading.
 
-> LLMProc views LLMs as processes in a computing environment, with standard interfaces for communication, state management, and system calls.
+> LLMProc treats language models as processes: spawn them, fork them, link them together, and handle their I/O with a familiar Unix-like approach.
 
 ## Table of Contents
 
@@ -15,7 +15,6 @@ A flexible framework for building LLM applications with standardized configurati
 - [Demo Tools](#demo-tools)
 - [Documentation](#documentation)
 - [Design Philosophy](#design-philosophy)
-- [Feature Status](#feature-status)
 - [Roadmap](#roadmap)
 - [License](#license)
 
@@ -90,15 +89,12 @@ LLMProc offers a complete toolkit for building sophisticated LLM applications:
 ### Large Content Handling
 - **[File Descriptor System](./examples/features/file-descriptor/main.toml)** - Unix-like pagination for large outputs
 
-### Performance & Advanced Models
+### More Features
 - **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
-- **Enhanced Reasoning** - [Claude 3.7 Thinking](./examples/anthropic/claude-3-7-thinking-high.toml) and [OpenAI Reasoning](./examples/openai/o3-mini-high.toml) models
-- **[Claude Code](./examples/claude-code/claude-code.toml)** - Specialized configurations for code tasks
+- **Reasoning/Thinking models** - [Claude 3.7 Thinking](./examples/anthropic/claude-3-7-thinking-high.toml) and [OpenAI Reasoning](./examples/openai/o3-mini-high.toml) models
+- **[MCP Protocol](./examples/features/mcp.toml)** - Standardized interface for tool usage
 
-### Cross-Provider Support
-- **Anthropic** - Claude 3.5/3.7 Haiku, Sonnet, Opus 
-- **OpenAI** - GPT-4o, GPT-4o-mini, GPT-4-5, o3-mini
-- **Vertex AI** - Claude models on Google Cloud
+- **Cross-provider support** - Currently supports Anthropic, OpenAI, and Anthropic on Vertex AI
 
 ## Demo Tools
 
@@ -126,6 +122,9 @@ llmproc-prompt ./config.toml -o prompt.txt   # Save to file
 llmproc-prompt ./config.toml -E              # Without environment info
 ```
 
+## Use Cases
+- **[Claude Code](./examples/claude-code/claude-code.toml)** - A minimal Claude Code implementation, with support for preloading CLAUDE.md, spawning, MCP
+
 ## Documentation
 
 - [Examples](./examples/README.md): Sample configurations and use cases
@@ -149,21 +148,6 @@ The library functions as a kernel:
 - Implements system calls for LLM processes
 - Manages resources across processes
 - Creates a standardized interface with the environment
-
-## Feature Status
-
-LLMProc's key features are production-ready:
-
-- ✅ Program Linking: Spawn and delegate tasks to specialized LLM processes
-- ✅ File Descriptor System: Unix-like pagination for large outputs
-- ✅ Fork Tool: Create process copies with shared conversation state
-- ✅ File Preloading: Enhanced context from loaded files
-- ✅ Enhanced Reasoning: Claude 3.7 Thinking and OpenAI o3-mini reasoning models
-
-Additional stable features:
-- ✅ Prompt Caching: Automatic for Claude models (up to 90% token savings)
-- ✅ MCP Protocol: Standardized interface for tools
-- ✅ Cross-provider support: OpenAI, Anthropic, and Vertex AI
 
 ## Roadmap
 
