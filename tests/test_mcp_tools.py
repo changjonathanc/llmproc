@@ -139,7 +139,7 @@ def test_llm_process_with_time_tool(
     from llmproc.program import LLMProgram
 
     program = LLMProgram(
-        model_name="claude-3-haiku-20240307",
+        model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
         mcp_config_path=time_mcp_config,
@@ -181,7 +181,7 @@ async def test_run_with_time_tool(
         from llmproc.program import LLMProgram
 
         program = LLMProgram(
-            model_name="claude-3-haiku-20240307",
+            model_name="claude-3-5-haiku-20241022",
             provider="anthropic",
             system_prompt="You are an assistant with access to tools.",
             mcp_config_path=time_mcp_config,
@@ -264,7 +264,7 @@ async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_
     
     # Create program with non-existent server
     program = LLMProgram(
-        model_name="claude-3-haiku-20240307",
+        model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are a helpful assistant with access to tools.",
         mcp_config_path=mock_mcp_config,
@@ -311,7 +311,7 @@ async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_an
     
     # Create program with non-existent tool
     program = LLMProgram(
-        model_name="claude-3-haiku-20240307",
+        model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are a helpful assistant with access to tools.",
         mcp_config_path=mock_mcp_config,
@@ -352,7 +352,7 @@ async def test_tool_not_found_error(mock_server_registry, mock_aggregator, mock_
     
     # Create program with non-existent tool
     program = LLMProgram(
-        model_name="claude-3-haiku-20240307",
+        model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are a helpful assistant with access to tools.",
         mcp_config_path=mock_mcp_config,
@@ -403,7 +403,7 @@ async def test_no_tools_registered_error(mock_register_tool, mock_server_registr
     
     # Create program with configuration that will pass validation but not register tools
     program = LLMProgram(
-        model_name="claude-3-haiku-20240307",
+        model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are a helpful assistant with access to tools.",
         mcp_config_path=mock_mcp_config,

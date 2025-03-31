@@ -38,7 +38,7 @@ class TestProgramLinkingAPI:
             with open(main_toml_path, "w") as f:
                 f.write("""
                 [model]
-                name = "claude-3-haiku-20240307"
+                name = "claude-3-5-haiku-20241022"
                 provider = "anthropic"
                 
                 [prompt]

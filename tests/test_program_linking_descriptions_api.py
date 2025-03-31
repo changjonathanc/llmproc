@@ -44,7 +44,7 @@ async def test_program_linking_descriptions_api(temp_dir):
     # Create the expert TOML
     expert_toml_content = dedent("""
     [model]
-    name = "claude-3-haiku-20240307"
+    name = "claude-3-5-haiku-20241022"
     provider = "anthropic"
     display_name = "Expert"
     

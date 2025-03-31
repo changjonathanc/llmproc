@@ -87,7 +87,7 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
     from llmproc.program import LLMProgram
 
     program = LLMProgram(
-        model_name="claude-3-sonnet-20240229",
+        model_name="claude-3-5-sonnet-20241022",
         provider="anthropic",
         system_prompt="You are a test assistant.",
     )

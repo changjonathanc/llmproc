@@ -8,7 +8,7 @@
 # Model name (Required)
 name = "claude-3-7-sonnet-20250219"  # Default Anthropic model
 # name = "claude-3-5-sonnet-20241022"  # Alternative Claude model
-# name = "claude-3-haiku-20240307"  # Faster, cheaper Claude model
+# name = "claude-3-5-haiku-20241022"  # Faster, cheaper Claude model
 # name = "gpt-4o"  # OpenAI example
 
 # Provider (Required)

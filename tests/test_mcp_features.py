@@ -141,7 +141,7 @@ def test_mcp_initialization(
     from llmproc.program import LLMProgram
 
     program = LLMProgram(
-        model_name="claude-3-haiku-20240307",
+        model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are a test assistant.",
         mcp_config_path=mcp_config_file,
@@ -191,7 +191,7 @@ def test_from_toml_with_mcp(mock_mcp_registry, mock_env, mcp_config_file):
         config_file = temp_dir_path / "config.toml"
         config_file.write_text("""
 [model]
-name = "claude-3-haiku-20240307"
+name = "claude-3-5-haiku-20241022"
 provider = "anthropic"
 display_name = "Test MCP Assistant"
 
@@ -240,7 +240,7 @@ sequential-thinking = ["sequentialthinking"]
                             "github": ["search_repositories", "get_file_contents"],
                             "sequential-thinking": ["sequentialthinking"],
                         }
-                        assert process.model_name == "claude-3-haiku-20240307"
+                        assert process.model_name == "claude-3-5-haiku-20241022"
                         assert process.provider == "anthropic"
                         assert process.display_name == "Test MCP Assistant"
 
@@ -260,7 +260,7 @@ def test_mcp_with_no_tools(
         from llmproc.program import LLMProgram
 
         program = LLMProgram(
-            model_name="claude-3-haiku-20240307",
+            model_name="claude-3-5-haiku-20241022",
             provider="anthropic",
             system_prompt="You are a test assistant.",
             mcp_config_path=mcp_config_file,
@@ -288,7 +288,7 @@ def test_mcp_with_all_tools(
         from llmproc.program import LLMProgram
 
         program = LLMProgram(
-            model_name="claude-3-haiku-20240307",
+            model_name="claude-3-5-haiku-20241022",
             provider="anthropic",
             system_prompt="You are a test assistant.",
             mcp_config_path=mcp_config_file,

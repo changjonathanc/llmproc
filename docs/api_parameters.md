@@ -38,9 +38,9 @@
 
 When using Claude models through Vertex AI, the model name format includes the version with @ symbol:
 
-- **claude-3-opus@20240229**: Opus model with timestamp
-- **claude-3-sonnet@20240229**: Sonnet model with timestamp
-- **claude-3-haiku@20240307**: Haiku model with timestamp
+- **claude-3-5-sonnet@20241022**: Claude 3.5 Sonnet model with timestamp
+- **claude-3-5-haiku@20241022**: Claude 3.5 Haiku model with timestamp
+- **claude-3-7-sonnet@20250219**: Claude 3.7 Sonnet model with timestamp
 
 ## Usage in TOML Configuration
 

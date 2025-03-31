@@ -44,7 +44,7 @@ def test_get_openai_provider_missing_import(mock_env):
 def test_get_anthropic_provider_missing_import(mock_env):
     """Test getting Anthropic provider when import fails."""
     with pytest.raises(ImportError):
-        get_provider_client("anthropic", "claude-3-sonnet-20240229")
+        get_provider_client("anthropic", "claude-3-5-sonnet-20241022")
 
 
 @patch("llmproc.providers.providers.AsyncAnthropic")
@@ -53,7 +53,7 @@ def test_get_anthropic_provider(mock_anthropic, mock_env):
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
 
-    client = get_provider_client("anthropic", "claude-3-sonnet-20240229")
+    client = get_provider_client("anthropic", "claude-3-5-sonnet-20241022")
 
     mock_anthropic.assert_called_once_with(api_key="test-anthropic-key")
     assert client == mock_client
@@ -63,7 +63,7 @@ def test_get_anthropic_provider(mock_anthropic, mock_env):
 def test_get_anthropic_vertex_provider_missing_import(mock_env):
     """Test getting Anthropic Vertex provider when import fails."""
     with pytest.raises(ImportError):
-        get_provider_client("anthropic_vertex", "claude-3-haiku@20240307")
+        get_provider_client("anthropic_vertex", "claude-3-5-haiku@20241022")
 
 
 @patch("llmproc.providers.providers.AsyncAnthropicVertex")
@@ -72,7 +72,7 @@ def test_get_anthropic_vertex_provider(mock_vertex, mock_env):
     mock_client = MagicMock()
     mock_vertex.return_value = mock_client
 
-    client = get_provider_client("anthropic_vertex", "claude-3-haiku@20240307")
+    client = get_provider_client("anthropic_vertex", "claude-3-5-haiku@20241022")
 
     mock_vertex.assert_called_once_with(project_id="test-vertex-project", region="us-central1-vertex")
     assert client == mock_client
@@ -86,7 +86,7 @@ def test_get_anthropic_vertex_provider_with_params(mock_vertex, mock_env):
 
     client = get_provider_client(
         "anthropic_vertex",
-        "claude-3-haiku@20240307",
+        "claude-3-5-haiku@20241022",
         project_id="custom-project",
         region="europe-west4",
     )
