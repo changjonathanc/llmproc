@@ -26,13 +26,11 @@ files = ["CLAUDE.md"]
 config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
-# this is the full list of tools
-#codemcp = ["read_file", "write_file", "edit_file", "ls", "grep", "init_project_tool"]
-# we only allow read only access to the file system for demo purposes
-codemcp = ["read_file", "ls", "grep"]
+# Use the sequential-thinking tool which provides reasoning capabilities
+sequential-thinking = "all"
 
 [tools]
-enabled = ["spawn"]
+enabled = ["spawn", "read_file"]
 
 
 [linked_programs]

@@ -180,10 +180,12 @@ code_assistant = "./basic/claude-3-haiku.toml"      # Program for coding help
 # Users must explicitly specify which tools to import from each server
 [mcp.tools]
 # Server name = List of specific tools to import OR "all" to import all tools
-github = ["search_repositories", "get_file_contents"]  # Specific GitHub tools
-exa = ["search"]                                      # Exa search tool
-code_tools = "all"                                    # All code tools
-# webfetch = ["fetch"]                                # Web fetch tools
+sequential-thinking = "all"  # Sequential thinking for step-by-step reasoning
+# Other servers (commented out as they're not in current config)
+# github = ["search_repositories", "get_file_contents"]  # Specific GitHub tools
+# exa = ["search"]                                      # Exa search tool
+# code_tools = "all"                                    # All code tools
+# webfetch = ["fetch"]                                  # Web fetch tools
 
 #----------------------------------------
 # File Descriptor Configuration

@@ -16,7 +16,7 @@ User can't see the tool call results. You must summarize the expert's response a
 max_tokens = 1000
 
 [tools]
-enabled = ["fork"]
+enabled = ["fork", "read_file"]
 
 
 [mcp]
@@ -24,4 +24,4 @@ config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
 # Only configure servers that are available in your config/mcp_servers.json
-codemcp = ["read_file"]
+sequential-thinking = "all"

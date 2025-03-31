@@ -57,11 +57,16 @@ def mock_mcp_registry():
     }
 
     mock_tool3 = MagicMock()
-    mock_tool3.name = "codemcp.ReadFile"
-    mock_tool3.description = "Read a file from the filesystem"
+    mock_tool3.name = "sequential-thinking.sequentialthinking"
+    mock_tool3.description = "A detailed tool for dynamic and reflective problem-solving through thoughts"
     mock_tool3.inputSchema = {
         "type": "object",
-        "properties": {"path": {"type": "string"}},
+        "properties": {
+            "thought": {"type": "string"},
+            "nextThoughtNeeded": {"type": "boolean"},
+            "thoughtNumber": {"type": "integer"},
+            "totalThoughts": {"type": "integer"},
+        },
     }
 
     # Setup tool calls
@@ -103,12 +108,12 @@ def mcp_config_file():
                         "args": ["-y", "@modelcontextprotocol/server-github"],
                         "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"},
                     },
-                    "codemcp": {
+                    "sequential-thinking": {
                         "type": "stdio",
                         "command": "/bin/zsh",
                         "args": [
                             "-c",
-                            "uvx --from git+https://github.com/cccntu/codemcp@main codemcp ",
+                            "npx -y @modelcontextprotocol/server-sequential-thinking",
                         ],
                     },
                 }
@@ -140,7 +145,7 @@ def test_mcp_initialization(
         provider="anthropic",
         system_prompt="You are a test assistant.",
         mcp_config_path=mcp_config_file,
-        mcp_tools={"github": ["search_repositories"], "codemcp": ["ReadFile"]},
+        mcp_tools={"github": ["search_repositories"], "sequential-thinking": ["sequentialthinking"]},
     )
     process = LLMProcess(program=program)
 
@@ -151,12 +156,12 @@ def test_mcp_initialization(
     # Check the configuration is correct
     assert process.mcp_tools == {
         "github": ["search_repositories"],
-        "codemcp": ["ReadFile"],
+        "sequential-thinking": ["sequentialthinking"],
     }
     assert process.mcp_config_path == mcp_config_file
     assert process.mcp_tools == {
         "github": ["search_repositories"],
-        "codemcp": ["ReadFile"],
+        "sequential-thinking": ["sequentialthinking"],
     }
 
     # In our new design, _initialize_tools no longer calls asyncio.run
@@ -202,7 +207,7 @@ config_path = "config/mcp_servers.json"
 
 [mcp.tools]
 github = ["search_repositories", "get_file_contents"]
-codemcp = ["ReadFile"]
+sequential-thinking = ["sequentialthinking"]
 """)
 
         # Create and patch the instance
@@ -229,11 +234,11 @@ codemcp = ["ReadFile"]
                         )
                         assert (
                             "github" in process.mcp_tools
-                            and "codemcp" in process.mcp_tools
+                            and "sequential-thinking" in process.mcp_tools
                         )
                         assert process.mcp_tools == {
                             "github": ["search_repositories", "get_file_contents"],
-                            "codemcp": ["ReadFile"],
+                            "sequential-thinking": ["sequentialthinking"],
                         }
                         assert process.model_name == "claude-3-haiku-20240307"
                         assert process.provider == "anthropic"
@@ -287,7 +292,7 @@ def test_mcp_with_all_tools(
             provider="anthropic",
             system_prompt="You are a test assistant.",
             mcp_config_path=mcp_config_file,
-            mcp_tools={"github": "all", "codemcp": ["ReadFile"]},
+            mcp_tools={"github": "all", "sequential-thinking": ["sequentialthinking"]},
         )
         process = LLMProcess(program=program)
 
@@ -295,7 +300,7 @@ def test_mcp_with_all_tools(
         process.mcp_enabled = True
 
         # Check configuration
-        assert process.mcp_tools == {"github": "all", "codemcp": ["ReadFile"]}
+        assert process.mcp_tools == {"github": "all", "sequential-thinking": ["sequentialthinking"]}
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)

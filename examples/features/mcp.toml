@@ -10,6 +10,9 @@ max_tokens = 300
 [prompt]
 system_prompt = "You are a helpful assistant with access to tools. Use tools whenever appropriate to answer user queries accurately."
 
+[tools]
+enabled = ["read_file"]
+
 [mcp]
 config_path = "../../config/mcp_servers.json"
 
