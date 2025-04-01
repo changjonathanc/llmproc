@@ -170,7 +170,7 @@ Future development plans:
 2. Process State Serialization & Restoration
 3. Retry mechanism with exponential backoff
 4. Enhanced error handling and reporting
-5. Improved stream mode support
+5. Support for streaming
 6. File Descriptor System Phase 3 enhancements
 7. Gemini models support
 
