@@ -108,10 +108,18 @@ async def test_thinking_models_basic_functionality():
     # High thinking model has a max_tokens=32768 which requires streaming mode
     medium_process = await load_thinking_model("examples/anthropic/claude-3-7-thinking-medium.toml")
     
-    # Run the model
-    result = await medium_process.run(simple_problem)
-    
-    # Verify we got a response
-    assert result
-    assert medium_process.get_last_message()
-    assert "168" in medium_process.get_last_message()  # Basic check for correct answer
+    # Try to run the model with error handling
+    try:
+        result = await medium_process.run(simple_problem)
+        
+        # Verify we got a response
+        assert result
+        assert medium_process.get_last_message()
+        assert "168" in medium_process.get_last_message()  # Basic check for correct answer
+    except Exception as e:
+        # Print more detailed error information
+        import traceback
+        print(f"\nError details: {e}")
+        print(f"\nAPI parameters:\n{medium_process.api_params}")
+        traceback.print_exc()
+        raise

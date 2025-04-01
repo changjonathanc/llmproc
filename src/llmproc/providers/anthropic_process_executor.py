@@ -88,7 +88,7 @@ class AnthropicProcessExecutor:
             api_params = process.api_params.copy()
 
             # Extract extra headers if present
-            extra_headers = api_params.pop("extra_headers", {})
+            extra_headers = api_params.pop("extra_headers", {}) if "extra_headers" in api_params else {}
 
             # Determine if we should use caching
             # Prompt caching is implemented via cache_control parameters in content
@@ -396,8 +396,11 @@ class AnthropicProcessExecutor:
             return system_prompt
 
         if isinstance(system_prompt, str):
-            # Add cache to the entire system prompt
-            return [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+            # Add cache to the entire system prompt, but only if the prompt is not empty
+            if self._is_cacheable_content(system_prompt):
+                return [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+            else:
+                return system_prompt  # Return as is if empty
         elif isinstance(system_prompt, list):
             # Already in structured format, assume correctly configured
             return system_prompt
@@ -425,21 +428,51 @@ class AnthropicProcessExecutor:
         if isinstance(tools_copy, list) and tools_copy:
             # Find the last tool and add cache_control to it
             # This caches all tools up to this point, using just one cache point
-            if isinstance(tools_copy[-1], dict):
+            if isinstance(tools_copy[-1], dict) and self._is_cacheable_content(tools_copy[-1]):
+                # Only add cache control if tool definition is not empty
                 tools_copy[-1]["cache_control"] = {"type": "ephemeral"}
 
         return tools_copy
+
+    def _is_cacheable_content(self, content):
+        """
+        Check if the content can safely have cache control added to it.
+        
+        Args:
+            content: The content to check
+            
+        Returns:
+            bool: True if the content can be cached, False otherwise
+        """
+        # Empty content should not have cache control
+        if not content:
+            return False
+            
+        # For string content, check that it's not empty
+        if isinstance(content, str):
+            return bool(content.strip())
+            
+        # For dict content, check that there's text or content
+        if isinstance(content, dict):
+            if content.get("type") in ["text", "tool_result"]:
+                return bool(content.get("text") or content.get("content"))
+                
+        # Default to True for other cases
+        return True
 
     def _add_cache_to_message(self, message):
         """Add cache control to a message."""
         if isinstance(message.get("content"), list):
             for content in message["content"]:
                 if isinstance(content, dict) and content.get("type") in ["text", "tool_result"]:
-                    content["cache_control"] = {"type": "ephemeral"}
-                    return  # Only add to the first eligible content
+                    # Only add cache control if there's actual content
+                    if self._is_cacheable_content(content):
+                        content["cache_control"] = {"type": "ephemeral"}
+                        return  # Only add to the first eligible content
         elif isinstance(message.get("content"), str):
-            # Convert string content to structured format with cache
-            message["content"] = [{"type": "text", "text": message["content"], "cache_control": {"type": "ephemeral"}}]
+            # Convert string content to structured format with cache, but only if not empty
+            if self._is_cacheable_content(message.get("content")):
+                message["content"] = [{"type": "text", "text": message["content"], "cache_control": {"type": "ephemeral"}}]
 
     async def count_tokens(self, process):
         """Count tokens in the current conversation context using Anthropic's API.
