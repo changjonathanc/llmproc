@@ -81,9 +81,9 @@ class ToolRegistry:
         self.tool_handlers = {}
 ```
 
-### 3. No Changes Needed to LLMProcess.call_tool
+### 3. Changes to LLMProcess.call_tool
 
-The LLMProcess.call_tool method doesn't need to change either, since the error handling happens at the ToolRegistry level. This provides a cleaner separation of concerns:
+The LLMProcess.call_tool method needs to be updated to use the ToolManager:
 
 ```python
 async def call_tool(self, tool_name: str, args: dict) -> Any:
@@ -99,10 +99,10 @@ async def call_tool(self, tool_name: str, args: dict) -> Any:
     Returns:
         The result of the tool execution
     """
-    return await self.tool_registry.call_tool(tool_name, args)
+    return await self.tool_manager.call_tool(tool_name, args)
 ```
 
-Since the ToolRegistry.call_tool method never raises exceptions, the try/except block in LLMProcess.call_tool is no longer needed.
+Since the ToolManager.call_tool method (which delegates to the registry) never raises exceptions, the try/except block in LLMProcess.call_tool is no longer needed.
 
 ## Expected Behavior
 
