@@ -5,6 +5,7 @@ import math
 import operator
 
 from llmproc.tools.tool_result import ToolResult
+from llmproc.tools.function_tools import register_tool
 
 # Allowed binary operators
 ALLOWED_OPERATORS = {
@@ -147,7 +148,7 @@ def safe_eval(expression: str) -> float:
         raise ValueError(f"Error evaluating expression: {str(e)}")
 
 
-# Calculator tool definition for Anthropic API
+# Calculator tool definition for Anthropic API (legacy)
 calculator_tool_def = {
     "name": "calculator",
     "description": """
@@ -184,6 +185,7 @@ calculator("sqrt(16) + 5") → 9.0
 }
 
 
+# Legacy implementation
 async def calculator_tool(
     expression: str,
     precision: int | None = 6,
@@ -232,6 +234,63 @@ async def calculator_tool(
             formatted_result = str(result)
 
         return ToolResult.from_success(formatted_result)
+
+    except ValueError as e:
+        return ToolResult.from_error(f"Calculation error: {str(e)}")
+    except Exception as e:
+        return ToolResult.from_error(f"Unexpected error: {str(e)}")
+
+
+# New function-based implementation
+@register_tool(
+    description="""A tool for evaluating mathematical expressions safely.
+It supports basic arithmetic, mathematical functions, and constants.""",
+    param_descriptions={
+        "expression": "The mathematical expression to evaluate. Supports operations like +, -, *, /, //, %, **, functions like sin, cos, sqrt, and constants like pi, e.",
+        "precision": "Number of decimal places in the result (between 0 and 15, default: 6)."
+    }
+)
+async def calculator(expression: str, precision: int = 6) -> str:
+    """Calculate the result of a mathematical expression.
+    
+    Args:
+        expression: The mathematical expression to evaluate
+        precision: Number of decimal places in the result (default: 6)
+        
+    Returns:
+        The calculated result as a string
+    """
+    # Validate parameters
+    if not expression or not isinstance(expression, str):
+        return ToolResult.from_error("Expression must be a non-empty string.")
+
+    try:
+        precision = int(precision)
+        if precision < 0 or precision > 15:
+            return ToolResult.from_error("Precision must be between 0 and 15.")
+    except ValueError:
+        return ToolResult.from_error("Precision must be an integer.")
+
+    # Try to evaluate the expression
+    try:
+        result = safe_eval(expression)
+
+        # Format result based on type and precision
+        if isinstance(result, int | float):
+            if math.isnan(result):
+                formatted_result = "NaN"
+            elif math.isinf(result):
+                formatted_result = "Infinity" if result > 0 else "-Infinity"
+            else:
+                # Apply precision
+                formatted_result = f"{result:.{precision}f}".rstrip("0").rstrip(".")
+                # Convert to int if it's a whole number
+                if formatted_result.endswith(".0"):
+                    formatted_result = formatted_result[:-2]
+        else:
+            formatted_result = str(result)
+
+        return formatted_result
 
     except ValueError as e:
         return ToolResult.from_error(f"Calculation error: {str(e)}")

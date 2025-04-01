@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
 
 from . import mcp
-from .calculator import calculator_tool, calculator_tool_def
+from .calculator import calculator_tool, calculator_tool_def, calculator
 from .file_descriptor import (
     fd_to_file_tool, fd_to_file_tool_def,
     file_descriptor_instructions, file_descriptor_base_instructions,
@@ -18,7 +18,7 @@ from .file_descriptor import (
 )
 from .fork import fork_tool, fork_tool_def
 from .function_tools import register_tool, create_tool_from_function
-from .read_file import read_file_tool, read_file_tool_def
+from .read_file import read_file_tool, read_file_tool_def, read_file
 from .spawn import spawn_tool, spawn_tool_def
 from .tool_result import ToolResult
 
@@ -405,12 +405,14 @@ __all__ = [
     "fork_tool_def",
     "calculator_tool",
     "calculator_tool_def",
+    "calculator",  # New function-based tool
     "read_fd_tool",
     "read_fd_tool_def",
     "fd_to_file_tool",
     "fd_to_file_tool_def",
     "read_file_tool",
     "read_file_tool_def",
+    "read_file",  # New function-based tool
     "file_descriptor_instructions",
     "get_tool",
     "list_available_tools",

@@ -17,29 +17,30 @@ from typing import (
 from llmproc.tools.tool_result import ToolResult
 
 
-def register_tool(name: str = None, description: str = None):
+def register_tool(name: str = None, description: str = None, param_descriptions: Dict[str, str] = None):
     """Decorator to register a function as a tool.
     
     Args:
         name: Optional custom name for the tool (defaults to function name)
         description: Optional custom description for the tool (defaults to docstring)
+        param_descriptions: Optional dict mapping parameter names to descriptions
+            (overrides descriptions parsed from docstrings)
         
     Returns:
         Decorator function that registers the tool metadata
         
     Example:
         ```python
-        @register_tool(name="weather_info", description="Get weather for a location")
+        @register_tool(
+            name="weather_info", 
+            description="Get weather for a location",
+            param_descriptions={
+                "location": "City name or postal code to get weather for",
+                "units": "Temperature units (celsius or fahrenheit)"
+            }
+        )
         def get_weather(location: str, units: str = "celsius"):
-            '''Get weather for a location.
-            
-            Args:
-                location: City name or address
-                units: Temperature units (celsius or fahrenheit)
-                
-            Returns:
-                Weather information including temperature
-            '''
+            '''Get weather for a location.'''
             # Implementation...
             return {"temperature": 22, "units": units}
         ```
@@ -50,6 +51,8 @@ def register_tool(name: str = None, description: str = None):
             func._tool_name = name
         if description is not None:
             func._tool_description = description
+        if param_descriptions is not None:
+            func._param_descriptions = param_descriptions
         # Mark the function as a tool
         func._is_tool = True
         return func
@@ -93,13 +96,19 @@ def extract_docstring_params(func: Callable) -> Dict[str, Dict[str, str]]:
     return params
 
 
-def type_to_json_schema(type_hint: Any, param_name: str, docstring_params: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
+def type_to_json_schema(
+    type_hint: Any, 
+    param_name: str, 
+    docstring_params: Dict[str, Dict[str, str]],
+    explicit_descriptions: Dict[str, str] = None
+) -> Dict[str, Any]:
     """Convert a Python type hint to a JSON schema type.
     
     Args:
         type_hint: The Python type hint
         param_name: The parameter name (for documentation)
         docstring_params: Extracted parameter documentation
+        explicit_descriptions: Optional explicit parameter descriptions that override docstring
         
     Returns:
         JSON schema representation of the type
@@ -107,8 +116,10 @@ def type_to_json_schema(type_hint: Any, param_name: str, docstring_params: Dict[
     # Start with a default schema
     schema = {"type": "string"}  # Default to string if we can't determine
     
-    # Get description from docstring if available
-    if param_name in docstring_params:
+    # Get description - prioritize explicit description over docstring
+    if explicit_descriptions and param_name in explicit_descriptions:
+        schema["description"] = explicit_descriptions[param_name]
+    elif param_name in docstring_params:
         schema["description"] = docstring_params[param_name]["description"]
     
     # Handle Optional types (Union[T, None])
@@ -194,6 +205,9 @@ def function_to_tool_schema(func: Callable) -> Dict[str, Any]:
     # Extract parameter documentation from docstring
     docstring_params = extract_docstring_params(func)
     
+    # Get explicit parameter descriptions if provided
+    explicit_descriptions = getattr(func, "_param_descriptions", None)
+    
     # Get type hints and signature
     type_hints = get_type_hints(func)
     sig = inspect.signature(func)
@@ -208,7 +222,12 @@ def function_to_tool_schema(func: Callable) -> Dict[str, Any]:
         param_type = type_hints.get(param_name, Any)
         
         # Convert the type to JSON schema
-        param_schema = type_to_json_schema(param_type, param_name, docstring_params)
+        param_schema = type_to_json_schema(
+            param_type, 
+            param_name, 
+            docstring_params, 
+            explicit_descriptions
+        )
         
         # Add to properties
         schema["input_schema"]["properties"][param_name] = param_schema

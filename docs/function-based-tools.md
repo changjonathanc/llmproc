@@ -37,23 +37,22 @@ process = await program.start()
 
 ## Using the `register_tool` Decorator
 
-For more control over tool names and descriptions, use the `register_tool` decorator:
+For more control over tool names, descriptions, and parameter descriptions, use the `register_tool` decorator:
 
 ```python
 from typing import Dict, Any
 from llmproc import register_tool
 
-@register_tool(name="weather_info", description="Get weather information for a location")
+@register_tool(
+    name="weather_info", 
+    description="Get weather information for a location",
+    param_descriptions={
+        "location": "City name or postal code to get weather for. More specific locations yield better results.",
+        "units": "Temperature units to use in the response (either 'celsius' or 'fahrenheit')."
+    }
+)
 def get_weather(location: str, units: str = "celsius") -> Dict[str, Any]:
-    """Get weather for a location.
-    
-    Args:
-        location: City or address
-        units: Temperature units (celsius or fahrenheit)
-        
-    Returns:
-        Weather information including temperature and conditions
-    """
+    """Get weather for a location."""
     # Implementation...
     return {
         "location": location,
@@ -62,6 +61,8 @@ def get_weather(location: str, units: str = "celsius") -> Dict[str, Any]:
         "conditions": "Sunny"
     }
 ```
+
+The `param_descriptions` argument allows you to explicitly define parameter descriptions instead of relying on docstring parsing, which should be considered a fallback mechanism. Explicit parameter descriptions provide more control and clarity in your tool schemas.
 
 ## Async Function Support
 
