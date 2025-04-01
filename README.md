@@ -110,8 +110,7 @@ LLMProc offers a complete toolkit for building sophisticated LLM applications:
 
 ### Developer Experience
 - **[Fluent SDK API](./docs/sdk-developer-experience.md)** - Create programs with intuitive method chaining
-- **[Function-Based Tools](./examples/features/function_tools.py)** - Register Python functions as tools with type conversion
-- **[Type-Safe Tools](./docs/function-based-tools.md)** - Tools use Python type hints for parameter validation
+- **[Function-Based Tools](./docs/function-based-tools.md)** - Register Python functions as tools with type-safety and auto-conversion
 
 ### Process Management
 - **[Program Linking](./examples/features/program-linking/main.toml)** - Spawn and delegate tasks to specialized LLM processes
