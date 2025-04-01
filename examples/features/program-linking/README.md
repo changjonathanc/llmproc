@@ -44,9 +44,9 @@ The tool will provide descriptions of available experts to help you choose the r
 enabled = ["spawn"]
 
 [linked_programs]
-repo_expert = { path = "./repo_expert.toml", description = "Expert specialized in repository analysis" }
-thinking_expert = { path = "../../anthropic/claude-3-7-thinking-high.toml", description = "Claude 3.7 with high thinking budget for complex reasoning problems" }
-gpt_judge = { path = "../../openai/gpt-4-5.toml", description = "GPT-4.5, excellent at providing different insights and judging alternatives" }
+repo_expert = {path="./repo_expert.toml", description="Expert specialized in repository analysis"}
+thinking_expert = {path="../../anthropic/claude-3-7-thinking-high.toml", description="Claude 3.7 with high thinking budget for complex reasoning problems"}
+gpt_judge = {path="../../openai/gpt-4-5.toml", description="GPT-4.5, excellent at providing different insights and judging alternatives"}
 ```
 
 With the enhanced description system, you don't need to manually list each expert in the system prompt. The spawn tool automatically makes the descriptions available to the model.

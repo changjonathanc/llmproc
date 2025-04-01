@@ -77,8 +77,17 @@ class TestProgramLinking:
                     assert process.has_linked_programs
                     assert "expert" in process.linked_programs
 
-                    # Verify compile was called
-                    mock_compile.assert_called_with(main_toml, include_linked=True)
+                    # Verify from_toml was called for both files
+                    assert mock_from_toml.called
+                    
+                    # Check all call arguments to verify both files were processed
+                    call_file_names = [call.args[0].name for call in mock_from_toml.call_args_list]
+                    assert main_toml.name in call_file_names, "main.toml should be processed"
+                    assert expert_toml.name in call_file_names, "expert.toml should be processed"
+                    
+                    # Verify include_linked was set to True in at least one call
+                    include_linked_calls = [call for call in mock_from_toml.call_args_list if call.kwargs.get("include_linked") is True]
+                    assert len(include_linked_calls) > 0, "At least one call should have include_linked=True"
 
         finally:
             # Clean up test files
@@ -281,7 +290,7 @@ class TestProgramLinking:
                 mock_get_client.return_value = mock_client
 
                 # Compile the main program with linked programs
-                main_program = LLMProgram.compile(main_toml, include_linked=True)
+                main_program = LLMProgram.from_toml(main_toml, include_linked=True)
 
                 # Verify the program has linked_program_descriptions
                 assert hasattr(main_program, "linked_program_descriptions")

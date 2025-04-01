@@ -32,9 +32,10 @@ def test_compile_all_example_programs():
     failed_files = []
     success_count = 0
     
-    # Known files that still require external resources (usually from API integrations)
+    # Known files that still require external resources or have special syntax
     skip_files = [
-        # Empty - we've fixed the path issues!
+        #"claude-code.toml",  # Uses a complex linked_programs syntax
+        #"main.toml",  # Uses a complex linked_programs syntax in program-linking folder
     ]
     
     # Try to compile each file

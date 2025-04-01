@@ -28,7 +28,4 @@ sequential-thinking = "all"  # Step-by-step reasoning
 enabled = ["spawn", "read_file"]
 
 [linked_programs]
-dispatch_agent = { 
-  path = "./dispatch-agent.toml", 
-  description = "Agent for exploring codebases efficiently" 
-}
+dispatch_agent = {path="./dispatch-agent.toml", description="Agent for exploring codebases efficiently"}

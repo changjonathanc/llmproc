@@ -19,7 +19,7 @@ Add support for program descriptions in the linked programs configuration:
 simple_program = "./simple.toml"
 
 # Enhanced form with description
-repo_expert = { path = "./repo_expert.toml", description = "Expert specialized in repository analysis" }
+repo_expert = {path="./repo_expert.toml", description="Expert specialized in repository analysis"}
 ```
 
 ## Implementation Details
@@ -61,8 +61,8 @@ You have access to the 'spawn' tool that lets you communicate with specialized e
 enabled = ["spawn"]
 
 [linked_programs]
-repo_expert = { path = "./repo_expert.toml", description = "Specialized in analyzing repository structure and codebase organization" }
-math_helper = { path = "./math_helper.toml", description = "Specialized in mathematical calculations and proofs" }
+repo_expert = {path="./repo_expert.toml", description="Specialized in analyzing repository structure and codebase organization"}
+math_helper = {path="./math_helper.toml", description="Specialized in mathematical calculations and proofs"}
 ```
 
 ## Backward Compatibility

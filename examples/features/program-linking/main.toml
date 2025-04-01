@@ -19,11 +19,5 @@ enabled = ["spawn"]
 
 [linked_programs]
 # Connect to specialized models with descriptive metadata
-repo_expert = { 
-  path = "./repo_expert.toml", 
-  description = "Expert on the LLMProc project codebase and documentation" 
-}
-thinking_expert = { 
-  path = "../../anthropic/claude-3-7-thinking-high.toml", 
-  description = "Claude 3.7 with high thinking budget for complex reasoning" 
-}
+repo_expert = {path="./repo_expert.toml", description="Expert on the LLMProc project codebase and documentation"}
+thinking_expert = {path="../../anthropic/claude-3-7-thinking-high.toml", description="Claude 3.7 with high thinking budget for complex reasoning"}

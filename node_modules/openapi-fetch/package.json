@@ -1,0 +1,80 @@
+{
+  "name": "openapi-fetch",
+  "description": "Fast, type-safe fetch client for your OpenAPI schema. Only 5 kb (min). Works with React, Vue, Svelte, or vanilla JS.",
+  "version": "0.9.8",
+  "author": {
+    "name": "Drew Powers",
+    "email": "drew@pow.rs"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.cts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    },
+    "./*": "./*"
+  },
+  "homepage": "https://openapi-ts.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openapi-ts/openapi-typescript",
+    "directory": "packages/openapi-fetch"
+  },
+  "bugs": {
+    "url": "https://github.com/openapi-ts/openapi-typescript/issues"
+  },
+  "keywords": [
+    "openapi",
+    "swagger",
+    "rest",
+    "api",
+    "oapi_3",
+    "oapi_3_1",
+    "typescript",
+    "fetch",
+    "react",
+    "vue",
+    "svelte"
+  ],
+  "dependencies": {
+    "openapi-typescript-helpers": "^0.0.8"
+  },
+  "devDependencies": {
+    "axios": "^1.6.8",
+    "del-cli": "^5.1.0",
+    "esbuild": "^0.20.2",
+    "execa": "^8.0.1",
+    "msw": "^2.3.0",
+    "openapi-typescript": "^6.x",
+    "openapi-typescript-codegen": "^0.25.0",
+    "openapi-typescript-fetch": "^2.0.0",
+    "superagent": "^9.0.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  },
+  "scripts": {
+    "build": "pnpm run build:clean && pnpm run build:js && pnpm run build:js-min && pnpm run build:cjs",
+    "build:clean": "del-cli dist",
+    "build:js": "mkdir -p dist && cp src/* dist",
+    "build:js-min": "esbuild --bundle src/index.js --format=esm --minify --outfile=dist/index.min.js && cp dist/index.d.ts dist/index.min.d.ts",
+    "build:cjs": "esbuild --bundle src/index.js --format=cjs --outfile=dist/cjs/index.cjs && cp dist/index.d.ts dist/cjs/index.d.cts",
+    "format": "biome format . --write",
+    "lint": "biome check .",
+    "generate-types": "node ./scripts/generate-types.js",
+    "pretest": "pnpm run generate-types",
+    "test": "pnpm run \"/^test:/\"",
+    "test:js": "vitest run",
+    "test:ts": "tsc --noEmit",
+    "version": "pnpm run prepare && pnpm run build"
+  }
+}

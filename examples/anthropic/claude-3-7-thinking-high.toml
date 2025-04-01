@@ -3,7 +3,7 @@
 [model]
 name = "claude-3-7-sonnet-20250219" 
 provider = "anthropic"
-display_name = "Claude 3.7 (High Thinking)"
+display_name = "Claude 3.7 Sonnet (High Thinking)"
 
 [parameters]
 max_tokens = 32768
