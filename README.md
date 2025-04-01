@@ -40,21 +40,47 @@ The package supports `.env` files for environment variables.
 
 ```python
 import asyncio
-from llmproc import LLMProgram
+from llmproc import LLMProgram, register_tool
+
+# Function-based tool
+@register_tool(description="Calculate the result of a math expression")
+def calculate(expression: str) -> dict:
+    """Calculate a math expression.
+    
+    Args:
+        expression: A mathematical expression like "2 + 2"
+        
+    Returns:
+        Result of the calculation
+    """
+    result = eval(expression, {"__builtins__": {}})
+    return {"expression": expression, "result": result}
 
 async def main():
-    # Load a program from TOML config
-    program = LLMProgram.from_toml('examples/anthropic/claude-3-5-haiku.toml')
+    # Method 1: Load from TOML config
+    program1 = LLMProgram.from_toml('examples/anthropic/claude-3-5-haiku.toml')
+    
+    # Method 2: Fluent Python API with method chaining
+    program2 = (
+        LLMProgram(
+            model_name="claude-3-haiku-20240307",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant with tools."
+        )
+        .add_tool(calculate)
+        .preload_file("context.txt")
+        .compile()
+    )
 
     # Start the LLM process
-    process = await program.start()
+    process = await program2.start()
 
     # Run with user input
-    result = await process.run('What can you tell me about Python?')
+    result = await process.run('What is 125 * 48?')
     print(process.get_last_message())
 
     # Continue the conversation
-    result = await process.run('How does it compare to JavaScript?')
+    result = await process.run('How does that compare to 150 * 42?')
     print(process.get_last_message())
 
 asyncio.run(main())
@@ -82,6 +108,11 @@ LLMProc offers a complete toolkit for building sophisticated LLM applications:
 - **[File Preloading](./examples/features/preload.toml)** - Enhance context by loading files into system prompts
 - **[Environment Info](./examples/features/env-info.toml)** - Add runtime context like working directory and platform
 
+### Developer Experience
+- **[Fluent SDK API](./docs/sdk-developer-experience.md)** - Create programs with intuitive method chaining
+- **[Function-Based Tools](./examples/features/function_tools.py)** - Register Python functions as tools with type conversion
+- **[Type-Safe Tools](./docs/function-based-tools.md)** - Tools use Python type hints for parameter validation
+
 ### Process Management
 - **[Program Linking](./examples/features/program-linking/main.toml)** - Spawn and delegate tasks to specialized LLM processes
 - **[Fork Tool](./examples/features/fork.toml)** - Create process copies with shared conversation state
@@ -93,7 +124,6 @@ LLMProc offers a complete toolkit for building sophisticated LLM applications:
 - **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
 - **Reasoning/Thinking models** - [Claude 3.7 Thinking](./examples/anthropic/claude-3-7-thinking-high.toml) and [OpenAI Reasoning](./examples/openai/o3-mini-high.toml) models
 - **[MCP Protocol](./examples/features/mcp.toml)** - Standardized interface for tool usage
-
 - **Cross-provider support** - Currently supports Anthropic, OpenAI, and Anthropic on Vertex AI
 
 ## Demo Tools
@@ -129,6 +159,8 @@ llmproc-prompt ./config.toml -E              # Without environment info
 
 - [Examples](./examples/README.md): Sample configurations and use cases
 - [API Docs](./docs/api/index.md): Detailed API documentation
+- [SDK Developer Experience](./docs/sdk-developer-experience.md): Fluent API and program creation
+- [Function-Based Tools](./docs/function-based-tools.md): Python function tools with type hints
 - [File Descriptor System](./docs/file-descriptor-system.md): Handling large outputs
 - [Program Linking](./docs/program-linking.md): LLM-to-LLM communication
 - [MCP Feature](./docs/mcp-feature.md): Model Context Protocol for tools
@@ -153,13 +185,15 @@ The library functions as a kernel:
 
 Future development plans:
 
-1. Exec System Call for process replacement
-2. Process State Serialization & Restoration
-3. Retry mechanism with exponential backoff
-4. Enhanced error handling and reporting
-5. Improved stream mode support
-6. File Descriptor System Phase 3 enhancements
-7. Gemini models support
+1. ✅ Python SDK with fluent API (completed in RFC018)
+2. ✅ Function-based tools with type hints (completed in RFC018)
+3. Exec System Call for process replacement
+4. Process State Serialization & Restoration
+5. Retry mechanism with exponential backoff
+6. Enhanced error handling and reporting
+7. Improved stream mode support
+8. File Descriptor System Phase 3 enhancements
+9. Gemini models support
 
 ## License
 
