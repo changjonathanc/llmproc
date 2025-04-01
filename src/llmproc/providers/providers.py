@@ -4,12 +4,7 @@ import os
 from typing import Any
 
 # Import provider constants
-from llmproc.providers.constants import (
-    PROVIDER_OPENAI,
-    PROVIDER_ANTHROPIC,
-    PROVIDER_ANTHROPIC_VERTEX,
-    SUPPORTED_PROVIDERS
-)
+from llmproc.providers.constants import PROVIDER_ANTHROPIC, PROVIDER_ANTHROPIC_VERTEX, PROVIDER_OPENAI, SUPPORTED_PROVIDERS
 
 # Try importing providers, set to None if packages aren't installed
 try:
@@ -53,40 +48,29 @@ def get_provider_client(
     """
     # Normalize provider name
     provider = provider.lower()
-    
+
     if provider == PROVIDER_OPENAI:
         if AsyncOpenAI is None:
-            raise ImportError(
-                "The 'openai' package is required for OpenAI provider. Install it with 'pip install openai'."
-            )
+            raise ImportError("The 'openai' package is required for OpenAI provider. Install it with 'pip install openai'.")
         return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     elif provider == PROVIDER_ANTHROPIC:
         if AsyncAnthropic is None:
-            raise ImportError(
-                "The 'anthropic' package is required for Anthropic provider. Install it with 'pip install anthropic'."
-            )
+            raise ImportError("The 'anthropic' package is required for Anthropic provider. Install it with 'pip install anthropic'.")
         return AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     elif provider == PROVIDER_ANTHROPIC_VERTEX:
         if AsyncAnthropicVertex is None:
-            raise ImportError(
-                "The 'anthropic' package with vertex support is required. Install it with 'pip install \"anthropic[vertex]\"'."
-            )
-            
+            raise ImportError("The 'anthropic' package with vertex support is required. Install it with 'pip install \"anthropic[vertex]\"'.")
+
         # Use provided project_id/region or get from environment variables
         project = project_id or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID")
         reg = region or os.getenv("CLOUD_ML_REGION", "us-central1")
 
         if not project:
-            raise ValueError(
-                "Project ID must be provided either as parameter or via ANTHROPIC_VERTEX_PROJECT_ID environment variable"
-            )
+            raise ValueError("Project ID must be provided either as parameter or via ANTHROPIC_VERTEX_PROJECT_ID environment variable")
 
         return AsyncAnthropicVertex(project_id=project, region=reg)
 
     else:
-        raise NotImplementedError(
-            f"Provider '{provider}' not implemented. "
-            f"Supported providers: {', '.join(SUPPORTED_PROVIDERS)}"
-        )
+        raise NotImplementedError(f"Provider '{provider}' not implemented. Supported providers: {', '.join(SUPPORTED_PROVIDERS)}")

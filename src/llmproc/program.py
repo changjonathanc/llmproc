@@ -8,6 +8,7 @@ from typing import Any, Optional, Union
 
 from pydantic import ValidationError
 
+import llmproc
 from llmproc.config.schema import LLMProgramConfig
 from llmproc.config.utils import resolve_path
 from llmproc.env_info import EnvInfoBuilder
@@ -790,9 +791,6 @@ class LLMProgram:
         if not self.compiled:
             self.compile()
             
-        # Import dynamically to avoid circular imports
-        import llmproc
-
         # Create process and set up linked programs
         process = await llmproc.LLMProcess.create(program=self)
         

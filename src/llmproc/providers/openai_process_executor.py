@@ -45,10 +45,7 @@ class OpenAIProcessExecutor:
 
         # Check if tools are configured but not yet supported
         if process.tools and len(process.tools) > 0:
-            raise ValueError(
-                "Tool usage is not yet supported for OpenAI models in this implementation. "
-                "Please use a model without tools, or use the Anthropic provider for tool support."
-            )
+            raise ValueError("Tool usage is not yet supported for OpenAI models in this implementation. Please use a model without tools, or use the Anthropic provider for tool support.")
 
         # Add user message to conversation history
         process.state.append({"role": "user", "content": user_prompt})
@@ -58,17 +55,13 @@ class OpenAIProcessExecutor:
 
         # First add system message if present
         if process.enriched_system_prompt:
-            formatted_messages.append(
-                {"role": "system", "content": process.enriched_system_prompt}
-            )
+            formatted_messages.append({"role": "system", "content": process.enriched_system_prompt})
 
         # Then add conversation history
         for message in process.state:
             # Add user and assistant messages
             if message["role"] in ["user", "assistant"]:
-                formatted_messages.append(
-                    {"role": message["role"], "content": message["content"]}
-                )
+                formatted_messages.append({"role": message["role"], "content": message["content"]})
 
         # Create a new RunResult if one wasn't provided
         if run_result is None:
@@ -80,10 +73,10 @@ class OpenAIProcessExecutor:
             # Make the API call
             # Check if this is a reasoning model (o1, o1-mini, o3, o3-mini)
             api_params = process.api_params.copy()
-            
+
             # Determine if this is a reasoning model
             is_reasoning_model = process.model_name.startswith(("o1", "o3"))
-            
+
             # Handle reasoning model specific parameters
             if is_reasoning_model:
                 # Reasoning models use max_completion_tokens instead of max_tokens
@@ -93,7 +86,7 @@ class OpenAIProcessExecutor:
                 # Remove reasoning_effort for non-reasoning models
                 if "reasoning_effort" in api_params:
                     del api_params["reasoning_effort"]
-                
+
             response = await process.client.chat.completions.create(
                 model=process.model_name,
                 messages=formatted_messages,

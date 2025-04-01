@@ -1,6 +1,7 @@
 """LLMProcess class for executing LLM programs and handling interactions."""
 
 import asyncio
+import copy
 import logging
 import os
 import warnings
@@ -12,6 +13,7 @@ from dotenv import load_dotenv
 from llmproc.program import LLMProgram
 from llmproc.providers import get_provider_client
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 from llmproc.results import RunResult
 from llmproc.tools import ToolManager, file_descriptor_instructions, mcp
@@ -308,9 +310,6 @@ class LLMProcess:
         Raises:
             ValueError: If user_input is empty
         """
-        # Import the RunResult class
-        from llmproc.results import RunResult
-
         # Create a RunResult object to track this run
         run_result = RunResult()
 
@@ -544,12 +543,8 @@ class LLMProcess:
             dict: Token count information for Anthropic models or None for others
         """
         # Only support Anthropic models for now
-        from llmproc.providers.constants import ANTHROPIC_PROVIDERS
         if self.provider not in ANTHROPIC_PROVIDERS:
             return None
-
-        # Import here to avoid circular imports
-        from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 
         # Create executor and count tokens
         executor = AnthropicProcessExecutor()
@@ -607,8 +602,6 @@ class LLMProcess:
         Returns:
             A new LLMProcess instance that is a deep copy of this one
         """
-        import copy
-
         # Create a new instance of LLMProcess with the same program
         forked_process = LLMProcess(program=self.program)
 

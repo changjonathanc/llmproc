@@ -5,6 +5,7 @@ import asyncio
 import logging
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import click
@@ -216,8 +217,6 @@ def main(program_path, prompt=None, non_interactive=False) -> None:
                     )
 
     except Exception as e:
-        import traceback
-
         click.echo(f"Error: {str(e)}", err=True)
         click.echo("\nFull traceback:", err=True)
         traceback.print_exc()
