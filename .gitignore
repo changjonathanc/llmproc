@@ -49,3 +49,5 @@ Thumbs.db
 local/
 forking-an-agent/
 session_summaries/
+llms-full.txt
+*.diff
