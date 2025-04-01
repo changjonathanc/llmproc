@@ -29,8 +29,9 @@ llmproc-demo ./examples/claude-code/claude-code.toml
 [tools]
 enabled = ["spawn"]
 
-[linked_programs]
-dispatch_agent = {path="./dispatch-agent.toml", description="Specialized agent for searching and exploring codebases efficiently"}
+[linked_programs.dispatch_agent]
+path = "./dispatch-agent.toml"
+description = "Specialized agent for searching and exploring codebases efficiently"
 ```
 
 The dispatch agent is made available through program linking with descriptive metadata, allowing Claude Code to better understand when to use it.
