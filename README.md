@@ -42,45 +42,27 @@ The package supports `.env` files for environment variables.
 import asyncio
 from llmproc import LLMProgram, register_tool
 
-# Function-based tool
-@register_tool(description="Calculate the result of a math expression")
+@register_tool()
 def calculate(expression: str) -> dict:
-    """Calculate a math expression.
-    
-    Args:
-        expression: A mathematical expression like "2 + 2"
-        
-    Returns:
-        Result of the calculation
-    """
-    result = eval(expression, {"__builtins__": {}})
-    return {"expression": expression, "result": result}
+    return {"result": eval(expression, {"__builtins__": {}})}
 
 async def main():
-    # Method 1: Load from TOML config
+    # Load from TOML config
     program1 = LLMProgram.from_toml('examples/anthropic/claude-3-5-haiku.toml')
     
-    # Method 2: Fluent Python API with method chaining
+    # Fluent Python API
     program2 = (
         LLMProgram(
             model_name="claude-3-haiku-20240307",
             provider="anthropic",
-            system_prompt="You are a helpful assistant with tools."
+            system_prompt="You are a helpful assistant."
         )
         .add_tool(calculate)
-        .preload_file("context.txt")
         .compile()
     )
 
-    # Start the LLM process
     process = await program2.start()
-
-    # Run with user input
     result = await process.run('What is 125 * 48?')
-    print(process.get_last_message())
-
-    # Continue the conversation
-    result = await process.run('How does that compare to 150 * 42?')
     print(process.get_last_message())
 
 asyncio.run(main())
