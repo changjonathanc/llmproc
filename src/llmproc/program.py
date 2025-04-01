@@ -455,24 +455,20 @@ class LLMProgram:
         return self
         
     def add_tool(self, tool) -> "LLMProgram":
-        """Add a tool to this program.
+        """Add a function-based tool to this program.
         
-        This method allows adding tools to the program in multiple ways:
+        This method allows adding function-based tools to the program:
         1. Adding a function decorated with @register_tool
         2. Adding a regular function (will be converted to a tool using its name and docstring)
-        3. Adding a tool definition dictionary with name and other properties
         
         Args:
-            tool: Either a function to register as a tool, or a tool definition dictionary
+            tool: A function to register as a tool
             
         Returns:
             self (for method chaining)
             
         Examples:
             ```python
-            # Register a tool using a dictionary
-            program.add_tool({"name": "my_tool", "enabled": True})
-            
             # Register a function as a tool
             @register_tool(description="Searches for weather")
             def get_weather(location: str):
@@ -499,48 +495,28 @@ class LLMProgram:
             ```
         """
         # Add to tool manager (checking for duplicates)
-        if callable(tool):
-            # Get tool name from tool metadata or function name
-            tool_name = getattr(tool, "_tool_name", tool.__name__)
+        if not callable(tool):
+            raise ValueError(f"Invalid tool type: {type(tool)}. Expected a callable function.")
             
-            # Check if this tool is already registered with the tool manager
-            is_duplicate = False
-            for existing_tool in self.tool_manager.function_tools:
-                existing_name = getattr(existing_tool, "_tool_name", existing_tool.__name__)
-                if existing_name == tool_name or existing_tool is tool:
-                    is_duplicate = True
-                    logger.debug(f"Tool {tool_name} already registered, skipping duplicate")
-                    break
-                    
-            if not is_duplicate:
-                self.tool_manager.add_function_tool(tool)
+        # Get tool name from tool metadata or function name
+        tool_name = getattr(tool, "_tool_name", tool.__name__)
+        
+        # Check if this tool is already registered with the tool manager
+        is_duplicate = False
+        for existing_tool in self.tool_manager.function_tools:
+            existing_name = getattr(existing_tool, "_tool_name", existing_tool.__name__)
+            if existing_name == tool_name or existing_tool is tool:
+                is_duplicate = True
+                logger.debug(f"Tool {tool_name} already registered, skipping duplicate")
+                break
                 
-                # Store in _function_tools list for tool processing
-                if not hasattr(self, "_function_tools"):
-                    self._function_tools = []
-                self._function_tools.append(tool)
-                
-        elif isinstance(tool, dict):
-            # For dictionary-based tools
-            if "name" in tool:
-                tool_name = tool["name"]
-                # Check for duplicate in enabled tools
-                if "enabled" in self.tools and tool_name in self.tools["enabled"]:
-                    logger.debug(f"Tool {tool_name} already in enabled tools, skipping duplicate")
-                else:
-                    self.tool_manager.add_dict_tool(tool)
-                    
-                    # Make sure we have an enabled list for tools
-                    if "enabled" not in self.tools:
-                        self.tools["enabled"] = []
-                    if tool["name"] not in self.tools["enabled"]:
-                        self.tools["enabled"].append(tool["name"])
-            else:
-                # No name to check for duplicates, add it
-                self.tool_manager.add_dict_tool(tool)
-        else:
-            # Invalid tool type
-            raise ValueError(f"Invalid tool type: {type(tool)}. Expected callable or dict.")
+        if not is_duplicate:
+            self.tool_manager.add_function_tool(tool)
+            
+            # Store in _function_tools list for tool processing
+            if not hasattr(self, "_function_tools"):
+                self._function_tools = []
+            self._function_tools.append(tool)
         
         return self
         

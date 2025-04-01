@@ -177,36 +177,7 @@ class ToolManager:
         self.function_tools.append(func)
         return self
 
-    def add_dict_tool(self, tool_dict):
-        """Add a dictionary-based tool configuration.
-
-        Args:
-            tool_dict: Dictionary with tool configuration
-
-        Returns:
-            self (for method chaining)
-
-        Raises:
-            ValueError: If tool_dict is not a dictionary or is missing required fields
-        """
-        if not isinstance(tool_dict, dict):
-            raise ValueError(f"Expected a dictionary, got {type(tool_dict)}")
-
-        if "name" in tool_dict:
-            tool_name = tool_dict["name"]
-            if tool_name not in self.enabled_tools:
-                self.enabled_tools.append(tool_name)
-                logger.debug(f"Added tool '{tool_name}' to enabled tools list")
-        else:
-            warnings.warn("Tool dictionary missing 'name' field", UserWarning, stacklevel=2)
-
-        # If the tool has a schema, store it
-        if "schema" in tool_dict:
-            schema = tool_dict["schema"]
-            if "name" in schema:
-                self.tool_schemas[schema["name"]] = schema
-
-        return self
+    # add_dict_tool method has been removed to simplify the API
 
     def get_tool_schemas(self):
         """Get all tool schemas for API calls.

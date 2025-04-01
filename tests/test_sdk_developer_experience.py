@@ -164,6 +164,18 @@ def test_complex_method_chaining():
         system_prompt="You are an inner expert."
     )
     
+    # Function-based test tool
+    def test_tool(query: str) -> str:
+        """A test tool.
+        
+        Args:
+            query: The query to process
+            
+        Returns:
+            Processed result
+        """
+        return f"Processed: {query}"
+    
     # Create the main program with fluent chaining
     main_program = (
         LLMProgram(
@@ -183,7 +195,7 @@ def test_complex_method_chaining():
             "First level expert"
         )
         .add_linked_program("inner_expert", inner_expert, "Special inner expert")
-        .add_tool({"name": "special_tool", "enabled": True})
+        .add_tool(test_tool)
     )
     
     # Validate the complex structure

@@ -43,27 +43,7 @@ def test_add_function_tool():
         manager.add_function_tool("not a function")
 
 
-def test_add_dict_tool():
-    """Test adding dictionary tools to the manager."""
-    manager = ToolManager()
-    
-    # Add a dictionary tool
-    tool_dict = {"name": "test_tool", "enabled": True}
-    result = manager.add_dict_tool(tool_dict)
-    
-    # Check the result is the manager itself (for chaining)
-    assert result is manager
-    
-    # Check the tool name was added to enabled_tools
-    assert "test_tool" in manager.enabled_tools
-    
-    # Test with non-dict
-    with pytest.raises(ValueError):
-        manager.add_dict_tool("not a dict")
-        
-    # Test with dict without name
-    with pytest.warns(UserWarning):
-        manager.add_dict_tool({})
+# test_add_dict_tool test removed as the method has been removed from ToolManager
 
 
 def test_get_tool_schemas():
