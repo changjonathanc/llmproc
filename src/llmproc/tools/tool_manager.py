@@ -177,8 +177,6 @@ class ToolManager:
         self.function_tools.append(func)
         return self
 
-    # add_dict_tool method has been removed to simplify the API
-
     def get_tool_schemas(self):
         """Get all tool schemas for API calls.
 
