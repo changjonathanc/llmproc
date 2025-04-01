@@ -109,7 +109,7 @@ LLMProc offers a complete toolkit for building sophisticated LLM applications:
 - **[Environment Info](./examples/features/env-info.toml)** - Add runtime context like working directory and platform
 
 ### Developer Experience
-- **[Fluent SDK API](./docs/sdk-developer-experience.md)** - Create programs with intuitive method chaining
+- **[Python SDK](./docs/python-sdk.md)** - Create programs with intuitive method chaining
 - **[Function-Based Tools](./docs/function-based-tools.md)** - Register Python functions as tools with type-safety and auto-conversion
 
 ### Process Management
@@ -158,7 +158,7 @@ llmproc-prompt ./config.toml -E              # Without environment info
 
 - [Examples](./examples/README.md): Sample configurations and use cases
 - [API Docs](./docs/api/index.md): Detailed API documentation
-- [SDK Developer Experience](./docs/sdk-developer-experience.md): Fluent API and program creation
+- [Python SDK](./docs/python-sdk.md): Fluent API and program creation
 - [Function-Based Tools](./docs/function-based-tools.md): Python function tools with type hints
 - [File Descriptor System](./docs/file-descriptor-system.md): Handling large outputs
 - [Program Linking](./docs/program-linking.md): LLM-to-LLM communication

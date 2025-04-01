@@ -242,7 +242,7 @@ The proposed API enhancements are guided by the following principles:
 
 ## References
 
-- [SDK Developer Experience Documentation](../docs/sdk-developer-experience.md)
+- [Python SDK Documentation](../docs/python-sdk.md)
 - [Function-Based Tools Documentation](../docs/function-based-tools.md)
 - [Program Linking Documentation](../docs/program-linking.md)
 - [File Descriptor System Documentation](../docs/file-descriptor-system.md)
