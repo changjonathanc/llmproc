@@ -184,15 +184,18 @@ The library functions as a kernel:
 
 Future development plans:
 
-1. ✅ Python SDK with fluent API ([RFC018](./RFC/RFC018_python_sdk.md))
-2. ✅ Function-based tools with type hints ([RFC018](./RFC/RFC018_python_sdk.md))
-3. Exec System Call for process replacement
-4. Process State Serialization & Restoration
-5. Retry mechanism with exponential backoff
-6. Enhanced error handling and reporting
-7. Improved stream mode support
-8. File Descriptor System Phase 3 enhancements
-9. Gemini models support
+1. Exec System Call for process replacement
+2. Process State Serialization & Restoration
+3. Retry mechanism with exponential backoff
+4. Enhanced error handling and reporting
+5. Improved stream mode support
+6. File Descriptor System Phase 3 enhancements
+7. Gemini models support
+
+### Recently Completed
+
+- ✅ Python SDK with fluent API ([RFC018](./RFC/RFC018_python_sdk.md))
+- ✅ Function-based tools with type hints ([RFC018](./RFC/RFC018_python_sdk.md))
 
 ## License
 
