@@ -168,6 +168,6 @@ class ProgramLoader:
                     must_exist=True,
                     error_prefix=f"Linked program file (from '{path}')"
                 )
-                program.linked_programs[name] = cls.from_toml(linked_path, include_linked=True)
+                program.linked_programs[name] = LLMProgram.from_toml(linked_path, include_linked=True)
             except FileNotFoundError as e:
                 raise FileNotFoundError(str(e))
