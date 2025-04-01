@@ -17,6 +17,7 @@ from .file_descriptor import (
     read_fd_tool, read_fd_tool_def
 )
 from .fork import fork_tool, fork_tool_def
+from .function_tools import register_tool, create_tool_from_function
 from .read_file import read_file_tool, read_file_tool_def
 from .spawn import spawn_tool, spawn_tool_def
 from .tool_result import ToolResult
@@ -424,4 +425,6 @@ __all__ = [
     "register_file_descriptor_tools",
     "ToolResult",
     "mcp",
+    "register_tool",
+    "create_tool_from_function",
 ]

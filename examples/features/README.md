@@ -10,6 +10,7 @@ This directory contains examples of LLMProc's core features, each demonstrated i
 - **mcp.toml**: Demonstrates basic Model Context Protocol tool usage
 - **token-efficient-tools.toml**: Shows token-efficient tool use configuration
 - **fork.toml**: Demonstrates the fork system call for process duplication
+- **function_tools.py**: Shows how to register Python functions as LLM tools with the new fluent API
 
 ## Advanced Features
 
@@ -22,4 +23,10 @@ Run any example with the CLI tool:
 
 ```bash
 llmproc-demo ./examples/features/preload.toml
+```
+
+For Python script examples:
+
+```bash
+python ./examples/features/function_tools.py
 ```

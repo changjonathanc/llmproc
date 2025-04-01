@@ -165,6 +165,35 @@ class LLMProgram:
             raise ValueError("provider is required")
         if not self.system_prompt:
             raise ValueError("Either system_prompt or system_prompt_file must be provided")
+        
+        # Process function-based tools if any
+        if hasattr(self, "_function_tools") and self._function_tools:
+            # Import here to avoid circular imports
+            from llmproc.tools.function_tools import create_tool_from_function
+            
+            # Make sure enabled tools list exists
+            if "enabled" not in self.tools:
+                self.tools["enabled"] = []
+                
+            # Process each function tool
+            for func_tool in self._function_tools:
+                # Convert the function to a tool handler and schema
+                handler, schema = create_tool_from_function(func_tool)
+                
+                # Store the tool definition for use during initialization
+                tool_name = schema["name"]
+                
+                # Add the tool name to the enabled list if not already there
+                if tool_name not in self.tools["enabled"]:
+                    self.tools["enabled"].append(tool_name)
+                
+                # Store the handler and schema
+                if not hasattr(self, "_function_tool_handlers"):
+                    self._function_tool_handlers = {}
+                    self._function_tool_schemas = {}
+                
+                self._function_tool_handlers[tool_name] = handler
+                self._function_tool_schemas[tool_name] = schema
             
         # Handle linked programs
         compiled_linked = {}
@@ -223,24 +252,66 @@ class LLMProgram:
     def add_tool(self, tool) -> "LLMProgram":
         """Add a tool to this program.
         
+        This method allows adding tools to the program in multiple ways:
+        1. Adding a function decorated with @register_tool
+        2. Adding a regular function (will be converted to a tool using its name and docstring)
+        3. Adding a tool definition dictionary with name and other properties
+        
         Args:
             tool: Either a function to register as a tool, or a tool definition dictionary
             
         Returns:
             self (for method chaining)
+            
+        Examples:
+            ```python
+            # Register a tool using a dictionary
+            program.add_tool({"name": "my_tool", "enabled": True})
+            
+            # Register a function as a tool
+            @register_tool(description="Searches for weather")
+            def get_weather(location: str):
+                # Implementation...
+                return {"temperature": 22}
+                
+            program.add_tool(get_weather)
+            
+            # Register a regular function (auto-converts to tool)
+            def search_docs(query: str, limit: int = 5) -> list:
+                '''Search documentation for a query.
+                
+                Args:
+                    query: The search query
+                    limit: Maximum results to return
+                    
+                Returns:
+                    List of matching documents
+                '''
+                # Implementation...
+                return [{"title": "Doc1"}]
+                
+            program.add_tool(search_docs)
+            ```
         """
-        # This will be extended in Phase 2 to handle function-based tools
-        if hasattr(self, "_function_tools"):
+        # Handle different types of tools
+        if hasattr(self, "_function_tools") and callable(tool):
+            # Already have _function_tools and got a callable, just append
             self._function_tools.append(tool)
         elif callable(tool):
-            # Initialize _function_tools if not present
+            # Initialize _function_tools with the callable
             self._function_tools = [tool]
+            # Make sure we have an enabled list for tools
+            if "enabled" not in self.tools:
+                self.tools["enabled"] = []
         elif isinstance(tool, dict):
-            # Add to tools configuration
+            # Add dictionary-based tool configuration
             if "enabled" not in self.tools:
                 self.tools["enabled"] = []
             if "name" in tool and tool["name"] not in self.tools["enabled"]:
                 self.tools["enabled"].append(tool["name"])
+        else:
+            # Invalid tool type
+            raise ValueError(f"Invalid tool type: {type(tool)}. Expected callable or dict.")
         
         return self
         

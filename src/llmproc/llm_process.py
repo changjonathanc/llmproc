@@ -461,6 +461,7 @@ class LLMProcess:
     def _initialize_tools(self) -> None:
         """Initialize all system tools.
 
+        This method initializes both system tools and function-based tools.
         MCP tools require async initialization and are handled separately
         via the create() factory method or lazy initialization in run().
         """
@@ -479,6 +480,18 @@ class LLMProcess:
 
         # Register system tools using the ToolRegistry
         register_system_tools(self.tool_registry, self)
+        
+        # Register function-based tools if available
+        if hasattr(self.program, "_function_tool_handlers") and self.program._function_tool_handlers:
+            for tool_name, handler in self.program._function_tool_handlers.items():
+                # Get the corresponding schema
+                schema = self.program._function_tool_schemas.get(tool_name)
+                if schema:
+                    # Register the function-based tool with the registry
+                    self.tool_registry.register_tool(tool_name, handler, schema)
+                    logger.info(f"Registered function-based tool: {tool_name}")
+                else:
+                    logger.warning(f"Missing schema for function-based tool: {tool_name}")
 
     @property
     def tools(self) -> list:
