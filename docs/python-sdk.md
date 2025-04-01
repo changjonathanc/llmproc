@@ -16,8 +16,8 @@ program = (
         system_prompt="You are a helpful assistant."
     )
     .add_tool(my_tool_function)
-    .preload_file("context.txt")
-    .link_program("expert", expert_program, "An expert program")
+    .add_preload_file("context.txt")
+    .add_linked_program("expert", expert_program, "An expert program")
 )
 
 # Start the process
@@ -47,8 +47,8 @@ All configuration methods return `self` to allow for method chaining:
 # Configure a program with method chaining
 program = (
     LLMProgram(...)
-    .preload_file("file1.md")
-    .preload_file("file2.md")
+    .add_preload_file("file1.md")
+    .add_preload_file("file2.md")
     .add_tool(tool_function)
 )
 ```
@@ -78,8 +78,8 @@ main_program = (
         provider="anthropic",
         system_prompt="You are a helpful assistant."
     )
-    .link_program("math", math_program, "Expert in mathematics")
-    .link_program("code", code_program, "Expert in coding")
+    .add_linked_program("math", math_program, "Expert in mathematics")
+    .add_linked_program("code", code_program, "Expert in coding")
 )
 ```
 

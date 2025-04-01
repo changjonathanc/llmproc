@@ -222,7 +222,7 @@ class LLMProgram:
         self.compiled = True
         return self
         
-    def link_program(self, name: str, program: "LLMProgram", description: str = "") -> "LLMProgram":
+    def add_linked_program(self, name: str, program: "LLMProgram", description: str = "") -> "LLMProgram":
         """Link another program to this one.
         
         Args:
@@ -237,7 +237,22 @@ class LLMProgram:
         self.linked_program_descriptions[name] = description
         return self
         
-    def preload_file(self, file_path: str) -> "LLMProgram":
+    def link_program(self, name: str, program: "LLMProgram", description: str = "") -> "LLMProgram":
+        """Legacy method for linking another program.
+        
+        Will be removed in a future version. Use add_linked_program() instead.
+        
+        Args:
+            name: Name to identify the linked program
+            program: LLMProgram instance to link
+            description: Optional description of the program's purpose
+            
+        Returns:
+            self (for method chaining)
+        """
+        return self.add_linked_program(name, program, description)
+        
+    def add_preload_file(self, file_path: str) -> "LLMProgram":
         """Add a file to preload into the system prompt.
         
         Args:
@@ -248,6 +263,19 @@ class LLMProgram:
         """
         self.preload_files.append(file_path)
         return self
+        
+    def preload_file(self, file_path: str) -> "LLMProgram":
+        """Legacy method for adding a file to preload.
+        
+        Will be removed in a future version. Use add_preload_file() instead.
+        
+        Args:
+            file_path: Path to the file to preload
+            
+        Returns:
+            self (for method chaining)
+        """
+        return self.add_preload_file(file_path)
         
     def add_tool(self, tool) -> "LLMProgram":
         """Add a tool to this program.

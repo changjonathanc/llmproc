@@ -43,7 +43,7 @@ def test_program_linking():
     )
     
     # Link them using the fluent interface
-    main_program.link_program(
+    main_program.add_linked_program(
         "expert", 
         expert_program, 
         "Expert for specialized tasks"
@@ -64,9 +64,9 @@ def test_fluent_methods_chaining():
             provider="anthropic",
             system_prompt="You are a helpful assistant."
         )
-        .preload_file("example1.md")
-        .preload_file("example2.md")
-        .link_program(
+        .add_preload_file("example1.md")
+        .add_preload_file("example2.md")
+        .add_linked_program(
             "expert",
             LLMProgram(
                 model_name="claude-3-5-haiku",
@@ -224,18 +224,18 @@ def test_complex_method_chaining():
             provider="openai",
             system_prompt="You are a coordinator."
         )
-        .preload_file("context1.md")
-        .preload_file("context2.md")
-        .link_program(
+        .add_preload_file("context1.md")
+        .add_preload_file("context2.md")
+        .add_linked_program(
             "expert1", 
             LLMProgram(
                 model_name="claude-3-5-haiku",
                 provider="anthropic",
                 system_prompt="Expert 1"
-            ).preload_file("expert1_context.md"),
+            ).add_preload_file("expert1_context.md"),
             "First level expert"
         )
-        .link_program("inner_expert", inner_expert, "Special inner expert")
+        .add_linked_program("inner_expert", inner_expert, "Special inner expert")
         .add_tool({"name": "special_tool", "enabled": True})
     )
     

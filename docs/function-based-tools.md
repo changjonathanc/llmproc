@@ -135,8 +135,8 @@ program = (
     .add_tool(get_calculator)
     .add_tool(get_weather)
     .add_tool(fetch_data)
-    .preload_file("context.txt")
-    .link_program("expert", expert_program, "A specialized expert program")
+    .add_preload_file("context.txt")
+    .add_linked_program("expert", expert_program, "A specialized expert program")
     .compile()
 )
 ```
