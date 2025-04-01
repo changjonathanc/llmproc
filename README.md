@@ -47,11 +47,8 @@ def calculate(expression: str) -> dict:
     return {"result": eval(expression, {"__builtins__": {}})}
 
 async def main():
-    # Load from TOML config
-    program1 = LLMProgram.from_toml('examples/anthropic/claude-3-5-haiku.toml')
-    
-    # Fluent Python API
-    program2 = (
+    # Create a program with the fluent API
+    program = (
         LLMProgram(
             model_name="claude-3-haiku-20240307",
             provider="anthropic",
@@ -61,7 +58,8 @@ async def main():
         .compile()
     )
 
-    process = await program2.start()
+    # Start and use the process
+    process = await program.start()
     result = await process.run('What is 125 * 48?')
     print(process.get_last_message())
 
