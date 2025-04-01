@@ -421,6 +421,50 @@ class LLMProgram:
         self.parameters["extra_headers"]["anthropic-beta"] = "token-efficient-tools-2025-02-19"
         return self
         
+    def set_enabled_tools(self, tool_names: list[str]) -> "LLMProgram":
+        """Set the list of enabled built-in tools.
+        
+        This method allows you to enable specific built-in tools by name.
+        It replaces any previously enabled tools.
+        
+        Args:
+            tool_names: List of tool names to enable
+            
+        Returns:
+            self (for method chaining)
+            
+        Examples:
+            ```python
+            # Enable calculator and read_file tools
+            program.set_enabled_tools(["calculator", "read_file"])
+            
+            # Later, replace with different tools
+            program.set_enabled_tools(["calculator", "spawn"])
+            ```
+            
+        Available built-in tools:
+        - calculator: Simple mathematical calculations
+        - read_file: Read local files
+        - fork: Create a new conversation state copy
+        - spawn: Call linked programs
+        - read_fd: Read from file descriptors (if FD system enabled)
+        - fd_to_file: Write file descriptor content to file (if FD system enabled)
+        """
+        # Delegate to tool manager's set_enabled_tools
+        self.tool_manager.set_enabled_tools(tool_names)
+        
+        # Ensure the tools dictionary is updated
+        if "enabled" not in self.tools:
+            self.tools["enabled"] = []
+            
+        # Clear existing enabled tools and add the new ones
+        self.tools["enabled"] = list(tool_names)
+        
+        # Make sure tools are synchronized
+        self._synchronize_enabled_tools()
+        
+        return self
+        
     def configure_mcp(self, config_path: str, tools: dict[str, list[str] | str] = None) -> "LLMProgram":
         """Configure Model Context Protocol (MCP) tools.
         

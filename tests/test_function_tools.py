@@ -269,6 +269,38 @@ def test_add_tool_method():
     assert "weather_info" in program.tools["enabled"]
     assert "get_calculator" in program.tools["enabled"]
     assert "search_documents" in program.tools["enabled"]
+    
+    
+def test_set_enabled_tools_with_function_tools():
+    """Test interaction between set_enabled_tools and function tools."""
+    # Create a program with function tools
+    program = LLMProgram(
+        model_name="claude-3-7-sonnet",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant."
+    )
+    
+    # Add function tools
+    program.add_tool(get_weather)
+    program.add_tool(get_calculator)
+    
+    # Should have function tools enabled
+    program.compile()
+    assert "weather_info" in program.tools["enabled"]
+    assert "get_calculator" in program.tools["enabled"]
+    
+    # Set built-in tools - should replace function tools
+    program.set_enabled_tools(["calculator", "read_file"])
+    
+    # Check that built-in tools replaced function tools
+    assert "calculator" in program.tools["enabled"]
+    assert "read_file" in program.tools["enabled"]
+    assert "weather_info" not in program.tools["enabled"]
+    assert "get_calculator" not in program.tools["enabled"]
+    
+    # Function tools should still be registered but not enabled
+    assert "weather_info" in program.tool_manager.tool_schemas
+    assert "get_calculator" in program.tool_manager.tool_schemas
 
 
 @pytest.mark.asyncio

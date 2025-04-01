@@ -217,6 +217,37 @@ def test_complex_method_chaining():
     assert "expert1_context.md" in main_program.linked_programs["expert1"].preload_files
 
 
+def test_set_enabled_tools():
+    """Test setting enabled built-in tools."""
+    # Create a program
+    program = LLMProgram(
+        model_name="claude-3-7-sonnet",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant."
+    )
+    
+    # Set enabled tools
+    result = program.set_enabled_tools(["calculator", "read_file"])
+    
+    # Check that the method returns self for chaining
+    assert result is program
+    
+    # Check that tools were enabled
+    assert "calculator" in program.tools["enabled"]
+    assert "read_file" in program.tools["enabled"]
+    assert "calculator" in program.tool_manager.enabled_tools
+    assert "read_file" in program.tool_manager.enabled_tools
+    
+    # Try replacing with different tools
+    program.set_enabled_tools(["calculator", "fork"])
+    
+    # Check that tools list was replaced (not appended to)
+    assert len(program.tools["enabled"]) == 2
+    assert "calculator" in program.tools["enabled"]
+    assert "fork" in program.tools["enabled"]
+    assert "read_file" not in program.tools["enabled"]
+
+
 def test_error_handling_in_fluent_api():
     """Test error handling in the fluent API."""
     # Test missing system prompt
