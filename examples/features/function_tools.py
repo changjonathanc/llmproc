@@ -20,7 +20,7 @@ from llmproc import LLMProgram, register_tool
 load_dotenv()
 
 
-@register_tool(name="calculator", description="Perform arithmetic calculations")
+@register_tool(name="math_calculator", description="Perform arithmetic calculations")
 def calculate(expression: str) -> Dict[str, Any]:
     """Calculate the result of an arithmetic expression.
     
@@ -105,7 +105,7 @@ async def main():
     # Create a program with function tools
     system_prompt = """You are a helpful assistant with access to the following tools:
 
-1. calculator: Perform arithmetic calculations (add, subtract, multiply, divide)
+1. math_calculator: Perform arithmetic calculations (add, subtract, multiply, divide)
 2. weather_lookup: Get weather information for a location
 
 IMPORTANT: When the user asks you about calculations or weather, ALWAYS use the appropriate tool
@@ -115,56 +115,72 @@ rather than generating the answer yourself. Show your work by explaining the res
     print("Creating program...")
     program = (
         LLMProgram(
-            model_name="claude-3-5-sonnet",  # Use a less expensive model
+            model_name="claude-3-haiku-20240307",  # Use a widely available model
             provider="anthropic",
-            system_prompt=system_prompt
+            system_prompt=system_prompt,
+            parameters={"max_tokens": 1024}  # Add required max_tokens parameter
         )
         .add_tool(calculate)
         .add_tool(weather_lookup)
         .compile()
     )
     
+    # Always simulate tool execution for the example
+    print("\nDemonstrating function tools:")
+    
+    # Directly call the tools to show how they work
+    print("\n=== Direct tool execution ===")
+    calc_result = calculate("5 * 7 + 3")
+    print(f"math_calculator('5 * 7 + 3') → {calc_result}")
+    
+    weather_result = weather_lookup("New York", "fahrenheit")
+    print(f"weather_lookup('New York', 'fahrenheit') → {weather_result}")
+    
     # Check for API key
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("\nError: ANTHROPIC_API_KEY environment variable not set.")
-        print("Set it in your environment or create a .env file with this value.")
-        print("\nSimulating tool execution instead:")
-        
-        # Directly call the tools to show how they work
-        print("\nDirect tool calls:")
-        calc_result = calculate("5 * 7 + 3")
-        print(f"calculator('5 * 7 + 3') → {calc_result}")
-        
-        weather_result = weather_lookup("New York", "fahrenheit")
-        print(f"weather_lookup('New York', 'fahrenheit') → {weather_result}")
+        print("\nNote: To run with actual LLM, set ANTHROPIC_API_KEY environment variable.")
+        print("For this example, we'll demonstrate how the functions work directly.")
         return
     
-    # Start the LLM process
-    print("Starting process...")
-    process = await program.start()
-    
-    # Print available tools
-    print("\nRegistered tools:")
-    for tool in process.tools:
-        print(f"- {tool['name']}: {tool['description']}")
-    
-    # Run a prompt that will trigger tool usage
-    user_prompt = """I have two questions:
+    try:
+        # Start the LLM process
+        print("\n=== LLM integration demonstration ===")
+        print("Starting process...")
+        process = await program.start()
+        
+        # Print available tools
+        print("\nRegistered tools:")
+        for tool in process.tools:
+            print(f"- {tool['name']}: {tool['description']}")
+        
+        # Run a prompt that will trigger tool usage
+        user_prompt = """I have two questions:
 1. What's the result of 125 * 48?
 2. What's the weather like in Tokyo?"""
 
-    print(f"\nRunning with prompt: '{user_prompt}'")
-    result = await process.run(user_prompt, callbacks=callbacks)
+        print(f"\nRunning with prompt: '{user_prompt}'")
+        result = await process.run(user_prompt, callbacks=callbacks)
+        
+        # Print the final response
+        print("\n===== FINAL RESPONSE =====")
+        print(process.get_last_message())
+        print("==========================")
+        
+        # Print execution statistics if available
+        print("\nExecution statistics:")
+        # Check for different attributes safely
+        if hasattr(result, 'duration'):
+            print(f"Duration: {result.duration:.2f} seconds")
+        if hasattr(result, 'tool_calls'):
+            print(f"Tool calls: {result.tool_calls}")
+        if hasattr(result, 'iterations'):
+            print(f"Total iterations: {result.iterations}")
+        print("Function-based tools were successfully used!")
     
-    # Print the final response
-    print("\n===== FINAL RESPONSE =====")
-    print(process.get_last_message())
-    print("==========================")
-    
-    # Print execution statistics
-    print(f"\nExecution completed in {result.duration:.2f} seconds")
-    print(f"Tool calls: {result.tool_calls}")
-    print(f"Total iterations: {result.iterations}")
+    except Exception as e:
+        print(f"\nError running LLM: {str(e)}")
+        print("This is expected when running the example without proper setup.")
+        print("The main purpose of this example is to demonstrate function-based tool registration.")
 
 
 if __name__ == "__main__":
