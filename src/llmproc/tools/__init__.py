@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
 
 from . import mcp
-from .calculator import calculator_tool, calculator_tool_def, calculator
+from .calculator import calculator
 from .file_descriptor import (
     fd_to_file_tool, fd_to_file_tool_def,
     file_descriptor_instructions, file_descriptor_base_instructions,
@@ -18,7 +18,7 @@ from .file_descriptor import (
 )
 from .fork import fork_tool, fork_tool_def
 from .function_tools import register_tool, create_tool_from_function
-from .read_file import read_file_tool, read_file_tool_def, read_file
+from .read_file import read_file
 from .spawn import spawn_tool, spawn_tool_def
 from .tool_result import ToolResult
 
@@ -155,10 +155,10 @@ class ToolRegistry:
 _SYSTEM_TOOLS = {
     "spawn": (spawn_tool, spawn_tool_def),
     "fork": (fork_tool, fork_tool_def),
-    "calculator": (calculator_tool, calculator_tool_def),
+    # Calculator and read_file now use function-based implementations
+    # defined with @register_tool - function and schema are created at runtime
     "read_fd": (read_fd_tool, read_fd_tool_def),
     "fd_to_file": (fd_to_file_tool, fd_to_file_tool_def),
-    "read_file": (read_file_tool, read_file_tool_def),
 }
 
 
@@ -310,19 +310,13 @@ def register_calculator_tool(registry: ToolRegistry) -> None:
     Args:
         registry: The ToolRegistry to register the tool with
     """
-    # Get tool definition
-    api_tool_def = calculator_tool_def.copy()
-
-    # Create a handler function
-    async def calculator_handler(args):
-        expression = args.get("expression", "")
-        precision = args.get("precision", 6)
-        return await calculator_tool(expression, precision)
-
+    # Create handler and schema from function using create_tool_from_function
+    handler, schema = create_tool_from_function(calculator)
+    
     # Register with the registry
-    registry.register_tool("calculator", calculator_handler, api_tool_def)
+    registry.register_tool("calculator", handler, schema)
 
-    logger.info("Registered calculator tool")
+    logger.info("Registered calculator tool (function-based)")
 
 
 def register_file_descriptor_tools(registry: ToolRegistry, process) -> None:
@@ -384,18 +378,13 @@ def register_read_file_tool(registry: ToolRegistry) -> None:
     Args:
         registry: The ToolRegistry to register the tool with
     """
-    # Get tool definition
-    api_tool_def = read_file_tool_def.copy()
-
-    # Create a handler function
-    async def read_file_handler(args):
-        file_path = args.get("file_path", "")
-        return await read_file_tool(file_path)
-
+    # Create handler and schema from function using create_tool_from_function
+    handler, schema = create_tool_from_function(read_file)
+    
     # Register with the registry
-    registry.register_tool("read_file", read_file_handler, api_tool_def)
+    registry.register_tool("read_file", handler, schema)
 
-    logger.info("Registered read_file tool")
+    logger.info("Registered read_file tool (function-based)")
 
 
 __all__ = [
@@ -403,16 +392,12 @@ __all__ = [
     "spawn_tool_def",
     "fork_tool",
     "fork_tool_def",
-    "calculator_tool",
-    "calculator_tool_def",
-    "calculator",  # New function-based tool
+    "calculator",
     "read_fd_tool",
     "read_fd_tool_def",
     "fd_to_file_tool",
     "fd_to_file_tool_def",
-    "read_file_tool",
-    "read_file_tool_def",
-    "read_file",  # New function-based tool
+    "read_file",
     "file_descriptor_instructions",
     "get_tool",
     "list_available_tools",

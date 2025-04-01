@@ -5,7 +5,8 @@ import pytest
 import tempfile
 from unittest.mock import patch
 
-from llmproc.tools.read_file import read_file_tool
+from llmproc.tools.read_file import read_file
+from llmproc.tools.tool_result import ToolResult
 
 
 @pytest.mark.asyncio
@@ -18,11 +19,14 @@ async def test_read_file_success():
     
     try:
         # Call the tool
-        result = await read_file_tool(tmp_path)
+        result = await read_file(tmp_path)
         
         # Check result
-        assert result.content == "Test content"
-        assert not result.is_error
+        if isinstance(result, ToolResult):
+            assert result.content == "Test content"
+            assert not result.is_error
+        else:
+            assert result == "Test content"
     finally:
         # Clean up
         os.unlink(tmp_path)
@@ -32,9 +36,10 @@ async def test_read_file_success():
 async def test_read_file_nonexistent():
     """Test reading a nonexistent file."""
     # Call the tool with a non-existent path
-    result = await read_file_tool("/nonexistent/file.txt")
+    result = await read_file("/nonexistent/file.txt")
     
     # Check error response
+    assert isinstance(result, ToolResult)
     assert result.is_error
     assert "not found" in result.content
 
@@ -45,9 +50,10 @@ async def test_read_file_error_handling():
     # Create a mock path that raises an exception when read
     with patch('pathlib.Path.read_text', side_effect=PermissionError("Permission denied")):
         # Call the tool
-        result = await read_file_tool("/some/path.txt")
+        result = await read_file("/some/path.txt")
         
         # Check error response
+        assert isinstance(result, ToolResult)
         assert result.is_error
         assert "File not found" in result.content or "Permission denied" in result.content
 
@@ -62,10 +68,13 @@ async def test_read_file_absolute_path():
     
     try:
         # Call the tool with absolute path
-        result = await read_file_tool(tmp_path)
+        result = await read_file(tmp_path)
         
         # Check result
-        assert result.content == "Absolute path test"
+        if isinstance(result, ToolResult):
+            assert result.content == "Absolute path test"
+        else:
+            assert result == "Absolute path test"
     finally:
         # Clean up
         os.unlink(tmp_path)
@@ -85,10 +94,13 @@ async def test_read_file_relative_path():
             f.write("Relative path test")
         
         # Call the tool with relative path
-        result = await read_file_tool(rel_path)
+        result = await read_file(rel_path)
         
         # Check result
-        assert result.content == "Relative path test"
+        if isinstance(result, ToolResult):
+            assert result.content == "Relative path test"
+        else:
+            assert result == "Relative path test"
     finally:
         # Clean up
         if os.path.exists(abs_path):
