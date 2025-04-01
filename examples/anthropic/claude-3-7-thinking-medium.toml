@@ -7,7 +7,7 @@ provider = "anthropic"
 display_name = "Claude 3.7 Sonnet (Medium Thinking)"
 
 [parameters]
-max_tokens = 16384  # Balanced token limit for thinking and outputs
+max_tokens = 16384  # Set to a consistent value that works well without streaming
 
 [parameters.thinking]
 type = "enabled"

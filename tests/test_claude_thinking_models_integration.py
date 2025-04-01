@@ -16,8 +16,8 @@ from llmproc import LLMProcess, LLMProgram
 async def load_thinking_model(config_path: str) -> LLMProcess:
     """Load a thinking model from a TOML configuration file."""
     program = LLMProgram.from_toml(config_path)
-    # For API tests, disable automatic caching to avoid cache_control issues
-    program.parameters["disable_automatic_caching"] = True
+    # We need to set this at the program level, not in parameters
+    program.disable_automatic_caching = True
     return await program.start()
 
 
@@ -33,8 +33,8 @@ def test_thinking_models_configuration():
     assert high_program.provider == "anthropic"
     assert "thinking" in high_program.parameters
     assert high_program.parameters["thinking"]["type"] == "enabled"
-    assert high_program.parameters["thinking"]["budget_tokens"] == 16000
-    assert high_program.parameters["max_tokens"] == 32768
+    assert high_program.parameters["thinking"]["budget_tokens"] == 8000  # Updated from 16000
+    assert high_program.parameters["max_tokens"] == 16384  # Updated from 32768
     
     # Verify medium thinking configuration
     assert medium_program.model_name == "claude-3-7-sonnet-20250219"
@@ -86,7 +86,7 @@ def test_thinking_models_parameter_validation():
     low_budget = validate_thinking_parameters(low_program)
     
     # Verify the specific budget values
-    assert high_budget == 16000
+    assert high_budget == 8000  # Updated from 16000
     assert medium_budget == 4000
     assert low_budget == 1024
     
