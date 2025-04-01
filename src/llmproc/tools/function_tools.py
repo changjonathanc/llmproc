@@ -8,6 +8,7 @@ converting Python types to JSON schema, and adapting functions to the tool inter
 import asyncio
 import functools
 import inspect
+import logging
 import re
 from typing import (
     Any, Callable, Dict, List, Optional, Tuple, Union, get_args, 
@@ -15,6 +16,9 @@ from typing import (
 )
 
 from llmproc.tools.tool_result import ToolResult
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 def register_tool(name: str = None, description: str = None, param_descriptions: Dict[str, str] = None):
@@ -289,6 +293,46 @@ def prepare_tool_handler(func: Callable) -> Callable:
     
     return handler
 
+
+def create_process_aware_handler(func: Callable, process: Any) -> Callable:
+    """Create a process-aware tool handler that extracts args from a dictionary.
+    
+    This helps standardize the creation of system tool handlers that require
+    an LLMProcess instance.
+    
+    Args:
+        func: The tool function to wrap
+        process: The LLMProcess instance to pass to the function
+        
+    Returns:
+        Async function that extracts args and calls the tool with the process
+    """
+    # Get the function signature
+    sig = inspect.signature(func)
+    
+    # Create a handler that will extract args and call the function
+    async def handler(args: Dict[str, Any]) -> Any:
+        # Gather kwargs from args dict based on parameter names
+        kwargs = {}
+        for param_name in sig.parameters:
+            # Skip the llm_process parameter - we'll add it separately
+            if param_name == 'llm_process':
+                continue
+                
+            # Add parameter if provided
+            if param_name in args:
+                kwargs[param_name] = args[param_name]
+        
+        # Add the process parameter 
+        kwargs["llm_process"] = process
+        
+        # Call the function (works for both sync and async)
+        if asyncio.iscoroutinefunction(func):
+            return await func(**kwargs)
+        else:
+            return func(**kwargs)
+            
+    return handler
 
 def create_tool_from_function(func: Callable) -> Tuple[Callable, Dict[str, Any]]:
     """Create a complete tool (handler and schema) from a function.
