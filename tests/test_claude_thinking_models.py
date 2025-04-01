@@ -80,9 +80,9 @@ def test_thinking_model_configs():
     assert high_program.provider == "anthropic"
     assert "thinking" in high_program.parameters
     assert high_program.parameters["thinking"]["type"] == "enabled"
-    assert high_program.parameters["thinking"]["budget_tokens"] == 16000
+    assert high_program.parameters["thinking"]["budget_tokens"] == 8000
     assert "max_tokens" in high_program.parameters
-    assert high_program.parameters["max_tokens"] == 32768
+    assert high_program.parameters["max_tokens"] == 16384
     
     # Verify medium thinking configuration
     assert medium_program.model_name == "claude-3-7-sonnet-20250219"

@@ -1,6 +1,7 @@
 """Integration tests for file descriptor system features."""
 
 import pytest
+from tests.conftest import create_mock_llm_program
 import re
 from unittest.mock import Mock, patch, MagicMock, call
 
@@ -35,8 +36,7 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     #        -> child2
     
     # Set up parent program with fd, references, spawn and fork enabled
-    parent_program = Mock(spec=LLMProgram)
-    parent_program.model_name = "model"
+    parent_program = create_mock_llm_program()
     parent_program.provider = "anthropic"
     parent_program.tools = {"enabled": ["read_fd", "spawn", "fork"]}
     parent_program.system_prompt = "parent system"
@@ -46,8 +46,7 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     parent_program.get_enriched_system_prompt = Mock(return_value="enriched parent")
     
     # Child programs for spawning
-    child_program = Mock(spec=LLMProgram)
-    child_program.model_name = "model"
+    child_program = create_mock_llm_program()
     child_program.provider = "anthropic"
     child_program.tools = {"enabled": ["read_fd", "spawn", "fork"]}
     child_program.system_prompt = "child system"
@@ -56,8 +55,7 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     child_program.api_params = {}
     child_program.get_enriched_system_prompt = Mock(return_value="enriched child")
     
-    grandchild_program = Mock(spec=LLMProgram)
-    grandchild_program.model_name = "model"
+    grandchild_program = create_mock_llm_program()
     grandchild_program.provider = "anthropic"
     grandchild_program.tools = {"enabled": ["read_fd"]}
     grandchild_program.system_prompt = "grandchild system"
@@ -324,8 +322,7 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     # level1 -> level2 -> level3 -> level4
     
     # Set up programs for each level
-    level1_program = Mock(spec=LLMProgram)
-    level1_program.model_name = "model"
+    level1_program = create_mock_llm_program()
     level1_program.provider = "anthropic"
     level1_program.tools = {"enabled": ["read_fd", "spawn"]}
     level1_program.system_prompt = "level1 system"
@@ -334,8 +331,7 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     level1_program.api_params = {}
     level1_program.get_enriched_system_prompt = Mock(return_value="enriched level1")
     
-    level2_program = Mock(spec=LLMProgram)
-    level2_program.model_name = "model"
+    level2_program = create_mock_llm_program()
     level2_program.provider = "anthropic"
     level2_program.tools = {"enabled": ["read_fd", "spawn"]}
     level2_program.system_prompt = "level2 system"
@@ -344,8 +340,7 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     level2_program.api_params = {}
     level2_program.get_enriched_system_prompt = Mock(return_value="enriched level2")
     
-    level3_program = Mock(spec=LLMProgram)
-    level3_program.model_name = "model"
+    level3_program = create_mock_llm_program()
     level3_program.provider = "anthropic"
     level3_program.tools = {"enabled": ["read_fd", "spawn"]}
     level3_program.system_prompt = "level3 system"
@@ -354,8 +349,7 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     level3_program.api_params = {}
     level3_program.get_enriched_system_prompt = Mock(return_value="enriched level3")
     
-    level4_program = Mock(spec=LLMProgram)
-    level4_program.model_name = "model"
+    level4_program = create_mock_llm_program()
     level4_program.provider = "anthropic"
     level4_program.tools = {"enabled": ["read_fd"]}
     level4_program.system_prompt = "level4 system"
@@ -561,8 +555,7 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
     })
     
     # Create a program with file descriptor and spawn support
-    parent_program = Mock(spec=LLMProgram)
-    parent_program.model_name = "model"
+    parent_program = create_mock_llm_program()
     parent_program.provider = "anthropic"
     parent_program.tools = {"enabled": ["read_fd", "spawn"]}
     parent_program.system_prompt = "parent system"
@@ -572,8 +565,7 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
     parent_program.get_enriched_system_prompt = Mock(return_value="enriched parent")
     
     # Child program for spawning
-    child_program = Mock(spec=LLMProgram)
-    child_program.model_name = "model"
+    child_program = create_mock_llm_program()
     child_program.provider = "anthropic"
     child_program.tools = {"enabled": ["read_fd"]}
     child_program.system_prompt = "child system"

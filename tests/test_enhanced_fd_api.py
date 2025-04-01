@@ -432,15 +432,8 @@ async def test_fd_integration_end_to_end():
         mock_get_provider.return_value = mock_client
         
         # Create a program with file descriptor support
-        program = Mock(spec=LLMProgram)
-        program.model_name = "model"
-        program.provider = "anthropic"
-        program.tools = {"enabled": ["read_fd"]}
-        program.system_prompt = "system"
-        program.display_name = "display"
-        program.base_dir = None
-        program.api_params = {}
-        program.get_enriched_system_prompt = Mock(return_value="enriched")
+        from tests.conftest import create_mock_llm_program
+        program = create_mock_llm_program(enabled_tools=["read_fd"])
         
         # Create a process
         process = LLMProcess(program=program)

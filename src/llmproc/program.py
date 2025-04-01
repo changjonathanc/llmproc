@@ -113,17 +113,30 @@ class LLMProgram:
         self.disable_automatic_caching = disable_automatic_caching
         self.mcp_tools = mcp_tools or {}
         
+        # Initialize the tool manager
+        from llmproc.tools import ToolManager
+        self.tool_manager = ToolManager()
+        
         # Handle tools which can be a dict or a list of function-based tools
         self.tools = {}
         if tools:
             if isinstance(tools, dict):
                 self.tools = tools
+                
+                # Add to tool manager if there are enabled tools
+                if "enabled" in tools and isinstance(tools["enabled"], list):
+                    # Set enabled tools in the tool manager
+                    self.tool_manager.set_enabled_tools(tools["enabled"])
+                        
             elif isinstance(tools, list):
-                # Will handle function-based tools in a future implementation
-                # For now, just store them as a list
+                # For backward compatibility, store as _function_tools
                 self._function_tools = tools
                 # Enable tools section with empty enabled list to be populated later
                 self.tools = {"enabled": []}
+                
+                # Add to tool manager
+                for func_tool in tools:
+                    self.tool_manager.add_function_tool(func_tool)
         
         self.linked_programs = linked_programs or {}
         self.linked_program_descriptions = linked_program_descriptions or {}
@@ -162,9 +175,24 @@ class LLMProgram:
             if not self.system_prompt: missing.append("system_prompt or system_prompt_file")
             raise ValueError(f"Missing required fields: {', '.join(missing)}")
         
-        # Process function-based tools if any
+        # Process function-based tools using the tool manager
         self._process_function_tools()
+        
+        # Synchronize enabled tools between self.tools["enabled"] and tool_manager.enabled_tools
+        # First ensure tools["enabled"] exists
+        if "enabled" not in self.tools:
+            self.tools["enabled"] = []
             
+        # Add any tools from tool_manager.enabled_tools that aren't in self.tools["enabled"]
+        for tool_name in self.tool_manager.enabled_tools:
+            if tool_name not in self.tools["enabled"]:
+                self.tools["enabled"].append(tool_name)
+                
+        # Update the tool_manager's enabled_tools with any in self.tools["enabled"]
+        for tool_name in self.tools["enabled"]:
+            if tool_name not in self.tool_manager.enabled_tools:
+                self.tool_manager.enabled_tools.append(tool_name)
+                
         # Handle linked programs recursively
         self._compile_linked_programs()
         
@@ -177,33 +205,36 @@ class LLMProgram:
         if not hasattr(self, "_function_tools") or not self._function_tools:
             return
             
-        # Import here to avoid circular imports
-        from llmproc.tools.function_tools import create_tool_from_function
+        # Process using the tool manager
+        self.tool_manager.process_function_tools()
         
-        # Make sure enabled tools list exists
+        # Ensure enabled tools list exists
         if "enabled" not in self.tools:
             self.tools["enabled"] = []
             
-        # Initialize storage for handlers and schemas if needed
+        # Initialize storage for handlers and schemas if needed (for backward compatibility)
         if not hasattr(self, "_function_tool_handlers"):
             self._function_tool_handlers = {}
             self._function_tool_schemas = {}
-            
-        # Process each function tool
-        for func_tool in self._function_tools:
-            # Convert the function to a tool handler and schema
-            handler, schema = create_tool_from_function(func_tool)
-            
-            # Store the tool definition for use during initialization
-            tool_name = schema["name"]
-            
-            # Add the tool name to the enabled list if not already there
+        
+        # Synchronize enabled tools between self.tools["enabled"] and tool_manager.enabled_tools
+        # This ensures both systems have the same state
+        # Add any tools from tool_manager that aren't in self.tools["enabled"]
+        for tool_name in self.tool_manager.enabled_tools:
             if tool_name not in self.tools["enabled"]:
                 self.tools["enabled"].append(tool_name)
-            
-            # Store the handler and schema
-            self._function_tool_handlers[tool_name] = handler
+                
+        # Add any tools from self.tools["enabled"] that aren't in tool_manager
+        for tool_name in self.tools["enabled"]:
+            if tool_name not in self.tool_manager.enabled_tools:
+                self.tool_manager.enabled_tools.append(tool_name)
+                
+        # Update the _function_tool_handlers and _function_tool_schemas for backward compatibility
+        for tool_name, schema in self.tool_manager.tool_schemas.items():
             self._function_tool_schemas[tool_name] = schema
+            
+        for tool_name, handler in self.tool_manager.tool_handlers.items():
+            self._function_tool_handlers[tool_name] = handler
             
     def _compile_linked_programs(self) -> None:
         """Compile linked programs recursively."""
@@ -485,25 +516,62 @@ class LLMProgram:
             program.add_tool(search_docs)
             ```
         """
-        # Handle different types of tools
-        if hasattr(self, "_function_tools") and callable(tool):
-            # Already have _function_tools and got a callable, just append
-            self._function_tools.append(tool)
-        elif callable(tool):
-            # Initialize _function_tools with the callable
-            self._function_tools = [tool]
-            # Make sure we have an enabled list for tools
-            if "enabled" not in self.tools:
-                self.tools["enabled"] = []
+        # Add to tool manager (checking for duplicates)
+        if callable(tool):
+            # Get tool name from tool metadata or function name
+            tool_name = getattr(tool, "_tool_name", tool.__name__)
+            
+            # Check if this tool is already registered with the tool manager
+            is_duplicate = False
+            for existing_tool in self.tool_manager.function_tools:
+                existing_name = getattr(existing_tool, "_tool_name", existing_tool.__name__)
+                if existing_name == tool_name or existing_tool is tool:
+                    is_duplicate = True
+                    logger.debug(f"Tool {tool_name} already registered, skipping duplicate")
+                    break
+                    
+            if not is_duplicate:
+                self.tool_manager.add_function_tool(tool)
+                
+        elif isinstance(tool, dict):
+            # For dictionary-based tools
+            if "name" in tool:
+                tool_name = tool["name"]
+                # Check for duplicate in enabled tools
+                if "enabled" in self.tools and tool_name in self.tools["enabled"]:
+                    logger.debug(f"Tool {tool_name} already in enabled tools, skipping duplicate")
+                else:
+                    self.tool_manager.add_dict_tool(tool)
+            else:
+                # No name to check for duplicates, add it
+                self.tool_manager.add_dict_tool(tool)
+        else:
+            # Invalid tool type
+            raise ValueError(f"Invalid tool type: {type(tool)}. Expected callable or dict.")
+            
+        # For backward compatibility
+        if callable(tool):
+            # Handle callable tools
+            if hasattr(self, "_function_tools"):
+                # Check if tool is already in the list
+                for existing_func in self._function_tools:
+                    if existing_func is tool:
+                        # Already registered, just return
+                        return self
+                # Add to the list
+                self._function_tools.append(tool)
+            else:
+                # Initialize _function_tools with the callable
+                self._function_tools = [tool]
+                # Make sure we have an enabled list for tools
+                if "enabled" not in self.tools:
+                    self.tools["enabled"] = []
         elif isinstance(tool, dict):
             # Add dictionary-based tool configuration
             if "enabled" not in self.tools:
                 self.tools["enabled"] = []
             if "name" in tool and tool["name"] not in self.tools["enabled"]:
                 self.tools["enabled"].append(tool["name"])
-        else:
-            # Invalid tool type
-            raise ValueError(f"Invalid tool type: {type(tool)}. Expected callable or dict.")
         
         return self
         

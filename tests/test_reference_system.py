@@ -1,6 +1,7 @@
 """Tests for the reference ID system."""
 
 import pytest
+from tests.conftest import create_mock_llm_program
 import re
 from unittest.mock import Mock, patch, MagicMock
 
@@ -251,8 +252,7 @@ class TestReferenceUsage:
     async def test_read_fd_with_reference(self):
         """Test reading content from a reference using read_fd."""
         # Create a process with file descriptor support
-        program = Mock(spec=LLMProgram)
-        program.model_name = "model"
+        program = create_mock_llm_program()
         program.provider = "anthropic"
         program.tools = {"enabled": ["read_fd"]}
         program.system_prompt = "system"
@@ -294,8 +294,7 @@ class TestReferenceUsage:
         # Mock open to avoid actually writing files
         with patch("builtins.open", MagicMock()), patch("os.path.getsize", return_value=100):
             # Create a process with file descriptor support
-            program = Mock(spec=LLMProgram)
-            program.model_name = "model"
+            program = create_mock_llm_program()
             program.provider = "anthropic"
             program.tools = {"enabled": ["read_fd", "fd_to_file"]}
             program.system_prompt = "system"
@@ -437,8 +436,7 @@ async def test_reference_inheritance_during_spawn(mock_get_provider_client):
     mock_get_provider_client.return_value = mock_client
     
     # Create a parent program with file descriptor and spawn support
-    parent_program = Mock(spec=LLMProgram)
-    parent_program.model_name = "model"
+    parent_program = create_mock_llm_program()
     parent_program.provider = "anthropic"
     parent_program.tools = {"enabled": ["read_fd", "spawn"]}
     parent_program.system_prompt = "parent system"
@@ -448,8 +446,7 @@ async def test_reference_inheritance_during_spawn(mock_get_provider_client):
     parent_program.get_enriched_system_prompt = Mock(return_value="enriched parent")
     
     # Create a child program for spawning
-    child_program = Mock(spec=LLMProgram)
-    child_program.model_name = "model"
+    child_program = create_mock_llm_program()
     child_program.provider = "anthropic"
     child_program.tools = {"enabled": ["read_fd"]}
     child_program.system_prompt = "child system"
@@ -531,8 +528,7 @@ async def test_reference_inheritance_during_fork(mock_get_provider_client):
     mock_get_provider_client.return_value = mock_client
     
     # Create a program with file descriptor support
-    program = Mock(spec=LLMProgram)
-    program.model_name = "model"
+    program = create_mock_llm_program()
     program.provider = "anthropic"
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"

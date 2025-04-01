@@ -14,7 +14,7 @@ from llmproc.providers import get_provider_client
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 from llmproc.results import RunResult
-from llmproc.tools import ToolRegistry, file_descriptor_instructions, mcp, register_system_tools
+from llmproc.tools import ToolManager, file_descriptor_instructions, mcp
 from llmproc.tools.file_descriptor import FileDescriptorManager
 
 # Check if mcp-registry is installed
@@ -82,8 +82,12 @@ class LLMProcess:
             # Get enabled tools from the program
             self.enabled_tools = program.tools.get("enabled", [])
 
-        # Initialize the tool registry
-        self.tool_registry = ToolRegistry()
+        # Get the tool manager from the program (Phase 5 of RFC022)
+        self.tool_manager = program.tool_manager
+        
+        # For backward compatibility with tests and existing code
+        # This will be removed in a future release
+        self.tool_registry = self.tool_manager.registry
 
         # MCP Configuration
         self.mcp_enabled = False
@@ -407,7 +411,7 @@ class LLMProcess:
             return
 
         success = await mcp.initialize_mcp_tools(
-            self, self.tool_registry, self.mcp_config_path, self.mcp_tools
+            self, self.tool_manager.registry, self.mcp_config_path, self.mcp_tools
         )
 
         if not success:
@@ -478,44 +482,51 @@ class LLMProcess:
                     "MCP features are currently only supported with the Anthropic provider"
                 )
 
-        # Register system tools using the ToolRegistry
-        register_system_tools(self.tool_registry, self)
+        # Use the ToolManager for tool registration (Phase 5 of RFC022)
+        # 1. Process function-based tools that use @register_tool decorator
+        self.tool_manager.process_function_tools()
+        # 2. Register built-in system tools like read_fd, spawn, fork, etc.
+        self.tool_manager.register_system_tools(self)
         
-        # Register function-based tools if available
-        if hasattr(self.program, "_function_tool_handlers") and self.program._function_tool_handlers:
-            for tool_name, handler in self.program._function_tool_handlers.items():
-                # Get the corresponding schema
-                schema = self.program._function_tool_schemas.get(tool_name)
-                if schema:
-                    # Register the function-based tool with the registry
-                    self.tool_registry.register_tool(tool_name, handler, schema)
-                    logger.info(f"Registered function-based tool: {tool_name}")
-                else:
-                    logger.warning(f"Missing schema for function-based tool: {tool_name}")
+        enabled_tools = self.tool_manager.get_enabled_tools()
+        logger.info(f"Initialized {len(enabled_tools)} tools using ToolManager: {', '.join(enabled_tools)}")
 
     @property
     def tools(self) -> list:
-        """Property to access tool definitions.
+        """Property to access tool definitions for the LLM API.
+
+        This delegates to the ToolManager which provides a consistent interface
+        for getting tool schemas across all tool types.
+
+        Only returns schemas for tools that are enabled to prevent duplicates.
 
         Returns:
-            List of tool definitions.
+            List of tool schemas formatted for the LLM provider's API.
         """
-        return self.tool_registry.get_definitions()
+        all_schemas = self.tool_manager.get_tool_schemas()
+        enabled_tools = self.tool_manager.get_enabled_tools()
+        
+        # Filter schemas to only include enabled tools
+        return [schema for schema in all_schemas if schema.get("name") in enabled_tools]
 
     @property
     def tool_handlers(self) -> dict:
-        """Property to access tool handlers.
+        """Property to access tool handler functions.
+
+        This delegates to the ToolManager's registry to provide access to the
+        actual handler functions that execute tool operations.
 
         Returns:
-            Dictionary of tool handlers.
+            Dictionary mapping tool names to their handler functions.
         """
-        return self.tool_registry.tool_handlers
+        return self.tool_manager.registry.tool_handlers
 
     async def call_tool(self, tool_name: str, args: dict) -> Any:
         """Call a tool by name with the given arguments.
 
         This method provides a unified interface for calling any registered tool,
-        whether it's an MCP tool or a system tool like spawn or fork.
+        whether it's an MCP tool, a system tool, or a function-based tool.
+        It delegates to the ToolManager which handles all tool calling details.
 
         Args:
             tool_name: The name of the tool to call
@@ -524,7 +535,7 @@ class LLMProcess:
         Returns:
             The result of the tool execution or an error ToolResult
         """
-        return await self.tool_registry.call_tool(tool_name, args)
+        return await self.tool_manager.call_tool(tool_name, args)
 
     async def count_tokens(self):
         """Count tokens in the current conversation state.

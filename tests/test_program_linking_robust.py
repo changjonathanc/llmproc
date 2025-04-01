@@ -109,14 +109,22 @@ class TestProgramLinkingRobust:
             main_process.mcp_enabled = True
             main_process.enabled_tools = ["spawn"]
 
+            # Initialize the tool_manager
+            from llmproc.tools.tool_manager import ToolManager
+            main_process.tool_manager = ToolManager()
+            main_process.tool_registry = main_process.tool_manager.registry
+            
+            # Set enabled tools in the tool manager
+            main_process.tool_manager.set_enabled_tools(["spawn"])
+            
             # Register spawn tool using the new method
-            from llmproc.tools import register_spawn_tool
+            from llmproc.tools.utils import register_spawn_tool
 
             register_spawn_tool(main_process.tool_registry, main_process)
-
-            # For backward compatibility
-            main_process.tools.extend(main_process.tool_registry.get_definitions())
-            main_process.tool_handlers.update(main_process.tool_registry.tool_handlers)
+            
+            # Add spawn to enabled tools list in the registry if not already there
+            if "spawn" not in main_process.tool_manager.enabled_tools:
+                main_process.tool_manager.enabled_tools.append("spawn")
 
             # Ensure the tool was registered - tools is now a property
             assert len(main_process.tools) > 0

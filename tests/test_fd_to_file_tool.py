@@ -18,15 +18,8 @@ async def test_fd_to_file_tool():
     """Test the fd_to_file tool."""
     
     # Create a process with file descriptor support
-    program = Mock(spec=LLMProgram)
-    program.model_name = "model"
-    program.provider = "anthropic"  # Use a valid provider
-    program.tools = {"enabled": ["read_fd", "fd_to_file"]}
-    program.system_prompt = "system"
-    program.display_name = "display"
-    program.base_dir = None
-    program.api_params = {}
-    program.get_enriched_system_prompt.return_value = "enriched"
+    from tests.conftest import create_mock_llm_program
+    program = create_mock_llm_program(enabled_tools=["read_fd", "fd_to_file"])
     
     # Create a process with mocked provider client
     with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
@@ -71,15 +64,8 @@ async def test_fd_to_file_invalid_fd():
     """Test fd_to_file with an invalid file descriptor."""
     
     # Create a process with file descriptor support
-    program = Mock(spec=LLMProgram)
-    program.model_name = "model"
-    program.provider = "anthropic"  # Use a valid provider
-    program.tools = {"enabled": ["read_fd", "fd_to_file"]}
-    program.system_prompt = "system"
-    program.display_name = "display"
-    program.base_dir = None
-    program.api_params = {}
-    program.get_enriched_system_prompt.return_value = "enriched"
+    from tests.conftest import create_mock_llm_program
+    program = create_mock_llm_program(enabled_tools=["read_fd", "fd_to_file"])
     
     # Create a process with mocked provider client
     with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
@@ -107,15 +93,8 @@ async def test_fd_to_file_invalid_path():
     """Test fd_to_file with an invalid file path."""
     
     # Create a process with file descriptor support
-    program = Mock(spec=LLMProgram)
-    program.model_name = "model"
-    program.provider = "anthropic"  # Use a valid provider
-    program.tools = {"enabled": ["read_fd", "fd_to_file"]}
-    program.system_prompt = "system"
-    program.display_name = "display"
-    program.base_dir = None
-    program.api_params = {}
-    program.get_enriched_system_prompt.return_value = "enriched"
+    from tests.conftest import create_mock_llm_program
+    program = create_mock_llm_program(enabled_tools=["read_fd", "fd_to_file"])
     
     # Create a process with mocked provider client
     with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:

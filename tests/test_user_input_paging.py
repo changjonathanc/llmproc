@@ -1,6 +1,7 @@
 """Tests for file descriptor user input paging."""
 
 import pytest
+from tests.conftest import create_mock_llm_program
 import re
 from unittest.mock import Mock, patch, MagicMock
 
@@ -171,8 +172,7 @@ async def test_llm_process_user_input_paging(mock_get_provider_client):
     })
     
     # Create a program with file descriptor support
-    program = Mock(spec=LLMProgram)
-    program.model_name = "model"
+    program = create_mock_llm_program()
     program.provider = "anthropic"
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"
@@ -237,8 +237,7 @@ async def test_read_paged_user_input(mock_get_provider_client):
     mock_get_provider_client.return_value = mock_client
     
     # Create a program with file descriptor support
-    program = Mock(spec=LLMProgram)
-    program.model_name = "model"
+    program = create_mock_llm_program()
     program.provider = "anthropic"
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"

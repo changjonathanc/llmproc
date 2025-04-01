@@ -1,6 +1,7 @@
 """Integration tests for file descriptor system with the rest of LLMProc."""
 
 import pytest
+from tests.conftest import create_mock_llm_program
 from unittest.mock import Mock, patch, MagicMock, call
 
 from llmproc.program import LLMProgram
@@ -40,9 +41,8 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
     mock_get_provider_client.return_value = mock_client
     
     # Create a program with file descriptor support
-    program = Mock(spec=LLMProgram)
-    program.model_name = "claude-3"
-    program.provider = "anthropic"
+    from tests.conftest import create_mock_llm_program
+    program = create_mock_llm_program()
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"
     program.display_name = "display"

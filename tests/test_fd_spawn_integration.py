@@ -1,6 +1,7 @@
 """Tests for file descriptor integration with spawn system."""
 
 import pytest
+from tests.conftest import create_mock_llm_program
 from unittest.mock import Mock, patch, MagicMock, AsyncMock
 
 from llmproc.program import LLMProgram
@@ -19,8 +20,7 @@ async def test_spawn_with_fd_sharing(mock_get_provider_client):
     mock_get_provider_client.return_value = mock_client
     
     # Create a parent program with file descriptor and spawn support
-    parent_program = Mock(spec=LLMProgram)
-    parent_program.model_name = "model"
+    parent_program = create_mock_llm_program()
     parent_program.provider = "anthropic"
     parent_program.tools = {"enabled": ["read_fd", "spawn"]}
     parent_program.system_prompt = "parent system"
@@ -30,8 +30,7 @@ async def test_spawn_with_fd_sharing(mock_get_provider_client):
     parent_program.get_enriched_system_prompt = Mock(return_value="enriched parent")
     
     # Create a child program for spawning
-    child_program = Mock(spec=LLMProgram)
-    child_program.model_name = "model"
+    child_program = create_mock_llm_program()
     child_program.provider = "anthropic"
     child_program.tools = {"enabled": ["read_fd"]}
     child_program.system_prompt = "child system"
@@ -108,8 +107,7 @@ async def test_fd_enabled_registration(mock_get_provider_client):
     mock_get_provider_client.return_value = mock_client
     
     # Create a program with file descriptor and spawn support
-    program_with_fd = Mock(spec=LLMProgram)
-    program_with_fd.model_name = "model"
+    program_with_fd = create_mock_llm_program()
     program_with_fd.provider = "anthropic"
     program_with_fd.tools = {"enabled": ["read_fd", "spawn"]}
     program_with_fd.system_prompt = "system"
@@ -119,8 +117,7 @@ async def test_fd_enabled_registration(mock_get_provider_client):
     program_with_fd.get_enriched_system_prompt = Mock(return_value="enriched")
     
     # Create a program without file descriptor support
-    program_without_fd = Mock(spec=LLMProgram)
-    program_without_fd.model_name = "model"
+    program_without_fd = create_mock_llm_program()
     program_without_fd.provider = "anthropic"
     program_without_fd.tools = {"enabled": ["spawn"]}
     program_without_fd.system_prompt = "system"
