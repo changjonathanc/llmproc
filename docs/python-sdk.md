@@ -18,7 +18,6 @@ program = (
     .add_tool(my_tool_function)
     .preload_file("context.txt")
     .link_program("expert", expert_program, "An expert program")
-    .compile()
 )
 
 # Start the process
@@ -34,7 +33,7 @@ from llmproc import LLMProgram
 
 # Create a basic program
 program = LLMProgram(
-    model_name="gpt-4",  
+    model_name="gpt-4",
     provider="openai",
     system_prompt="You are a helpful assistant."
 )
@@ -51,7 +50,6 @@ program = (
     .preload_file("file1.md")
     .preload_file("file2.md")
     .add_tool(tool_function)
-    .compile()
 )
 ```
 
@@ -82,13 +80,12 @@ main_program = (
     )
     .link_program("math", math_program, "Expert in mathematics")
     .link_program("code", code_program, "Expert in coding")
-    .compile()
 )
 ```
 
 ### Compilation
 
-All programs need to be compiled before starting:
+All programs are compiled before starting:
 
 ```python
 # Compile the program
@@ -98,10 +95,12 @@ program.compile()
 process = await program.start()
 ```
 
-You can also chain the compilation and starting:
+compile() will load necessary files from the program configuration and raise error/warning if there's any issue. It will be called automatically when start() is called if the program is not compiled.
+
+So you can call start() directly.
 
 ```python
-process = await program.compile().start()
+process = await program.start()
 ```
 
 ## Function-Based Tools

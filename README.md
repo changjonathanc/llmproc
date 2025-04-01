@@ -47,15 +47,17 @@ def calculate(expression: str) -> dict:
     return {"result": eval(expression, {"__builtins__": {}})}
 
 async def main():
-    # Create a program with the fluent API
+    # You can load a program from a TOML file
+    program = LLMProgram.from_toml('examples/anthropic/claude-3-5-haiku.toml')
+
+    # Or create a program with the python API
     program = (
         LLMProgram(
-            model_name="claude-3-haiku-20240307",
+            model_name="claude-3-7-sonnet-20250219",
             provider="anthropic",
             system_prompt="You are a helpful assistant."
         )
         .add_tool(calculate)
-        .compile()
     )
 
     # Start and use the process
