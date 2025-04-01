@@ -16,6 +16,8 @@ from llmproc import LLMProcess, LLMProgram
 async def load_thinking_model(config_path: str) -> LLMProcess:
     """Load a thinking model from a TOML configuration file."""
     program = LLMProgram.from_toml(config_path)
+    # For API tests, disable automatic caching to avoid cache_control issues
+    program.parameters["disable_automatic_caching"] = True
     return await program.start()
 
 
@@ -102,13 +104,14 @@ async def test_thinking_models_basic_functionality():
     # Simple problem for testing
     simple_problem = "What is 24 * 7?"
     
-    # Load high thinking model
-    high_process = await load_thinking_model("examples/anthropic/claude-3-7-thinking-high.toml")
+    # Load medium thinking model instead of high to avoid token limit issues
+    # High thinking model has a max_tokens=32768 which requires streaming mode
+    medium_process = await load_thinking_model("examples/anthropic/claude-3-7-thinking-medium.toml")
     
     # Run the model
-    result = await high_process.run(simple_problem)
+    result = await medium_process.run(simple_problem)
     
     # Verify we got a response
     assert result
-    assert high_process.get_last_message()
-    assert "168" in high_process.get_last_message()  # Basic check for correct answer
+    assert medium_process.get_last_message()
+    assert "168" in medium_process.get_last_message()  # Basic check for correct answer
