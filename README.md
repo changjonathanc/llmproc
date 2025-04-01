@@ -184,8 +184,8 @@ The library functions as a kernel:
 
 Future development plans:
 
-1. ✅ Python SDK with fluent API (completed in RFC018)
-2. ✅ Function-based tools with type hints (completed in RFC018)
+1. ✅ Python SDK with fluent API ([RFC018](./RFC/RFC018_python_sdk.md))
+2. ✅ Function-based tools with type hints ([RFC018](./RFC/RFC018_python_sdk.md))
 3. Exec System Call for process replacement
 4. Process State Serialization & Restoration
 5. Retry mechanism with exponential backoff
