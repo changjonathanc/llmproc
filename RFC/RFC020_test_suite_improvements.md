@@ -161,6 +161,47 @@ Benefits:
 2. How should we handle version-specific tests as model behaviors change?
 3. Should we create a versioned model registry to track model capabilities and limitations?
 
+## Relevant Files
+
+### Reference Implementations
+
+These files contain implementations of the recommended patterns:
+
+1. **Path Constants**: 
+   - `tests/test_features_programs_api.py` - Base example path constants
+   - `tests/test_fork_tool.py` - Example path constants for fork tool tests
+
+2. **Parameter Validation**:
+   - `tests/test_claude_thinking_models_integration.py` - `validate_thinking_parameters()` function
+   - `tests/test_reasoning_models_integration.py` - `validate_reasoning_parameters()` function
+
+3. **Model Constants**:
+   - `tests/test_prompt_caching_integration.py` - `CLAUDE_MODEL` constant
+   - `tests/test_provider_specific_features.py` - `CLAUDE_MODEL` constant
+
+4. **Configuration Tests**:
+   - `tests/test_claude_thinking_models_integration.py::test_thinking_models_configuration`
+   - `tests/test_reasoning_models_integration.py::test_reasoning_models_configuration`
+   - `tests/test_program_linking_descriptions_specific.py::test_program_linking_description_in_example`
+
+5. **API Tests**:
+   - `tests/test_claude_thinking_models_integration.py::test_thinking_models_basic_functionality`
+   - `tests/test_reasoning_models_integration.py::test_reasoning_models_basic_functionality`
+   - `tests/test_program_linking_descriptions_specific.py::test_program_linking_description_in_example_with_api`
+
+### Files Requiring Updates
+
+These files would benefit from applying the recommended patterns:
+
+1. **Test Files**:
+   - `tests/test_example_programs.py` - Needs path constants
+   - `tests/test_program_linking_*.py` - Needs consistent API test marking
+   - `tests/test_cli_*.py` - Could benefit from separation of API/non-API tests
+
+2. **Example Configurations**:
+   - `examples/openai/*.toml` - Review token limits for practicality
+   - `examples/features/*.toml` - Review for consistent parameter structure
+
 ## Implementation Checklist
 
 - [ ] Create test_utils.py with path constants
