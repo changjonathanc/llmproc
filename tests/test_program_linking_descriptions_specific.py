@@ -9,17 +9,9 @@ import pytest
 from llmproc.program import LLMProgram
 
 
-@pytest.mark.llm_api
 @pytest.mark.asyncio
 async def test_program_linking_description_in_example():
     """Test program linking descriptions in the actual examples directory."""
-    # Skip test if API keys aren't available
-    for key_name in ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]:
-        if os.environ.get(key_name):
-            break
-    else:
-        pytest.skip("No Anthropic API key available")
-    
     # Path to the program linking example with descriptions
     program_path = Path(__file__).parent.parent / "examples" / "features" / "program-linking" / "main.toml"
     if not program_path.exists():
@@ -46,6 +38,26 @@ async def test_program_linking_description_in_example():
     # Check that all descriptions are non-empty
     for name, description in program.linked_program_descriptions.items():
         assert description, f"Empty description for {name}"
+
+
+@pytest.mark.llm_api
+@pytest.mark.asyncio
+async def test_program_linking_description_in_example_with_api():
+    """Test program linking descriptions with API calls."""
+    # Skip test if API keys aren't available
+    for key_name in ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]:
+        if os.environ.get(key_name):
+            break
+    else:
+        pytest.skip("No Anthropic API key available")
+    
+    # Path to the program linking example with descriptions
+    program_path = Path(__file__).parent.parent / "examples" / "features" / "program-linking" / "main.toml"
+    if not program_path.exists():
+        pytest.skip(f"Example file not found: {program_path}")
+    
+    # Compile the program with linked programs
+    program = LLMProgram.from_toml(program_path)
     
     # Start the process
     process = await program.start()

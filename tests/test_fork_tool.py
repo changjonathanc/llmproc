@@ -1,12 +1,18 @@
 """Tests for the fork system call."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from pathlib import Path
 
 import pytest
 
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.tools.fork import fork_tool
+
+# Define example paths for easier maintenance
+EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
+FEATURES_DIR = EXAMPLES_DIR / "features"
+FORK_EXAMPLE = FEATURES_DIR / "fork.toml"
 
 
 class TestForkTool:
@@ -127,12 +133,8 @@ class TestForkToolWithAPI:
         if not os.environ.get("ANTHROPIC_API_KEY"):
             pytest.skip("ANTHROPIC_API_KEY not available")
 
-        # Create a program from the example file
-        from pathlib import Path
-
-        example_path = Path(__file__).parents[1] / "examples" / "fork.toml"
-
-        program = LLMProgram.from_toml(example_path)
+        # Create a program from the example file using the constant
+        program = LLMProgram.from_toml(FORK_EXAMPLE)
         process = await program.start()
 
         # Run a test query

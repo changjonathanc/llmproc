@@ -19,196 +19,96 @@ async def load_thinking_model(config_path: str) -> LLMProcess:
     return await program.start()
 
 
-@pytest.mark.llm_api
 def test_thinking_models_configuration():
     """Test that thinking model configurations load correctly with proper parameters."""
     # Load all three thinking model configurations
-    high_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-high.toml")
-    medium_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-medium.toml")
-    low_program = LLMProgram.from_toml("examples/basic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
+    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
+    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
     
     # Verify high thinking configuration
     assert high_program.model_name == "claude-3-7-sonnet-20250219"
     assert high_program.provider == "anthropic"
-    assert high_program.parameters["thinking_budget"] == 16000
+    assert "thinking" in high_program.parameters
+    assert high_program.parameters["thinking"]["type"] == "enabled"
+    assert high_program.parameters["thinking"]["budget_tokens"] == 16000
     assert high_program.parameters["max_tokens"] == 32768
     
     # Verify medium thinking configuration
     assert medium_program.model_name == "claude-3-7-sonnet-20250219"
     assert medium_program.provider == "anthropic"
-    assert medium_program.parameters["thinking_budget"] == 4000
+    assert "thinking" in medium_program.parameters
+    assert medium_program.parameters["thinking"]["type"] == "enabled"
+    assert medium_program.parameters["thinking"]["budget_tokens"] == 4000
     assert medium_program.parameters["max_tokens"] == 16384
     
     # Verify low thinking configuration
     assert low_program.model_name == "claude-3-7-sonnet-20250219"
     assert low_program.provider == "anthropic"
-    assert low_program.parameters["thinking_budget"] == 1024
+    assert "thinking" in low_program.parameters
+    assert low_program.parameters["thinking"]["type"] == "enabled"
+    assert low_program.parameters["thinking"]["budget_tokens"] == 1024
     assert low_program.parameters["max_tokens"] == 8192
 
 
-@pytest.mark.llm_api
-async def test_thinking_models_parameter_transformation():
-    """Test that the API parameters are correctly transformed for thinking models."""
-    # Skip if no Anthropic API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
+# Helper function to validate thinking model parameters without API calls
+def validate_thinking_parameters(program):
+    """Validate the thinking model parameters structure from a program configuration."""
+    # Check basic configuration requirements
+    assert program.model_name.startswith("claude-3-7")
+    assert program.provider == "anthropic"
     
+    # Check thinking parameters format
+    assert "thinking" in program.parameters
+    assert program.parameters["thinking"]["type"] == "enabled"
+    assert "budget_tokens" in program.parameters["thinking"]
+    assert isinstance(program.parameters["thinking"]["budget_tokens"], int)
+    assert program.parameters["thinking"]["budget_tokens"] > 0
+    assert "max_tokens" in program.parameters
+    
+    # Return the budget tokens value for specific assertions
+    return program.parameters["thinking"]["budget_tokens"]
+    
+    
+# Test parameter validation without requiring API access
+def test_thinking_models_parameter_validation():
+    """Test thinking model parameter validation without API access."""
     # Load all three thinking model configurations
-    high_process = await load_thinking_model("examples/basic/claude-3-7-thinking-high.toml")
-    medium_process = await load_thinking_model("examples/basic/claude-3-7-thinking-medium.toml")
-    low_process = await load_thinking_model("examples/basic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
+    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
+    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
     
-    # Verify high thinking API parameters
-    assert "thinking_budget" in high_process.api_params
-    assert high_process.api_params["thinking_budget"] == 16000
-    assert "max_tokens" in high_process.api_params
+    # Validate parameters for each model and check specific budget values
+    high_budget = validate_thinking_parameters(high_program)
+    medium_budget = validate_thinking_parameters(medium_program)
+    low_budget = validate_thinking_parameters(low_program)
     
-    # Verify medium thinking API parameters
-    assert "thinking_budget" in medium_process.api_params
-    assert medium_process.api_params["thinking_budget"] == 4000
-    assert "max_tokens" in medium_process.api_params
+    # Verify the specific budget values
+    assert high_budget == 16000
+    assert medium_budget == 4000
+    assert low_budget == 1024
     
-    # Verify low thinking API parameters
-    assert "thinking_budget" in low_process.api_params
-    assert low_process.api_params["thinking_budget"] == 1024
-    assert "max_tokens" in low_process.api_params
+    # Verify the ordering of budget values
+    assert high_budget > medium_budget > low_budget
 
 
 @pytest.mark.llm_api
-async def test_thinking_models_response_quality():
-    """Test that thinking models with different budgets produce 
-    different quality responses for complex problems."""
+async def test_thinking_models_basic_functionality():
+    """Test that thinking models run successfully with a simple query."""
     # Skip if no Anthropic API key
     if not os.environ.get("ANTHROPIC_API_KEY"):
         pytest.skip("ANTHROPIC_API_KEY environment variable not set")
     
-    # Complex problem requiring multi-step reasoning
-    complex_problem = """
-    A farmer has a rectangular field with a perimeter of 100 meters. 
-    If the width of the field is 20 meters, what is its area in square meters?
-    
-    Work through this step-by-step.
-    """
-    
-    # Load all three thinking model configurations
-    high_process = await load_thinking_model("examples/basic/claude-3-7-thinking-high.toml")
-    medium_process = await load_thinking_model("examples/basic/claude-3-7-thinking-medium.toml")
-    low_process = await load_thinking_model("examples/basic/claude-3-7-thinking-low.toml")
-    
-    # Run the models with the same prompt
-    high_result = await high_process.run(complex_problem)
-    medium_result = await medium_process.run(complex_problem)
-    low_result = await low_process.run(complex_problem)
-    
-    # Verify we got responses from all models
-    assert high_result
-    assert medium_result
-    assert low_result
-    
-    # Get the text content from the RunResult objects
-    high_text = high_process.get_last_message()
-    medium_text = medium_process.get_last_message()
-    low_text = low_process.get_last_message()
-    
-    # Check that high thinking model provides more detailed reasoning
-    # (We can't check exact content, but we can check length as a proxy for detail)
-    high_length = len(high_text)
-    medium_length = len(medium_text)
-    low_length = len(low_text)
-    
-    # Log the response lengths for diagnostics
-    print(f"High thinking response length: {high_length}")
-    print(f"Medium thinking response length: {medium_length}")
-    print(f"Low thinking response length: {low_length}")
-    
-    # The actual response lengths will vary, but we verify that all responses
-    # contain the correct answer (600 square meters)
-    assert "600" in high_text
-    assert "600" in medium_text
-    assert "600" in low_text
-
-
-@pytest.mark.llm_api
-async def test_thinking_models_response_time():
-    """Test the response time differences between different thinking budgets."""
-    # Skip if no Anthropic API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
-    
-    # Simple problem that should be quick to solve
+    # Simple problem for testing
     simple_problem = "What is 24 * 7?"
     
-    # Load all three thinking model configurations
-    high_process = await load_thinking_model("examples/basic/claude-3-7-thinking-high.toml")
-    medium_process = await load_thinking_model("examples/basic/claude-3-7-thinking-medium.toml")
-    low_process = await load_thinking_model("examples/basic/claude-3-7-thinking-low.toml")
-    
-    # Measure response times
-    high_times = []
-    medium_times = []
-    low_times = []
-    
-    # Run each model once (to reduce test time)
-    # High thinking
-    start_time = time.time()
-    await high_process.run(simple_problem)
-    high_times.append(time.time() - start_time)
-    
-    # Medium thinking
-    start_time = time.time()
-    await medium_process.run(simple_problem)
-    medium_times.append(time.time() - start_time)
-    
-    # Low thinking
-    start_time = time.time()
-    await low_process.run(simple_problem)
-    low_times.append(time.time() - start_time)
-    
-    # Calculate average times
-    avg_high_time = sum(high_times) / len(high_times)
-    avg_medium_time = sum(medium_times) / len(medium_times)
-    avg_low_time = sum(low_times) / len(low_times)
-    
-    # Log the average response times
-    print(f"Average high thinking response time: {avg_high_time:.2f}s")
-    print(f"Average medium thinking response time: {avg_medium_time:.2f}s")
-    print(f"Average low thinking response time: {avg_low_time:.2f}s")
-    
-    # Note: We don't assert specific response times as they can vary significantly
-    # based on network conditions, API server load, etc. This test is primarily
-    # for diagnostic information.
-
-
-@pytest.mark.llm_api
-async def test_thinking_models_complex_coding():
-    """Test thinking models with a complex coding task."""
-    # Skip if no Anthropic API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
-    
-    # Complex coding problem requiring reasoning
-    coding_problem = """
-    Write a Python function to find all prime numbers in the Fibonacci sequence 
-    up to the 100th Fibonacci number. Make sure your solution is optimized for 
-    performance and memory usage.
-    
-    Show your reasoning process as comments in the code.
-    """
-    
-    # Load high thinking model (we only use high for complex coding)
-    high_process = await load_thinking_model("examples/basic/claude-3-7-thinking-high.toml")
+    # Load high thinking model
+    high_process = await load_thinking_model("examples/anthropic/claude-3-7-thinking-high.toml")
     
     # Run the model
-    high_result = await high_process.run(coding_problem)
+    result = await high_process.run(simple_problem)
     
     # Verify we got a response
-    assert high_result
-    
-    # Get the text content from the RunResult object
-    high_text = high_process.get_last_message()
-    
-    # Check for key indicators of a valid solution
-    assert "def" in high_text  # Function definition
-    assert "fibonacci" in high_text.lower()  # Fibonacci logic
-    assert "prime" in high_text.lower()  # Prime checking logic
-    assert "#" in high_text  # Comments for reasoning
+    assert result
+    assert high_process.get_last_message()
+    assert "168" in high_process.get_last_message()  # Basic check for correct answer

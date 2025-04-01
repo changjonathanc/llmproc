@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 
+# Define constants for model versions to make updates easier
+CLAUDE_MODEL = "claude-3-5-sonnet-20240620"  # Use a specific versioned model
+
 
 class TestProviderSpecificFeatures:
     """Test suite for provider-specific feature implementations."""
@@ -191,7 +194,7 @@ class TestProviderSpecificFeaturesIntegration:
         
         # Create a simple program
         program = LLMProgram(
-            model_name="claude-3-5-sonnet-20240620",
+            model_name=CLAUDE_MODEL,
             provider="anthropic",
             system_prompt="You are a helpful assistant. " + ("This is filler content. " * 500),
             parameters={

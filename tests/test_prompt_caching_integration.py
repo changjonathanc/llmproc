@@ -5,6 +5,9 @@ import pytest
 from llmproc import LLMProcess
 from llmproc.results import RunResult
 
+# Define constants for model versions to make updates easier
+CLAUDE_MODEL = "claude-3-5-sonnet-20240620"  # Use a specific versioned model
+
 
 @pytest.mark.llm_api
 def test_caching_integration():
@@ -16,7 +19,7 @@ def test_caching_integration():
     # Create a process with a large system prompt that will trigger caching
     # No beta header needed - automatic caching works with cache_control parameters
     process = LLMProcess(
-        model_name="claude-3-sonnet",
+        model_name=CLAUDE_MODEL,
         provider="anthropic",
         system_prompt="You are a helpful assistant with the following long context to remember. " + 
                     ("This is some long placeholder content. " * 500),  # Make it long enough to trigger caching
@@ -111,7 +114,7 @@ def test_disable_automatic_caching():
     
     # Create a process with caching disabled
     process_with_caching_disabled = LLMProcess(
-        model_name="claude-3-sonnet",
+        model_name=CLAUDE_MODEL,
         provider="anthropic",
         system_prompt="You are a helpful assistant. " + 
                     ("This is some long placeholder content. " * 200),  # Make it long enough to trigger caching
@@ -124,7 +127,7 @@ def test_disable_automatic_caching():
     
     # Create a process with caching enabled
     process_with_caching_enabled = LLMProcess(
-        model_name="claude-3-sonnet",
+        model_name=CLAUDE_MODEL,
         provider="anthropic",
         system_prompt="You are a helpful assistant. " + 
                     ("This is some long placeholder content. " * 200),  # Make it long enough to trigger caching

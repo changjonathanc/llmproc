@@ -146,7 +146,7 @@ async def test_openai_reasoning_model_api():
         pytest.skip("OPENAI_API_KEY environment variable not set")
     
     # Load example program
-    program = LLMProgram.from_toml("examples/openai_reasoning.toml")
+    program = LLMProgram.from_toml("examples/openai/o3-mini-medium.toml")
     
     # Start the process
     process = await program.start()
