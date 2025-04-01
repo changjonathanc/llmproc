@@ -192,11 +192,6 @@ Future development plans:
 6. File Descriptor System Phase 3 enhancements
 7. Gemini models support
 
-### Recently Completed
-
-- ✅ Python SDK with fluent API ([RFC018](./RFC/RFC018_python_sdk.md))
-- ✅ Function-based tools with type hints ([RFC018](./RFC/RFC018_python_sdk.md))
-
 ## License
 
 Apache License 2.0
