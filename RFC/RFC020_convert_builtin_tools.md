@@ -1,7 +1,7 @@
 # RFC020: Convert Built-in Tools to Function-Based Tools
 
 ## Status
-Proposed
+Partially Completed (calculator and read_file converted)
 
 ## Summary
 This RFC proposes converting the current built-in tools in LLMProc (such as read_file and calculator) to use the function-based tools interface introduced in RFC018. This would standardize the tool implementation approach across the codebase, leverage the automatic schema generation capabilities, and improve developer experience for tool creation and maintenance. Additionally, it proposes enhancing the function-based tools interface to allow more control over parameter descriptions.
@@ -166,6 +166,33 @@ The migration would proceed in phases:
 4. **Error Handling**: Ensure consistent error handling across all tools
 5. **Tool Result Format**: Standardize return value processing
 6. **Parameter Description Priority**: Explicit parameter descriptions should always override docstring-parsed ones. Documentation should recommend using explicit `param_descriptions` rather than relying on docstring parsing, which should be considered a fallback mechanism.
+
+## Implementation Status
+
+The following tools have been converted to use the function-based interface:
+
+1. **calculator**: Converted in commit 6c32023
+   - Added `param_descriptions` for better parameter documentation
+   - Original calculator_tool fully replaced
+   - All tests updated and passing
+
+2. **read_file**: Converted in commit 6c32023
+   - Added `param_descriptions` for better parameter documentation  
+   - Original read_file_tool fully replaced
+   - All tests updated and passing
+
+The function-based tool system was enhanced to support:
+- The `param_descriptions` parameter for explicit parameter documentation
+- Priority of explicit descriptions over docstring-parsed ones
+
+The following tools still need to be converted:
+- fork_tool
+- spawn_tool
+- read_fd_tool
+- fd_to_file_tool
+- Other file descriptor tools
+
+This could be done in a future implementation phase.
 
 ## Examples
 
