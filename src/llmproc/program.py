@@ -736,27 +736,4 @@ class LLMProgram:
 
         return process
         
-    def get_structure(self) -> dict:
-        """Return program structure info for tests/debugging."""
-        info = {
-            "model": self.model_name,
-            "provider": self.provider,
-            "compiled": self.compiled
-        }
-        
-        if self.linked_programs:
-            linked_info = {}
-            for name, program in self.linked_programs.items():
-                linked_info[name] = {
-                    "model": program.model_name,
-                    "provider": program.provider
-                }
-                if name in self.linked_program_descriptions:
-                    linked_info[name]["description"] = self.linked_program_descriptions[name]
-            info["linked_programs"] = linked_info
-            
-        if self.tools and "enabled" in self.tools and self.tools["enabled"]:
-            info["tools"] = self.tools["enabled"]
-            
-        return info
         

@@ -155,59 +155,6 @@ def test_recursive_program_compilation():
     assert expert.compiled
 
 
-def test_get_structure():
-    """Test the get_structure method."""
-    # Create a program with linked programs
-    expert1 = LLMProgram(
-        model_name="claude-3-7-sonnet",
-        provider="anthropic",
-        system_prompt="You are expert 1."
-    )
-    
-    expert2 = LLMProgram(
-        model_name="claude-3-5-haiku",
-        provider="anthropic",
-        system_prompt="You are expert 2."
-    )
-    
-    main = LLMProgram(
-        model_name="gpt-4o",
-        provider="openai",
-        system_prompt="You are the coordinator.",
-        linked_programs={
-            "expert1": expert1,
-            "expert2": expert2
-        },
-        linked_program_descriptions={
-            "expert1": "Expert for complex tasks",
-            "expert2": "Expert for simple tasks"
-        },
-        tools={"enabled": ["calculator", "web_search"]}
-    )
-    
-    # Get the structure and check it
-    structure = main.compile().get_structure()
-    
-    # Check main program info
-    assert structure["model"] == "gpt-4o"
-    assert structure["provider"] == "openai"
-    assert structure["compiled"] is True
-    
-    # Check linked programs
-    assert "linked_programs" in structure
-    assert "expert1" in structure["linked_programs"]
-    assert "expert2" in structure["linked_programs"]
-    
-    # Check descriptions
-    assert structure["linked_programs"]["expert1"]["description"] == "Expert for complex tasks"
-    assert structure["linked_programs"]["expert2"]["description"] == "Expert for simple tasks"
-    
-    # Check tools
-    assert "tools" in structure
-    assert "calculator" in structure["tools"]
-    assert "web_search" in structure["tools"]
-
-
 def test_complex_method_chaining():
     """Test more complex method chaining scenarios."""
     # Create nested programs with method chaining
