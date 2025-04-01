@@ -61,10 +61,10 @@ class TestProgramLinking:
                 from llmproc.program import LLMProgram
 
                 with patch(
-                    "llmproc.program.LLMProgram.compile", wraps=LLMProgram.compile
-                ) as mock_compile:
-                    # Compile the main program with linked programs
-                    main_program = LLMProgram.compile(main_toml, include_linked=True)
+                    "llmproc.program.LLMProgram.from_toml", wraps=LLMProgram.from_toml
+                ) as mock_from_toml:
+                    # Load the main program with linked programs
+                    main_program = LLMProgram.from_toml(main_toml, include_linked=True)
 
                     # Verify the compilation worked - now linked_programs contains Program objects
                     assert hasattr(main_program, "linked_programs")

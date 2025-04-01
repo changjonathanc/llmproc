@@ -48,23 +48,25 @@ class ProgramRegistry:
 
 
 class LLMProgram:
-    """Compiler for LLM program configurations.
+    """Program definition for LLM processes.
 
-    This class handles loading, validating, and processing TOML program files
-    into a format ready for LLMProcess instantiation.
+    This class handles creating, configuring, and compiling LLM programs
+    for use with LLMProcess. It supports both direct initialization in code
+    and loading from TOML configuration files.
     """
 
     def __init__(
         self,
         model_name: str,
         provider: str,
-        system_prompt: str,
+        system_prompt: str = None,
+        system_prompt_file: str = None,
         parameters: dict[str, Any] = None,
         display_name: str | None = None,
         preload_files: list[str] | None = None,
         mcp_config_path: str | None = None,
         mcp_tools: dict[str, list[str]] | None = None,
-        tools: dict[str, Any] | None = None,
+        tools: dict[str, Any] | list[Any] | None = None,
         linked_programs: dict[str, Union[str, "LLMProgram"]] | None = None,
         linked_program_descriptions: dict[str, str] | None = None,
         env_info: dict[str, Any] | None = None,
@@ -77,22 +79,29 @@ class LLMProgram:
         Args:
             model_name: Name of the model to use
             provider: Provider of the model (openai, anthropic, or anthropic_vertex)
-            system_prompt: System prompt that defines the behavior of the process
+            system_prompt: System prompt text that defines the behavior of the process
+            system_prompt_file: Path to a file containing the system prompt (alternative to system_prompt)
             parameters: Dictionary of API parameters
             display_name: User-facing name for the process in CLI interfaces
             preload_files: List of file paths to preload into the system prompt as context
             mcp_config_path: Path to MCP servers configuration file
             mcp_tools: Dictionary mapping server names to tools to enable
-            tools: Dictionary from the [tools] section in the TOML program
-            linked_programs: Dictionary mapping program names to TOML program paths or compiled LLMProgram objects
+            tools: Dictionary from the [tools] section, or list of function-based tools
+            linked_programs: Dictionary mapping program names to paths or LLMProgram objects
+            linked_program_descriptions: Dictionary mapping program names to descriptions
             env_info: Environment information configuration
             file_descriptor: File descriptor configuration
             base_dir: Base directory for resolving relative paths in files
             disable_automatic_caching: Whether to disable automatic prompt caching for Anthropic models
         """
-        # Flag to track if this program has been fully compiled (including linked programs)
+        # Flag to track if this program has been fully compiled
         self.compiled = False
-
+        self._system_prompt_file = system_prompt_file
+        
+        # Handle system prompt (either direct or from file)
+        if system_prompt and system_prompt_file:
+            raise ValueError("Cannot specify both system_prompt and system_prompt_file")
+            
         # Initialize core attributes
         self.model_name = model_name
         self.provider = provider
@@ -103,7 +112,19 @@ class LLMProgram:
         self.mcp_config_path = mcp_config_path
         self.disable_automatic_caching = disable_automatic_caching
         self.mcp_tools = mcp_tools or {}
-        self.tools = tools or {}
+        
+        # Handle tools which can be a dict or a list of function-based tools
+        self.tools = {}
+        if tools:
+            if isinstance(tools, dict):
+                self.tools = tools
+            elif isinstance(tools, list):
+                # Will handle function-based tools in a future implementation
+                # For now, just store them as a list
+                self._function_tools = tools
+                # Enable tools section with empty enabled list to be populated later
+                self.tools = {"enabled": []}
+        
         self.linked_programs = linked_programs or {}
         self.linked_program_descriptions = linked_program_descriptions or {}
         self.env_info = env_info or {
@@ -112,8 +133,133 @@ class LLMProgram:
         self.file_descriptor = file_descriptor or {}
         self.base_dir = base_dir
 
-        # No need to initialize api_params here - we'll use a property
+    def _compile_self(self) -> "LLMProgram":
+        """Internal method to validate and compile this program.
 
+        This method validates the program configuration, resolves any
+        system prompt files, and compiles linked programs recursively.
+        
+        Returns:
+            self (for method chaining)
+            
+        Raises:
+            ValueError: If validation fails
+            FileNotFoundError: If required files cannot be found
+        """
+        # Skip if already compiled
+        if self.compiled:
+            return self
+            
+        # Resolve system prompt from file if specified
+        if self._system_prompt_file and not self.system_prompt:
+            try:
+                with open(self._system_prompt_file, 'r') as f:
+                    self.system_prompt = f.read()
+            except FileNotFoundError:
+                raise FileNotFoundError(f"System prompt file not found: {self._system_prompt_file}")
+                
+        # Validate required fields
+        if not self.model_name:
+            raise ValueError("model_name is required")
+        if not self.provider:
+            raise ValueError("provider is required")
+        if not self.system_prompt:
+            raise ValueError("Either system_prompt or system_prompt_file must be provided")
+            
+        # Handle linked programs
+        compiled_linked = {}
+        for name, program_or_path in self.linked_programs.items():
+            if isinstance(program_or_path, str):
+                # It's a path, load and compile using from_toml
+                try:
+                    linked_program = LLMProgram.from_toml(program_or_path)
+                except FileNotFoundError:
+                    # Issue a warning but don't fail
+                    warnings.warn(f"Linked program not found: {program_or_path}", stacklevel=2)
+                    continue
+                compiled_linked[name] = linked_program
+            elif isinstance(program_or_path, LLMProgram):
+                # It's already a program instance, compile it if not already compiled
+                if not program_or_path.compiled:
+                    program_or_path._compile_self()
+                compiled_linked[name] = program_or_path
+            else:
+                raise ValueError(f"Invalid linked program type for {name}: {type(program_or_path)}")
+                
+        # Replace linked_programs with compiled versions
+        self.linked_programs = compiled_linked
+        
+        # Mark as compiled
+        self.compiled = True
+        return self
+        
+    def link_program(self, name: str, program: "LLMProgram", description: str = "") -> "LLMProgram":
+        """Link another program to this one.
+        
+        Args:
+            name: Name to identify the linked program
+            program: LLMProgram instance to link
+            description: Optional description of the program's purpose
+            
+        Returns:
+            self (for method chaining)
+        """
+        self.linked_programs[name] = program
+        self.linked_program_descriptions[name] = description
+        return self
+        
+    def preload_file(self, file_path: str) -> "LLMProgram":
+        """Add a file to preload into the system prompt.
+        
+        Args:
+            file_path: Path to the file to preload
+            
+        Returns:
+            self (for method chaining)
+        """
+        self.preload_files.append(file_path)
+        return self
+        
+    def add_tool(self, tool) -> "LLMProgram":
+        """Add a tool to this program.
+        
+        Args:
+            tool: Either a function to register as a tool, or a tool definition dictionary
+            
+        Returns:
+            self (for method chaining)
+        """
+        # This will be extended in Phase 2 to handle function-based tools
+        if hasattr(self, "_function_tools"):
+            self._function_tools.append(tool)
+        elif callable(tool):
+            # Initialize _function_tools if not present
+            self._function_tools = [tool]
+        elif isinstance(tool, dict):
+            # Add to tools configuration
+            if "enabled" not in self.tools:
+                self.tools["enabled"] = []
+            if "name" in tool and tool["name"] not in self.tools["enabled"]:
+                self.tools["enabled"].append(tool["name"])
+        
+        return self
+        
+    def compile(self) -> "LLMProgram":
+        """Validate and compile this program.
+        
+        This method validates the program configuration, resolves any
+        system prompt files, and compiles linked programs recursively.
+        
+        Returns:
+            self (for method chaining)
+            
+        Raises:
+            ValueError: If validation fails
+            FileNotFoundError: If required files cannot be found
+        """
+        # Call the internal _compile_self method
+        return self._compile_self()
+    
     @property
     def api_params(self) -> dict[str, Any]:
         """Get API parameters for LLM API calls.
@@ -125,160 +271,8 @@ class LLMProgram:
             Dictionary of API parameters for LLM API calls
         """
         return self.parameters.copy() if self.parameters else {}
+        
 
-    @classmethod
-    def compile(
-        cls,
-        toml_path: str | Path,
-        include_linked: bool = True,
-        check_linked_files: bool = True,
-        return_all: bool = False,
-    ) -> Union["LLMProgram", dict[str, "LLMProgram"]]:
-        """Compile an LLM program from a TOML file.
-
-        This method loads a TOML file, validates the configuration, resolves file paths,
-        and returns a compiled LLMProgram ready for instantiation of an LLMProcess.
-
-        If include_linked=True, it will also compile all linked programs recursively
-        and update the linked_programs attribute of each program to reference the
-        compiled program objects directly.
-
-        Args:
-            toml_path: Path to the TOML program file
-            include_linked: Whether to compile linked programs recursively
-            check_linked_files: Whether to verify linked program files exist
-            return_all: Whether to return all compiled programs as a dictionary
-
-        Returns:
-            By default: A single compiled LLMProgram instance for the main program
-            If return_all=True: Dictionary mapping absolute paths to compiled programs
-
-        Raises:
-            FileNotFoundError: If the TOML file or referenced files cannot be found
-            ValidationError: If the configuration is invalid
-            ValueError: If there are issues with configuration values
-        """
-        # Use the utility function to resolve the path
-        path = resolve_path(toml_path, must_exist=True, error_prefix="Program file")
-
-        # Get the global registry
-        registry = ProgramRegistry()
-
-        # Handle single program compilation (no linked programs)
-        if not include_linked:
-            # If already compiled, return from registry
-            if registry.contains(path):
-                return registry.get(path)
-
-            # Otherwise compile and register it
-            program = cls._compile_single_program(path)
-            program.compiled = True
-            registry.register(path, program)
-            return program
-
-        # Handle BFS compilation of the program graph
-        abs_path = str(path)
-
-        # If main program is already compiled and we're not returning all, just return it
-        if registry.contains(path) and not return_all:
-            return registry.get(path)
-
-        # Stage 1: Compile all programs without resolving linked programs
-        # This builds a complete set of all programs in the graph
-        to_compile = deque([path])
-        compiled_paths = set()  # Track what we've queued to avoid duplicates
-        compiled_paths.add(abs_path)
-
-        while to_compile:
-            current_path = to_compile.popleft()
-
-            # Skip if already compiled - just continue to queue its linked programs
-            if not registry.contains(current_path):
-                # Compile the current program
-                program = cls._compile_single_program(current_path)
-                registry.register(current_path, program)
-            else:
-                program = registry.get(current_path)
-
-            # Find linked programs and add them to the compilation queue
-            if hasattr(program, "linked_programs") and program.linked_programs:
-                base_dir = current_path.parent
-
-                # At this stage, linked_programs contains string paths
-                for _linked_name, linked_path_str in list(
-                    program.linked_programs.items()
-                ):
-                    # Skip any non-string items (already processed linked programs)
-                    if not isinstance(linked_path_str, str):
-                        continue
-
-                    # Only validate existence if check_linked_files is True
-                    try:
-                        linked_path = resolve_path(
-                            linked_path_str,
-                            base_dir,
-                            must_exist=check_linked_files,
-                            error_prefix=f"Linked program file (from '{current_path}')"
-                        )
-                    except FileNotFoundError as e:
-                        # Re-raise with the original error message
-                        raise FileNotFoundError(str(e))
-
-                    # Only add to queue if we haven't seen it before
-                    linked_abs_path = str(linked_path)
-                    if linked_abs_path not in compiled_paths:
-                        to_compile.append(linked_path)
-                        compiled_paths.add(linked_abs_path)
-
-        # Stage 2: Update linked_programs to reference compiled program objects
-        for compiled_path in compiled_paths:
-            program = registry.get(Path(compiled_path))
-
-            # Update any string paths to refer to compiled program objects
-            if hasattr(program, "linked_programs") and program.linked_programs:
-                base_dir = Path(compiled_path).parent
-
-                # Create a new dict for the updated references
-                updated_links = {}
-
-                for linked_name, linked_path_str in program.linked_programs.items():
-                    # Skip if it's already a program object not a string
-                    if not isinstance(linked_path_str, str):
-                        updated_links[linked_name] = linked_path_str
-                        continue
-
-                    # Resolve the path using our utility
-                    linked_path = resolve_path(linked_path_str, base_dir, must_exist=False)
-
-                    # Get the compiled program from the registry
-                    linked_program = registry.get(linked_path)
-                    if linked_program:
-                        # Copy the description from the parent to the linked program
-                        if (hasattr(program, "linked_program_descriptions") and 
-                            linked_name in program.linked_program_descriptions):
-                            # Only set the description if the linked program doesn't already have one
-                            if not hasattr(linked_program, "description"):
-                                linked_program.description = program.linked_program_descriptions[linked_name]
-                        
-                        updated_links[linked_name] = linked_program
-                    else:
-                        # Should never happen if Stage 1 completed successfully
-                        warnings.warn(
-                            f"Could not find compiled program for {linked_path}", stacklevel=2
-                        )
-                        updated_links[linked_name] = linked_path_str
-
-                # Replace the linked_programs dict with the updated version
-                program.linked_programs = updated_links
-
-            # Mark the program as fully compiled
-            program.compiled = True
-
-        # Return either the main program or all compiled programs
-        if return_all:
-            return {path: registry.get(Path(path)) for path in compiled_paths}
-        else:
-            return registry.get(path)
 
     @classmethod
     def _compile_single_program(cls, path: Path) -> "LLMProgram":
@@ -467,9 +461,8 @@ class LLMProgram:
     ) -> "LLMProgram":
         """Load and compile a program from a TOML file.
 
-        This is a convenience method that simply calls compile() with the
-        most common options for end users. It handles loading the TOML file,
-        validating it, and creating a compiled program ready to be started.
+        This method loads a TOML configuration file, validates it, and 
+        returns a compiled LLMProgram ready to be started.
 
         Args:
             toml_path: Path to the TOML program file
@@ -482,15 +475,53 @@ class LLMProgram:
             FileNotFoundError: If the TOML file doesn't exist
             ValueError: If the configuration is invalid
         """
-        return cls.compile(
-            toml_path, include_linked=include_linked, check_linked_files=True
-        )
+        # Use the utility function to resolve the path
+        path = resolve_path(toml_path, must_exist=True, error_prefix="Program file")
+
+        # Get the global registry
+        registry = ProgramRegistry()
+
+        # If already compiled, return from registry
+        if registry.contains(path):
+            return registry.get(path)
+
+        # Create the uncompiled program
+        program = cls._compile_single_program(path)
+        registry.register(path, program)
+
+        # If linked programs are requested, handle them now
+        if include_linked and program.linked_programs:
+            # Process all linked programs that are paths
+            for name, program_or_path in list(program.linked_programs.items()):
+                if isinstance(program_or_path, str):
+                    # It's a path, convert to absolute if needed
+                    base_dir = path.parent
+                    try:
+                        linked_path = resolve_path(
+                            program_or_path, 
+                            base_dir=base_dir, 
+                            must_exist=True,
+                            error_prefix=f"Linked program file (from '{path}')"
+                        )
+                        # Load and compile the linked program
+                        linked_program = cls.from_toml(linked_path, include_linked=True)
+                        program.linked_programs[name] = linked_program
+                    except FileNotFoundError as e:
+                        # Re-raise with the original error message
+                        raise FileNotFoundError(str(e))
+
+        # Mark the program as compiled
+        program.compiled = True
+        return program
 
     async def start(self) -> "LLMProcess":  # noqa: F821
         """Create and fully initialize an LLMProcess from this program.
 
-        This is the recommended way to create a process from a program, as it
-        properly handles async initialization for features like MCP tools.
+        This method:
+        1. Ensures the program is compiled
+        2. Creates an LLMProcess instance
+        3. Initializes it asynchronously (for MCP tools, etc.)
+        4. Sets up linked programs
 
         The process will have access to all linked programs that were included
         during compilation. Linked programs are not instantiated until needed.
@@ -500,7 +531,12 @@ class LLMProgram:
 
         Raises:
             RuntimeError: If initialization fails
+            ValueError: If program compilation fails
         """
+        # Ensure the program is compiled
+        if not self.compiled:
+            self.compile()
+            
         # Import dynamically to avoid circular imports
         import llmproc
 
@@ -516,3 +552,39 @@ class LLMProgram:
             process.linked_program_descriptions = self.linked_program_descriptions
 
         return process
+        
+    def get_structure(self) -> dict:
+        """Return a dictionary representing the structure of this program.
+        
+        This method is useful for debugging and visualizing the program structure,
+        including linked programs and their relationships.
+        
+        Returns:
+            Dictionary with program structure information
+        """
+        # Basic program info
+        info = {
+            "model": self.model_name,
+            "provider": self.provider,
+            "compiled": self.compiled
+        }
+        
+        # Add linked program information if present
+        if self.linked_programs:
+            linked_info = {}
+            for name, program in self.linked_programs.items():
+                linked_info[name] = {
+                    "model": program.model_name,
+                    "provider": program.provider
+                }
+                # Add description if available
+                if name in self.linked_program_descriptions:
+                    linked_info[name]["description"] = self.linked_program_descriptions[name]
+            
+            info["linked_programs"] = linked_info
+            
+        # Add tools information
+        if self.tools and "enabled" in self.tools and self.tools["enabled"]:
+            info["tools"] = self.tools["enabled"]
+            
+        return info

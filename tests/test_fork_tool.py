@@ -132,7 +132,7 @@ class TestForkToolWithAPI:
 
         example_path = Path(__file__).parents[1] / "examples" / "fork.toml"
 
-        program = LLMProgram.compile(example_path)
+        program = LLMProgram.from_toml(example_path)
         process = await program.start()
 
         # Run a test query

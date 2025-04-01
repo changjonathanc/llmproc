@@ -35,7 +35,7 @@ def print_system_prompt(
 
     try:
         # Load the program file
-        program = LLMProgram.compile(program_path)
+        program = LLMProgram.from_toml(program_path)
 
         # Create a simple process-like object to pass the necessary flags
         process_info = type('ProcessInfo', (), {})()

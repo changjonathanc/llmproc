@@ -45,12 +45,11 @@ def test_compile_all_example_programs():
             continue
             
         try:
-            # Compile without requiring real linked program files
+            # Load without requiring real linked program files
             # and don't include linked programs to avoid API calls
-            program = LLMProgram.compile(
+            program = LLMProgram.from_toml(
                 toml_file, 
-                include_linked=False,
-                check_linked_files=False
+                include_linked=False
             )
             
             # Verify it's a valid program
