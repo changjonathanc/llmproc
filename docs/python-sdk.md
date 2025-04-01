@@ -50,6 +50,9 @@ program = (
     .add_preload_file("file1.md")
     .add_preload_file("file2.md")
     .add_tool(tool_function)
+    .configure_env_info(["working_directory", "platform", "date"])
+    .configure_file_descriptor(max_direct_output_chars=10000)
+    .configure_thinking(budget_tokens=8192)
 )
 ```
 
@@ -101,6 +104,84 @@ So you can call start() directly.
 
 ```python
 process = await program.start()
+```
+
+## Advanced Configuration
+
+### Environment Information
+
+Configure which environment variables are included in the system prompt:
+
+```python
+# Include specific environment variables
+program.configure_env_info(["working_directory", "platform", "date"])
+
+# Include all standard environment variables
+program.configure_env_info("all")
+
+# Explicitly disable environment information
+program.configure_env_info([])
+```
+
+### File Descriptor System
+
+Configure the file descriptor system for handling large outputs:
+
+```python
+# Enable with default settings
+program.configure_file_descriptor()
+
+# Configure with custom settings
+program.configure_file_descriptor(
+    max_direct_output_chars=10000,
+    default_page_size=5000,
+    enable_references=True
+)
+
+# Disable file descriptor system
+program.configure_file_descriptor(enabled=False)
+```
+
+### Claude 3.7 Thinking Models
+
+Configure the thinking capability for Claude 3.7 models:
+
+```python
+# Enable thinking with default budget
+program.configure_thinking()
+
+# Enable thinking with custom budget
+program.configure_thinking(budget_tokens=8192)
+
+# Disable thinking
+program.configure_thinking(enabled=False)
+```
+
+### Token-Efficient Tools
+
+Enable token-efficient tool use for Claude 3.7 models:
+
+```python
+# Enable token-efficient tools
+program.enable_token_efficient_tools()
+```
+
+### MCP Tools
+
+Configure Model Context Protocol (MCP) tools:
+
+```python
+# Enable specific tools from servers
+program.configure_mcp(
+    config_path="config/mcp_servers.json",
+    tools={
+        "sequential-thinking": "all",
+        "github": ["search_repositories", "get_file_contents"]
+    }
+)
+
+# Enable only MCP configuration without tools
+program.configure_mcp(config_path="config/mcp_servers.json")
 ```
 
 ## Function-Based Tools

@@ -122,6 +122,8 @@ rather than generating the answer yourself. Show your work by explaining the res
         )
         .add_tool(calculate)
         .add_tool(weather_lookup)
+        .configure_env_info(["working_directory", "platform"])  # Add minimal env info
+        .configure_file_descriptor()  # Enable file descriptor system with defaults
         .compile()
     )
     

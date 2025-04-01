@@ -277,6 +277,191 @@ class LLMProgram:
         """
         return self.add_preload_file(file_path)
         
+    def configure_env_info(self, variables: list[str] | str = "all") -> "LLMProgram":
+        """Configure environment information sharing.
+        
+        This method configures which environment variables will be included in the
+        system prompt for added context. For privacy/security, this is disabled by default.
+        
+        Args:
+            variables: List of variables to include, or "all" to include all standard variables
+                      Standard variables include: "working_directory", "platform", "date", 
+                      "python_version", "hostname", "username"
+            
+        Returns:
+            self (for method chaining)
+            
+        Examples:
+            ```python
+            # Include specific environment variables
+            program.configure_env_info(["working_directory", "platform", "date"])
+            
+            # Include all standard environment variables
+            program.configure_env_info("all")
+            
+            # Explicitly disable environment information (default)
+            program.configure_env_info([])
+            ```
+        """
+        if variables == "all":
+            self.env_info = {"variables": "all"}
+        else:
+            self.env_info = {"variables": variables}
+        return self
+        
+    def configure_file_descriptor(self, 
+                                 enabled: bool = True, 
+                                 max_direct_output_chars: int = 8000,
+                                 default_page_size: int = 4000,
+                                 max_input_chars: int = 8000,
+                                 page_user_input: bool = True,
+                                 enable_references: bool = True) -> "LLMProgram":
+        """Configure the file descriptor system.
+        
+        The file descriptor system provides Unix-like pagination for large outputs,
+        allowing LLMs to handle content that would exceed context limits.
+        
+        Args:
+            enabled: Whether to enable the file descriptor system
+            max_direct_output_chars: Threshold for FD creation
+            default_page_size: Page size for pagination
+            max_input_chars: Threshold for user input FD creation
+            page_user_input: Whether to page user input
+            enable_references: Whether to enable reference ID system
+            
+        Returns:
+            self (for method chaining)
+            
+        Examples:
+            ```python
+            # Enable with default settings
+            program.configure_file_descriptor()
+            
+            # Configure with custom settings
+            program.configure_file_descriptor(
+                max_direct_output_chars=10000,
+                default_page_size=5000,
+                enable_references=True
+            )
+            
+            # Disable file descriptor system
+            program.configure_file_descriptor(enabled=False)
+            ```
+        """
+        self.file_descriptor = {
+            "enabled": enabled,
+            "max_direct_output_chars": max_direct_output_chars,
+            "default_page_size": default_page_size,
+            "max_input_chars": max_input_chars,
+            "page_user_input": page_user_input,
+            "enable_references": enable_references
+        }
+        return self
+        
+    def configure_thinking(self, enabled: bool = True, budget_tokens: int = 4096) -> "LLMProgram":
+        """Configure Claude 3.7 thinking capability.
+        
+        This method configures the thinking capability for Claude 3.7 models, allowing
+        the model to perform deeper reasoning on complex problems.
+        
+        Args:
+            enabled: Whether to enable thinking capability
+            budget_tokens: Budget for thinking in tokens (1024-32768)
+            
+        Returns:
+            self (for method chaining)
+            
+        Note:
+            This only applies to Claude 3.7 models. For other models, this configuration
+            will be ignored.
+            
+        Examples:
+            ```python
+            # Enable thinking with default budget
+            program.configure_thinking()
+            
+            # Enable thinking with custom budget
+            program.configure_thinking(budget_tokens=8192)
+            
+            # Disable thinking
+            program.configure_thinking(enabled=False)
+            ```
+        """
+        # Ensure parameters dict exists
+        if self.parameters is None:
+            self.parameters = {}
+            
+        # Configure thinking
+        self.parameters["thinking"] = {
+            "type": "enabled" if enabled else "disabled",
+            "budget_tokens": budget_tokens
+        }
+        return self
+        
+    def enable_token_efficient_tools(self) -> "LLMProgram":
+        """Enable token-efficient tool use for Claude 3.7 models.
+        
+        This method enables the token-efficient tools feature which can
+        significantly reduce token usage when working with tools.
+        
+        Returns:
+            self (for method chaining)
+            
+        Note:
+            This only applies to Claude 3.7 models. For other models, this configuration
+            will be ignored.
+            
+        Examples:
+            ```python
+            # Enable token-efficient tools
+            program.enable_token_efficient_tools()
+            ```
+        """
+        # Ensure parameters dict exists
+        if self.parameters is None:
+            self.parameters = {}
+            
+        # Ensure extra_headers dict exists
+        if "extra_headers" not in self.parameters:
+            self.parameters["extra_headers"] = {}
+            
+        # Add header for token-efficient tools
+        self.parameters["extra_headers"]["anthropic-beta"] = "token-efficient-tools-2025-02-19"
+        return self
+        
+    def configure_mcp(self, config_path: str, tools: dict[str, list[str] | str] = None) -> "LLMProgram":
+        """Configure Model Context Protocol (MCP) tools.
+        
+        This method configures MCP tool access for the program.
+        
+        Args:
+            config_path: Path to the MCP servers configuration file
+            tools: Dictionary mapping server names to lists of tools to enable,
+                  or "all" to enable all tools from a server
+            
+        Returns:
+            self (for method chaining)
+            
+        Examples:
+            ```python
+            # Enable specific tools from servers
+            program.configure_mcp(
+                config_path="config/mcp_servers.json",
+                tools={
+                    "sequential-thinking": "all",
+                    "github": ["search_repositories", "get_file_contents"]
+                }
+            )
+            
+            # Enable only MCP configuration without tools
+            program.configure_mcp(config_path="config/mcp_servers.json")
+            ```
+        """
+        self.mcp_config_path = config_path
+        if tools:
+            self.mcp_tools = tools
+        return self
+        
     def add_tool(self, tool) -> "LLMProgram":
         """Add a tool to this program.
         
