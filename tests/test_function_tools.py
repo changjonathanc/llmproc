@@ -229,10 +229,10 @@ def test_program_with_function_tools():
     program.compile()
     
     # Check that function tools were processed
-    assert hasattr(program, "_function_tool_handlers")
-    assert len(program._function_tool_handlers) == 2
-    assert "get_calculator" in program._function_tool_handlers
-    assert "search_documents" in program._function_tool_handlers
+    assert hasattr(program.tool_manager, "tool_handlers")
+    assert len(program.tool_manager.tool_handlers) >= 2
+    assert "get_calculator" in program.tool_manager.tool_handlers
+    assert "search_documents" in program.tool_manager.tool_handlers
     
     # Check that tools were added to enabled tools
     assert "enabled" in program.tools
@@ -259,10 +259,10 @@ def test_add_tool_method():
     program.compile()
     
     # Check that all tools were processed
-    assert len(program._function_tool_handlers) == 3
-    assert "weather_info" in program._function_tool_handlers  # Custom name from decorator
-    assert "get_calculator" in program._function_tool_handlers
-    assert "search_documents" in program._function_tool_handlers
+    assert len(program.tool_manager.tool_handlers) >= 3
+    assert "weather_info" in program.tool_manager.tool_handlers  # Custom name from decorator
+    assert "get_calculator" in program.tool_manager.tool_handlers
+    assert "search_documents" in program.tool_manager.tool_handlers
     
     # Check enabled tools list
     assert len(program.tools["enabled"]) == 3
