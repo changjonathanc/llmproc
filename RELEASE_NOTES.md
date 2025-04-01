@@ -1,5 +1,49 @@
 # Release Notes
 
+## Version 0.3.0 (2025-04-01)
+
+This version includes significant refactoring and improvements to the codebase organization, as well as support for Claude 3.7 thinking models.
+
+### Major Features
+
+1. **Code Reorganization and Refactoring**
+   - Extracted configuration loading to a dedicated ProgramLoader class
+   - Simplified tool API by removing dictionary-based tools
+   - Added method chaining support for better developer experience
+   - Improved separation of concerns throughout the codebase
+
+2. **Claude 3.7 Thinking Models Support**
+   - Added support for Claude 3.7 models with thinking capability
+   - Configurable thinking budget (high, medium, low)
+   - Clear parameter validation for thinking models
+   - Example configurations in examples/anthropic directory
+
+3. **Enhanced API for Tool Management**
+   - Added set_enabled_tools method for easier tool enabling
+   - Streamlined tool registration process
+   - Better error handling for tool execution
+
+4. **Bug Fixes**
+   - Fixed cache control handling in Anthropic API for thinking models
+   - Fixed program linking bug in the program loader
+   - Improved error handling for API parameters
+
+### Documentation Updates
+
+1. **Added New RFCs:**
+   - RFC023: File Descriptor Manager
+   - RFC024: Configuration Manager
+   - RFC025: Simplified Tool Registration
+   - RFC026: Unified Tool Management
+
+2. **Updated Examples**
+   - New examples for Claude 3.7 thinking models
+   - Updated documentation for tool usage
+
+### Dependency Updates
+   - Support for newer versions of the Anthropic API
+   - Token-efficient tools beta header for Claude 3.7 models
+
 ## Version 0.2.0 (2025-03-19)
 
 This version includes significant improvements and new features over the previous 0.1.0 release.
