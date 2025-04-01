@@ -1,0 +1,26 @@
+[model]
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+display_name = "Claude MCP Assistant"
+
+[parameters]
+temperature = 0.7
+max_tokens = 300
+
+[prompt]
+system_prompt = "You are a helpful assistant with access to tools. Use tools whenever appropriate to answer user queries accurately."
+
+[tools]
+enabled = ["read_file"]
+
+[mcp]
+config_path = "../../config/mcp_servers.json"
+
+[mcp.tools]
+# Only configure servers that are available in your config/mcp_servers.json
+# This server is available in the default config
+sequential-thinking = "all"
+
+# NOTE: If you add servers or tools that aren't available in the configuration,
+# an error will be raised. For example, this line would cause an error:
+# invalid-server = ["some-tool"]

@@ -1,0 +1,22 @@
+# Claude 3.7 Sonnet with token-efficient tool use
+# This configuration reduces token usage for tool calls by ~14% on average (up to 70%)
+
+[model]
+name = "claude-3-7-sonnet-20250219"
+provider = "anthropic"
+display_name = "Claude 3.7 Sonnet (Token-Efficient Tools)"
+
+[prompt]
+system_prompt = """You are a helpful assistant that uses tools effectively.
+When appropriate, use available tools to provide the most accurate and helpful responses."""
+
+[parameters]
+max_tokens = 20000
+
+# Enable token-efficient tool use - this reduces token usage and latency for tool calls
+[parameters.extra_headers]
+anthropic-beta = "token-efficient-tools-2025-02-19"
+
+# Enable calculator and web search tools
+[tools]
+enabled = ["calculator", "read_file"]

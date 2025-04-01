@@ -103,7 +103,9 @@ class EnvInfoBuilder:
 
     @staticmethod
     def get_enriched_system_prompt(
-        base_prompt: str, env_config: dict, preloaded_content: dict = None, include_env: bool = True
+        base_prompt: str, env_config: dict, preloaded_content: dict = None, 
+        include_env: bool = True, file_descriptor_enabled: bool = False,
+        references_enabled: bool = False, page_user_input: bool = False
     ) -> str:
         """Get enhanced system prompt with preloaded files and environment info.
 
@@ -112,6 +114,9 @@ class EnvInfoBuilder:
             env_config: Environment configuration dictionary
             preloaded_content: Dictionary mapping file paths to content
             include_env: Whether to include environment information
+            file_descriptor_enabled: Whether file descriptor system is enabled
+            references_enabled: Whether reference ID system is enabled
+            page_user_input: Whether user input paging is enabled
 
         Returns:
             Complete system prompt ready for API calls
@@ -123,6 +128,21 @@ class EnvInfoBuilder:
         env_info = EnvInfoBuilder.build_env_info(env_config, include_env)
         if env_info:
             parts.append(env_info)
+            
+        # Add file descriptor instructions if enabled
+        if file_descriptor_enabled:
+            from llmproc.tools import file_descriptor_base_instructions
+            parts.append(file_descriptor_base_instructions)
+            
+            # Add user input paging instructions if enabled
+            if page_user_input:
+                from llmproc.tools import fd_user_input_instructions
+                parts.append(fd_user_input_instructions)
+            
+        # Add reference instructions if enabled
+        if references_enabled and file_descriptor_enabled:
+            from llmproc.tools import reference_instructions
+            parts.append(reference_instructions)
 
         # Add preloaded content if available
         if preloaded_content:

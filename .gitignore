@@ -48,3 +48,6 @@ Thumbs.db
 # Local development files
 local/
 forking-an-agent/
+session_summaries/
+llms-full.txt
+*.diff

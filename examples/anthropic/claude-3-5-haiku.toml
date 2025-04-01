@@ -1,0 +1,11 @@
+# Minimal Claude configuration
+[model]
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+display_name = "Claude Haiku"
+
+[prompt]
+system_prompt = "You are Claude, a helpful AI assistant."
+
+[parameters]
+max_tokens = 150

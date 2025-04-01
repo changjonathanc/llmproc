@@ -5,11 +5,13 @@ import asyncio
 import logging
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import click
 
 from llmproc import LLMProgram
+from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 
 # Set up logging
 logging.basicConfig(
@@ -21,7 +23,7 @@ logger = logging.getLogger("llmproc.cli")
 
 
 @click.command()
-@click.argument("program_path", required=False)
+@click.argument("program_path", required=True)
 @click.option(
     "--prompt", "-p", help="Run in non-interactive mode with the given prompt"
 )
@@ -31,11 +33,10 @@ logger = logging.getLogger("llmproc.cli")
     is_flag=True,
     help="Run in non-interactive mode (reads from stdin if no prompt provided)",
 )
-def main(program_path=None, prompt=None, non_interactive=False) -> None:
+def main(program_path, prompt=None, non_interactive=False) -> None:
     """Run a simple CLI for LLMProc.
 
-    PROGRAM_PATH is an optional path to a TOML program file.
-    If not provided, you'll be prompted to select from available examples.
+    PROGRAM_PATH is the path to a TOML program file.
 
     Supports three modes:
     1. Interactive mode (default): Chat continuously with the model
@@ -50,42 +51,15 @@ def main(program_path=None, prompt=None, non_interactive=False) -> None:
         click.echo("LLMProc CLI Demo")
         click.echo("----------------")
 
-    # If program path is provided, use it
-    if program_path:
-        program_file = Path(program_path)
-        if not program_file.exists():
-            click.echo(f"Error: Program file not found: {program_path}")
-            sys.exit(1)
-        if program_file.suffix != ".toml":
-            click.echo(f"Error: Program file must be a TOML file: {program_path}")
-            sys.exit(1)
-        selected_program = program_file
-    # Otherwise, prompt user to select from examples
-    else:
-        # Find available program files
-        program_dir = Path("./examples")
-        if not program_dir.exists():
-            click.echo("Error: examples directory not found.")
-            sys.exit(1)
-
-        program_files = list(program_dir.glob("*.toml"))
-        if not program_files:
-            click.echo("Error: No TOML program files found in examples directory.")
-            sys.exit(1)
-
-        # Display available programs
-        click.echo("\nAvailable programs:")
-        for i, program_file in enumerate(sorted(program_files), 1):
-            click.echo(f"{i}. {program_file.name}")
-
-        # Let user select a program
-        selection = click.prompt("\nSelect a program (number)", type=int)
-
-        if selection < 1 or selection > len(program_files):
-            click.echo("Invalid selection.")
-            sys.exit(1)
-
-        selected_program = sorted(program_files)[selection - 1]
+    # Validate program path
+    program_file = Path(program_path)
+    if not program_file.exists():
+        click.echo(f"Error: Program file not found: {program_path}")
+        sys.exit(1)
+    if program_file.suffix != ".toml":
+        click.echo(f"Error: Program file must be a TOML file: {program_path}")
+        sys.exit(1)
+    selected_program = program_file
 
     # Load the selected program
     try:
@@ -100,6 +74,8 @@ def main(program_path=None, prompt=None, non_interactive=False) -> None:
         click.echo(f"  Model: {program.model_name}")
         click.echo(f"  Provider: {program.provider}")
         click.echo(f"  Display Name: {program.display_name or program.model_name}")
+        
+        # Initial token count will be displayed after initialization
 
         # Show brief system prompt summary
         if hasattr(program, "system_prompt") and program.system_prompt:
@@ -165,7 +141,7 @@ def main(program_path=None, prompt=None, non_interactive=False) -> None:
             elapsed = time.time() - start_time
 
             # Log run result information
-            logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s")
+            logger.info(f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s")
 
             # Get the last assistant message and just print the raw response
             response = process.get_last_message()
@@ -176,37 +152,37 @@ def main(program_path=None, prompt=None, non_interactive=False) -> None:
             click.echo(
                 "\nStarting interactive chat session. Type 'exit' or 'quit' to end."
             )
-            click.echo("Type 'reset' to reset the conversation state.")
-            click.echo("Type 'verbose' to toggle verbose logging.")
-
-            # Toggle for verbose logging
-            verbose = False
-
+            
+            # Show initial token count for Anthropic models
+            if process.provider in ANTHROPIC_PROVIDERS:
+                try:
+                    token_info = asyncio.run(process.count_tokens())
+                    if token_info and "input_tokens" in token_info:
+                        click.echo(f"Initial context size: {token_info['input_tokens']:,} tokens ({token_info['percentage']:.1f}% of {token_info['context_window']:,} token context window)")
+                except Exception as e:
+                    logger.warning(f"Failed to count initial tokens: {str(e)}")
+            
             while True:
-                user_input = click.prompt("\nYou", prompt_suffix="> ")
+                # Display token usage if available from the count_tokens method
+                token_display = ""
+                if process.provider in ANTHROPIC_PROVIDERS:
+                    try:
+                        token_info = asyncio.run(process.count_tokens())
+                        if token_info and "input_tokens" in token_info:
+                            token_display = f" [Tokens: {token_info['input_tokens']:,}/{token_info['context_window']:,}]"
+                    except Exception as e:
+                        logger.warning(f"Failed to count tokens for prompt: {str(e)}")
+                
+                user_input = click.prompt(f"\nYou{token_display}", prompt_suffix="> ")
 
                 if user_input.lower() in ("exit", "quit"):
                     click.echo("Ending session.")
                     break
 
-                if user_input.lower() == "reset":
-                    process.reset_state()
-                    click.echo("Conversation state has been reset.")
-                    continue
-
-                if user_input.lower() == "verbose":
-                    verbose = not verbose
-                    level = logging.DEBUG if verbose else logging.INFO
-                    logging.getLogger("llmproc").setLevel(level)
-                    click.echo(
-                        f"Verbose logging {'enabled' if verbose else 'disabled'}"
-                    )
-                    continue
-
                 # Track time for this run
                 start_time = time.time()
 
-                # Show a spinner while running (to be implemented)
+                # Show a spinner while running
                 click.echo("Thinking...", nl=False)
 
                 # Run the process with the new API
@@ -218,33 +194,29 @@ def main(program_path=None, prompt=None, non_interactive=False) -> None:
                 # Clear the "Thinking..." text
                 click.echo("\r" + " " * 12 + "\r", nl=False)
 
-                # Log run result information
-                if verbose:
-                    logger.debug(
-                        f"Run completed in {elapsed:.2f}s with {run_result.api_calls} API calls"
+                # Token counting is now handled before each prompt using the count_tokens method
+
+                # Log basic info
+                if run_result.api_calls > 0:
+                    logger.info(
+                        f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s"
                     )
-                    for i, api_info in enumerate(run_result.api_call_infos):
-                        if "type" in api_info and api_info["type"] == "tool_call":
-                            logger.debug(
-                                f"Tool call: {api_info.get('tool_name', 'unknown')}"
-                            )
-                        elif "model" in api_info:
-                            logger.debug(f"API call {i + 1}: model={api_info['model']}")
-                else:
-                    if run_result.api_calls > 0:
-                        logger.info(
-                            f"Used {run_result.api_calls} API calls in {elapsed:.2f}s"
-                        )
 
                 # Get the last assistant message
                 response = process.get_last_message()
 
                 # Display the response
                 click.echo(f"\n{process.display_name}> {response}")
+                
+                # Display token usage stats if available
+                if hasattr(run_result, 'total_tokens') and run_result.total_tokens > 0:
+                    click.echo(
+                        f"[API calls: {run_result.api_calls}, "
+                        f"Tool calls: {run_result.tool_calls}, "
+                        f"Tokens: {run_result.input_tokens}/{run_result.output_tokens}/{run_result.total_tokens} (in/out/total)]"
+                    )
 
     except Exception as e:
-        import traceback
-
         click.echo(f"Error: {str(e)}", err=True)
         click.echo("\nFull traceback:", err=True)
         traceback.print_exc()

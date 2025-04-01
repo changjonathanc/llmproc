@@ -68,10 +68,25 @@ def test_compile_all_programs():
             system_prompt = "Utility program"
             """)
 
-        # Use the compile method with return_all=True
-        compiled_programs = LLMProgram.compile(
-            main_program_path, include_linked=True, return_all=True
-        )
+        # Use the from_toml method to get the main program
+        # Since from_toml doesn't support return_all, we need to handle this differently
+        # For this test, we'll manually track all programs
+        compiled_programs = {}
+        
+        # Load main program and track it
+        main_program = LLMProgram.from_toml(main_program_path, include_linked=True)
+        compiled_programs[str(main_program_path.resolve())] = main_program
+        
+        # Also track all linked programs (at this point they are LLMProgram instances)
+        for name, linked_program in main_program.linked_programs.items():
+            if name == "helper":
+                compiled_programs[str(helper_program_path.resolve())] = linked_program
+                # Get utility from helper
+                utility_program = linked_program.linked_programs.get("utility")
+                if utility_program:
+                    compiled_programs[str(utility_program_path.resolve())] = utility_program
+            elif name == "math":
+                compiled_programs[str(math_program_path.resolve())] = linked_program
 
         # Check that all programs were compiled
         assert len(compiled_programs) == 4
@@ -135,7 +150,7 @@ def test_compile_all_with_missing_file():
 
         # Should raise a FileNotFoundError
         with pytest.raises(FileNotFoundError) as excinfo:
-            LLMProgram.compile(main_program_path, include_linked=True, return_all=True)
+            LLMProgram.from_toml(main_program_path, include_linked=True)
 
         # Verify error message contains path information
         error_message = str(excinfo.value)
@@ -175,19 +190,16 @@ def test_circular_dependency():
             a = "program_a.toml"
             """)
 
-        # Should compile both programs without infinite recursion
-        compiled_programs = LLMProgram.compile(
-            program_a_path, include_linked=True, return_all=True
-        )
-
-        # Both programs should be compiled
-        assert len(compiled_programs) == 2
-
-        program_a_abs_path = program_a_path.resolve()
-        program_b_abs_path = program_b_path.resolve()
-
-        assert str(program_a_abs_path) in compiled_programs
-        assert str(program_b_abs_path) in compiled_programs
+        # Should load both programs without infinite recursion
+        program_a = LLMProgram.from_toml(program_a_path, include_linked=True)
+        
+        # Both programs should be loaded and linked to each other
+        assert "b" in program_a.linked_programs
+        program_b = program_a.linked_programs["b"]
+        
+        # Check circular reference resolution - program_b should have a reference to program_a
+        assert "a" in program_b.linked_programs
+        assert program_b.linked_programs["a"] is program_a  # Same object reference
 
 
 def test_from_toml_with_linked_programs():

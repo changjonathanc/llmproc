@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmproc"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
     {name = "Developer", email = "dev@example.com"},
 ]
@@ -48,15 +48,15 @@ packages = ["llmproc"]
 package-dir = {"" = "src"}
 
 [tool.black]
-line-length = 88
+line-length = 200
 target-version = ["py311"]
 
 [tool.isort]
 profile = "black"
-line_length = 88
+line_length = 200
 
 [tool.ruff]
-line-length = 88
+line-length = 200
 target-version = "py311"
 
 [tool.ruff.lint]
@@ -101,3 +101,4 @@ dev = [
 
 [project.scripts]
 llmproc-demo = "llmproc.cli:main"
+llmproc-prompt = "llmproc.tools.print_system_prompt:main"

@@ -57,11 +57,16 @@ def mock_mcp_registry():
     }
 
     mock_tool3 = MagicMock()
-    mock_tool3.name = "codemcp.ReadFile"
-    mock_tool3.description = "Read a file from the filesystem"
+    mock_tool3.name = "sequential-thinking.sequentialthinking"
+    mock_tool3.description = "A detailed tool for dynamic and reflective problem-solving through thoughts"
     mock_tool3.inputSchema = {
         "type": "object",
-        "properties": {"path": {"type": "string"}},
+        "properties": {
+            "thought": {"type": "string"},
+            "nextThoughtNeeded": {"type": "boolean"},
+            "thoughtNumber": {"type": "integer"},
+            "totalThoughts": {"type": "integer"},
+        },
     }
 
     # Setup tool calls
@@ -103,12 +108,12 @@ def mcp_config_file():
                         "args": ["-y", "@modelcontextprotocol/server-github"],
                         "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"},
                     },
-                    "codemcp": {
+                    "sequential-thinking": {
                         "type": "stdio",
                         "command": "/bin/zsh",
                         "args": [
                             "-c",
-                            "uvx --from git+https://github.com/cccntu/codemcp@main codemcp ",
+                            "npx -y @modelcontextprotocol/server-sequential-thinking",
                         ],
                     },
                 }
@@ -123,8 +128,7 @@ def mcp_config_file():
 
 @patch("llmproc.llm_process.HAS_MCP", True)
 @patch("llmproc.llm_process.asyncio.run")
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_mcp_initialization(
     mock_anthropic, mock_asyncio_run, mock_mcp_registry, mock_env, mcp_config_file
 ):
@@ -137,11 +141,11 @@ def test_mcp_initialization(
     from llmproc.program import LLMProgram
 
     program = LLMProgram(
-        model_name="claude-3-haiku-20240307",
+        model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are a test assistant.",
         mcp_config_path=mcp_config_file,
-        mcp_tools={"github": ["search_repositories"], "codemcp": ["ReadFile"]},
+        mcp_tools={"github": ["search_repositories"], "sequential-thinking": ["sequentialthinking"]},
     )
     process = LLMProcess(program=program)
 
@@ -152,12 +156,12 @@ def test_mcp_initialization(
     # Check the configuration is correct
     assert process.mcp_tools == {
         "github": ["search_repositories"],
-        "codemcp": ["ReadFile"],
+        "sequential-thinking": ["sequentialthinking"],
     }
     assert process.mcp_config_path == mcp_config_file
     assert process.mcp_tools == {
         "github": ["search_repositories"],
-        "codemcp": ["ReadFile"],
+        "sequential-thinking": ["sequentialthinking"],
     }
 
     # In our new design, _initialize_tools no longer calls asyncio.run
@@ -187,7 +191,7 @@ def test_from_toml_with_mcp(mock_mcp_registry, mock_env, mcp_config_file):
         config_file = temp_dir_path / "config.toml"
         config_file.write_text("""
 [model]
-name = "claude-3-haiku-20240307"
+name = "claude-3-5-haiku-20241022"
 provider = "anthropic"
 display_name = "Test MCP Assistant"
 
@@ -203,13 +207,12 @@ config_path = "config/mcp_servers.json"
 
 [mcp.tools]
 github = ["search_repositories", "get_file_contents"]
-codemcp = ["ReadFile"]
+sequential-thinking = ["sequentialthinking"]
 """)
 
         # Create and patch the instance
-        with patch("llmproc.providers.providers.anthropic", MagicMock()):
-            with patch("llmproc.providers.providers.Anthropic"):
-                with patch("llmproc.llm_process.asyncio.run"):
+        with patch("llmproc.providers.providers.AsyncAnthropic"):
+            with patch("llmproc.llm_process.asyncio.run"):
                     # Use the two-step pattern
                     from llmproc.program import LLMProgram
 
@@ -231,20 +234,19 @@ codemcp = ["ReadFile"]
                         )
                         assert (
                             "github" in process.mcp_tools
-                            and "codemcp" in process.mcp_tools
+                            and "sequential-thinking" in process.mcp_tools
                         )
                         assert process.mcp_tools == {
                             "github": ["search_repositories", "get_file_contents"],
-                            "codemcp": ["ReadFile"],
+                            "sequential-thinking": ["sequentialthinking"],
                         }
-                        assert process.model_name == "claude-3-haiku-20240307"
+                        assert process.model_name == "claude-3-5-haiku-20241022"
                         assert process.provider == "anthropic"
                         assert process.display_name == "Test MCP Assistant"
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_mcp_with_no_tools(
     mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file
 ):
@@ -258,7 +260,7 @@ def test_mcp_with_no_tools(
         from llmproc.program import LLMProgram
 
         program = LLMProgram(
-            model_name="claude-3-haiku-20240307",
+            model_name="claude-3-5-haiku-20241022",
             provider="anthropic",
             system_prompt="You are a test assistant.",
             mcp_config_path=mcp_config_file,
@@ -275,8 +277,7 @@ def test_mcp_with_no_tools(
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_mcp_with_all_tools(
     mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file
 ):
@@ -287,11 +288,11 @@ def test_mcp_with_all_tools(
         from llmproc.program import LLMProgram
 
         program = LLMProgram(
-            model_name="claude-3-haiku-20240307",
+            model_name="claude-3-5-haiku-20241022",
             provider="anthropic",
             system_prompt="You are a test assistant.",
             mcp_config_path=mcp_config_file,
-            mcp_tools={"github": "all", "codemcp": ["ReadFile"]},
+            mcp_tools={"github": "all", "sequential-thinking": ["sequentialthinking"]},
         )
         process = LLMProcess(program=program)
 
@@ -299,7 +300,7 @@ def test_mcp_with_all_tools(
         process.mcp_enabled = True
 
         # Check configuration
-        assert process.mcp_tools == {"github": "all", "codemcp": ["ReadFile"]}
+        assert process.mcp_tools == {"github": "all", "sequential-thinking": ["sequentialthinking"]}
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
@@ -338,8 +339,7 @@ github = 123  # This is invalid, should be a list or "all"
 """)
 
         # Test that it raises a ValueError
-        with patch("llmproc.providers.providers.anthropic", MagicMock()):
-            with patch("llmproc.providers.providers.Anthropic"):
+        with patch("llmproc.providers.providers.AsyncAnthropic"):
                 with pytest.raises(ValueError):
                     # Use LLMProgram.from_toml instead
                     from llmproc.program import LLMProgram
@@ -348,8 +348,7 @@ github = 123  # This is invalid, should be a list or "all"
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.anthropic", MagicMock())
-@patch("llmproc.providers.providers.Anthropic")
+@patch("llmproc.providers.providers.AsyncAnthropic")
 def test_run_with_tools(mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file):
     """Test the run method with tool support."""
     # Use a completely different approach - create a simplified mock for demonstration
@@ -365,7 +364,7 @@ def test_run_with_tools(mock_anthropic, mock_mcp_registry, mock_env, mcp_config_
 @patch("llmproc.llm_process.HAS_MCP", True)
 def test_openai_with_mcp_raises_error(mock_mcp_registry, mock_env, mcp_config_file):
     """Test that using OpenAI with MCP raises an error (not yet supported)."""
-    with patch("llmproc.providers.providers.OpenAI", MagicMock()):
+    with patch("llmproc.providers.providers.AsyncOpenAI", MagicMock()):
         from llmproc.program import LLMProgram
 
         # Create program with OpenAI provider but MCP configuration
@@ -387,8 +386,7 @@ def test_openai_with_mcp_raises_error(mock_mcp_registry, mock_env, mcp_config_fi
 @patch("llmproc.llm_process.HAS_MCP", False)
 def test_mcp_import_error(mock_env, mcp_config_file):
     """Test that trying to use MCP when the package is not installed raises an ImportError."""
-    with patch("llmproc.providers.providers.anthropic", MagicMock()):
-        with patch("llmproc.providers.providers.Anthropic", MagicMock()):
+    with patch("llmproc.providers.providers.AsyncAnthropic", MagicMock()):
             from llmproc.program import LLMProgram
 
             # Create program with MCP configuration

@@ -16,6 +16,7 @@ class ModelConfig(BaseModel):
     name: str
     provider: str
     display_name: str | None = None
+    disable_automatic_caching: bool = False
 
     @classmethod
     @field_validator("provider")
@@ -27,6 +28,18 @@ class ModelConfig(BaseModel):
                 f"Provider '{v}' not supported. Must be one of: {', '.join(supported_providers)}"
             )
         return v
+        
+    @model_validator(mode="after")
+    def validate_caching_config(self):
+        """Validate that automatic caching is only disabled for Anthropic providers."""
+        if self.disable_automatic_caching and "anthropic" not in self.provider:
+            import warnings
+            warnings.warn(
+                f"'disable_automatic_caching' is set to true, but the provider is '{self.provider}'. "
+                f"Automatic caching is only supported for Anthropic providers, so this setting will have no effect.",
+                stacklevel=2
+            )
+        return self
 
 
 class PromptConfig(BaseModel):
@@ -120,10 +133,35 @@ class EnvInfoConfig(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class FileDescriptorConfig(BaseModel):
+    """File descriptor configuration section."""
+
+    enabled: bool = False
+    max_direct_output_chars: int = 8000
+    default_page_size: int = 4000
+    max_input_chars: int = 8000
+    page_user_input: bool = True
+    enable_references: bool = False
+    
+    @classmethod
+    @field_validator("max_direct_output_chars", "default_page_size", "max_input_chars")
+    def validate_positive_int(cls, v):
+        """Validate that integer values are positive."""
+        if v <= 0:
+            raise ValueError("Value must be positive")
+        return v
+
+
+class LinkedProgramItem(BaseModel):
+    """Configuration for a single linked program."""
+    
+    path: str
+    description: str = ""
+    
 class LinkedProgramsConfig(RootModel):
     """Linked programs configuration section."""
 
-    root: dict[str, str] = {}
+    root: dict[str, str | LinkedProgramItem] = {}
 
 
 class LLMProgramConfig(BaseModel):
@@ -137,10 +175,101 @@ class LLMProgramConfig(BaseModel):
     tools: ToolsConfig | None = ToolsConfig()
     env_info: EnvInfoConfig | None = EnvInfoConfig()
     linked_programs: LinkedProgramsConfig | None = LinkedProgramsConfig()
+    file_descriptor: FileDescriptorConfig | None = None
 
     model_config = {
         "extra": "forbid"  # Forbid extra fields
     }
+    
+    @field_validator("parameters")
+    def validate_reasoning_parameters(cls, v):
+        """Validate that reasoning parameters have valid values."""
+        # Check reasoning_effort values
+        if "reasoning_effort" in v:
+            valid_values = {"low", "medium", "high"}
+            if v["reasoning_effort"] not in valid_values:
+                raise ValueError(
+                    f"Invalid reasoning_effort value '{v['reasoning_effort']}'. "
+                    f"Must be one of: {', '.join(valid_values)}"
+                )
+        
+        # Remove validation for deprecated thinking_budget parameter
+        
+        # Check for token parameter conflicts
+        if "max_tokens" in v and "max_completion_tokens" in v:
+            raise ValueError(
+                "Cannot specify both 'max_tokens' and 'max_completion_tokens'. "
+                "Use 'max_tokens' for standard models and 'max_completion_tokens' for reasoning models."
+            )
+        
+        # Validate extra_headers structure if present
+        if "extra_headers" in v and not isinstance(v["extra_headers"], dict):
+            raise ValueError(f"parameters.extra_headers must be a dictionary of header key-value pairs")
+        
+        # Validate thinking structure if present
+        if "thinking" in v:
+            thinking = v["thinking"]
+            if not isinstance(thinking, dict):
+                raise ValueError(f"parameters.thinking must be a dictionary")
+            
+            # Check for required fields
+            if "type" in thinking and thinking["type"] not in ["enabled", "disabled"]:
+                raise ValueError(f"parameters.thinking.type must be 'enabled' or 'disabled'")
+            
+            # Check budget_tokens if present
+            if "budget_tokens" in thinking:
+                budget = thinking["budget_tokens"]
+                if not isinstance(budget, int):
+                    raise ValueError(f"parameters.thinking.budget_tokens must be an integer")
+                if budget < 0:
+                    raise ValueError(f"parameters.thinking.budget_tokens must be non-negative")
+                if budget > 0 and budget < 1024:
+                    import warnings
+                    warnings.warn(
+                        f"parameters.thinking.budget_tokens set to {budget}, but Claude requires minimum 1024. "
+                        f"This will likely fail at runtime.",
+                        stacklevel=2
+                    )
+        
+        return v
+    
+    @model_validator(mode="after")
+    def validate_file_descriptor(self):
+        """Validate file descriptor configuration is consistent with tools.
+        
+        This validator checks if file_descriptor.enabled is true but no FD tools are enabled.
+        It also issues a warning if there's a file_descriptor section but no FD tools.
+        """
+        import warnings
+        
+        # FD tools
+        fd_tools = ["read_fd", "fd_to_file"]
+        
+        # Check if file_descriptor is configured
+        if self.file_descriptor:
+            # Check if any FD tools are enabled
+            has_fd_tools = False
+            if self.tools and self.tools.enabled:
+                has_fd_tools = any(tool in fd_tools for tool in self.tools.enabled)
+            
+            # If explicitly enabled but no tools, raise error
+            if self.file_descriptor.enabled and not has_fd_tools:
+                raise ValueError(
+                    "file_descriptor.enabled is set to true, but no file descriptor tools "
+                    "('read_fd', 'fd_to_file') are enabled in the [tools] section. "
+                    "Add at least 'read_fd' to the enabled tools list."
+                )
+            
+            # If has settings but not explicitly enabled and no tools, issue warning
+            if not self.file_descriptor.enabled and not has_fd_tools:
+                warnings.warn(
+                    "File descriptor configuration is present but no file descriptor tools "
+                    "are enabled in the [tools] section and file_descriptor.enabled is not true. "
+                    "The configuration will have no effect.",
+                    stacklevel=2
+                )
+        
+        return self
 
     @model_validator(mode="after")
     def validate_parameters(self):
@@ -161,9 +290,14 @@ class LLMProgramConfig(BaseModel):
             # OpenAI specific
             "top_k",
             "stop",
+            "reasoning_effort",  # For OpenAI reasoning models
+            "max_completion_tokens",  # For OpenAI reasoning models (replaces max_tokens)
             # Anthropic specific
             "max_tokens_to_sample",
             "stop_sequences",
+            "thinking_budget",  # For Claude 3.7+ thinking models (legacy format)
+            "thinking",         # For Claude 3.7+ thinking models (new nested format)
+            "extra_headers",    # For API-specific headers like beta features
         }
 
         if self.parameters:
@@ -172,6 +306,64 @@ class LLMProgramConfig(BaseModel):
                     warnings.warn(
                         f"Unknown API parameter '{param_name}' in configuration. "
                         f"This may be a typo or a newer parameter not yet recognized.",
+                        stacklevel=2
+                    )
+            
+            # Check if using OpenAI reasoning model - in this case we need special parameter handling
+            is_reasoning_model = False
+            if hasattr(self, "model") and self.model.provider == "openai":
+                is_reasoning_model = self.model.name.startswith(("o1", "o3"))
+                
+                # If using a reasoning model, suggest recommended parameters
+                if is_reasoning_model and "reasoning_effort" not in self.parameters:
+                    warnings.warn(
+                        "OpenAI reasoning model detected (o1, o3). For better results, "
+                        "consider adding the 'reasoning_effort' parameter (low, medium, high).",
+                        stacklevel=2
+                    )
+            
+            # Check if using Claude 3.7 thinking model
+            is_claude_thinking_model = False
+            if hasattr(self, "model") and self.model.provider == "anthropic":
+                is_claude_thinking_model = self.model.name.startswith("claude-3-7")
+                
+                # If using a Claude thinking model, suggest recommended parameters
+                if is_claude_thinking_model and "thinking" not in self.parameters:
+                    warnings.warn(
+                        "Claude 3.7+ thinking model detected. For better results, "
+                        "consider adding the '[parameters.thinking]' section with 'type' and 'budget_tokens'.",
+                        stacklevel=2
+                    )
+                
+            # Check if reasoning_effort used with non-OpenAI provider
+            if "reasoning_effort" in self.parameters and hasattr(self, "model") and self.model.provider != "openai":
+                warnings.warn(
+                    "The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. "
+                    "It will be ignored for other providers.",
+                    stacklevel=2
+                )
+                
+            # Check if thinking parameters used with non-Claude provider or non-3.7 Claude
+            if "thinking" in self.parameters and hasattr(self, "model") and \
+               (self.model.provider != "anthropic" or not self.model.name.startswith("claude-3-7")):
+                warnings.warn(
+                    "The 'thinking' parameter is only supported with Claude 3.7+ models. "
+                    "It will be ignored for other providers.",
+                    stacklevel=2
+                )
+                
+            # Validate that reasoning models use max_completion_tokens
+            if hasattr(self, "model") and self.model.provider == "openai":
+                if is_reasoning_model and "max_tokens" in self.parameters:
+                    warnings.warn(
+                        "OpenAI reasoning models (o1, o3) should use 'max_completion_tokens' instead of 'max_tokens'. "
+                        "Your configuration may fail at runtime.",
+                        stacklevel=2
+                    )
+                elif not is_reasoning_model and "max_completion_tokens" in self.parameters:
+                    warnings.warn(
+                        "'max_completion_tokens' is only for OpenAI reasoning models (o1, o3). "
+                        "Standard models should use 'max_tokens' instead.",
                         stacklevel=2
                     )
 

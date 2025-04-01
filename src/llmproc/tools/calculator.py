@@ -5,6 +5,7 @@ import math
 import operator
 
 from llmproc.tools.tool_result import ToolResult
+from llmproc.tools.function_tools import register_tool
 
 # Allowed binary operators
 ALLOWED_OPERATORS = {
@@ -147,70 +148,36 @@ def safe_eval(expression: str) -> float:
         raise ValueError(f"Error evaluating expression: {str(e)}")
 
 
-# Calculator tool definition for Anthropic API
-calculator_tool_def = {
-    "name": "calculator",
-    "description": """
-A tool for evaluating mathematical expressions.
-
-This tool enables you to calculate the result of complex mathematical expressions safely.
-It supports basic arithmetic, mathematical functions, and constants.
-
-Supported operations:
-- Basic arithmetic: +, -, *, /, //, %, **
-- Comparison: ==, !=, <, <=, >, >=
-- Functions: sin, cos, tan, sqrt, log, exp, abs, round, min, max, and many more
-- Constants: pi, e, tau
-
-Examples:
-calculator("2 * (3 + 4)")  → 14.0
-calculator("sin(pi/2)")    → 1.0
-calculator("sqrt(16) + 5") → 9.0
-""",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "expression": {
-                "type": "string",
-                "description": "The mathematical expression to evaluate",
-            },
-            "precision": {
-                "type": "integer",
-                "description": "Number of decimal places in the result (default: 6)",
-            },
-        },
-        "required": ["expression"],
-    },
-}
 
 
-async def calculator_tool(
-    expression: str,
-    precision: int | None = 6,
-) -> ToolResult:
-    """
-    Calculate the result of a mathematical expression.
-
+@register_tool(
+    description="""A tool for evaluating mathematical expressions safely.
+It supports basic arithmetic, mathematical functions, and constants.""",
+    param_descriptions={
+        "expression": "The mathematical expression to evaluate. Supports operations like +, -, *, /, //, %, **, functions like sin, cos, sqrt, and constants like pi, e.",
+        "precision": "Number of decimal places in the result (between 0 and 15, default: 6)."
+    }
+)
+async def calculator(expression: str, precision: int = 6) -> str:
+    """Calculate the result of a mathematical expression.
+    
     Args:
         expression: The mathematical expression to evaluate
         precision: Number of decimal places in the result (default: 6)
-
+        
     Returns:
-        ToolResult with the calculated value or error message
+        The calculated result as a string
     """
     # Validate parameters
     if not expression or not isinstance(expression, str):
         return ToolResult.from_error("Expression must be a non-empty string.")
 
-    if precision is None:
-        precision = 6
-    else:
-        try:
-            precision = int(precision)
-            if precision < 0 or precision > 15:
-                return ToolResult.from_error("Precision must be between 0 and 15.")
-        except ValueError:
-            return ToolResult.from_error("Precision must be an integer.")
+    try:
+        precision = int(precision)
+        if precision < 0 or precision > 15:
+            return ToolResult.from_error("Precision must be between 0 and 15.")
+    except ValueError:
+        return ToolResult.from_error("Precision must be an integer.")
 
     # Try to evaluate the expression
     try:
@@ -231,7 +198,7 @@ async def calculator_tool(
         else:
             formatted_result = str(result)
 
-        return ToolResult.from_success(formatted_result)
+        return formatted_result
 
     except ValueError as e:
         return ToolResult.from_error(f"Calculation error: {str(e)}")

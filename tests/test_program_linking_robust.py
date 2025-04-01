@@ -82,7 +82,8 @@ class TestProgramLinkingRobust:
 
             # Create a mock RunResult for the expert's response
             mock_run_result = RunResult()
-            mock_run_result.api_calls = 1
+            # Add a mock API call instead of setting api_calls directly
+            mock_run_result.add_api_call({"model": "test-model"})
             expert_process.run = AsyncMock(return_value=mock_run_result)
 
             # Mock get_last_message to return the expected response
@@ -100,19 +101,30 @@ class TestProgramLinkingRobust:
                 program=main_program,
                 linked_programs_instances={"expert": expert_process},
             )
+            
+            # Set empty api_params to avoid None error
+            main_process.api_params = {}
 
             # Set mcp_enabled to allow tool registration
             main_process.mcp_enabled = True
             main_process.enabled_tools = ["spawn"]
 
+            # Initialize the tool_manager
+            from llmproc.tools.tool_manager import ToolManager
+            main_process.tool_manager = ToolManager()
+            main_process.tool_registry = main_process.tool_manager.registry
+            
+            # Set enabled tools in the tool manager
+            main_process.tool_manager.set_enabled_tools(["spawn"])
+            
             # Register spawn tool using the new method
-            from llmproc.tools import register_spawn_tool
+            from llmproc.tools.utils import register_spawn_tool
 
             register_spawn_tool(main_process.tool_registry, main_process)
-
-            # For backward compatibility
-            main_process.tools.extend(main_process.tool_registry.get_definitions())
-            main_process.tool_handlers.update(main_process.tool_registry.tool_handlers)
+            
+            # Add spawn to enabled tools list in the registry if not already there
+            if "spawn" not in main_process.tool_manager.enabled_tools:
+                main_process.tool_manager.enabled_tools.append("spawn")
 
             # Ensure the tool was registered - tools is now a property
             assert len(main_process.tools) > 0
@@ -165,7 +177,8 @@ class TestProgramLinkingRobust:
             from llmproc.results import RunResult
 
             mock_run_result = RunResult()
-            mock_run_result.api_calls = 1
+            # Add a mock API call instead of setting api_calls directly
+            mock_run_result.add_api_call({"model": "test-model"})
             mock_expert.run = AsyncMock(return_value=mock_run_result)
 
             # Mock get_last_message to return the expected response
@@ -216,6 +229,9 @@ class TestProgramLinkingRobust:
                 program=main_program,
                 linked_programs_instances={"error_expert": mock_expert},
             )
+            
+            # Set empty api_params to avoid None error
+            main_process.api_params = {}
 
             # Call the spawn tool directly
             from llmproc.tools.spawn import spawn_tool

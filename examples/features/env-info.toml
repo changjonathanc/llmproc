@@ -1,0 +1,27 @@
+# Environment Info - Add runtime context to system prompts
+[model]
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+display_name = "Claude with Env Info"
+
+[prompt]
+system_prompt = """You have access to environment information in <env> tags in your system prompt.
+Use this context to provide more relevant responses."""
+
+[parameters]
+max_tokens = 1000
+
+[env_info]
+# Selected environment variables to include
+variables = [
+    "working_directory",  # Current directory path
+    "platform",           # Operating system
+    "date"                # Current date
+]
+
+# Environment info appears in system prompt as:
+# <env>
+# working_directory: /path/to/dir
+# platform: darwin
+# date: 2025-03-30
+# </env>

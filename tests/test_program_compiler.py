@@ -81,8 +81,8 @@ def test_program_compile_with_env_info():
             custom_var = "custom value"
             """)
 
-        # Compile the program
-        program = LLMProgram.compile(toml_path)
+        # Load the program from TOML
+        program = LLMProgram.from_toml(toml_path)
 
         # Verify env_info was properly loaded
         assert program.env_info["variables"] == ["working_directory", "date"]
@@ -136,7 +136,7 @@ def test_program_linking_with_env_info():
             """)
 
         # Compile and instantiate the main program
-        program = LLMProgram.compile(main_program_path)
+        program = LLMProgram.from_toml(main_program_path)
         process = LLMProcess(program=program)
 
         # Verify the linked program was initialized
@@ -166,8 +166,8 @@ def test_program_compiler_load_toml():
             system_prompt = "Test system prompt"
             """)
 
-        # Compile the program
-        program = LLMProgram.compile(toml_path)
+        # Load the program from TOML
+        program = LLMProgram.from_toml(toml_path)
 
         # Verify the program was loaded correctly
         assert program.model_name == "test-model"
@@ -195,8 +195,8 @@ def test_system_prompt_file_loading():
             system_prompt_file = "prompt.md"
             """)
 
-        # Compile the program
-        program = LLMProgram.compile(toml_path)
+        # Load the program from TOML
+        program = LLMProgram.from_toml(toml_path)
 
         # Verify the prompt was loaded from the file
         assert program.system_prompt == "Test system prompt from file"
@@ -220,11 +220,18 @@ def test_preload_files_warnings():
             files = ["non-existent-file.txt"]
             """)
 
-        # Check for warnings when compiling
+        # Check for warnings when loading from TOML
         with warnings.catch_warnings(record=True) as w:
-            program = LLMProgram.compile(toml_path)
-            assert len(w) >= 1
-            assert "Preload file not found" in str(w[0].message)
+            # Filter out DeprecationWarning
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            program = LLMProgram.from_toml(toml_path)
+            # Look through all warnings
+            preload_warning_found = False
+            for warning in w:
+                if "Preload file not found" in str(warning.message):
+                    preload_warning_found = True
+                    break
+            assert preload_warning_found, "No warning about missing preload file found"
 
         # Verify the program was still compiled successfully
         assert program.model_name == "test-model"
@@ -254,9 +261,9 @@ def test_system_prompt_file_error():
             system_prompt_file = "non-existent-prompt.md"
             """)
 
-        # Check for FileNotFoundError when compiling
+        # Check for FileNotFoundError when loading from TOML
         with pytest.raises(FileNotFoundError) as excinfo:
-            LLMProgram.compile(toml_path)
+            LLMProgram.from_toml(toml_path)
 
         # Verify the error message includes both the specified and resolved paths
         assert "System prompt file not found" in str(excinfo.value)
@@ -281,9 +288,9 @@ def test_mcp_config_file_error():
             config_path = "non-existent-config.json"
             """)
 
-        # Check for FileNotFoundError when compiling
+        # Check for FileNotFoundError when loading from TOML
         with pytest.raises(FileNotFoundError) as excinfo:
-            LLMProgram.compile(toml_path)
+            LLMProgram.from_toml(toml_path)
 
         # Verify the error message includes both the specified and resolved paths
         assert "MCP config file not found" in str(excinfo.value)

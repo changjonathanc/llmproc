@@ -1,6 +1,7 @@
 """LLMProcess class for executing LLM programs and handling interactions."""
 
 import asyncio
+import copy
 import logging
 import os
 import warnings
@@ -12,9 +13,11 @@ from dotenv import load_dotenv
 from llmproc.program import LLMProgram
 from llmproc.providers import get_provider_client
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 from llmproc.results import RunResult
-from llmproc.tools import ToolRegistry, mcp, register_system_tools
+from llmproc.tools import ToolManager, file_descriptor_instructions, mcp
+from llmproc.tools.file_descriptor import FileDescriptorManager
 
 # Check if mcp-registry is installed
 HAS_MCP = False
@@ -81,8 +84,12 @@ class LLMProcess:
             # Get enabled tools from the program
             self.enabled_tools = program.tools.get("enabled", [])
 
-        # Initialize the tool registry
-        self.tool_registry = ToolRegistry()
+        # Get the tool manager from the program (Phase 5 of RFC022)
+        self.tool_manager = program.tool_manager
+        
+        # For backward compatibility with tests and existing code
+        # This will be removed in a future release
+        self.tool_registry = self.tool_manager.registry
 
         # MCP Configuration
         self.mcp_enabled = False
@@ -98,6 +105,7 @@ class LLMProcess:
         # Linked Programs Configuration
         self.linked_programs = {}
         self.has_linked_programs = False
+        self.linked_program_descriptions = {}
 
         # Initialize linked programs if provided in constructor
         if linked_programs_instances:
@@ -107,6 +115,10 @@ class LLMProcess:
         elif hasattr(program, "linked_programs") and program.linked_programs:
             self.has_linked_programs = True
             self.linked_programs = program.linked_programs
+            
+        # Get linked program descriptions if available
+        if hasattr(program, "linked_program_descriptions") and program.linked_program_descriptions:
+            self.linked_program_descriptions = program.linked_program_descriptions
 
         # Initialize system tools
         self._initialize_tools()
@@ -137,6 +149,52 @@ class LLMProcess:
 
         # Initialize fork support
         self.allow_fork = True  # By default, allow forking
+        
+        # Initialize file descriptor system
+        self.file_descriptor_enabled = False
+        self.fd_manager = None
+        self.references_enabled = False
+        
+        # Check for file descriptor configuration in program
+        if hasattr(program, "file_descriptor"):
+            # Configure file descriptor manager with program settings
+            fd_config = program.file_descriptor
+            
+            # Enable if explicitly enabled in config or if read_fd is in enabled tools
+            explicit_enabled = fd_config.get("enabled", False)
+            implicit_enabled = "read_fd" in self.enabled_tools
+            
+            if explicit_enabled or implicit_enabled:
+                self.file_descriptor_enabled = True
+                
+                # Get configuration values with defaults - fd_config is a dictionary, not an object
+                default_page_size = fd_config.get("default_page_size", 4000)
+                max_direct_output_chars = fd_config.get("max_direct_output_chars", 8000)
+                max_input_chars = fd_config.get("max_input_chars", 8000)
+                page_user_input = fd_config.get("page_user_input", True)
+                
+                # Check if references are enabled - fd_config is a dictionary, not an object
+                self.references_enabled = fd_config.get("enable_references", False)
+                
+                # Initialize the file descriptor manager
+                self.fd_manager = FileDescriptorManager(
+                    default_page_size=default_page_size,
+                    max_direct_output_chars=max_direct_output_chars,
+                    max_input_chars=max_input_chars,
+                    page_user_input=page_user_input
+                )
+                
+                logger.info(
+                    f"File descriptor system enabled with page size {default_page_size}, "
+                    f"user input paging: {page_user_input}, "
+                    f"references: {self.references_enabled}"
+                )
+        
+        # If read_fd is in tools but no configuration provided, still enable with defaults
+        elif "read_fd" in self.enabled_tools:
+            self.file_descriptor_enabled = True
+            self.fd_manager = FileDescriptorManager()
+            logger.info("File descriptor system enabled with default settings")
 
         # Preload files if specified
         if hasattr(program, "preload_files") and program.preload_files:
@@ -163,6 +221,7 @@ class LLMProcess:
         Raises:
             All exceptions from __init__, plus:
             RuntimeError: If MCP initialization fails
+            ValueError: If a server specified in mcp_tools is not found in available tools
         """
         # Create instance with basic initialization
         instance = cls(program, linked_programs_instances)
@@ -251,9 +310,6 @@ class LLMProcess:
         Raises:
             ValueError: If user_input is empty
         """
-        # Import the RunResult class
-        from llmproc.results import RunResult
-
         # Create a RunResult object to track this run
         run_result = RunResult()
 
@@ -272,9 +328,21 @@ class LLMProcess:
             self.enriched_system_prompt = self.program.get_enriched_system_prompt(
                 process_instance=self, include_env=True
             )
+            
+        # Process user input through file descriptor manager if enabled
+        processed_user_input = user_input
+        if self.file_descriptor_enabled and self.fd_manager:
+            # Handle large user input (convert to file descriptor if needed)
+            processed_user_input = self.fd_manager.handle_user_input(user_input)
+            
+            # Log if input was converted to a file descriptor
+            if processed_user_input != user_input:
+                logger.info(
+                    f"Large user input ({len(user_input)} chars) converted to file descriptor"
+                )
 
-        # Add user input to state
-        self.state.append({"role": "user", "content": user_input})
+        # Add processed user input to state
+        self.state.append({"role": "user", "content": processed_user_input})
 
         # Create provider-specific process executors
         if self.provider == "openai":
@@ -292,6 +360,27 @@ class LLMProcess:
             )
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
+
+        # Process any references in the last assistant message for reference ID system
+        if self.file_descriptor_enabled and self.fd_manager and self.references_enabled:
+            # Get the last assistant message if available
+            if self.state and len(self.state) > 0 and self.state[-1].get("role") == "assistant":
+                assistant_message = self.state[-1].get("content", "")
+                
+                # Check if we have a string message or a structured message (Anthropic)
+                if isinstance(assistant_message, list):
+                    # Process each text block in the message
+                    for i, block in enumerate(assistant_message):
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text_content = block.get("text", "")
+                            references = self.fd_manager.extract_references(text_content)
+                            if references:
+                                logger.info(f"Extracted {len(references)} references from assistant message")
+                else:
+                    # Process the simple string message
+                    references = self.fd_manager.extract_references(assistant_message)
+                    if references:
+                        logger.info(f"Extracted {len(references)} references from assistant message")
 
         # Mark the run as complete and calculate duration
         run_result.complete()
@@ -312,27 +401,31 @@ class LLMProcess:
         This sets up the MCP registry and filters tools based on user configuration.
         Only tools explicitly specified in the mcp_tools configuration will be enabled.
         Only servers that have tools configured will be initialized.
+        
+        Raises:
+            ValueError: If a server specified in mcp_tools is not found in available tools
+            RuntimeError: If MCP registry initialization or tool listing fails
         """
         if not self.mcp_enabled:
             return
 
         success = await mcp.initialize_mcp_tools(
-            self, self.tool_registry, self.mcp_config_path, self.mcp_tools
+            self, self.tool_manager.registry, self.mcp_config_path, self.mcp_tools
         )
 
         if not success:
-            logger.warning(
-                "Failed to initialize MCP tools. Some features may not work correctly."
-            )
+            raise RuntimeError("Failed to initialize MCP tools. Some tools may not be available.")
 
     def reset_state(
-        self, keep_system_prompt: bool = True, keep_preloaded: bool = True
+        self, keep_system_prompt: bool = True, keep_preloaded: bool = True,
+        keep_file_descriptors: bool = True
     ) -> None:
         """Reset the conversation state.
 
         Args:
             keep_system_prompt: Whether to keep the system prompt for the next API call
             keep_preloaded: Whether to keep preloaded file content
+            keep_file_descriptors: Whether to keep file descriptor content
 
         Note:
             State only contains user/assistant messages, not system message.
@@ -349,6 +442,20 @@ class LLMProcess:
         # If we're not keeping the system prompt, reset it to original
         if not keep_system_prompt:
             self.system_prompt = self.original_system_prompt
+            
+        # Reset file descriptors if not keeping them
+        if not keep_file_descriptors and self.file_descriptor_enabled and self.fd_manager:
+            # Create a new manager but preserve the settings
+            self.fd_manager = FileDescriptorManager(
+                default_page_size=self.fd_manager.default_page_size,
+                max_direct_output_chars=self.fd_manager.max_direct_output_chars,
+                max_input_chars=self.fd_manager.max_input_chars,
+                page_user_input=self.fd_manager.page_user_input
+            )
+            # Copy over the FD-related tools registry
+            self.fd_manager.fd_related_tools = self.fd_manager.fd_related_tools.union(
+                self.fd_manager._FD_RELATED_TOOLS
+            )
 
         # Always reset the enriched system prompt - it will be regenerated on next run
         # with the correct combination of system prompt and preloaded content
@@ -357,6 +464,7 @@ class LLMProcess:
     def _initialize_tools(self) -> None:
         """Initialize all system tools.
 
+        This method initializes both system tools and function-based tools.
         MCP tools require async initialization and are handled separately
         via the create() factory method or lazy initialization in run().
         """
@@ -373,49 +481,75 @@ class LLMProcess:
                     "MCP features are currently only supported with the Anthropic provider"
                 )
 
-        # Register system tools using the ToolRegistry
-        register_system_tools(self.tool_registry, self)
+        # Use the ToolManager for tool registration (Phase 5 of RFC022)
+        # 1. Process function-based tools that use @register_tool decorator
+        self.tool_manager.process_function_tools()
+        # 2. Register built-in system tools like read_fd, spawn, fork, etc.
+        self.tool_manager.register_system_tools(self)
+        
+        enabled_tools = self.tool_manager.get_enabled_tools()
+        logger.info(f"Initialized {len(enabled_tools)} tools using ToolManager: {', '.join(enabled_tools)}")
 
     @property
     def tools(self) -> list:
-        """Property to access tool definitions.
+        """Property to access tool definitions for the LLM API.
+
+        This delegates to the ToolManager which provides a consistent interface
+        for getting tool schemas across all tool types.
+
+        Only returns schemas for tools that are enabled to prevent duplicates.
 
         Returns:
-            List of tool definitions.
+            List of tool schemas formatted for the LLM provider's API.
         """
-        return self.tool_registry.get_definitions()
+        all_schemas = self.tool_manager.get_tool_schemas()
+        enabled_tools = self.tool_manager.get_enabled_tools()
+        
+        # Filter schemas to only include enabled tools
+        return [schema for schema in all_schemas if schema.get("name") in enabled_tools]
 
     @property
     def tool_handlers(self) -> dict:
-        """Property to access tool handlers.
+        """Property to access tool handler functions.
+
+        This delegates to the ToolManager's registry to provide access to the
+        actual handler functions that execute tool operations.
 
         Returns:
-            Dictionary of tool handlers.
+            Dictionary mapping tool names to their handler functions.
         """
-        return self.tool_registry.tool_handlers
+        return self.tool_manager.registry.tool_handlers
 
     async def call_tool(self, tool_name: str, args: dict) -> Any:
         """Call a tool by name with the given arguments.
 
         This method provides a unified interface for calling any registered tool,
-        whether it's an MCP tool or a system tool like spawn or fork.
+        whether it's an MCP tool, a system tool, or a function-based tool.
+        It delegates to the ToolManager which handles all tool calling details.
 
         Args:
             tool_name: The name of the tool to call
             args: The arguments to pass to the tool
 
         Returns:
-            The result of the tool execution
-
-        Raises:
-            ValueError: If the tool is not found
-            RuntimeError: If the tool execution fails
+            The result of the tool execution or an error ToolResult
         """
-        try:
-            return await self.tool_registry.call_tool(tool_name, args)
-        except Exception as e:
-            raise RuntimeError(f"Error executing tool '{tool_name}': {str(e)}")
+        return await self.tool_manager.call_tool(tool_name, args)
 
+    async def count_tokens(self):
+        """Count tokens in the current conversation state.
+
+        Returns:
+            dict: Token count information for Anthropic models or None for others
+        """
+        # Only support Anthropic models for now
+        if self.provider not in ANTHROPIC_PROVIDERS:
+            return None
+
+        # Create executor and count tokens
+        executor = AnthropicProcessExecutor()
+        return await executor.count_tokens(self)
+        
     def get_last_message(self) -> str:
         """Get the most recent message from the conversation.
 
@@ -468,8 +602,6 @@ class LLMProcess:
         Returns:
             A new LLMProcess instance that is a deep copy of this one
         """
-        import copy
-
         # Create a new instance of LLMProcess with the same program
         forked_process = LLMProcess(program=self.program)
 
@@ -494,6 +626,20 @@ class LLMProcess:
             # Copy the aggregator if it exists
             if hasattr(self, "aggregator"):
                 forked_process.aggregator = self.aggregator
+                
+        # If the parent process had file descriptors enabled, copy the manager and its state
+        if self.file_descriptor_enabled and self.fd_manager:
+            forked_process.file_descriptor_enabled = True
+            forked_process.fd_manager = copy.deepcopy(self.fd_manager)
+            
+            # Copy references_enabled setting
+            forked_process.references_enabled = getattr(self, "references_enabled", False)
+            
+            # Ensure user input handling settings are copied correctly
+            if not hasattr(forked_process.fd_manager, "page_user_input"):
+                forked_process.fd_manager.page_user_input = getattr(self.fd_manager, "page_user_input", False)
+            if not hasattr(forked_process.fd_manager, "max_input_chars"):
+                forked_process.fd_manager.max_input_chars = getattr(self.fd_manager, "max_input_chars", 8000)
 
         # Prevent forked processes from forking again
         forked_process.allow_fork = False
