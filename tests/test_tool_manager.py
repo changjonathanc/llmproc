@@ -132,7 +132,7 @@ async def test_process_function_tools():
     manager.add_function_tool(test_func)
     
     # Process the function tools
-    with patch('llmproc.tools.function_tools.create_tool_from_function') as mock_create:
+    with patch('llmproc.tools.tool_manager.create_tool_from_function') as mock_create:
         # Mock the create_tool_from_function function
         mock_handler = Mock()
         mock_schema = {"name": "test_func", "description": "Test function"}

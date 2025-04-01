@@ -3,6 +3,8 @@
 import logging
 from typing import Any
 
+from llmproc.tools.tool_result import ToolResult
+
 # Avoid circular import
 # LLMProcess is imported within the function
 
@@ -154,8 +156,6 @@ async def spawn_tool(
     if not llm_process or not hasattr(llm_process, "linked_programs"):
         error_msg = "Spawn system call requires a parent LLMProcess with linked_programs defined"
         logger.error(f"SPAWN ERROR: {error_msg}")
-        from llmproc.tools.tool_result import ToolResult
-
         return ToolResult.from_error(error_msg)
 
     linked_programs = llm_process.linked_programs
@@ -178,8 +178,6 @@ async def spawn_tool(
         available_programs = "\n- " + "\n- ".join(available_programs_list)
         error_msg = f"Program '{program_name}' not found. Available programs: {available_programs}"
         logger.error(f"SPAWN ERROR: {error_msg}")
-        from llmproc.tools.tool_result import ToolResult
-
         return ToolResult.from_error(error_msg)
 
     try:
@@ -236,14 +234,9 @@ async def spawn_tool(
         response_text = linked_process.get_last_message()
 
         # Return a successful ToolResult with the response text as content
-        from llmproc.tools.tool_result import ToolResult
-
         return ToolResult.from_success(response_text)
     except Exception as e:
-
         error_msg = f"Error creating process from program '{program_name}': {str(e)}"
         logger.error(f"SPAWN ERROR: {error_msg}")
         logger.debug("Detailed traceback:", exc_info=True)
-        from llmproc.tools.tool_result import ToolResult
-
         return ToolResult.from_error(error_msg)

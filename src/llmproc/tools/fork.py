@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from llmproc.tools.tool_result import ToolResult
+
 # Avoid circular import
 # LLMProcess is imported within the function
 
@@ -74,8 +76,6 @@ async def fork_tool(
         A dictionary with placeholder response
     """
     # This is just a placeholder - the real implementation is in the process executor
-    from llmproc.tools.tool_result import ToolResult
-
     return ToolResult.from_error(
         "Direct calls to fork_tool are not supported. This should be handled by the process executor."
     )
