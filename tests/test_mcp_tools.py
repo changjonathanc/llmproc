@@ -1,4 +1,9 @@
-"""Tests for MCP tool execution and error handling."""
+"""Tests for MCP tool execution and error handling.
+
+Note: We need an integration test for the tool manager and MCP tool interaction
+to catch issues like the one fixed where MCP tools were registered but not enabled
+in the tool manager's enabled_tools list.
+"""
 
 import asyncio
 import json
@@ -11,6 +16,7 @@ import pytest
 
 from llmproc import LLMProcess
 from llmproc.program import LLMProgram
+from llmproc.tools.mcp import MCP_TOOL_SEPARATOR
 
 
 @pytest.fixture
@@ -416,3 +422,67 @@ async def test_no_tools_registered_error(mock_register_tool, mock_server_registr
     
     # Check that the error message indicates no tools were registered
     assert "No MCP tools were registered" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@patch("llmproc.llm_process.HAS_MCP", True)
+@patch("llmproc.providers.providers.AsyncAnthropic")
+@patch("mcp_registry.MCPAggregator")
+@patch("mcp_registry.ServerRegistry")
+async def test_mcp_tools_in_tool_manager(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
+    """Test that MCP tools are properly added to the tool manager's enabled_tools list.
+    
+    This test specifically checks the fix for the issue where MCP tools were
+    registered with the tool registry but not added to the tool manager's
+    enabled_tools list, causing them to be filtered out when getting tool schemas.
+    """
+    # Setup mock client
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    
+    # Mock the MCP registry
+    mock_server_registry_instance = MagicMock()
+    mock_server_registry.from_config.return_value = mock_server_registry_instance
+    
+    mock_agg_instance = AsyncMock()
+    mock_aggregator.return_value = mock_agg_instance
+    
+    # Create a mock tool
+    mock_tool = MagicMock()
+    mock_tool.name = "test-tool"
+    mock_tool.description = "A test tool"
+    mock_tool.inputSchema = {"type": "object", "properties": {}}
+    
+    # Mock list_tools to return a server_tools_map with our server and tool
+    mock_agg_instance.list_tools = AsyncMock(
+        return_value={"test-server": [mock_tool]}
+    )
+    
+    # Create program with configuration
+    program = LLMProgram(
+        model_name="claude-3-5-haiku-20241022",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant with access to tools.",
+        mcp_config_path=mock_mcp_config,
+        mcp_tools={"test-server": ["test-tool"]}
+    )
+    
+    # Create the process
+    process = await LLMProcess.create(program)
+    
+    # We now directly add each namespaced MCP tool to enabled_tools during registration
+    # This is cleaner than using a generic "mcp" indicator in enabled_tools
+    
+    # Get the expected namespaced tool name
+    namespaced_tool_name = f"test-server{MCP_TOOL_SEPARATOR}test-tool"
+    
+    # Check that the tool manager's registry has the tool
+    assert namespaced_tool_name in process.tool_manager.registry.tool_handlers
+    
+    # Most importantly, check that the namespaced tool is in the tool manager's enabled_tools list
+    assert namespaced_tool_name in process.tool_manager.get_enabled_tools()
+    
+    # Check that the tool is in the tools property (which filters by enabled_tools)
+    # This is the critical test that was failing before our fix
+    tool_names = [t.get("name") for t in process.tools]
+    assert namespaced_tool_name in tool_names, "MCP tool not found in process.tools - it's being filtered out"

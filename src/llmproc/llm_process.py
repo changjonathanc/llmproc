@@ -18,6 +18,7 @@ from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 from llmproc.results import RunResult
 from llmproc.tools import ToolManager, file_descriptor_instructions, mcp
 from llmproc.tools.file_descriptor import FileDescriptorManager
+from llmproc.tools.mcp import MCP_TOOL_SEPARATOR
 
 # Check if mcp-registry is installed
 HAS_MCP = False
@@ -96,6 +97,9 @@ class LLMProcess:
         self.mcp_config_path = getattr(program, "mcp_config_path", None)
         self.mcp_tools = getattr(program, "mcp_tools", {})
         self._mcp_initialized = False
+        
+        # We no longer need to add "mcp" to enabled_tools
+        # Each individual MCP tool will be added to enabled_tools during registration
 
         # Mark if we need async initialization
         self._needs_async_init = self.mcp_config_path is not None and bool(
@@ -498,6 +502,7 @@ class LLMProcess:
         for getting tool schemas across all tool types.
 
         Only returns schemas for tools that are enabled to prevent duplicates.
+        For MCP tools, it handles special namespacing (server__toolname).
 
         Returns:
             List of tool schemas formatted for the LLM provider's API.
@@ -505,8 +510,10 @@ class LLMProcess:
         all_schemas = self.tool_manager.get_tool_schemas()
         enabled_tools = self.tool_manager.get_enabled_tools()
         
-        # Filter schemas to only include enabled tools
-        return [schema for schema in all_schemas if schema.get("name") in enabled_tools]
+        # Simply filter schemas to only include enabled tools
+        # Since MCP tools are directly added to enabled_tools during registration,
+        # we don't need special handling for them anymore
+        return [schema for schema in all_schemas if schema.get("name", "") in enabled_tools]
 
     @property
     def tool_handlers(self) -> dict:

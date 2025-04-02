@@ -49,5 +49,9 @@ Thumbs.db
 local/
 forking-an-agent/
 session_summaries/
+node_modules/
+package-lock.json
+package.json
+
 llms-full.txt
 *.diff

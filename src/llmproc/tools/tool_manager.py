@@ -43,6 +43,8 @@ class ToolManager:
     def __init__(self):
         """Initialize the tool manager."""
         self.registry = ToolRegistry()
+        # Add a reference to the tool manager in the registry for MCP tool registration
+        self.registry.tool_manager = self
         self.function_tools = []  # List of function tools to process
         self.enabled_tools = []  # List of enabled tool names
         self.tool_schemas = {}  # Dictionary of tool schemas by name
