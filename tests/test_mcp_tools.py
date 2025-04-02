@@ -470,9 +470,8 @@ async def test_mcp_tools_in_tool_manager(mock_server_registry, mock_aggregator, 
     # Create the process
     process = await LLMProcess.create(program)
     
-    # In our implementation, we don't need to add "mcp" to enabled_tools anymore
-    # because we directly add the namespaced tools to enabled_tools
-    # This functionality was changed compared to the original design
+    # We now directly add each namespaced MCP tool to enabled_tools during registration
+    # This is cleaner than using a generic "mcp" indicator in enabled_tools
     
     # Get the expected namespaced tool name
     namespaced_tool_name = f"test-server{MCP_TOOL_SEPARATOR}test-tool"
