@@ -18,6 +18,7 @@ from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 from llmproc.results import RunResult
 from llmproc.tools import ToolManager, file_descriptor_instructions, mcp
 from llmproc.tools.file_descriptor import FileDescriptorManager
+from llmproc.tools.mcp import MCP_TOOL_SEPARATOR
 
 # Check if mcp-registry is installed
 HAS_MCP = False
@@ -96,6 +97,11 @@ class LLMProcess:
         self.mcp_config_path = getattr(program, "mcp_config_path", None)
         self.mcp_tools = getattr(program, "mcp_tools", {})
         self._mcp_initialized = False
+        
+        # If MCP is configured, add "mcp" to enabled_tools to ensure it passes tool filtering
+        if self.mcp_config_path and self.mcp_tools:
+            if "mcp" not in self.enabled_tools:
+                self.enabled_tools.append("mcp")
 
         # Mark if we need async initialization
         self._needs_async_init = self.mcp_config_path is not None and bool(
@@ -498,6 +504,7 @@ class LLMProcess:
         for getting tool schemas across all tool types.
 
         Only returns schemas for tools that are enabled to prevent duplicates.
+        For MCP tools, it handles special namespacing (server__toolname).
 
         Returns:
             List of tool schemas formatted for the LLM provider's API.
@@ -505,8 +512,22 @@ class LLMProcess:
         all_schemas = self.tool_manager.get_tool_schemas()
         enabled_tools = self.tool_manager.get_enabled_tools()
         
-        # Filter schemas to only include enabled tools
-        return [schema for schema in all_schemas if schema.get("name") in enabled_tools]
+        # Create filtered list of tool schemas
+        filtered_schemas = []
+        
+        for schema in all_schemas:
+            tool_name = schema.get("name", "")
+            
+            # Add directly if tool name is in enabled_tools
+            if tool_name in enabled_tools:
+                filtered_schemas.append(schema)
+            # Special handling for MCP tools (which have server{MCP_TOOL_SEPARATOR}toolname format)
+            elif MCP_TOOL_SEPARATOR in tool_name and "mcp" in enabled_tools:
+                # MCP tools have been registered with their server prefix
+                # If "mcp" is in enabled_tools, include all MCP tools
+                filtered_schemas.append(schema)
+                
+        return filtered_schemas
 
     @property
     def tool_handlers(self) -> dict:

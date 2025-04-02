@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 MCPTool = Any
 MCPToolsMap = dict[str, list[Any]]
 
+# MCP tool naming constants
+MCP_TOOL_SEPARATOR = "__"  # Standard separator for MCP tool namespacing
+
 
 async def initialize_mcp_tools(
     process, tool_registry, mcp_config_path: str, mcp_tools_config: dict[str, Any]
@@ -37,6 +40,10 @@ async def initialize_mcp_tools(
     Raises:
         RuntimeError: If MCP registry initialization or tool listing fails
         ValueError: If a server specified in mcp_tools_config is not found in available tools
+        
+    Note:
+        Each registered MCP tool will be automatically added to the tool_manager's
+        enabled_tools list if the tool_registry has a tool_manager attribute.
     """
     try:
         # Import MCP registry here to avoid circular imports
@@ -107,9 +114,19 @@ async def initialize_mcp_tools(
             else:
                 logger.warning("No MCP tools were registered. Check your configuration.")
         else:
-            logger.info(
-                f"Total MCP tools registered: {len(tool_registry.get_definitions())}"
-            )
+            # Count MCP tools (those with MCP_TOOL_SEPARATOR in their name)
+            mcp_tools_count = sum(1 for def_entry in tool_registry.get_definitions() 
+                                if MCP_TOOL_SEPARATOR in def_entry.get("name", ""))
+            mcp_tool_names = [def_entry.get("name") for def_entry in tool_registry.get_definitions() 
+                             if MCP_TOOL_SEPARATOR in def_entry.get("name", "")]
+            
+            logger.info(f"Total MCP tools registered: {mcp_tools_count}")
+            logger.info(f"MCP tool names: {', '.join(mcp_tool_names)}")
+            
+            # Check if tool_manager exists and log enabled tools
+            if hasattr(tool_registry, "tool_manager"):
+                enabled_tools = tool_registry.tool_manager.enabled_tools
+                logger.info(f"Enabled tools after MCP registration: {', '.join(enabled_tools)}")
 
         return True
 
@@ -139,7 +156,7 @@ async def register_mcp_tool(
         aggregator: The MCP Aggregator that will call the tools
         registered_tools: Set of already registered tool names to avoid duplicates
     """
-    namespaced_name = f"{server_name}__{tool.name}"
+    namespaced_name = f"{server_name}{MCP_TOOL_SEPARATOR}{tool.name}"
     if namespaced_name not in registered_tools:
         # Format the tool for Anthropic API
         tool_def = format_tool_for_anthropic(tool, server_name)
@@ -163,6 +180,12 @@ async def register_mcp_tool(
 
         # Register with the registry
         tool_registry.register_tool(namespaced_name, mcp_tool_handler, tool_def)
+        
+        # Add to tool manager's enabled_tools if it has a tool_manager attribute
+        if hasattr(tool_registry, "tool_manager"):
+            if namespaced_name not in tool_registry.tool_manager.enabled_tools:
+                tool_registry.tool_manager.enabled_tools.append(namespaced_name)
+                logger.debug(f"Added MCP tool to enabled tools: {namespaced_name}")
 
         # Mark as registered
         registered_tools.add(namespaced_name)
@@ -181,7 +204,7 @@ def format_tool_for_anthropic(
         Dictionary with tool information formatted for Anthropic API
     """
     # Create namespaced name with server prefix
-    namespaced_name = f"{server_name}__{tool.name}" if server_name else tool.name
+    namespaced_name = f"{server_name}{MCP_TOOL_SEPARATOR}{tool.name}" if server_name else tool.name
 
     # Ensure input schema has required fields
     input_schema = tool.inputSchema.copy() if tool.inputSchema else {}
