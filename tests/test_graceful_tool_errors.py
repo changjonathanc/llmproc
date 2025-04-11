@@ -1,28 +1,28 @@
 """Tests for graceful tool error handling."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 from llmproc.tools import ToolManager
-from llmproc.tools.tool_result import ToolResult
+from llmproc.common.results import ToolResult
 
 
 @pytest.fixture
 def tool_manager():
     """Create a tool manager with a test tool."""
     manager = ToolManager()
-    
+
     # Define a simple test tool handler
-    async def test_tool_handler(args):
+    async def test_tool_handler(**kwargs):
         return ToolResult.from_success("Test tool success")
-    
+
     # Register the tool
-    manager.registry.register_tool(
-        "test_tool",
-        test_tool_handler,
-        {"name": "test_tool", "description": "A test tool"}
-    )
+    manager.runtime_registry.register_tool("test_tool", test_tool_handler, {"name": "test_tool", "description": "A test tool"})
     
+    # Enable the tool 
+    manager.enabled_tools.append("test_tool")
+
     return manager
 
 
@@ -41,23 +41,22 @@ async def test_call_nonexistent_tool(tool_manager):
     result = await tool_manager.call_tool("nonexistent_tool", {})
     assert isinstance(result, ToolResult)
     assert result.is_error
-    assert "not found" in result.content
-    assert "Available tools: test_tool" in result.content
+    assert "not enabled" in result.content.lower()  # Now returns "not enabled" instead of "not found"
 
 
 @pytest.mark.asyncio
 async def test_tool_execution_error(tool_manager):
     """Test error during tool execution returns an error ToolResult."""
+
     # Register a tool that raises an exception
-    async def error_tool_handler(args):
+    async def error_tool_handler(**kwargs):
         raise ValueError("Test error")
+
+    tool_manager.runtime_registry.register_tool("error_tool", error_tool_handler, {"name": "error_tool", "description": "A tool that errors"})
     
-    tool_manager.registry.register_tool(
-        "error_tool",
-        error_tool_handler,
-        {"name": "error_tool", "description": "A tool that errors"}
-    )
-    
+    # Enable the error tool
+    tool_manager.enabled_tools.append("error_tool")
+
     result = await tool_manager.call_tool("error_tool", {})
     assert isinstance(result, ToolResult)
     assert result.is_error

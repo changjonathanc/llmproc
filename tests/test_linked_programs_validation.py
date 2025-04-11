@@ -19,10 +19,10 @@ def test_linked_programs_validation_error():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Test system prompt"
-            
+
             [linked_programs]
             enabled = ["./other_program.toml"]
             """)
@@ -47,10 +47,10 @@ def test_valid_linked_programs_format():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Test system prompt"
-            
+
             [linked_programs]
             program1 = "./other_program.toml"
             """)

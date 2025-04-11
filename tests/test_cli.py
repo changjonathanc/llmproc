@@ -41,9 +41,7 @@ def test_cli_interactive_mode():
         mock_run.return_value = MagicMock()  # Mock RunResult
         mock_exists.return_value = True  # Make Path.exists() return True
         mock_suffix.return_value = ".toml"  # Set the suffix to .toml
-        mock_absolute.return_value = Path(
-            "/fake/path/test.toml"
-        )  # Mock Path.absolute()
+        mock_absolute.return_value = Path("/fake/path/test.toml")  # Mock Path.absolute()
 
         # Create a temporary example file
         with runner.isolated_filesystem():
@@ -82,9 +80,7 @@ def test_cli_non_interactive_mode():
         mock_run.return_value = MagicMock()  # Mock RunResult
         mock_exists.return_value = True  # Make Path.exists() return True
         mock_suffix.return_value = ".toml"  # Set the suffix to .toml
-        mock_absolute.return_value = Path(
-            "/fake/path/test.toml"
-        )  # Mock Path.absolute()
+        mock_absolute.return_value = Path("/fake/path/test.toml")  # Mock Path.absolute()
 
         # Create a temporary example file
         with runner.isolated_filesystem():
@@ -125,16 +121,12 @@ def test_cli_stdin_non_interactive_mode():
         mock_isatty.return_value = False  # Simulate stdin having data
         mock_exists.return_value = True  # Make Path.exists() return True
         mock_suffix.return_value = ".toml"  # Set the suffix to .toml
-        mock_absolute.return_value = Path(
-            "/fake/path/test.toml"
-        )  # Mock Path.absolute()
+        mock_absolute.return_value = Path("/fake/path/test.toml")  # Mock Path.absolute()
 
         # Create a temporary example file
         with runner.isolated_filesystem():
             # Run the CLI with the test file and --non-interactive
-            result = runner.invoke(
-                main, ["test.toml", "--non-interactive"], input="Hello from stdin"
-            )
+            result = runner.invoke(main, ["test.toml", "--non-interactive"], input="Hello from stdin")
 
         # Verify that the code ran as expected
         assert mock_llm_program.from_toml.called

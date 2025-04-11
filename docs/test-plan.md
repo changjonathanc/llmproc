@@ -50,12 +50,12 @@ def test_cli_reset_command():
         mock_process = MagicMock()
         mock_llmprocess.from_toml.return_value = mock_process
         mock_process.run.return_value = "Hello"
-        
+
         runner = CliRunner()
         # Simulate user entering "reset" then "exit"
-        result = runner.invoke(main, ["examples/minimal.toml"], 
+        result = runner.invoke(main, ["examples/minimal.toml"],
                               input="Hello\nreset\nexit\n")
-        
+
         assert "Conversation state has been reset" in result.output
         assert mock_process.reset_state.called
 ```
@@ -80,24 +80,24 @@ async def test_api_error_recovery():
     """Test recovery from API errors."""
     class MockApiError(Exception):
         pass
-    
+
     # Mock API to fail once then succeed
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "Recovered response"
-    
+
     with patch('openai.ChatCompletion.create') as mock_create:
         mock_create.side_effect = [
             MockApiError("Rate limit exceeded"),  # First call fails
             mock_response  # Second call succeeds
         ]
-        
+
         process = LLMProcess(
             model_name="gpt-4o-mini",
             provider="openai",
             system_prompt="Test assistant"
         )
-        
+
         # Should retry and recover
         response = await process.run("Test prompt")
         assert response == "Recovered response"
@@ -124,11 +124,11 @@ async def test_concurrent_processes():
     # Create multiple process instances with different programs
     program1 = LLMProgram.from_toml("examples/minimal.toml")
     program2 = LLMProgram.from_toml("examples/anthropic.toml")
-    
+
     # Start the processes
     process1 = await program1.start()
     process2 = await program2.start()
-    
+
     # Mock API clients
     with patch_multiple_providers():
         # Run processes concurrently
@@ -137,13 +137,13 @@ async def test_concurrent_processes():
             process2.run("Message to process 2"),
             process1.run("Second message to process 1"),
         ]
-        
+
         results = await asyncio.gather(*tasks)
-        
+
         # Verify all processes responded correctly
         assert all(isinstance(r, str) for r in results)
         assert len(results) == 3
-        
+
         # Verify state integrity maintained
         state1 = process1.get_state()
         assert len(state1) == 5  # system + 2 user + 2 assistant
@@ -168,20 +168,20 @@ async def test_long_conversation():
     """Test a conversation with many turns."""
     program = LLMProgram.from_toml("examples/minimal.toml")
     process = await program.start()
-    
+
     # Mock API responses
     with patch_provider() as mock_provider:
         mock_provider.return_value = "Response"
-        
+
         # Simulate 15 conversation turns
         for i in range(15):
             response = await process.run(f"This is message {i}")
             assert response == "Response"
-            
+
         # Verify state contains all messages
         state = process.get_state()
         assert len(state) == 31  # 1 system + 15 user + 15 assistant
-        
+
         # Verify memory consumption is reasonable
         import sys
         state_size = sys.getsizeof(str(state))
@@ -209,21 +209,21 @@ async def test_tool_error_handling():
     # Mock a tool that raises an exception
     def failing_tool(*args, **kwargs):
         raise ValueError("Tool execution failed")
-    
+
     # Setup process with mocked tool interface
     with patch.object(MCPAggregator, 'call_tool') as mock_call_tool:
         mock_call_tool.side_effect = failing_tool
-        
+
         process = LLMProcess(
             model_name="claude-3-haiku-20240307",
             provider="anthropic",
             system_prompt="Test assistant",
             mcp_tools={"test_server": ["test_tool"]}
         )
-        
+
         # Should handle tool error gracefully
         response = await process.run("Use the test_tool please")
-        
+
         # Verify error was properly handled
         assert mock_call_tool.called
         tool_response = find_tool_response_in_state(process.state)
@@ -250,7 +250,7 @@ def test_provider_parameter_handling(provider):
     # Skip if mocks not available
     if provider == "vertex" and not has_vertex_mock():
         pytest.skip("Vertex mock not available")
-    
+
     # Create test process with different provider
     with patch_provider(provider):
         params = {
@@ -258,21 +258,21 @@ def test_provider_parameter_handling(provider):
             "max_tokens": 200,
             "top_p": 0.95
         }
-        
+
         process = LLMProcess(
             model_name="test-model",
             provider=provider,
             system_prompt="Test system prompt",
             parameters=params
         )
-        
+
         # Verify parameters correctly mapped to provider-specific format
         api_params = process.api_params
-        
+
         # Check common parameters
         assert "temperature" in api_params
         assert api_params["temperature"] == 0.7
-        
+
         # Check provider-specific translation
         if provider == "anthropic":
             assert "max_tokens" in api_params
@@ -304,7 +304,7 @@ def test_program_validation():
         [model]
         # Missing name and provider
         """, "required field"),
-        
+
         # Invalid type
         ("""
         [model]
@@ -313,7 +313,7 @@ def test_program_validation():
         [parameters]
         temperature = "hot"  # Should be float
         """, "invalid type"),
-        
+
         # Unknown provider
         ("""
         [model]
@@ -321,16 +321,16 @@ def test_program_validation():
         provider = "unknown-provider"
         """, "provider not supported"),
     ]
-    
+
     for program_content, expected_error in test_cases:
         with tempfile.NamedTemporaryFile('w+', suffix='.toml') as program_file:
             program_file.write(program_content)
             program_file.flush()
-            
+
             # Should raise appropriate error
             with pytest.raises(Exception) as exc_info:
                 LLMProgram.from_toml(program_file.name)
-            
+
             # Verify error message contains expected text
             assert expected_error.lower() in str(exc_info.value).lower()
 ```
@@ -355,14 +355,14 @@ def test_memory_usage():
     """Test memory usage patterns."""
     import tracemalloc
     import gc
-    
+
     # Force garbage collection
     gc.collect()
-    
+
     # Start memory tracking
     tracemalloc.start()
     start_snapshot = tracemalloc.take_snapshot()
-    
+
     # Create 10 instances with different configurations
     processes = []
     for i in range(10):
@@ -373,15 +373,15 @@ def test_memory_usage():
             parameters={"temperature": 0.5 + (i * 0.05)}
         )
         processes.append(process)
-    
+
     # Measure memory usage
     end_snapshot = tracemalloc.take_snapshot()
     tracemalloc.stop()
-    
+
     # Compare memory usage
     stats = end_snapshot.compare_to(start_snapshot, 'lineno')
     total_memory = sum(stat.size_diff for stat in stats if stat.size_diff > 0)
-    
+
     # Memory per instance should be reasonable
     memory_per_instance = total_memory / 10
     assert memory_per_instance < 1024 * 100  # Less than 100KB per instance
@@ -406,28 +406,28 @@ def test_documentation_examples():
     # Parse README.md for Python code examples
     with open("README.md", "r") as f:
         readme_content = f.read()
-    
+
     # Extract code blocks
     import re
     python_examples = re.findall(r"```python\n(.*?)\n```", readme_content, re.DOTALL)
-    
+
     # Test each example
     for i, example in enumerate(python_examples):
         # Skip examples that require API calls
         if "process.run" in example and not is_mocked_example(example):
             continue
-            
+
         # Prepare test environment
         setup_code = """
         from unittest.mock import patch, MagicMock
         from llmproc import LLMProcess
         import asyncio
-        
+
         # Mock API clients
         with patch('llmproc.llm_process._run_openai') as mock_run:
             mock_run.return_value = "Mocked response"
         """
-        
+
         # Make example runnable by adding async wrapper if needed
         if "await" in example:
             test_code = f"{setup_code}\nasync def test_example():\n"
@@ -435,7 +435,7 @@ def test_documentation_examples():
             test_code += "\n\nasyncio.run(test_example())"
         else:
             test_code = f"{setup_code}\n{example}"
-        
+
         # Execute example code
         try:
             exec(test_code, {"__name__": f"__example_{i}"})

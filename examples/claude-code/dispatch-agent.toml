@@ -28,3 +28,5 @@ config_path = "../../config/mcp_servers.json"
 [mcp.tools]
 # Use the sequential-thinking tool which provides reasoning capabilities
 sequential-thinking = "all"
+# Use the add tool for precise calculations
+everything = ["add"]

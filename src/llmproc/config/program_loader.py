@@ -34,7 +34,7 @@ class ProgramLoader:
         # Resolve path and check registry
         path = resolve_path(toml_path, must_exist=True, error_prefix="Program file")
         registry = ProgramRegistry()
-        
+
         if registry.contains(path):
             return registry.get(path)
 
@@ -45,7 +45,7 @@ class ProgramLoader:
         # Process linked programs if needed
         if include_linked and program.linked_programs:
             cls._process_toml_linked_programs(program, path)
-            
+
         program.compiled = True
         return program
 
@@ -53,7 +53,7 @@ class ProgramLoader:
     def _compile_single_program(cls, path: Path) -> "LLMProgram":
         """Compile a single program without recursively compiling linked programs."""
         from llmproc.program import LLMProgram
-        
+
         # Load and validate the TOML file
         try:
             with path.open("rb") as f:
@@ -72,13 +72,13 @@ class ProgramLoader:
     def _build_from_config(cls, config: LLMProgramConfig, base_dir: Path) -> "LLMProgram":
         """Build an LLMProgram from a validated configuration."""
         from llmproc.program import LLMProgram
-        
+
         # Resolve system prompt
         system_prompt = config.prompt.resolve(base_dir)
-        
+
         # Process linked programs
         linked_programs, linked_program_descriptions = cls._process_config_linked_programs(config)
-        
+
         # Create and return the program instance
         return LLMProgram(
             model_name=config.model.name,
@@ -96,6 +96,8 @@ class ProgramLoader:
             file_descriptor=config.file_descriptor.model_dump() if config.file_descriptor else None,
             base_dir=base_dir,
             disable_automatic_caching=config.model.disable_automatic_caching,
+            project_id=config.model.project_id,
+            region=config.model.region,
         )
 
     @classmethod
@@ -103,7 +105,7 @@ class ProgramLoader:
         """Resolve preload file paths from configuration."""
         if not config.preload or not config.preload.files:
             return None
-            
+
         preload_files = []
         for file_path in config.preload.files:
             try:
@@ -114,32 +116,27 @@ class ProgramLoader:
             except Exception as e:
                 warnings.warn(f"Error resolving path '{file_path}': {str(e)}", stacklevel=2)
         return preload_files
-        
+
     @classmethod
     def _resolve_mcp_config(cls, config: LLMProgramConfig, base_dir: Path) -> str:
         """Resolve MCP configuration path."""
         if not config.mcp or not config.mcp.config_path:
             return None
-            
+
         try:
-            return str(resolve_path(
-                config.mcp.config_path,
-                base_dir,
-                must_exist=True,
-                error_prefix="MCP config file"
-            ))
+            return str(resolve_path(config.mcp.config_path, base_dir, must_exist=True, error_prefix="MCP config file"))
         except FileNotFoundError as e:
             raise FileNotFoundError(str(e))
-            
+
     @classmethod
     def _process_config_linked_programs(cls, config: LLMProgramConfig) -> tuple:
         """Process linked programs from configuration."""
         if not config.linked_programs:
             return None, None
-            
+
         linked_programs = {}
         linked_program_descriptions = {}
-        
+
         for name, program_config in config.linked_programs.root.items():
             if isinstance(program_config, str):
                 linked_programs[name] = program_config
@@ -147,27 +144,22 @@ class ProgramLoader:
             else:
                 linked_programs[name] = program_config.path
                 linked_program_descriptions[name] = program_config.description
-                
+
         return linked_programs, linked_program_descriptions
 
     @classmethod
     def _process_toml_linked_programs(cls, program: "LLMProgram", path: Path) -> None:
         """Process linked programs in a TOML-loaded program."""
         from llmproc.program import LLMProgram
-        
+
         base_dir = path.parent
-        
+
         for name, program_or_path in list(program.linked_programs.items()):
             if not isinstance(program_or_path, str):
                 continue
-                
+
             try:
-                linked_path = resolve_path(
-                    program_or_path, 
-                    base_dir=base_dir, 
-                    must_exist=True,
-                    error_prefix=f"Linked program file (from '{path}')"
-                )
+                linked_path = resolve_path(program_or_path, base_dir=base_dir, must_exist=True, error_prefix=f"Linked program file (from '{path}')")
                 program.linked_programs[name] = LLMProgram.from_toml(linked_path, include_linked=True)
             except FileNotFoundError as e:
                 raise FileNotFoundError(str(e))

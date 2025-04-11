@@ -5,6 +5,7 @@ from llmproc.providers.providers import (
     AsyncAnthropic,
     AsyncAnthropicVertex,
     AsyncOpenAI,
+    genai,
     get_provider_client,
 )
 
@@ -21,6 +22,12 @@ except ImportError:
     # Provide placeholder if the module is not available
     OpenAIProcessExecutor = None
 
+try:
+    from llmproc.providers.gemini_process_executor import GeminiProcessExecutor
+except ImportError:
+    # Provide placeholder if the module is not available
+    GeminiProcessExecutor = None
+
 
 __all__ = [
     "get_provider_client",
@@ -29,4 +36,6 @@ __all__ = [
     "AsyncAnthropicVertex",
     "AnthropicProcessExecutor",
     "OpenAIProcessExecutor",
+    "GeminiProcessExecutor",
+    "genai",
 ]

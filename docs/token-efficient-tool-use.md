@@ -53,12 +53,12 @@ async def main():
     # Load a configuration with token-efficient tool use enabled
     program = LLMProgram.from_toml('examples/features/token-efficient-tools.toml')
     process = await program.start()
-    
+
     # Use tools as you normally would
     result = await process.run(
         "What is the square root of 256? Also, tell me about the token-efficient tool use feature."
     )
-    
+
     print(process.get_last_message())
 
 asyncio.run(main())

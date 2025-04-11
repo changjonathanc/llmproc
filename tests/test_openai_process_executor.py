@@ -86,9 +86,7 @@ class TestOpenAIProcessExecutor:
 
         # Mock the API call to raise an exception
         process.client = MagicMock()
-        process.client.chat.completions.create = AsyncMock(
-            side_effect=Exception("API error")
-        )
+        process.client.chat.completions.create = AsyncMock(side_effect=Exception("API error"))
 
         # Create the executor
         executor = OpenAIProcessExecutor()

@@ -12,14 +12,19 @@ import pytest
 
 def api_keys_available():
     """Check if required API keys are available."""
+    # Check for presence of keys
     has_openai = "OPENAI_API_KEY" in os.environ
     has_anthropic = "ANTHROPIC_API_KEY" in os.environ
-    has_vertex = (
-        "GOOGLE_APPLICATION_CREDENTIALS" in os.environ
-        or "GOOGLE_CLOUD_PROJECT" in os.environ
-    )
+    has_vertex = "GOOGLE_APPLICATION_CREDENTIALS" in os.environ or "GOOGLE_CLOUD_PROJECT" in os.environ
 
-    return has_openai and has_anthropic and has_vertex
+    # Additionally check if the keys are valid (not "None" or empty)
+    if has_openai and (not os.environ["OPENAI_API_KEY"] or "None" in os.environ["OPENAI_API_KEY"]):
+        has_openai = False
+    if has_anthropic and (not os.environ["ANTHROPIC_API_KEY"] or "None" in os.environ["ANTHROPIC_API_KEY"]):
+        has_anthropic = False
+
+    # For test purposes, if environment has any valid key, consider it available
+    return has_openai or has_anthropic or has_vertex
 
 
 def run_cli_non_interactive(program_path, prompt=None, timeout=45):
@@ -69,14 +74,33 @@ def run_cli_non_interactive(program_path, prompt=None, timeout=45):
 
 
 @pytest.mark.llm_api
+@pytest.mark.release_api
 @pytest.mark.parametrize(
-    "program_name",
+    "program_path",
     [
-        "minimal.toml",
-        "anthropic.toml",
-        "openai.toml",
         pytest.param(
-            "anthropic_vertex.toml",
+            "examples/anthropic/claude-3-5-sonnet.toml",
+            marks=pytest.mark.skipif(
+                "ANTHROPIC_API_KEY" not in os.environ or "None" in os.environ["ANTHROPIC_API_KEY"],
+                reason="Anthropic API key not available or invalid",
+            ),
+        ),
+        pytest.param(
+            "examples/anthropic/claude-3-5-haiku.toml",
+            marks=pytest.mark.skipif(
+                "ANTHROPIC_API_KEY" not in os.environ or "None" in os.environ["ANTHROPIC_API_KEY"],
+                reason="Anthropic API key not available or invalid",
+            ),
+        ),
+        pytest.param(
+            "examples/openai/gpt-4o-mini.toml",
+            marks=pytest.mark.skipif(
+                "OPENAI_API_KEY" not in os.environ or "None" in os.environ["OPENAI_API_KEY"],
+                reason="OpenAI API key not available or invalid",
+            ),
+        ),
+        pytest.param(
+            "examples/anthropic/claude-3-5-haiku-vertex.toml",
             marks=pytest.mark.skipif(
                 "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ,
                 reason="Vertex AI credentials not available",
@@ -84,60 +108,70 @@ def run_cli_non_interactive(program_path, prompt=None, timeout=45):
         ),
     ],
 )
-def test_prompt_option(program_name):
+def test_prompt_option(program_path):
     """Test the --prompt option with various example programs."""
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    program_path = Path(__file__).parent.parent / "examples" / program_name
-
     # Create a unique test marker
-    unique_marker = f"UNIQUE_TEST_MARKER_{program_name.replace('.', '_').upper()}"
+    unique_marker = f"UNIQUE_TEST_MARKER_{Path(program_path).stem.upper()}"
     prompt = f"Reply with this exact marker: {unique_marker}"
 
     # Run CLI with --prompt option
     return_code, stdout, stderr = run_cli_non_interactive(program_path, prompt=prompt)
 
     # Check for successful execution
-    assert return_code == 0, (
-        f"CLI exited with error code {return_code}. Stderr: {stderr}"
-    )
+    assert return_code == 0, f"CLI exited with error code {return_code}. Stderr: {stderr}"
 
     # Check for the unique marker in the output
-    assert unique_marker in stdout, (
-        f"Expected unique marker '{unique_marker}' in output, but it wasn't found"
-    )
+    assert unique_marker in stdout, f"Expected unique marker '{unique_marker}' in output, but it wasn't found"
 
 
 @pytest.mark.llm_api
+@pytest.mark.release_api
 @pytest.mark.parametrize(
-    "program_name",
+    "program_path",
     [
-        "minimal.toml",
-        "anthropic.toml",
-        "openai.toml",
+        pytest.param(
+            "examples/anthropic/claude-3-5-sonnet.toml",
+            marks=pytest.mark.skipif(
+                "ANTHROPIC_API_KEY" not in os.environ or "None" in os.environ["ANTHROPIC_API_KEY"],
+                reason="Anthropic API key not available or invalid",
+            ),
+        ),
+        pytest.param(
+            "examples/anthropic/claude-3-5-haiku.toml",
+            marks=pytest.mark.skipif(
+                "ANTHROPIC_API_KEY" not in os.environ or "None" in os.environ["ANTHROPIC_API_KEY"],
+                reason="Anthropic API key not available or invalid",
+            ),
+        ),
+        pytest.param(
+            "examples/openai/gpt-4o-mini.toml",
+            marks=pytest.mark.skipif(
+                "OPENAI_API_KEY" not in os.environ or "None" in os.environ["OPENAI_API_KEY"],
+                reason="OpenAI API key not available or invalid",
+            ),
+        ),
     ],
 )
-def test_non_interactive_option(program_name):
+def test_non_interactive_option(program_path):
     """Test the --non-interactive option with stdin input."""
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
-
-    program_path = Path(__file__).parent.parent / "examples" / program_name
 
     # Run CLI with --non-interactive option
     return_code, stdout, stderr = run_cli_non_interactive(program_path, prompt=None)
 
     # Check for successful execution
-    assert return_code == 0, (
-        f"CLI exited with error code {return_code}. Stderr: {stderr}"
-    )
+    assert return_code == 0, f"CLI exited with error code {return_code}. Stderr: {stderr}"
 
     # Check for some output (can't check specific content as it depends on the model)
     assert len(stdout) > 0, "Expected some output, but got empty response"
 
 
 @pytest.mark.llm_api
+@pytest.mark.release_api
 def test_tool_usage_in_non_interactive_mode():
     """Test that tools work correctly in non-interactive mode."""
     if not api_keys_available():
@@ -150,58 +184,46 @@ def test_tool_usage_in_non_interactive_mode():
     prompt = "What directories are in the current project? Use the dispatch_agent tool to find out."
 
     # Run CLI with --prompt option
-    return_code, stdout, stderr = run_cli_non_interactive(
-        program_path, prompt=prompt, timeout=90
-    )
+    return_code, stdout, stderr = run_cli_non_interactive(program_path, prompt=prompt, timeout=90)
 
     # Check for successful execution
-    assert return_code == 0, (
-        f"CLI exited with error code {return_code}. Stderr: {stderr}"
-    )
+    assert return_code == 0, f"CLI exited with error code {return_code}. Stderr: {stderr}"
 
     # Check that output contains likely directory names
     expected_terms = ["src", "examples", "tests"]
     found_terms = [term for term in expected_terms if term.lower() in stdout.lower()]
 
-    assert len(found_terms) > 0, (
-        f"Expected output to mention at least one of {expected_terms}, but found none"
-    )
+    assert len(found_terms) > 0, f"Expected output to mention at least one of {expected_terms}, but found none"
 
 
 @pytest.mark.llm_api
+@pytest.mark.release_api
 def test_program_linking_in_non_interactive_mode():
     """Test program linking in non-interactive mode."""
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
     # Test with program_linking/main.toml
-    program_path = (
-        Path(__file__).parent.parent / "examples" / "program_linking" / "main.toml"
-    )
+    program_path = Path(__file__).parent.parent / "examples" / "program_linking" / "main.toml"
 
     # Prompt that should trigger the spawn tool
     prompt = "Ask the repo expert: what is the purpose of LLMProcess?"
 
     # Run CLI with --prompt option (longer timeout for program linking)
-    return_code, stdout, stderr = run_cli_non_interactive(
-        program_path, prompt=prompt, timeout=120
-    )
+    return_code, stdout, stderr = run_cli_non_interactive(program_path, prompt=prompt, timeout=120)
 
     # Check for successful execution
-    assert return_code == 0, (
-        f"CLI exited with error code {return_code}. Stderr: {stderr}"
-    )
+    assert return_code == 0, f"CLI exited with error code {return_code}. Stderr: {stderr}"
 
     # Check that output mentions LLMProcess functionality
     expected_terms = ["llm", "process", "interface", "class"]
     found_terms = [term for term in expected_terms if term.lower() in stdout.lower()]
 
-    assert len(found_terms) > 0, (
-        f"Expected output to mention at least one of {expected_terms}, but found none"
-    )
+    assert len(found_terms) > 0, f"Expected output to mention at least one of {expected_terms}, but found none"
 
 
 @pytest.mark.llm_api
+@pytest.mark.release_api
 def test_invalid_program_handling():
     """Test handling of invalid program with --prompt option."""
     # Create a temporary invalid program file
@@ -214,20 +236,17 @@ def test_invalid_program_handling():
         invalid_program.flush()
 
         # Run CLI with invalid program
-        return_code, stdout, stderr = run_cli_non_interactive(
-            invalid_program.name, prompt="test"
-        )
+        return_code, stdout, stderr = run_cli_non_interactive(invalid_program.name, prompt="test")
 
         # Should exit with non-zero return code
         assert return_code != 0, "Expected non-zero return code for invalid program"
 
         # Should provide an error message
-        assert "error" in (stdout + stderr).lower(), (
-            "Expected error message for invalid program"
-        )
+        assert "error" in (stdout + stderr).lower(), "Expected error message for invalid program"
 
 
 @pytest.mark.llm_api
+@pytest.mark.release_api
 def test_empty_prompt_handling():
     """Test handling of empty prompt."""
     if not api_keys_available():
@@ -239,9 +258,7 @@ def test_empty_prompt_handling():
     return_code, stdout, stderr = run_cli_non_interactive(program_path, prompt="")
 
     # Should execute successfully
-    assert return_code == 0, (
-        f"CLI exited with error code {return_code}. Stderr: {stderr}"
-    )
+    assert return_code == 0, f"CLI exited with error code {return_code}. Stderr: {stderr}"
 
     # Should provide some response
     assert len(stdout) > 0, "Expected some output even with empty prompt"

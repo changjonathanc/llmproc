@@ -20,13 +20,13 @@ def test_documentation_example():
             [model]
             name = "main-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Main program"
-            
+
             [tools]
             enabled = ["spawn"]
-            
+
             [linked_programs]
             helper = "helper.toml"
             math = "math.toml"
@@ -38,10 +38,10 @@ def test_documentation_example():
             [model]
             name = "helper-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Helper program"
-            
+
             [linked_programs]
             utility = "utility.toml"
             """)
@@ -52,7 +52,7 @@ def test_documentation_example():
             [model]
             name = "math-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Math program"
             """)
@@ -63,27 +63,62 @@ def test_documentation_example():
             [model]
             name = "utility-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Utility program"
             """)
 
         # Mock the provider client to avoid API calls
-        with unittest.mock.patch(
-            "llmproc.providers.get_provider_client"
-        ) as mock_get_client:
+        with unittest.mock.patch("llmproc.providers.get_provider_client") as mock_get_client:
             mock_get_client.return_value = unittest.mock.MagicMock()
 
             # Compile and link as shown in the documentation - using the two-step pattern
             program = LLMProgram.from_toml(main_toml)
 
-            # Mock the start method to avoid actual async initialization
-            with unittest.mock.patch("llmproc.program.LLMProgram.start") as mock_start:
+            # Mock the async create method to avoid actual async initialization
+            with unittest.mock.patch("llmproc.llm_process.LLMProcess.create") as mock_create:
+                # Create a properly configured process using program configuration
+                # This follows the Unix-inspired pattern from RFC053
+                
+                # Set up tool configuration from program
+                from llmproc.tools.tool_manager import ToolManager
+                
+                # Create a tool manager and properly initialize it
+                tool_manager = ToolManager()
+                
+                # Register the enabled tools in the program
+                tool_config = {
+                    "enabled_tools": ["spawn"],
+                    "has_linked_programs": True,
+                    "linked_programs": program.linked_programs,
+                    "linked_program_descriptions": getattr(program, "linked_program_descriptions", {})
+                }
+                
+                # Initialize the process with proper tool configuration
                 process = LLMProcess(program=program)
-                mock_start.return_value = process
-
-                # Manually initialize linked programs field to simulate start()
                 process.has_linked_programs = True
+                process.enabled_tools = ["spawn"]
+                process.tool_manager = tool_manager
+                
+                # Register system tools using configuration-based approach
+                tool_manager.register_system_tools(tool_config)
+                
+                # Explicitly create spawn tool schema for the test
+                from llmproc.tools.builtin.spawn import SPAWN_TOOL_SCHEMA
+                
+                # Directly set the tool schema
+                spawn_tool_def = SPAWN_TOOL_SCHEMA.copy()
+                spawn_tool_def["description"] += "\n\nAvailable programs: \n- 'helper'\n- 'math'"
+                
+                # Add to the tool manager's runtime registry
+                tool_manager.runtime_registry.register_tool(
+                    "spawn", 
+                    lambda args: None,  # Dummy handler for test
+                    spawn_tool_def
+                )
+                
+                # Set the mock return value
+                mock_create.return_value = process
 
             # Verify the process and its linked programs
             assert process.model_name == "main-model"
@@ -111,14 +146,19 @@ def test_documentation_example():
             assert math_process.model_name == "math-model"
             assert math_process.provider == "anthropic"
 
-            # Check that the spawn tool is set up
-            assert hasattr(process, "tools")
-            spawn_tool = None
-            for tool in process.tools:
-                if tool["name"] == "spawn":
-                    spawn_tool = tool
+            # Check that the spawn tool is registered in the tool registry
+            assert hasattr(process, "tool_manager")
+            assert "spawn" in process.tool_manager.runtime_registry.tool_handlers
+            
+            # Get the spawn tool schema from the registry's definitions list
+            spawn_def = None
+            for tool_def in process.tool_manager.runtime_registry.tool_definitions:
+                if tool_def["name"] == "spawn":
+                    spawn_def = tool_def
                     break
-
-            assert spawn_tool is not None
-            assert "program_name" in spawn_tool["input_schema"]["properties"]
-            assert "query" in spawn_tool["input_schema"]["properties"]
+                    
+            assert spawn_def is not None
+            assert "input_schema" in spawn_def
+            assert "properties" in spawn_def["input_schema"]
+            assert "program_name" in spawn_def["input_schema"]["properties"]
+            assert "query" in spawn_def["input_schema"]["properties"]

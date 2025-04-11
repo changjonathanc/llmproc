@@ -1,9 +1,9 @@
 """Anthropic provider tools implementation for LLMProc."""
 
 import asyncio
-import copy
 import json
 import logging
+from typing import Any, Optional
 
 # Import Anthropic clients (will be None if not installed)
 try:
@@ -13,8 +13,21 @@ except ImportError:
     AsyncAnthropicVertex = None
 
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
-from llmproc.results import RunResult
-from llmproc.tools.tool_result import ToolResult
+from llmproc.providers.utils import safe_callback
+from llmproc.providers.anthropic_utils import (
+    is_cacheable_content,
+    add_cache_to_message,
+    add_message_ids,
+    state_to_api_messages,
+    system_to_api_format,
+    tools_to_api_format,
+    add_token_efficient_header_if_needed,
+    contains_tool_calls,
+    get_context_window_size
+)
+from llmproc.common.results import RunResult
+from llmproc.common.results import ToolResult
+from llmproc.utils.message_utils import append_message_with_id
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +53,10 @@ class AnthropicProcessExecutor:
         "claude-3-7-sonnet": 200000,
     }
 
+    #
+    # Primary methods
+    #
+
     async def run(
         self,
         process: "Process",  # noqa: F821
@@ -49,6 +66,8 @@ class AnthropicProcessExecutor:
         run_result=None,
         is_tool_continuation: bool = False,
     ) -> "RunResult":
+        # PHASE 3: This method contains several complexity hotspots that could be simplified
+        # with targeted helper functions, making the code more maintainable without changing structure.
         """Execute a conversation with the Anthropic API.
 
         This method executes a conversation turn with proper tool handling, tracking metrics,
@@ -75,7 +94,8 @@ class AnthropicProcessExecutor:
         if is_tool_continuation:
             pass
         else:
-            process.state.append({"role": "user", "content": user_prompt})
+            # Add user message with GOTO ID
+            append_message_with_id(process, "user", user_prompt)
 
         process.run_stop_reason = None
         iterations = 0
@@ -97,25 +117,21 @@ class AnthropicProcessExecutor:
 
             # Apply token-efficient tool use if appropriate (for Claude 3.7+ on both direct Anthropic API and Vertex AI)
             # Testing confirmed it works on both providers
-            if process.provider in ANTHROPIC_PROVIDERS and process.model_name.startswith("claude-3-7"):
-                # Add token-efficient tools beta header if appropriate
-                if "anthropic-beta" not in extra_headers:
-                    extra_headers["anthropic-beta"] = "token-efficient-tools-2025-02-19"
-                elif "token-efficient-tools" not in extra_headers["anthropic-beta"]:
-                    # Append to existing beta features
-                    extra_headers["anthropic-beta"] += ",token-efficient-tools-2025-02-19"
-            elif (
+            # Add token-efficient tools header if appropriate
+            extra_headers = add_token_efficient_header_if_needed(process, extra_headers)
+
+            # Warning if token-efficient tools header is present but not supported
+            if (
                 "anthropic-beta" in extra_headers
                 and "token-efficient-tools" in extra_headers["anthropic-beta"]
                 and (process.provider not in ANTHROPIC_PROVIDERS or not process.model_name.startswith("claude-3-7"))
             ):
-                # Warning if token-efficient tools header is present but not supported
                 logger.warning(f"Token-efficient tools header is only supported by Claude 3.7 models. Currently using {process.model_name} on {process.provider}. The header will be ignored.")
 
             # Transform internal state to API-ready format with caching
-            api_messages = self._state_to_api_messages(process.state, add_cache=use_caching)
-            api_system = self._system_to_api_format(process.enriched_system_prompt, add_cache=use_caching)
-            api_tools = self._tools_to_api_format(process.tools, add_cache=use_caching)
+            api_messages = state_to_api_messages(process.state, add_cache=use_caching)
+            api_system = system_to_api_format(process.enriched_system_prompt, add_cache=use_caching)
+            api_tools = tools_to_api_format(process.tools, add_cache=use_caching)
 
             # Make the API call with any extra headers
             response = await process.client.messages.create(
@@ -140,7 +156,7 @@ class AnthropicProcessExecutor:
 
             stop_reason = response.stop_reason
 
-            has_tool_calls = len([content for content in response.content if content.type == "tool_use"]) > 0
+            has_tool_calls = contains_tool_calls(response.content)
             tool_results = []
             # NOTE: these are the possible stop_reason values: ["end_turn", "max_tokens", "stop_sequence"]:
             process.stop_reason = stop_reason  # TODO: not finalized api,
@@ -149,11 +165,14 @@ class AnthropicProcessExecutor:
                     # NOTE: sometimes model can decide to not response any text, for example, after using tools.
                     # appending the empty assistant message will cause the following API error in the next api call:
                     # ERROR: all messages must have non-empty content except for the optional final assistant message
-                    process.state.append({"role": "assistant", "content": response.content})
+                    append_message_with_id(process, "assistant", response.content)
                 # NOTE: this is needed for user to check the stop reason afterward
                 process.run_stop_reason = stop_reason
                 break
             else:
+                # PHASE 3: Text content extraction could be simplified with a helper function
+                # _extract_text_content(content_items) to reduce code duplication and improve readability.
+
                 # Fire callback for model response if provided
                 if on_response and "on_response" in callbacks:
                     # Extract text content for callback
@@ -161,10 +180,7 @@ class AnthropicProcessExecutor:
                     for c in response.content:
                         if hasattr(c, "type") and c.type == "text" and hasattr(c, "text"):
                             text_content += c.text
-                    try:
-                        on_response(text_content)
-                    except Exception as e:
-                        logger.warning(f"Error in on_response callback: {str(e)}")
+                    safe_callback(on_response, text_content, callback_name="on_response")
 
                 for content in response.content:
                     if content.type == "text":
@@ -176,11 +192,7 @@ class AnthropicProcessExecutor:
                         tool_id = content.id
 
                         # Fire callback for tool start if provided
-                        if on_tool_start:
-                            try:
-                                on_tool_start(tool_name, tool_args)
-                            except Exception as e:
-                                logger.warning(f"Error in on_tool_start callback: {str(e)}")
+                        safe_callback(on_tool_start, tool_name, tool_args, callback_name="on_tool_start")
 
                         # Track tool in run_result if available
                         if run_result:
@@ -188,8 +200,12 @@ class AnthropicProcessExecutor:
                                 {
                                     "type": "tool_call",
                                     "tool_name": tool_name,
+                                    "args": tool_args,
                                 }
                             )
+
+                        # PHASE 3: The tool execution conditional could be simplified with a
+                        # _is_fork_tool(tool_name) helper function for better readability.
 
                         # NOTE: fork requires special handling, such as removing all other tool calls from the last assistant response
                         # so we separate the fork handling from other tool call handling
@@ -202,14 +218,23 @@ class AnthropicProcessExecutor:
                                 last_assistant_response=response.content,
                             )
                         else:
-                            result = await process.call_tool(tool_name, tool_args)
+                            # Handle tool call with parameters
+                            if isinstance(tool_args, dict):
+                                # Call the tool with explicit keyword arguments extracted from the input dict
+                                # process.call_tool already handles exceptions internally and returns a ToolResult
+                                logger.debug(f"Calling tool '{tool_name}' with parameters: {tool_args}")
+                                result = await process.call_tool(tool_name, **tool_args)
+                            else:
+                                # This case shouldn't happen with properly formatted API responses
+                                error_msg = f"Invalid tool arguments format for '{tool_name}'. Expected a dictionary but got: {type(tool_args)}"
+                                logger.error(error_msg)
+                                result = ToolResult.from_error(error_msg)
 
                         # Fire callback for tool end if provided
-                        if on_tool_end:
-                            try:
-                                on_tool_end(tool_name, result)
-                            except Exception as e:
-                                logger.warning(f"Error in on_tool_end callback: {str(e)}")
+                        safe_callback(on_tool_end, tool_name, result, callback_name="on_tool_end")
+
+                        # PHASE 3: This file descriptor eligibility check is complex and could be simplified with a
+                        # _should_use_file_descriptor(process, tool_name, tool_result) helper function.
 
                         # Require a ToolResult instance
                         if not isinstance(result, ToolResult):
@@ -221,26 +246,15 @@ class AnthropicProcessExecutor:
                         else:
                             tool_result = result
 
-                            # Check if file descriptor system is enabled and output exceeds the threshold
-                            if (
-                                hasattr(process, "file_descriptor_enabled")
-                                and process.file_descriptor_enabled
-                                and hasattr(process, "fd_manager")
-                                and process.fd_manager
-                                and not process.fd_manager.is_fd_related_tool(tool_name)  # Skip FD-related tools
-                                and isinstance(tool_result.content, str)
-                                and len(tool_result.content) > process.fd_manager.max_direct_output_chars
-                            ):
-                                logger.info(f"Tool result from '{tool_name}' exceeds {process.fd_manager.max_direct_output_chars} chars, creating file descriptor")
+                            # Check if file descriptor should be used for this tool result
+                            if hasattr(process, "file_descriptor_enabled") and process.file_descriptor_enabled and hasattr(process, "fd_manager") and process.fd_manager:
+                                # Use helper to decide if FD is needed and create it if so
+                                processed_result, used_fd = process.fd_manager.create_fd_from_tool_result(tool_result.content, tool_name)
 
-                                # Create a file descriptor for the large content
-                                fd_result = process.fd_manager.create_fd(tool_result.content)
-
-                                # Replace the original tool result with the file descriptor result
-                                # fd_result is already a ToolResult instance now
-                                tool_result = fd_result
-
-                                logger.debug(f"Created file descriptor for tool result from '{tool_name}'")
+                                if used_fd:
+                                    logger.info(f"Tool result from '{tool_name}' exceeds {process.fd_manager.max_direct_output_chars} chars, creating file descriptor")
+                                    tool_result = processed_result
+                                    logger.debug(f"Created file descriptor for tool result from '{tool_name}'")
 
                         # Only convert to dict at the last moment when building the response
                         tool_result_dict = tool_result.to_dict()
@@ -259,8 +273,18 @@ class AnthropicProcessExecutor:
                                 ],
                             }
                         )
-                process.state.append({"role": "assistant", "content": response.content})
-                process.state.extend(tool_results)
+                # PHASE 3: The state update could be made more intentional with a
+                # _update_state_with_tool_results(process, response, tool_results) helper function.
+
+                # Update state with response and tool results
+                # Add assistant message with GOTO ID
+                append_message_with_id(process, "assistant", response.content)
+                
+                # Add tool results to state using append_message_with_id
+                for tool_result in tool_results:
+                    # Tool result already has the correct structure with "role": "user"
+                    # and "content" is a list with tool result data
+                    append_message_with_id(process, tool_result["role"], tool_result["content"])
 
         if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
@@ -273,7 +297,7 @@ class AnthropicProcessExecutor:
         # Complete the RunResult and return it
         return run_result.complete()
 
-    async def run_till_text_response(self, process, user_prompt, max_iterations: int = 10):
+    async def run_till_text_response(self, process, user_prompt, max_iterations: int = 10) -> str:
         """Run the process until a text response is generated.
 
         This is specifically designed for forked processes, where the child must respond with a text response, which will become the tool result for the parent.
@@ -337,144 +361,7 @@ class AnthropicProcessExecutor:
         master_run_result.complete()
         return "Maximum iterations reached without final response."
 
-    def _state_to_api_messages(self, state, add_cache=True):
-        """
-        Transform conversation state to API-ready messages, optionally adding cache control points.
-
-        Args:
-            state: The conversation state to transform
-            add_cache: Whether to add cache control points
-
-        Returns:
-            List of API-ready messages with cache_control added at strategic points
-        """
-        # Create a deep copy to avoid modifying the original state
-        messages = copy.deepcopy(state)
-
-        if not add_cache or not messages:
-            return messages
-
-        # Add cache to the last message regardless of type
-        if messages:
-            self._add_cache_to_message(messages[-1])
-
-        # Find non-tool user messages
-        non_tool_user_indices = []
-        for i, msg in enumerate(messages):
-            if msg["role"] == "user":
-                # Check if this is not a tool result message
-                is_tool_message = False
-                if isinstance(msg.get("content"), list):
-                    for content in msg["content"]:
-                        if isinstance(content, dict) and content.get("type") == "tool_result":
-                            is_tool_message = True
-                            break
-
-                if not is_tool_message:
-                    non_tool_user_indices.append(i)
-
-        # Add cache to the message before the most recent non-tool user message
-        if len(non_tool_user_indices) > 1:
-            before_last_user_index = non_tool_user_indices[-2]
-            if before_last_user_index > 0:  # Ensure there's a message before this one
-                self._add_cache_to_message(messages[before_last_user_index - 1])
-
-        return messages
-
-    def _system_to_api_format(self, system_prompt, add_cache=True):
-        """
-        Transform system prompt to API-ready format with cache control.
-
-        Args:
-            system_prompt: The enriched system prompt
-            add_cache: Whether to add cache control
-
-        Returns:
-            API-ready system prompt with cache_control
-        """
-        if not add_cache:
-            return system_prompt
-
-        if isinstance(system_prompt, str):
-            # Add cache to the entire system prompt, but only if the prompt is not empty
-            if self._is_cacheable_content(system_prompt):
-                return [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
-            else:
-                return system_prompt  # Return as is if empty
-        elif isinstance(system_prompt, list):
-            # Already in structured format, assume correctly configured
-            return system_prompt
-        else:
-            # Fallback for unexpected formats
-            return system_prompt
-
-    def _tools_to_api_format(self, tools, add_cache=True):
-        """
-        Transform tools to API-ready format with cache control.
-
-        Args:
-            tools: The tool definitions
-            add_cache: Whether to add cache control
-
-        Returns:
-            API-ready tools with cache_control
-        """
-        if not add_cache or not tools:
-            return tools
-
-        tools_copy = copy.deepcopy(tools)
-
-        # Add cache_control to the last tool in the array
-        if isinstance(tools_copy, list) and tools_copy:
-            # Find the last tool and add cache_control to it
-            # This caches all tools up to this point, using just one cache point
-            if isinstance(tools_copy[-1], dict) and self._is_cacheable_content(tools_copy[-1]):
-                # Only add cache control if tool definition is not empty
-                tools_copy[-1]["cache_control"] = {"type": "ephemeral"}
-
-        return tools_copy
-
-    def _is_cacheable_content(self, content):
-        """
-        Check if the content can safely have cache control added to it.
-        
-        Args:
-            content: The content to check
-            
-        Returns:
-            bool: True if the content can be cached, False otherwise
-        """
-        # Empty content should not have cache control
-        if not content:
-            return False
-            
-        # For string content, check that it's not empty
-        if isinstance(content, str):
-            return bool(content.strip())
-            
-        # For dict content, check that there's text or content
-        if isinstance(content, dict):
-            if content.get("type") in ["text", "tool_result"]:
-                return bool(content.get("text") or content.get("content"))
-                
-        # Default to True for other cases
-        return True
-
-    def _add_cache_to_message(self, message):
-        """Add cache control to a message."""
-        if isinstance(message.get("content"), list):
-            for content in message["content"]:
-                if isinstance(content, dict) and content.get("type") in ["text", "tool_result"]:
-                    # Only add cache control if there's actual content
-                    if self._is_cacheable_content(content):
-                        content["cache_control"] = {"type": "ephemeral"}
-                        return  # Only add to the first eligible content
-        elif isinstance(message.get("content"), str):
-            # Convert string content to structured format with cache, but only if not empty
-            if self._is_cacheable_content(message.get("content")):
-                message["content"] = [{"type": "text", "text": message["content"], "cache_control": {"type": "ephemeral"}}]
-
-    async def count_tokens(self, process):
+    async def count_tokens(self, process) -> dict:
         """Count tokens in the current conversation context using Anthropic's API.
 
         Args:
@@ -489,15 +376,15 @@ class AnthropicProcessExecutor:
             if not process.state:
                 # Use a temporary copy to avoid modifying the actual state
                 temp_state = [{"role": "user", "content": "Hi"}]
-                api_messages = self._state_to_api_messages(temp_state, add_cache=False)
+                api_messages = state_to_api_messages(temp_state, add_cache=False)
             else:
-                api_messages = self._state_to_api_messages(process.state, add_cache=False)
+                api_messages = state_to_api_messages(process.state, add_cache=False)
 
             # Handle system prompt format
             system_prompt = process.enriched_system_prompt
 
             # Get tool definitions if available
-            api_tools = self._tools_to_api_format(process.tools, add_cache=False) if hasattr(process, "tools") else None
+            api_tools = tools_to_api_format(process.tools, add_cache=False) if hasattr(process, "tools") else None
 
             # Call Anthropic's count_tokens API
             params = {
@@ -515,7 +402,7 @@ class AnthropicProcessExecutor:
             response = await process.client.messages.count_tokens(**params)
 
             # Calculate context window percentage
-            window_size = self._get_context_window_size(process.model_name)
+            window_size = get_context_window_size(process.model_name, self.CONTEXT_WINDOW_SIZES)
             input_tokens = getattr(response, "input_tokens", 0)
             percentage = (input_tokens / window_size * 100) if window_size > 0 else 0
             remaining = max(0, window_size - input_tokens)
@@ -525,24 +412,21 @@ class AnthropicProcessExecutor:
         except Exception as e:
             return {"error": str(e)}
 
-    def _get_context_window_size(self, model_name):
-        """Get the context window size for the given model."""
-        # Handle models with timestamps in the name
-        base_model = model_name
-        if "-2" in model_name:
-            base_model = model_name.split("-2")[0]
-
-        # Extract model family without version
-        for prefix in self.CONTEXT_WINDOW_SIZES:
-            if base_model.startswith(prefix):
-                return self.CONTEXT_WINDOW_SIZES[prefix]
-
-        # Default fallback
-        return 100000
+    #
+    # Tool handling methods
+    # PHASE 3: This section would be enhanced with targeted helper functions that simplify complexity hotspots:
+    # - _extract_text_content(content_items)
+    # - _contains_tool_calls(response_content)
+    # - _safe_callback(callback_fn, *args, callback_name)
+    # - _should_use_file_descriptor(process, tool_name, tool_result)
+    # - _add_token_efficient_header_if_needed(process, headers)
+    #
 
     @staticmethod
     async def _fork(process, params, tool_id, last_assistant_response):
         """Fork a conversation."""
+        # PHASE 3: Error handling here could be improved with _safe_callback pattern
+        # and better validation of input parameters
         if not process.allow_fork:
             return ToolResult.from_error("Forking is not allowed for this agent, possible reason: You are already a forked instance")
 

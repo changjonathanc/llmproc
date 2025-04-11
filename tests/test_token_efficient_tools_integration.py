@@ -1,13 +1,16 @@
 """Integration tests for token-efficient tool use feature."""
 
 import os
-import pytest
+import time
 from unittest.mock import patch
+
+import pytest
 
 from llmproc import LLMProgram
 
 
 @pytest.mark.llm_api
+@pytest.mark.extended_api
 class TestTokenEfficientToolsIntegration:
     """Integration test suite for token-efficient tool use with actual API calls."""
 
@@ -22,37 +25,37 @@ class TestTokenEfficientToolsIntegration:
         if not api_key:
             pytest.skip("No Anthropic API key found")
 
+        # Start timing
+        start_time = time.time()
+
         # Load config with token-efficient tools enabled
         program = LLMProgram.from_toml("examples/features/token-efficient-tools.toml")
-        
+
         # Start the process
         process = await program.start()
-        
+
         # Check that extra_headers are in parameters
         assert "extra_headers" in process.api_params
         assert "anthropic-beta" in process.api_params["extra_headers"]
         assert "token-efficient-tools-2025-02-19" in process.api_params["extra_headers"]["anthropic-beta"]
-        
+
         # Check that calculator tool is enabled
         assert "calculator" in [tool["name"] for tool in process.tools]
-        
+
         # Run the process with a prompt that should trigger tool use
-        result = await process.run("What is the square root of 256?")
-        
-        # Check result for tokens used
-        api_call = result.to_dict()["api_calls"][0]
-        
-        # Basic success check
-        assert "usage" in api_call
-        
-        # Ideally we would verify token reduction, but that's hard to test deterministically
-        # So we just check that the API call completed successfully
-        assert api_call["stop_reason"] in ["end_turn", "tool_use"]
+        result = await process.run("What is the square root of 256? Use the calculator tool.")
+
+        # Check for usage information
+        assert result.api_calls > 0
         
         # Verify the correct answer was calculated
         last_message = process.get_last_message()
         assert "16" in last_message, f"Expected calculator result '16' in message: {last_message}"
 
-    # Remove the combined test since we don't have a single example with both features.
-    # The individual features are tested separately in test_thinking_models_basic_functionality
-    # and test_token_efficient_tools_integration
+        # End timing
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"\nTest completed in {duration:.2f} seconds")
+        
+        # Verify test completes within reasonable time
+        assert duration < 20.0, f"Test took too long: {duration:.2f}s"

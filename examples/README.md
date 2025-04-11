@@ -17,6 +17,10 @@ This directory contains examples demonstrating LLMProc features and configuratio
   - Standard models: Claude 3 Haiku, Claude 3.5/3.7 Sonnet, Claude on Vertex
   - Thinking models: Claude 3.7 with low/medium/high thinking budgets
 
+- [**gemini/**](./gemini/): Google Gemini model configurations
+  - Direct API: Gemini 2.0 Flash, Gemini 2.5 Pro
+  - Vertex AI: Gemini models on Google Cloud
+
 - [**features/**](./features/): Feature demonstrations
   - **preload.toml**: File preloading
   - **env-info.toml**: Environment variables
@@ -43,6 +47,7 @@ Use the `llmproc-demo` command-line tool:
 llmproc-demo ./examples/openai/minimal.toml
 llmproc-demo ./examples/openai/gpt-4o-mini.toml
 llmproc-demo ./examples/anthropic/claude-3-haiku.toml
+llmproc-demo ./examples/gemini/gemini-2.0-flash-direct.toml
 
 # Feature examples
 llmproc-demo ./examples/features/preload.toml

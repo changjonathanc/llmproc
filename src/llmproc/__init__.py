@@ -7,4 +7,4 @@ from llmproc.program import (
 from llmproc.tools import register_tool
 
 __all__ = ["LLMProcess", "LLMProgram", "register_tool"]
-__version__ = "0.3.1"
+__version__ = "0.4.0"

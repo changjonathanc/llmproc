@@ -13,9 +13,10 @@ program = (
     LLMProgram(
         model_name="claude-3-haiku-20240307",
         provider="anthropic",
-        system_prompt="You are a helpful assistant."
+        system_prompt="You are a helpful assistant.",
+        parameters={"max_tokens": 1024}  # Required parameter
     )
-    .add_tool(my_tool_function)
+    .set_enabled_tools(["calculator", my_tool_function])  # Enable both built-in tools and functions
     .add_preload_file("context.txt")
     .add_linked_program("expert", expert_program, "An expert program")
 )
@@ -49,7 +50,7 @@ program = (
     LLMProgram(...)
     .add_preload_file("file1.md")
     .add_preload_file("file2.md")
-    .add_tool(tool_function)
+    .set_enabled_tools(["calculator", my_tool_function, another_function])  # Accepts both names and functions
     .configure_env_info(["working_directory", "platform", "date"])
     .configure_file_descriptor(max_direct_output_chars=10000)
     .configure_thinking(budget_tokens=8192)
@@ -86,25 +87,23 @@ main_program = (
 )
 ```
 
-### Compilation
+### Process Initialization
 
-All programs are compiled before starting:
+Programs are initialized and converted to processes with a single call to `start()`:
 
 ```python
-# Compile the program
-program.compile()
-
-# Start the process
+# Start the process - this handles compilation automatically
 process = await program.start()
 ```
 
-compile() will load necessary files from the program configuration and raise error/warning if there's any issue. It will be called automatically when start() is called if the program is not compiled.
+The `start()` method automatically:
+- Validates the program configuration
+- Loads necessary files from the program configuration
+- Initializes tools and dependencies
+- Creates a fully configured process instance
+- Raises errors/warnings if there are any issues
 
-So you can call start() directly.
-
-```python
-process = await program.start()
-```
+This is the preferred way to create a process from a program definition.
 
 ## Advanced Configuration
 
@@ -184,7 +183,9 @@ program.configure_mcp(
 program.configure_mcp(config_path="config/mcp_servers.json")
 ```
 
-## Function-Based Tools
+## Tool Management
+
+### Function-Based Tools
 
 LLMProc supports registering Python functions as tools with automatic schema generation from type hints and docstrings. This allows you to easily integrate custom Python functionality with your LLM programs.
 
@@ -198,3 +199,15 @@ For detailed documentation on function-based tools, including:
 See the dedicated [Function-Based Tools](function-based-tools.md) documentation.
 
 A complete working example is also available in [examples/features/function_tools.py](../examples/features/function_tools.py).
+
+### Getting Enabled Tools
+
+You can retrieve the list of currently enabled tools using the `get_enabled_tools()` method:
+
+```python
+# Get a list of all enabled tool names
+enabled_tools = program.get_enabled_tools()
+print(f"Currently enabled tools: {enabled_tools}")
+```
+
+This method returns the string names of all enabled tools (including both built-in tools and function-based tools).

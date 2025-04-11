@@ -36,7 +36,7 @@ from llmproc import LLMProgram
 
 async def main():
     # Load and compile program with preloaded files
-    program = LLMProgram.from_toml("examples/preload.toml")
+    program = LLMProgram.from_toml("examples/features/preload.toml")
     
     # Start the process (handles async initialization)
     process = await program.start()
@@ -68,7 +68,7 @@ from llmproc import LLMProgram
 
 async def main():
     # Load a program without preloaded files initially
-    program = LLMProgram.from_toml("examples/basic.toml")
+    program = LLMProgram.from_toml("examples/anthropic/claude-3-5-haiku.toml")
     process = await program.start()
     
     # Add preloaded files at runtime

@@ -7,9 +7,9 @@ The Program Linking feature allows LLM processes to communicate with each other 
 ## Use Cases
 
 1. **Knowledge Specialization**: Create specialized processes with domain-specific knowledge by preloading different files for each process.
-   
+
 2. **Task Distribution**: Split complex tasks among multiple processes, each optimized for a specific subtask.
-   
+
 3. **Context Separation**: Keep large reference documents in separate processes to maintain clean context spaces.
 
 ## Setup
@@ -92,19 +92,19 @@ from llmproc import LLMProgram
 async def main():
     # Load and compile the main program with linked programs
     main_program = LLMProgram.from_toml("path/to/main.toml")
-    
+
     # Start the process with async initialization
     main_process = await main_program.start()
-    
+
     # Run a query that will likely use the spawn tool
     run_result = await main_process.run(
         "Please use the repo expert to analyze the structure of this project."
     )
-    
+
     # Get the assistant's response (which will include the expert's insights)
     response = main_process.get_last_message()
     print(f"Response (including expert knowledge): {response}")
-    
+
     # Display run metrics
     print(f"API calls: {run_result.api_calls}")
     print(f"Duration: {run_result.duration_ms}ms")
@@ -124,7 +124,7 @@ from llmproc import LLMProgram
 async def main():
     program = LLMProgram.from_toml("path/to/main.toml")
     process = await program.start()
-    
+
     # Define callbacks for monitoring tool usage
     callbacks = {
         "on_tool_start": lambda tool_name, args: print(
@@ -134,13 +134,13 @@ async def main():
             f"Expert response received from {result.get('program')}"
         )
     }
-    
+
     # Run with callbacks
     run_result = await process.run(
-        "Ask the code helper to explain how async/await works", 
+        "Ask the code helper to explain how async/await works",
         callbacks=callbacks
     )
-    
+
     # Get the final response
     response = process.get_last_message()
     print(f"Final response: {response}")

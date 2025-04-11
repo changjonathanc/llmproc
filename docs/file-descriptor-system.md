@@ -38,10 +38,11 @@ enabled = ["read_fd", "fd_to_file"]  # FD reading and file export capability
 ```toml
 [file_descriptor]
 enabled = true                      # Explicitly enable (also enabled by read_fd in tools)
-max_direct_output_chars = 2000      # Threshold for FD creation
-default_page_size = 1000            # Size of each page
-max_input_chars = 2000              # Threshold for user input FD creation (future)
-page_user_input = true              # Enable/disable user input paging (future)
+max_direct_output_chars = 8000      # Threshold for FD creation
+default_page_size = 4000            # Size of each page
+max_input_chars = 8000              # Threshold for user input FD creation
+page_user_input = true              # Enable/disable user input paging
+enable_references = true            # Enable the reference ID system
 ```
 
 **Note**: The system is enabled if any FD tool is in `[tools].enabled` OR `enabled = true` exists in the `[file_descriptor]` section.
@@ -51,14 +52,67 @@ page_user_input = true              # Enable/disable user input paging (future)
 ### Basic File Descriptor Operations
 
 ```python
-# Read a specific page
-read_fd(fd="fd:1", page=2)
+# Basic Operations
+read_fd(fd="fd:1", start=2)                # Read page 2
+read_fd(fd="fd:1", read_all=True)          # Read the entire content
+fd_to_file(fd="fd:1", file_path="/path/to/output.txt")  # Export to file
 
-# Read the entire content
-read_fd(fd="fd:1", read_all=True)
+# Enhanced operations
+# Extract content to a new file descriptor
+new_fd = read_fd(fd="fd:1", start=2, extract_to_new_fd=True)  # Returns new FD like "fd:2"
 
-# Export content to a file
-fd_to_file(fd="fd:1", file_path="/path/to/output.txt")
+# Read specific lines (Enhanced API)
+content = read_fd(fd="fd:1", mode="line", start=10, count=5)  # Read lines 10-14
+
+# Read character ranges (Enhanced API)
+content = read_fd(fd="fd:1", mode="char", start=100, count=200)  # Read 200 chars
+
+# Append to existing file (Enhanced API)
+fd_to_file(fd="fd:1", file_path="/path/to/output.txt", mode="append")
+
+# Control file creation behavior (Enhanced API)
+fd_to_file(fd="fd:1", file_path="/path/to/output.txt", exist_ok=False)  # Don't overwrite
+fd_to_file(fd="fd:1", file_path="/path/to/output.txt", create=False)    # Update only
+```
+
+### Reference ID System
+
+The reference ID system allows the LLM to mark up content in its responses for later reference:
+
+```
+Here's a code snippet I want to reference later:
+
+<ref id="example_code">
+def hello_world():
+    print("Hello, world!")
+</ref>
+
+You can use the reference later by accessing it with read_fd(fd="ref:example_code").
+```
+
+References are automatically created as file descriptors with the prefix `ref:` followed by the ID. 
+They can be accessed using the standard `read_fd` tool just like any other file descriptor.
+
+### Spawn and Fork Integration
+
+References are automatically shared between processes during fork and spawn operations:
+
+1. When forking a process, all references from the parent are copied to the child.
+2. When spawning a child process, all references from the parent are automatically shared.
+3. References created in child processes remain isolated and are not visible to the parent.
+
+This enables complex workflows where multiple processes can share marked-up content without
+explicitly passing file descriptors.
+
+```python
+# Parent process creates a reference
+<ref id="important_data">Data the child will need</ref>
+
+# Child process can access the reference automatically
+spawn(program_name="analyzer", query="Analyze the content in ref:important_data")
+
+# Inside the child process
+read_fd(fd="ref:important_data")  # Works automatically
 ```
 
 ### XML Response Format
@@ -88,20 +142,23 @@ Second page content goes here...
 ### Key Features
 
 - **Line-Aware Pagination**: Breaks content at line boundaries when possible
-- **Continuation Indicators**: Shows if content continues across pages 
+- **Continuation Indicators**: Shows if content continues across pages
 - **Sequential IDs**: Simple fd:1, fd:2, etc. pattern
 - **Recursive Protection**: File descriptor tools don't trigger recursive FD creation
 - **Filesystem Export**: Can save file descriptor content to disk files
 - **Parent Directory Creation**: Automatically creates directories when exporting to files
+- **Reference ID System**: Mark up content with reference IDs for later access
+- **Reference Inheritance**: References automatically shared during fork/spawn operations
 
 ## Implementation
 
-The file descriptor system is implemented in `src/llmproc/tools/file_descriptor.py` with these key components:
+The file descriptor system is implemented in the `src/llmproc/file_descriptors/` package with these key components:
 
 1. **FileDescriptorManager**: Core class managing creation and access
 2. **read_fd Tool**: System call interface for accessing content
 3. **fd_to_file Tool**: System call interface for exporting content to files
 4. **XML Formatting**: Standard response format with metadata
+5. **Reference Extraction**: System for extracting and managing reference IDs
 
 ### Integration
 
@@ -110,6 +167,17 @@ The file descriptor system integrates with:
 - **LLMProcess**: Initializes and maintains FD manager state
 - **AnthropicProcessExecutor**: Automatically wraps large outputs
 - **fork_process**: Maintains FD state during process forking
+- **spawn_tool**: Shares references between parent and child processes
+
+### Performance Optimizations
+
+The file descriptor system includes several performance optimizations:
+
+- **Reference Extraction**: O(n log n) algorithm for detecting nested references
+- **Compiled Regex**: Pre-compiled regex patterns for faster reference extraction
+- **Proper Pagination**: Uses the calculate_total_pages function for consistent pagination
+- **Efficient XML Formatting**: Streamlined XML generation for standard outputs
+- **Memory Efficiency**: File descriptors are copied by reference where possible
 
 ## Implementation Status
 
@@ -126,31 +194,42 @@ The file descriptor system has completed Phase 1 implementation, which includes:
 - XML formatting with consistent metadata
 - System prompt instructions
 
-### 🔄 Phase 2: Process Integration (Partially Completed)
+### ✅ Phase 2: Process Integration (Completed)
 
 - ✅ **Fork Integration**: Automatic FD copying during fork
-- ❌ **Cross-Process FD Access**: Not yet implemented
-- ❌ **Spawn Tool Integration**: Planned (See [RFC005](/RFC/RFC005_fd_spawn_integration.md))
+- ✅ **Cross-Process FD Access**: Implemented via reference inheritance
+- ✅ **Spawn Tool Integration**: Implemented (See [RFC005](/RFC/RFC005_fd_spawn_integration.md))
 
-### 🔄 Phase 2.5: API Enhancements (Planned)
+### ✅ Phase 2.5: API Enhancements (Completed)
 
-- ❌ **Enhanced read_fd**: Not yet implemented (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
-- ❌ **Enhanced fd_to_file**: Not yet implemented (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
+- ✅ **Enhanced read_fd**: Implemented with extract_to_new_fd and positioning modes (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
+- ✅ **Enhanced fd_to_file**: Implemented with mode, create, and exist_ok parameters (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
 
 ### 🔄 Phase 3: Optional Features (Partially Completed)
 
 - ✅ **fd_to_file Tool**: Export FD content to filesystem files
-- ❌ **User Input Handling**: Not yet implemented
-- ❌ **Reference ID System**: Planned (See [RFC006](/RFC/RFC006_response_reference_id.md))
+- 🔄 **User Input Handling**: Partially implemented (basic user input paging)
+- ✅ **Reference ID System**: Implemented (See [RFC006](/RFC/RFC006_response_reference_id.md))
 
 ### Implementation Location
 
 The file descriptor system is implemented in the following files:
 
-- `src/llmproc/tools/file_descriptor.py`: Core implementation of FileDescriptorManager and FD tools
+- `src/llmproc/file_descriptors/`: Package containing all file descriptor functionality
+  - `manager.py`: Core implementation of FileDescriptorManager
+  - `fd_tools.py`: Implementation of read_fd and fd_to_file tools (in builtin/fd_tools.py)
+  - `references.py`: Reference ID system implementation (optimized for performance)
+  - `paginator.py`: Line-aware content pagination
+  - `formatter.py`: XML formatting utilities
+  - `constants.py`: Shared constants and definitions
 - `src/llmproc/llm_process.py`: Integration with LLMProcess
 - `src/llmproc/providers/anthropic_process_executor.py`: Integration with AnthropicProcessExecutor for output wrapping
+- `src/llmproc/tools/spawn.py`: Integration with spawn system call for reference inheritance
 - `src/llmproc/config/schema.py`: FileDescriptorConfig configuration schema
-- `tests/test_file_descriptor.py`: Basic unit tests
-- `tests/test_file_descriptor_integration.py`: Integration tests with process model
-- `tests/test_fd_to_file_tool.py`: Tests for FD export functionality
+- Tests:
+  - `tests/test_file_descriptor.py`: Basic unit tests
+  - `tests/test_file_descriptor_integration.py`: Integration tests with process model
+  - `tests/test_fd_to_file_tool.py`: Tests for FD export functionality
+  - `tests/test_reference_system.py`: Tests for reference ID system
+  - `tests/test_fd_spawn_integration.py`: Tests for spawn integration
+  - `tests/test_fd_all_features.py`: Tests for all FD features combined

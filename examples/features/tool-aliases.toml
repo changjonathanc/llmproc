@@ -1,0 +1,41 @@
+[model]
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+display_name = "Claude Tool Aliases Demo"
+
+[parameters]
+temperature = 0.7
+max_tokens = 300
+
+[prompt]
+system_prompt = """
+You are a helpful assistant with access to tools. Use tools whenever appropriate to answer user queries accurately.
+
+The following tools are available through easy-to-use aliases:
+- 'read': Reads a file from the local filesystem
+- 'calc': Performs mathematical calculations 
+- 'dir': Lists files in a directory
+- 'jump': Jumps to a specific point in the conversation (goto)
+
+When using tools, please use these simple names rather than their technical names.
+"""
+
+[tools]
+# Enable the original tool names, not the aliases
+enabled = ["read_file", "calculator", "list_dir", "goto"]
+
+[tools.aliases]
+# Define user-friendly aliases that the LLM will see
+read = "read_file"
+calc = "calculator"
+dir = "list_dir"
+jump = "goto"
+add = "everything__add"  # MCP tool alias
+
+# To use MCP tools with aliases, uncomment and configure:
+[mcp]
+config_path = "../../config/mcp_servers.json"
+[mcp.tools]
+everything = ["add"]
+
+# Also add MCP tool alias in the main tools.aliases section above

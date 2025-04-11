@@ -20,13 +20,13 @@ def test_compile_all_programs():
             [model]
             name = "main-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Main program"
-            
+
             [tools]
             enabled = ["spawn"]
-            
+
             [linked_programs]
             helper = "helper.toml"
             math = "math.toml"
@@ -38,10 +38,10 @@ def test_compile_all_programs():
             [model]
             name = "helper-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Helper program"
-            
+
             [linked_programs]
             utility = "utility.toml"
             """)
@@ -52,7 +52,7 @@ def test_compile_all_programs():
             [model]
             name = "math-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Math program"
             """)
@@ -63,7 +63,7 @@ def test_compile_all_programs():
             [model]
             name = "utility-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Utility program"
             """)
@@ -72,11 +72,11 @@ def test_compile_all_programs():
         # Since from_toml doesn't support return_all, we need to handle this differently
         # For this test, we'll manually track all programs
         compiled_programs = {}
-        
+
         # Load main program and track it
         main_program = LLMProgram.from_toml(main_program_path, include_linked=True)
         compiled_programs[str(main_program_path.resolve())] = main_program
-        
+
         # Also track all linked programs (at this point they are LLMProgram instances)
         for name, linked_program in main_program.linked_programs.items():
             if name == "helper":
@@ -137,13 +137,13 @@ def test_compile_all_with_missing_file():
             [model]
             name = "main-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Main program"
-            
+
             [tools]
             enabled = ["spawn"]
-            
+
             [linked_programs]
             missing = "non_existent.toml"
             """)
@@ -168,10 +168,10 @@ def test_circular_dependency():
             [model]
             name = "model-a"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Program A"
-            
+
             [linked_programs]
             b = "program_b.toml"
             """)
@@ -182,21 +182,21 @@ def test_circular_dependency():
             [model]
             name = "model-b"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Program B"
-            
+
             [linked_programs]
             a = "program_a.toml"
             """)
 
         # Should load both programs without infinite recursion
         program_a = LLMProgram.from_toml(program_a_path, include_linked=True)
-        
+
         # Both programs should be loaded and linked to each other
         assert "b" in program_a.linked_programs
         program_b = program_a.linked_programs["b"]
-        
+
         # Check circular reference resolution - program_b should have a reference to program_a
         assert "a" in program_b.linked_programs
         assert program_b.linked_programs["a"] is program_a  # Same object reference
@@ -212,13 +212,13 @@ def test_from_toml_with_linked_programs():
             [model]
             name = "main-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Main program"
-            
+
             [tools]
             enabled = ["spawn"]
-            
+
             [linked_programs]
             helper = "helper.toml"
             """)
@@ -229,15 +229,13 @@ def test_from_toml_with_linked_programs():
             [model]
             name = "helper-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Helper program"
             """)
 
         # Mock the get_provider_client function to avoid API calls
-        with unittest.mock.patch(
-            "llmproc.providers.get_provider_client"
-        ) as mock_get_client:
+        with unittest.mock.patch("llmproc.providers.get_provider_client") as mock_get_client:
             mock_get_client.return_value = unittest.mock.MagicMock()
 
             # Create a process using the two-step pattern

@@ -33,7 +33,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-uv.lock
 
 # IDE
 .idea/
@@ -48,10 +47,16 @@ Thumbs.db
 # Local development files
 local/
 forking-an-agent/
+mcp-registry/
+python-genai/
 session_summaries/
 node_modules/
 package-lock.json
 package.json
+tmp/
 
 llms-full.txt
 *.diff
+
+**/CLAUDE.local.md
+worktrees/

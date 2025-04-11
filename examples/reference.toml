@@ -21,6 +21,11 @@ provider = "anthropic"  # Options: "anthropic", "anthropic_vertex", "openai"
 # If not provided, defaults to "{provider} {model_name}"
 display_name = "Claude 3.7 Sonnet"
 
+# Optional: For Vertex AI models (Anthropic and Gemini on Vertex)
+# project_id = "your-project-id"   # GCP project ID for Vertex AI (if not using env var)
+# region = "us-central1"           # GCP region for Vertex AI (if not using env var)
+# IMPORTANT: These Vertex AI parameters must be placed in the [model] section, not in [parameters]
+
 # Optional: Disable automatic prompt caching (Anthropic models only)
 # Prompt caching is automatically enabled for all Anthropic models
 # This can reduce token usage by up to 90% and improve response times
@@ -181,6 +186,7 @@ code_assistant = "./basic/claude-3-haiku.toml"      # Program for coding help
 [mcp.tools]
 # Server name = List of specific tools to import OR "all" to import all tools
 sequential-thinking = "all"  # Sequential thinking for step-by-step reasoning
+everything = ["add"]  # Use the add tool for precise calculations
 # Other servers (commented out as they're not in current config)
 # github = ["search_repositories", "get_file_contents"]  # Specific GitHub tools
 # exa = ["search"]                                      # Exa search tool

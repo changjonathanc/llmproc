@@ -61,6 +61,58 @@ callbacks = {
 run_result = await process.run("User input", callbacks=callbacks)
 ```
 
+## Unix-Inspired Program/Process Pattern
+
+LLMProc uses a Unix-inspired model that clearly separates program configuration from process execution:
+
+1. **Program Phase**: Configuration and definition (static)
+2. **Process Phase**: Execution and runtime state (dynamic)
+
+This design follows these core principles:
+- **Separation of Concerns**: Configuration in LLMProgram, execution in LLMProcess
+- **Dependency Injection**: Clear handoff of dependencies at runtime
+- **Unidirectional Flow**: Program → Process → Runtime Context
+- **Explicit Tool Dependencies**: Tools explicitly declare their runtime dependencies
+
+### Initialization Flow
+
+```python
+# 1. Create program from configuration
+program = LLMProgram.from_toml("config.toml")
+
+# 2. Start process with proper initialization
+process = await program.start()
+
+# This performs proper initialization:
+# - Loads configuration from program
+# - Sets up tool manager with program configuration
+# - Initializes runtime components (FD, MCP, etc.)
+# - Creates runtime context for tool execution
+```
+
+### Runtime Context Pattern
+
+The runtime context pattern enables clean dependency injection for tools:
+
+```python
+from llmproc.tools.context_aware import context_aware
+
+# Use the context_aware decorator to mark tools that need runtime access
+@context_aware
+async def my_tool(arg1: str, runtime_context=None) -> dict:
+    """A tool that requires runtime context access."""
+    # Extract dependencies from runtime context
+    process = runtime_context.get("process")
+    fd_manager = runtime_context.get("fd_manager")
+    
+    # Use dependencies to implement the tool
+    # ...
+    
+    return {"result": "Success"}
+```
+
+This pattern eliminates circular dependencies between tools and the LLMProcess.
+
 ## Extension Patterns
 
 ### Adding a New Tool
@@ -80,27 +132,38 @@ my_tool_def = {
     }
 }
 
-# 2. Create the handler function
-async def my_tool_handler(args: dict) -> Any:
+# 2. Create a context-aware handler function
+from llmproc.tools.context_aware import context_aware
+
+@context_aware
+async def my_tool_handler(args: dict, runtime_context=None) -> Any:
+    # Extract required dependencies from runtime context
+    process = runtime_context.get("process")
+    fd_manager = runtime_context.get("fd_manager")
+    
+    # Extract arguments
     param1 = args.get("param1", "")
     param2 = args.get("param2", 0)
     
-    # Tool implementation
+    # Tool implementation using dependencies
     result = f"Processed {param1} with value {param2}"
     
-    return {"result": result, "success": True}
+    # Return a proper ToolResult
+    from llmproc.common.results import ToolResult
+    return ToolResult.from_success(result)
 
 # 3. Register with the tool registry
-def register_my_tool(registry, process):
+def register_my_tool(registry):
     registry.register_tool("my_tool", my_tool_handler, my_tool_def)
 
 # 4. Add to the registration system
-def register_system_tools(registry, process):
-    # ... existing code ...
+def register_system_tools_config(config):
+    # Get the tool registry
+    registry = config.get("registry")
     
-    # Register custom tool if enabled
-    if "my_tool" in process.enabled_tools:
-        register_my_tool(registry, process)
+    # Register custom tool if enabled in config
+    if "my_tool" in config.get("enabled_tools", []):
+        register_my_tool(registry)
 ```
 
 ### Adding a New Provider
@@ -125,7 +188,7 @@ class MyProviderProcessExecutor:
                   callbacks=None, run_result=None):
         # Create a RunResult if not provided
         if run_result is None:
-            from llmproc.results import RunResult
+            from llmproc.common.results import RunResult
             run_result = RunResult()
         
         # Implementation specific to this provider
@@ -213,7 +276,7 @@ elif self.provider == "my_provider":
 
 ```python
 # DON'T do this
-process = LLMProcess(program=program)
+process = LLMProcess(program=program)  # Missing proper initialization
 ```
 
 Instead, use the program.start() method for proper async initialization:
@@ -221,6 +284,28 @@ Instead, use the program.start() method for proper async initialization:
 ```python
 # DO this
 process = await program.start()
+```
+
+### ❌ Tool Dependencies Without Context-Aware Pattern
+
+```python
+# DON'T do this - creates circular dependency
+async def my_tool(args, llm_process):
+    # Direct dependency on LLMProcess instance
+    result = llm_process.some_method()
+    return result
+```
+
+Instead, use the context-aware pattern:
+
+```python
+# DO this - uses runtime context
+@context_aware
+async def my_tool(args, runtime_context=None):
+    # Extract dependencies from context
+    process = runtime_context.get("process")
+    # Use process methods
+    return result
 ```
 
 ### ❌ Ignoring RunResult

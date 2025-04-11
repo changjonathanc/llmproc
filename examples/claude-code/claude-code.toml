@@ -23,6 +23,7 @@ config_path = "../../config/mcp_servers.json"
 
 [mcp.tools]
 sequential-thinking = "all"  # Step-by-step reasoning
+everything = ["add"]  # Use the add tool for precise calculations
 
 [tools]
 enabled = ["spawn", "read_file"]

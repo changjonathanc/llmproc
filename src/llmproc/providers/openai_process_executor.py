@@ -2,7 +2,7 @@
 
 import logging
 
-from llmproc.results import RunResult
+from llmproc.common.results import RunResult
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,19 @@
+# Configuration for Gemini 2.0 Flash on Vertex AI
+
+[model]
+name = "gemini-2.0-flash"
+provider = "gemini_vertex"
+display_name = "Gemini 2.0 Flash (Vertex AI)"
+# Optional: Override environment variables
+# project_id = "your-project-id" 
+# region = "us-central1"
+
+[parameters]
+temperature = 0.7
+max_tokens = 4096
+top_p = 0.95
+
+[prompt]
+system_prompt = """You are a helpful AI assistant powered by Google's Gemini 2.0 Flash model.
+Your goal is to provide accurate, helpful, and safe responses to user queries.
+"""

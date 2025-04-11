@@ -26,12 +26,15 @@ system_prompt = "You are a helpful assistant with reasoning capabilities."
 
 [parameters]
 max_tokens = 16384
-thinking_budget = 4000  # Min: 1024, Higher values = more thorough reasoning
+
+[parameters.thinking]
+type = "enabled"  # "enabled" or "disabled"
+budget_tokens = 4000  # Min: 1024, Higher values = more thorough reasoning
 ```
 
-### Thinking Budget Parameter
+### Thinking Configuration
 
-The `thinking_budget` parameter controls how much "thinking" the model does before responding:
+The `thinking` parameter controls how much "thinking" the model does before responding:
 
 - **Low** (1,024 tokens):
   - Minimum allowed thinking budget
@@ -64,7 +67,7 @@ import asyncio
 from llmproc import LLMProgram
 
 async def main():
-    program = LLMProgram.from_toml('examples/basic/claude-3-7-thinking-high.toml')
+    program = LLMProgram.from_toml('examples/anthropic/claude-3-7-thinking-high.toml')
     process = await program.start()
     
     # Math example
@@ -88,7 +91,7 @@ Thinking models can generate and debug code with strong reasoning:
 
 ```python
 async def code_example():
-    program = LLMProgram.from_toml('examples/basic/claude-3-7-thinking-high.toml')
+    program = LLMProgram.from_toml('examples/anthropic/claude-3-7-thinking-high.toml')
     process = await program.start()
     
     # Code generation example
@@ -132,11 +135,11 @@ asyncio.run(code_example())
 
 ## Examples
 
-See the full example configuration files in [examples/basic/](../examples/basic/):
+See the full example configuration files in [examples/anthropic/](../examples/anthropic/):
 
-- [claude-3-7-thinking-high.toml](../examples/basic/claude-3-7-thinking-high.toml)
-- [claude-3-7-thinking-medium.toml](../examples/basic/claude-3-7-thinking-medium.toml)
-- [claude-3-7-thinking-low.toml](../examples/basic/claude-3-7-thinking-low.toml)
+- [claude-3-7-thinking-high.toml](../examples/anthropic/claude-3-7-thinking-high.toml)
+- [claude-3-7-thinking-medium.toml](../examples/anthropic/claude-3-7-thinking-medium.toml)
+- [claude-3-7-thinking-low.toml](../examples/anthropic/claude-3-7-thinking-low.toml)
 
 ## Future Enhancements
 

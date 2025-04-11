@@ -129,9 +129,7 @@ def mcp_config_file():
 @patch("llmproc.llm_process.HAS_MCP", True)
 @patch("llmproc.llm_process.asyncio.run")
 @patch("llmproc.providers.providers.AsyncAnthropic")
-def test_mcp_initialization(
-    mock_anthropic, mock_asyncio_run, mock_mcp_registry, mock_env, mcp_config_file
-):
+def test_mcp_initialization(mock_anthropic, mock_asyncio_run, mock_mcp_registry, mock_env, mcp_config_file):
     """Test that LLMProcess initializes correctly with MCP configuration."""
     # Setup mock client
     mock_client = MagicMock()
@@ -213,43 +211,33 @@ sequential-thinking = ["sequentialthinking"]
         # Create and patch the instance
         with patch("llmproc.providers.providers.AsyncAnthropic"):
             with patch("llmproc.llm_process.asyncio.run"):
-                    # Use the two-step pattern
-                    from llmproc.program import LLMProgram
+                # Use the two-step pattern
+                from llmproc.program import LLMProgram
 
-                    program = LLMProgram.from_toml(config_file)
+                program = LLMProgram.from_toml(config_file)
 
-                    # Mock the start method to return a process without actually initializing MCP
-                    with patch("llmproc.program.LLMProgram.start") as mock_start:
-                        process = LLMProcess(program=program)
-                        mock_start.return_value = process
+                # Mock the start method to return a process without actually initializing MCP
+                with patch("llmproc.program.LLMProgram.start") as mock_start:
+                    process = LLMProcess(program=program)
+                    mock_start.return_value = process
 
-                        # In our new design, MCP is only enabled when needed (in create or run)
-                        # So we check the configuration instead
-                        expected_config_path = (
-                            config_dir / "mcp_servers.json"
-                        ).resolve()
-                        assert (
-                            Path(process.mcp_config_path).resolve()
-                            == expected_config_path
-                        )
-                        assert (
-                            "github" in process.mcp_tools
-                            and "sequential-thinking" in process.mcp_tools
-                        )
-                        assert process.mcp_tools == {
-                            "github": ["search_repositories", "get_file_contents"],
-                            "sequential-thinking": ["sequentialthinking"],
-                        }
-                        assert process.model_name == "claude-3-5-haiku-20241022"
-                        assert process.provider == "anthropic"
-                        assert process.display_name == "Test MCP Assistant"
+                    # In our new design, MCP is only enabled when needed (in create or run)
+                    # So we check the configuration instead
+                    expected_config_path = (config_dir / "mcp_servers.json").resolve()
+                    assert Path(process.mcp_config_path).resolve() == expected_config_path
+                    assert "github" in process.mcp_tools and "sequential-thinking" in process.mcp_tools
+                    assert process.mcp_tools == {
+                        "github": ["search_repositories", "get_file_contents"],
+                        "sequential-thinking": ["sequentialthinking"],
+                    }
+                    assert process.model_name == "claude-3-5-haiku-20241022"
+                    assert process.provider == "anthropic"
+                    assert process.display_name == "Test MCP Assistant"
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
 @patch("llmproc.providers.providers.AsyncAnthropic")
-def test_mcp_with_no_tools(
-    mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file
-):
+def test_mcp_with_no_tools(mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file):
     """Test behavior when MCP is enabled but no tools are specified."""
     # Mock asyncio.run to do nothing
     with patch("llmproc.llm_process.asyncio.run"):
@@ -278,9 +266,7 @@ def test_mcp_with_no_tools(
 
 @patch("llmproc.llm_process.HAS_MCP", True)
 @patch("llmproc.providers.providers.AsyncAnthropic")
-def test_mcp_with_all_tools(
-    mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file
-):
+def test_mcp_with_all_tools(mock_anthropic, mock_mcp_registry, mock_env, mcp_config_file):
     """Test behavior when all tools from a server are requested."""
     # Mock asyncio.run to actually call the _initialize_mcp_tools method
     with patch("llmproc.llm_process.asyncio.run"):
@@ -340,11 +326,11 @@ github = 123  # This is invalid, should be a list or "all"
 
         # Test that it raises a ValueError
         with patch("llmproc.providers.providers.AsyncAnthropic"):
-                with pytest.raises(ValueError):
-                    # Use LLMProgram.from_toml instead
-                    from llmproc.program import LLMProgram
+            with pytest.raises(ValueError):
+                # Use LLMProgram.from_toml instead
+                from llmproc.program import LLMProgram
 
-                    LLMProgram.from_toml(config_file)
+                LLMProgram.from_toml(config_file)
 
 
 @patch("llmproc.llm_process.HAS_MCP", True)
@@ -387,18 +373,16 @@ def test_openai_with_mcp_raises_error(mock_mcp_registry, mock_env, mcp_config_fi
 def test_mcp_import_error(mock_env, mcp_config_file):
     """Test that trying to use MCP when the package is not installed raises an ImportError."""
     with patch("llmproc.providers.providers.AsyncAnthropic", MagicMock()):
-            from llmproc.program import LLMProgram
+        from llmproc.program import LLMProgram
 
-            # Create program with MCP configuration
-            program = LLMProgram(
-                model_name="claude-3-haiku-20240307",
-                provider="anthropic",
-                system_prompt="You are a test assistant.",
-                mcp_config_path=mcp_config_file,
-                mcp_tools={"github": ["search_repositories"]},
-            )
+        # Create program with MCP configuration
+        program = LLMProgram(
+            model_name="claude-3-haiku-20240307",
+            provider="anthropic",
+            system_prompt="You are a test assistant.",
+            mcp_config_path=mcp_config_file,
+            mcp_tools={"github": ["search_repositories"]},
+        )
 
-            with pytest.raises(
-                ImportError, match="MCP features require the mcp-registry package"
-            ):
-                LLMProcess(program=program)
+        with pytest.raises(ImportError, match="MCP features require the mcp-registry package"):
+            LLMProcess(program=program)

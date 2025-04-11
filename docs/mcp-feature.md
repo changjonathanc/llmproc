@@ -11,6 +11,21 @@ MCP provides a standardized way for LLM agents to interact with external tools. 
 3. Handle tool calls during model generation
 4. Process tool results and continue the conversation
 
+## Implementation Architecture
+
+The MCP implementation uses a two-registry design for performance and isolation:
+
+1. **MCP Manager**: Centralizes MCP server and tool management
+   - Handles selective initialization of MCP servers and tools
+   - Only launches servers needed for requested tools
+   - Maintains separation between MCP tools and runtime tools
+
+2. **Dual-Registry Approach**:
+   - **MCP Registry**: Manages tool definitions from MCP servers
+   - **Runtime Registry**: Stores runtime-accessible tools
+   - Tools are copied from MCP registry to runtime registry during initialization
+   - This separation improves performance and resource usage
+
 ## Configuration
 
 MCP is configured through the TOML configuration file with a dedicated `[mcp]` section:

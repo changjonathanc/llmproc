@@ -1,0 +1,15 @@
+[merge]
+    ff = false
+    # Always create a merge commit when merging
+    # This preserves branch history and development context
+
+[pull]
+    ff = only
+    # For pulls, only fast-forward if possible, otherwise abort
+    # This helps avoid accidental merge commits during pulls
+
+[alias]
+    # Add any useful project-specific aliases here
+    # For example:
+    # st = status -sb
+    # lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative

@@ -59,22 +59,20 @@ llmproc-demo ./examples/file_descriptor/references.toml
 
 4. **Process Control and Content Sharing**
    - Spawning child processes: `spawn(program_name="analyzer", query="Analyze this content")`
-   - Sharing FDs with child processes: `spawn(program_name="analyzer", query="...", additional_preload_fds=["fd:1"])`
-   - Forking the current process: `fork(prompt="Process this part of the content")`
+   - Forking the current process: `fork(prompts=["Process this part of the content"])`
 
 5. **User Input Handling**
    - Automatic FD creation for large inputs
    - Preview with metadata: `<fd:1 preview="First few chars..." type="user_input" size="10000">`
    - Reading full input: `read_fd(fd="fd:1", read_all=true)`
    - Reading specific portions: `read_fd(fd="fd:1", mode="line", start=10, count=5)`
-   - Delegating large input processing: `spawn(program_name="analyzer", query="...", additional_preload_fds=["fd:1"])`
+   - Delegating large input processing: `spawn(program_name="analyzer", query="Process the content in fd:1")` (references are automatically shared)
 
 6. **Response References**
    - Marking content: `<ref id="example">content</ref>`
    - Accessing references: `read_fd(fd="ref:example", read_all=true)`
    - Exporting to files: `fd_to_file(fd="ref:example", file_path="output.txt")`
    - Automatic inheritance by child processes: references created in parent are available to children
-   - Manual passing to children: `spawn(program_name="...", additional_preload_fds=["ref:example"])`
 
 ## Use Cases
 
@@ -104,15 +102,13 @@ read_fd(fd="fd:2", mode="line", start=50, count=10) # Read lines 50-60 from extr
 # Analyze document by delegating to a specialized child process
 spawn(
   program_name="analyzer",
-  query="Find all mentions of pricing in this document",
-  additional_preload_fds=["fd:1"]
+  query="Find all mentions of pricing in the document in fd:1"
 )
 
 # Transform document using a specialized child process
 spawn(
   program_name="transformer",
-  query="Convert this markdown to HTML",
-  additional_preload_fds=["fd:1"]
+  query="Convert the markdown in fd:1 to HTML"
 )
 ```
 
@@ -168,7 +164,6 @@ read_fd(fd="fd:1", mode="line", start=100, count=50, extract_to_new_fd=true)  # 
 # Delegate deeper analysis to a specialized process
 spawn(
   program_name="financial_analyzer",
-  query="Analyze this financial section in detail",
-  additional_preload_fds=["fd:2", "ref:analysis"]
+  query="Analyze the financial section in fd:2 and use the analysis in ref:analysis"
 )
 ```

@@ -41,24 +41,24 @@ from llmproc import LLMProgram
 async def main():
     # Load and compile program
     program = LLMProgram.from_toml("config.toml")
-    
+
     # Start the process
     process = await program.start()
-    
+
     # Define callbacks for monitoring
     callbacks = {
         "on_tool_start": lambda tool_name, args: print(f"Starting tool: {tool_name}"),
         "on_tool_end": lambda tool_name, result: print(f"Tool completed: {tool_name}"),
         "on_response": lambda content: print(f"Response: {content[:30]}...")
     }
-    
+
     # Run with user input
     run_result = await process.run("Hello, how can you help me?", callbacks=callbacks)
-    
+
     # Get and display response
     response = process.get_last_message()
     print(f"Response: {response}")
-    
+
     # Show metrics
     print(f"Run completed in {run_result.duration_ms}ms")
     print(f"API calls: {run_result.api_calls}")

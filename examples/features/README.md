@@ -16,6 +16,7 @@ This directory contains examples of LLMProc's core features, each demonstrated i
 
 - **file-descriptor/**: Examples of file descriptor system for handling large outputs
 - **program-linking/**: Examples of LLM-to-LLM communication via spawn tool
+- **builtin-tools/**: Examples demonstrating built-in tools provided by llmproc
 
 ## Usage
 

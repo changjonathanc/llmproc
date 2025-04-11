@@ -1,10 +1,11 @@
 """Tests for function-based implementation of existing tools."""
 
-import pytest
 import math
 
-from llmproc.tools import read_file, calculator
-from llmproc.tools.tool_result import ToolResult
+import pytest
+
+from llmproc.tools.builtin import calculator, read_file
+from llmproc.common.results import ToolResult
 
 
 @pytest.mark.asyncio

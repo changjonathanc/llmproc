@@ -24,6 +24,8 @@
 
 - **top_k**: Only samples from the top K options for each subsequent token. Used to remove "long tail" low probability responses.
 
+- **thinking**: Configure thinking capabilities (Claude 3.7+ only): `{type = "enabled", budget_tokens = 4000}`
+
 ## Claude on Vertex AI (anthropic_vertex) Parameters
 
 - **temperature** (0-1): Controls randomness in responses, with values closer to 0 being more deterministic.
@@ -33,6 +35,8 @@
 - **top_p** (0-1): Controls diversity via nucleus sampling, similar to other providers.
 
 - **top_k**: Only considers the top K tokens when generating each token in the response.
+
+- **thinking**: Configure thinking capabilities (Claude 3.7+ only): `{type = "enabled", budget_tokens = 4000}`
 
 ### Using Claude Models on Vertex AI
 

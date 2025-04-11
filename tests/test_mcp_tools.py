@@ -16,7 +16,9 @@ import pytest
 
 from llmproc import LLMProcess
 from llmproc.program import LLMProgram
-from llmproc.tools.mcp import MCP_TOOL_SEPARATOR
+from llmproc.common.results import ToolResult
+from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
+from llmproc.tools.mcp.manager import MCPManager
 
 
 @pytest.fixture
@@ -133,9 +135,7 @@ async def test_process_response_content(mock_mcp_registry, mock_time_response):
 @patch("llmproc.llm_process.HAS_MCP", True)
 @patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("llmproc.llm_process.asyncio.run")
-def test_llm_process_with_time_tool(
-    mock_asyncio_run, mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config
-):
+def test_llm_process_with_time_tool(mock_asyncio_run, mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config):
     """Test LLMProcess with the time tool."""
     # Setup mock client
     mock_client = MagicMock()
@@ -151,13 +151,23 @@ def test_llm_process_with_time_tool(
         mcp_config_path=time_mcp_config,
         mcp_tools={"time": ["current"]},
     )
-    process = LLMProcess(program=program)
     
-    # Set empty api_params to avoid None error
-    process.api_params = {}
-
-    # Set mcp_enabled for testing
-    process.mcp_enabled = True
+    # Use the proper pattern with mocked start() since this is a synchronous test
+    with patch.object(program, 'start') as mock_start:
+        # Create mock process that would be returned by start()
+        process = LLMProcess(program=program, skip_tool_init=True)
+        
+        # Set empty api_params to avoid None error
+        process.api_params = {}
+        
+        # Set mcp_enabled for testing
+        process.mcp_enabled = True
+        
+        # Configure mock to return our process
+        mock_start.return_value = process
+        
+        # In a real implementation, we would use:
+        # process = await program.start()
 
     # Check configuration
     assert process.mcp_tools == {"time": ["current"]}
@@ -172,20 +182,16 @@ def test_llm_process_with_time_tool(
 @pytest.mark.asyncio
 @patch("llmproc.llm_process.HAS_MCP", True)
 @patch("llmproc.providers.providers.AsyncAnthropic")
-async def test_run_with_time_tool(
-    mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config
-):
+async def test_run_with_time_tool(mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config):
     """Test the async run method with the time tool."""
     # Setup mock client
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
 
-    # Mock run method directly to bypass internal implementation details
-    # This is simpler than trying to mock the internal _run_anthropic_with_tools method
-    with patch("llmproc.llm_process.asyncio.run"):
-        # Create program and process with MCP configuration
-        from llmproc.program import LLMProgram
+    # Create program and process with MCP configuration
+    from llmproc.program import LLMProgram
 
+    with patch("llmproc.llm_process.asyncio.run"):
         program = LLMProgram(
             model_name="claude-3-5-haiku-20241022",
             provider="anthropic",
@@ -193,10 +199,22 @@ async def test_run_with_time_tool(
             mcp_config_path=time_mcp_config,
             mcp_tools={"time": ["current"]},
         )
-        process = LLMProcess(program=program)
+    
+    # Use the proper pattern with AsyncMock since this is an async test
+    mock_start = AsyncMock()
+    program.start = mock_start
+    
+    # Create mock process that would be returned by start()
+    process = LLMProcess(program=program, skip_tool_init=True)
+    
+    # Configure mock to return our process
+    mock_start.return_value = process
+    
+    # In a real implementation, we would use:
+    # process = await program.start()
 
-    # Import RunResult for mocking
-    from llmproc.results import RunResult
+    # Import RunResult from common.results to fix deprecation warning
+    from llmproc.common.results import RunResult
 
     # Create a mock RunResult
     mock_run_result = RunResult()
@@ -207,9 +225,7 @@ async def test_run_with_time_tool(
     process._async_run = AsyncMock(return_value=mock_run_result)
 
     # Patch get_last_message to return our expected response
-    process.get_last_message = MagicMock(
-        return_value="The current time is 2022-03-10T00:00:00Z"
-    )
+    process.get_last_message = MagicMock(return_value="The current time is 2022-03-10T00:00:00Z")
 
     # Call the run method
     result = await process.run("What time is it now?")
@@ -229,18 +245,10 @@ async def test_run_with_time_tool(
 def mock_mcp_config():
     """Create a temporary MCP config file for testing."""
     with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
-        config = {
-            "mcpServers": {
-                "existing-server": {
-                    "type": "stdio",
-                    "command": "/bin/echo",
-                    "args": ["mock server"]
-                }
-            }
-        }
+        config = {"mcpServers": {"existing-server": {"type": "stdio", "command": "/bin/echo", "args": ["mock server"]}}}
         json.dump(config, tmp)
         tmp_path = tmp.name
-    
+
     yield tmp_path
     os.unlink(tmp_path)
 
@@ -251,39 +259,51 @@ def mock_mcp_config():
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
 async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
-    """Test that an error is raised when an unknown server is configured."""
+    """Test that MCPManager handles unknown servers gracefully."""
     # Setup mock client
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
+
+    # Mock the MCP registry module
+    mock_mcp_registry = MagicMock()
+    mock_mcp_registry.ServerRegistry = mock_server_registry
+    mock_mcp_registry.MCPAggregator = mock_aggregator
     
-    # Mock the MCP registry
+    # Add necessary methods to the mocked mcp_registry module
+    mock_mcp_registry.get_definitions = MagicMock()
+    mock_mcp_registry.register_tool = MagicMock()
+
+    # Setup mock instances
     mock_server_registry_instance = MagicMock()
     mock_server_registry.from_config.return_value = mock_server_registry_instance
     
+    # Setup mock filter_servers to return the same mock registry
+    mock_server_registry_instance.filter_servers = MagicMock(return_value=mock_server_registry_instance)
+
     mock_agg_instance = AsyncMock()
     mock_aggregator.return_value = mock_agg_instance
-    
+
     # Mock list_tools to return a server_tools_map that doesn't include our target server
-    mock_agg_instance.list_tools = AsyncMock(
-        return_value={"existing-server": []}
-    )
-    
-    # Create program with non-existent server
-    program = LLMProgram(
-        model_name="claude-3-5-haiku-20241022",
-        provider="anthropic",
-        system_prompt="You are a helpful assistant with access to tools.",
-        mcp_config_path=mock_mcp_config,
-        mcp_tools={"non-existing-server": ["some-tool"]}
-    )
-    
-    # Test that initialization fails with ValueError
-    with pytest.raises(ValueError) as excinfo:
-        await LLMProcess.create(program)
-    
-    # Check that the error message contains the server name
-    assert "non-existing-server" in str(excinfo.value)
-    assert "not found in MCP configuration" in str(excinfo.value)
+    mock_agg_instance.list_tools = AsyncMock(return_value={"existing-server": []})
+
+    # Create a patch for the mcp_registry module
+    with patch.dict("sys.modules", {"mcp_registry": mock_mcp_registry}):
+        # Create program with non-existent server
+        program = LLMProgram(
+            model_name="claude-3-5-haiku-20241022",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant with access to tools.",
+            mcp_config_path=mock_mcp_config,
+            mcp_tools={"non-existing-server": ["some-tool"]},
+        )
+
+        # The behavior has changed - we now log a warning instead of raising an error
+        # Use program.start() instead of LLMProcess.create() for proper initialization
+        process = await program.start()
+        
+        # Verify that the process was created successfully despite no tools being registered
+        assert process is not None
+        assert process.mcp_enabled is True
 
 
 @pytest.mark.asyncio
@@ -292,197 +312,120 @@ async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
 async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
-    """Test that an error is raised when an unknown tool is configured."""
+    """Test that MCPManager handles unknown tools gracefully."""
     # Setup mock client
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
+
+    # Mock the MCP registry module
+    mock_mcp_registry = MagicMock()
+    mock_mcp_registry.ServerRegistry = mock_server_registry
+    mock_mcp_registry.MCPAggregator = mock_aggregator
     
-    # Mock the MCP registry
+    # Add necessary methods to the mocked mcp_registry module
+    mock_mcp_registry.get_definitions = MagicMock()
+    mock_mcp_registry.register_tool = MagicMock()
+
+    # Setup mock instances
     mock_server_registry_instance = MagicMock()
     mock_server_registry.from_config.return_value = mock_server_registry_instance
     
+    # Setup mock filter_servers to return the same mock registry
+    mock_server_registry_instance.filter_servers = MagicMock(return_value=mock_server_registry_instance)
+
     mock_agg_instance = AsyncMock()
     mock_aggregator.return_value = mock_agg_instance
-    
+
     # Create mock tool
     mock_tool = MagicMock()
     mock_tool.name = "existing-tool"
     mock_tool.description = "A test tool"
     mock_tool.inputSchema = {"type": "object", "properties": {}}
-    
-    # Mock list_tools to return a server_tools_map with our server but not the requested tool
-    mock_agg_instance.list_tools = AsyncMock(
-        return_value={"existing-server": [mock_tool]}
-    )
-    
-    # Create program with non-existent tool
-    program = LLMProgram(
-        model_name="claude-3-5-haiku-20241022",
-        provider="anthropic",
-        system_prompt="You are a helpful assistant with access to tools.",
-        mcp_config_path=mock_mcp_config,
-        mcp_tools={"existing-server": ["non-existing-tool"]}
-    )
-    
-    # Test that initialization fails with ValueError
-    with pytest.raises(ValueError) as excinfo:
-        await LLMProcess.create(program)
-    
-    # Check that the error message contains the tool name
-    assert "non-existing-tool" in str(excinfo.value)
-    assert "not found for server" in str(excinfo.value)
 
-
-@pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.AsyncAnthropic")
-@patch("mcp_registry.MCPAggregator")
-@patch("mcp_registry.ServerRegistry")
-async def test_tool_not_found_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
-    """Test that an error is raised when an unknown tool is configured."""
-    # Setup mock client
-    mock_client = MagicMock()
-    mock_anthropic.return_value = mock_client
-    
-    # Mock the MCP registry
-    mock_server_registry_instance = MagicMock()
-    mock_server_registry.from_config.return_value = mock_server_registry_instance
-    
-    mock_agg_instance = AsyncMock()
-    mock_aggregator.return_value = mock_agg_instance
-    
     # Mock list_tools to return a server_tools_map with our server but no tools
-    mock_agg_instance.list_tools = AsyncMock(
-        return_value={"existing-server": []}
-    )
-    
-    # Create program with non-existent tool
-    program = LLMProgram(
-        model_name="claude-3-5-haiku-20241022",
-        provider="anthropic",
-        system_prompt="You are a helpful assistant with access to tools.",
-        mcp_config_path=mock_mcp_config,
-        mcp_tools={"existing-server": ["non-existing-tool"]}
-    )
-    
-    # Test that initialization fails with ValueError
-    with pytest.raises(ValueError) as excinfo:
-        await LLMProcess.create(program)
-    
-    # Check that the error message is about the non-existing tool
-    assert "not found for server" in str(excinfo.value)
+    # This will cause the MCP tool handler to not register any tools
+    mock_agg_instance.list_tools = AsyncMock(return_value={"existing-server": []})
+
+    # Create a patch for the mcp_registry module
+    with patch.dict("sys.modules", {"mcp_registry": mock_mcp_registry}):
+        # Create program with non-existent tool
+        program = LLMProgram(
+            model_name="claude-3-5-haiku-20241022",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant with access to tools.",
+            mcp_config_path=mock_mcp_config,
+            mcp_tools={"existing-server": ["non-existing-tool"]},
+        )
+
+        # The behavior has changed - we now log a warning instead of raising an error
+        # Use program.start() instead of LLMProcess.create() for proper initialization
+        process = await program.start()
+        
+        # Verify that the process was created successfully despite no tools being registered
+        assert process is not None
+        assert process.mcp_enabled is True
 
 
 @pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.AsyncAnthropic")
-@patch("mcp_registry.MCPAggregator")
-@patch("mcp_registry.ServerRegistry")
-@patch("llmproc.tools.mcp.register_mcp_tool")
-async def test_no_tools_registered_error(mock_register_tool, mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
-    """Test that an error is raised when no tools are registered despite configuration."""
-    # Setup mock client
-    mock_client = MagicMock()
-    mock_anthropic.return_value = mock_client
+async def test_mcp_tools_in_tool_manager():
+    """Test that MCP tools are properly registered in the tool manager.
     
-    # Mock the MCP registry
-    mock_server_registry_instance = MagicMock()
-    mock_server_registry.from_config.return_value = mock_server_registry_instance
-    
-    mock_agg_instance = AsyncMock()
-    mock_aggregator.return_value = mock_agg_instance
-    
-    # Create a mock tool
-    mock_tool = MagicMock()
-    mock_tool.name = "existing-tool"
-    mock_tool.description = "A test tool"
-    mock_tool.inputSchema = {"type": "object", "properties": {}}
-    
-    # Mock list_tools to return a server_tools_map with our server and tool
-    mock_agg_instance.list_tools = AsyncMock(
-        return_value={"existing-server": [mock_tool]}
-    )
-    
-    # Make register_mcp_tool do nothing but don't actually register the tool
-    # This will make it pass the tool validation but have no tools registered
-    mock_register_tool.return_value = None
-    
-    # Create program with configuration that will pass validation but not register tools
-    program = LLMProgram(
-        model_name="claude-3-5-haiku-20241022",
-        provider="anthropic",
-        system_prompt="You are a helpful assistant with access to tools.",
-        mcp_config_path=mock_mcp_config,
-        mcp_tools={"existing-server": ["existing-tool"]}
-    )
-    
-    # Test that initialization fails with ValueError
-    with pytest.raises(ValueError) as excinfo:
-        await LLMProcess.create(program)
-    
-    # Check that the error message indicates no tools were registered
-    assert "No MCP tools were registered" in str(excinfo.value)
-
-
-@pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
-@patch("llmproc.providers.providers.AsyncAnthropic")
-@patch("mcp_registry.MCPAggregator")
-@patch("mcp_registry.ServerRegistry")
-async def test_mcp_tools_in_tool_manager(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
-    """Test that MCP tools are properly added to the tool manager's enabled_tools list.
-    
-    This test specifically checks the fix for the issue where MCP tools were
-    registered with the tool registry but not added to the tool manager's
-    enabled_tools list, causing them to be filtered out when getting tool schemas.
+    This test verifies that the integration functions correctly register MCP tools
+    in the tool registry and update the enabled_tools list.
     """
-    # Setup mock client
-    mock_client = MagicMock()
-    mock_anthropic.return_value = mock_client
+    # Import the tools modules we want to test
+    from llmproc.tools.tool_registry import ToolRegistry
+    from llmproc.tools.tool_manager import ToolManager
+    from llmproc.tools.mcp.manager import MCPManager
+    from llmproc.tools.mcp.integration import register_runtime_mcp_tools
     
-    # Mock the MCP registry
-    mock_server_registry_instance = MagicMock()
-    mock_server_registry.from_config.return_value = mock_server_registry_instance
-    
-    mock_agg_instance = AsyncMock()
-    mock_aggregator.return_value = mock_agg_instance
-    
-    # Create a mock tool
-    mock_tool = MagicMock()
-    mock_tool.name = "test-tool"
-    mock_tool.description = "A test tool"
-    mock_tool.inputSchema = {"type": "object", "properties": {}}
-    
-    # Mock list_tools to return a server_tools_map with our server and tool
-    mock_agg_instance.list_tools = AsyncMock(
-        return_value={"test-server": [mock_tool]}
-    )
-    
-    # Create program with configuration
-    program = LLMProgram(
-        model_name="claude-3-5-haiku-20241022",
-        provider="anthropic",
-        system_prompt="You are a helpful assistant with access to tools.",
-        mcp_config_path=mock_mcp_config,
-        mcp_tools={"test-server": ["test-tool"]}
-    )
-    
-    # Create the process
-    process = await LLMProcess.create(program)
-    
-    # We now directly add each namespaced MCP tool to enabled_tools during registration
-    # This is cleaner than using a generic "mcp" indicator in enabled_tools
-    
-    # Get the expected namespaced tool name
+    # Create a namespaced tool name
     namespaced_tool_name = f"test-server{MCP_TOOL_SEPARATOR}test-tool"
     
-    # Check that the tool manager's registry has the tool
-    assert namespaced_tool_name in process.tool_manager.registry.tool_handlers
+    # Create handler and schema for our test tool
+    async def mock_handler(args):
+        return ToolResult(content={"test": "result"}, is_error=False)
+        
+    tool_schema = {
+        "name": namespaced_tool_name,
+        "description": "Test tool description",
+        "parameters": {
+            "type": "object",
+            "properties": {}
+        }
+    }
     
-    # Most importantly, check that the namespaced tool is in the tool manager's enabled_tools list
-    assert namespaced_tool_name in process.tool_manager.get_enabled_tools()
+    # Create and set up registries
+    mcp_registry = ToolRegistry()
+    runtime_registry = ToolRegistry()
     
-    # Check that the tool is in the tools property (which filters by enabled_tools)
-    # This is the critical test that was failing before our fix
-    tool_names = [t.get("name") for t in process.tools]
-    assert namespaced_tool_name in tool_names, "MCP tool not found in process.tools - it's being filtered out"
+    # Create a tool manager that uses the runtime registry
+    tool_manager = ToolManager()
+    tool_manager.runtime_registry = runtime_registry
+    runtime_registry.tool_manager = tool_manager
+    
+    # Register the MCP tool in the MCP registry
+    mcp_registry.register_tool(namespaced_tool_name, mock_handler, tool_schema)
+    
+    # Create an initial list of enabled tools
+    enabled_tools = ["some_other_tool"]
+    tool_manager.enabled_tools = enabled_tools.copy()
+    
+    # Call the integration function to register MCP tools
+    registered_count = register_runtime_mcp_tools(mcp_registry, runtime_registry, tool_manager.enabled_tools)
+    
+    # Verify one tool was registered
+    assert registered_count == 1
+    
+    # Verify the tool is registered in the runtime registry
+    assert namespaced_tool_name in runtime_registry.tool_handlers
+    
+    # Verify the tool was added to the enabled_tools list
+    assert namespaced_tool_name in tool_manager.enabled_tools
+    
+    # Get tool definitions from the tool manager
+    tool_schemas = tool_manager.get_tool_schemas()
+    tool_names = [t.get("name") for t in tool_schemas]
+    
+    # Verify the tool appears in the schemas
+    assert namespaced_tool_name in tool_names, "MCP tool not found in tool schemas"

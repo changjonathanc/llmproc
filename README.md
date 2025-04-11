@@ -22,17 +22,13 @@ A Unix-inspired framework for building powerful LLM applications that lets you s
 
 ```bash
 # Install with uv (recommended)
-uv pip install -e .
-
-# Or with pip
-pip install -e .
-
-# Set environment variables
-export OPENAI_API_KEY="your-key"    # For OpenAI models
-export ANTHROPIC_API_KEY="your-key"  # For Claude models
+uv pip install llmproc               # Base package
+uv pip install "llmproc[openai]"     # For OpenAI models
+uv pip install "llmproc[anthropic]"  # For Anthropic models
+uv pip install "llmproc[all]"        # All providers
 ```
 
-The package supports `.env` files for environment variables.
+See [MISC.md](MISC.md) for additional installation options and provider configurations.
 
 ## Quick Start
 
@@ -55,9 +51,10 @@ async def main():
         LLMProgram(
             model_name="claude-3-7-sonnet-20250219",
             provider="anthropic",
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
+            parameters={"max_tokens": 1024}  # Required parameter
         )
-        .add_tool(calculate)
+        .set_enabled_tools([calculate])  # Enable the calculate tool
     )
 
     # Start and use the process
@@ -79,33 +76,43 @@ llmproc-demo ./examples/anthropic/claude-3-5-sonnet.toml -p "What is Python?"
 
 # Read from stdin
 cat questions.txt | llmproc-demo ./examples/anthropic/claude-3-7-sonnet.toml -n
+
+# Use Gemini models
+llmproc-demo ./examples/gemini/gemini-2.0-flash-direct.toml
 ```
 
 ## Features
 
-LLMProc offers a complete toolkit for building sophisticated LLM applications:
+### Supported Model Providers
+- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-4.5
+- **Anthropic**: Claude 3 Haiku, Claude 3.5/3.7 Sonnet (direct API and Vertex AI)
+- **Google**: Gemini 1.5 Flash/Pro, Gemini 2.0 Flash, Gemini 2.5 Pro (direct API and Vertex AI)
 
-### Basic Configuration
-- **[Minimal Setup](./examples/anthropic/claude-3-5-haiku.toml)** - Start with a simple Claude configuration
-- **[File Preloading](./examples/features/preload.toml)** - Enhance context by loading files into system prompts
-- **[Environment Info](./examples/features/env-info.toml)** - Add runtime context like working directory and platform
+LLMProc offers a Unix-inspired toolkit for building sophisticated LLM applications:
 
-### Developer Experience
-- **[Python SDK](./docs/python-sdk.md)** - Create programs with intuitive method chaining
-- **[Function-Based Tools](./docs/function-based-tools.md)** - Register Python functions as tools with type-safety and auto-conversion
-
-### Process Management
-- **[Program Linking](./examples/features/program-linking/main.toml)** - Spawn and delegate tasks to specialized LLM processes
+### Process Management - Unix-like LLM Orchestration
+- **[Program Linking](./examples/features/program-linking/main.toml)** - Spawn specialized LLM processes for delegated tasks
 - **[Fork Tool](./examples/features/fork.toml)** - Create process copies with shared conversation state
+- **[GOTO (Time Travel)](./examples/features/goto.toml)** - Reset conversations to previous points
 
-### Large Content Handling
+### Large Content Handling - Sophisticated I/O Management
 - **[File Descriptor System](./examples/features/file-descriptor/main.toml)** - Unix-like pagination for large outputs
+- **Reference ID System** - Mark up and reference specific pieces of content
+- **Smart Content Pagination** - Optimized line-aware chunking for content too large for context windows
 
-### More Features
+### Usage Examples
+- See the [Python SDK](./docs/python-sdk.md) documentation for the fluent API
+- Use [Function-Based Tools](./docs/function-based-tools.md) to register Python functions as tools
+- Start with a [simple configuration](./examples/anthropic/claude-3-5-haiku.toml) for quick experimentation
+
+### Additional Features
+- **File Preloading** - Enhance context by [loading files](./examples/features/preload.toml) into system prompts
+- **Environment Info** - Add [runtime context](./examples/features/env-info.toml) like working directory
 - **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
 - **Reasoning/Thinking models** - [Claude 3.7 Thinking](./examples/anthropic/claude-3-7-thinking-high.toml) and [OpenAI Reasoning](./examples/openai/o3-mini-high.toml) models
 - **[MCP Protocol](./examples/features/mcp.toml)** - Standardized interface for tool usage
-- **Cross-provider support** - Currently supports Anthropic, OpenAI, and Anthropic on Vertex AI
+- **[Tool Aliases](./examples/features/tool-aliases.toml)** - Provide simpler, intuitive names for tools
+- **Cross-provider support** - Currently supports Anthropic, OpenAI, and Google Gemini
 
 ## Demo Tools
 
@@ -138,13 +145,18 @@ llmproc-prompt ./config.toml -E              # Without environment info
 
 ## Documentation
 
+**[Documentation Index](./docs/index.md)**: Start here for guided learning paths
+
 - [Examples](./examples/README.md): Sample configurations and use cases
 - [API Docs](./docs/api/index.md): Detailed API documentation
 - [Python SDK](./docs/python-sdk.md): Fluent API and program creation
 - [Function-Based Tools](./docs/function-based-tools.md): Python function tools with type hints
 - [File Descriptor System](./docs/file-descriptor-system.md): Handling large outputs
 - [Program Linking](./docs/program-linking.md): LLM-to-LLM communication
+- [GOTO (Time Travel)](./docs/goto-feature.md): Conversation time travel
 - [MCP Feature](./docs/mcp-feature.md): Model Context Protocol for tools
+- [Tool Aliases](./docs/tool-aliases.md): Using simpler names for tools
+- [Gemini Integration](./docs/gemini.md): Google Gemini models usage guide
 - [Testing Guide](./docs/testing.md): Testing and validation
 - For complete reference, see [reference.toml](./examples/reference.toml)
 
@@ -164,15 +176,15 @@ The library functions as a kernel:
 
 ## Roadmap
 
-Future development plans:
+### 0.5.0
+- internal refactor & cleanup
 
-1. Exec System Call for process replacement
-2. Process State Serialization & Restoration
-3. Retry mechanism with exponential backoff
-4. Enhanced error handling and reporting
-5. Support for streaming
-6. File Descriptor System Phase 3 enhancements
-7. Gemini models support
+### 0.6.0 +
+- Persistent children & inter-process communication
+- llmproc mcp server
+- Streaming api support
+- Process State Serialization & Restoration
+- Feature parity for openai/gemini models
 
 ## License
 

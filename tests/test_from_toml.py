@@ -42,7 +42,6 @@ def mock_create_method():
         instance = cls(program, linked_programs_instances)
         if hasattr(instance, "_needs_async_init") and instance._needs_async_init:
             instance.mcp_enabled = True
-            instance._mcp_initialized = True  # Skip actual initialization
         return instance
 
     LLMProcess.create = mock_create

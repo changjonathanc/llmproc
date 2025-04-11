@@ -1,8 +1,9 @@
 # Program Linking - connecting specialized LLMs
 [model]
-name = "claude-3-5-haiku-20241022"
-provider = "anthropic"
+name = "claude-3-5-haiku@20241022"
+provider = "anthropic_vertex"
 display_name = "Claude with Experts"
+region = "us-east5"  # Specify your preferred region based on GCP documentation
 
 [prompt]
 system_prompt = """You are Claude with access to specialized experts via the 'spawn' tool:

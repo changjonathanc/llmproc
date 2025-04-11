@@ -1,63 +1,67 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "llmproc"
-version = "0.3.1"
-authors = [
-    {name = "Developer", email = "dev@example.com"},
-]
+version = "0.4.0"
 description = "A simple framework for LLM-powered applications"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [
+    {name = "Jonathan Chang", email = "31893406+cccntu@users.noreply.github.com"},
+]
+urls = {repository = "https://github.com/cccntu/llmproc"}
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
 ]
 dependencies = [
     "click>=8.1.8",
-    "mcp-registry>=0.3.3",
-    "openai>=1.0.0",
-    "python-dotenv>=0.19.0",
+    "mcp-registry>=0.9.1",
+    "python-dotenv>=1.0.1",
     "tomli>=2.2.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.1.0",
-    "black>=23.0.0",
-    "isort>=5.0.0",
-    "ruff>=0.9.10",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.0",
+    "ruff>=0.9.9",
+]
+openai = [
+    "openai>=1.70.0",
 ]
 anthropic = [
-    "anthropic>=0.6.0",
+    "anthropic>=0.49.0",
 ]
 vertex = [
-    "google-cloud-aiplatform>=1.35.0",
+    "google-cloud-aiplatform>=1.87.0",
+]
+gemini = [
+    "google-genai>=1.9.0",
 ]
 all = [
-    "anthropic>=0.6.0",
-    "google-cloud-aiplatform>=1.35.0",
+    "openai>=1.70.0",
+    "anthropic>=0.49.0",
+    "google-cloud-aiplatform>=1.87.0",
+    "google-genai>=1.9.0",
 ]
 
 [tool.setuptools]
 packages = ["llmproc"]
 package-dir = {"" = "src"}
 
-[tool.black]
-line-length = 200
-target-version = ["py311"]
-
-[tool.isort]
-profile = "black"
-line_length = 200
+[tool.ruff.format]
+# Line length set on the root level
+indent-style = "space"
+quote-style = "double"
 
 [tool.ruff]
 line-length = 200
 target-version = "py311"
+exclude = ["dev/"]
 
 [tool.ruff.lint]
 select = [
@@ -71,11 +75,24 @@ select = [
     "B", # flake8-bugbear
 ]
 ignore = [
-    "D203", 
+    "D203",
     "D212",
     "E501",  # Line too long
     "B904",  # Use 'raise from' in exception handling
     "F401",  # Unused imports
+    "F821",  # Undefined names
+    "N811",  # Constant imported as non-constant
+    "D102",  # Missing docstring in public method
+    # The following are primarily in test files and examples
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D103",  # Missing docstring in public function
+    "D107",  # Missing docstring in __init__
+    "D415",  # First line should end with punctuation
+    "N806",  # Variable in function should be lowercase
+    "UP007",  # Use X | Y for type annotations
+    "F841",  # Unused variables (primarily in tests)
+    "UP022",  # Prefer capture_output over stdout/stderr=PIPE (in tests)
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -93,12 +110,9 @@ disallow_incomplete_defs = true
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3.5",
-    "pytest-asyncio>=0.25.3",
-    "pytest-cov>=6.0.0",
-    "ruff>=0.9.10",
+    "pytest-asyncio>=0.26.0",
 ]
 
 [project.scripts]
 llmproc-demo = "llmproc.cli:main"
-llmproc-prompt = "llmproc.tools.print_system_prompt:main"
+llmproc-prompt = "llmproc.cli.print_system_prompt:main"

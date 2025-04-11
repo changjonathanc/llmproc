@@ -23,18 +23,14 @@ def test_get_enriched_system_prompt_include_env_parameter():
     process = LLMProcess(program=program)
 
     # Test the method with include_env=True
-    enriched_prompt = program.get_enriched_system_prompt(
-        process_instance=process, include_env=True
-    )
+    enriched_prompt = program.get_enriched_system_prompt(process_instance=process, include_env=True)
 
     # Verify it includes environment info
     assert "<env>" in enriched_prompt
     assert "working_directory:" in enriched_prompt
 
     # Test the method with include_env=False
-    enriched_prompt = program.get_enriched_system_prompt(
-        process_instance=process, include_env=False
-    )
+    enriched_prompt = program.get_enriched_system_prompt(process_instance=process, include_env=False)
 
     # Verify it does not include environment info
     assert "<env>" not in enriched_prompt
@@ -72,10 +68,10 @@ def test_program_compile_with_env_info():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Test system prompt"
-            
+
             [env_info]
             variables = ["working_directory", "date"]
             custom_var = "custom value"
@@ -109,7 +105,7 @@ def test_program_linking_with_env_info():
             [model]
             name = "linked-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Linked program system prompt"
             """)
@@ -121,16 +117,16 @@ def test_program_linking_with_env_info():
             [model]
             name = "main-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Main program system prompt"
-            
+
             [env_info]
             variables = ["working_directory"]
-            
+
             [tools]
             enabled = ["spawn"]
-            
+
             [linked_programs]
             test_program = "{linked_program_path}"
             """)
@@ -161,7 +157,7 @@ def test_program_compiler_load_toml():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Test system prompt"
             """)
@@ -190,7 +186,7 @@ def test_system_prompt_file_loading():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt_file = "prompt.md"
             """)
@@ -212,10 +208,10 @@ def test_preload_files_warnings():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Test system prompt"
-            
+
             [preload]
             files = ["non-existent-file.txt"]
             """)
@@ -256,7 +252,7 @@ def test_system_prompt_file_error():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt_file = "non-existent-prompt.md"
             """)
@@ -280,10 +276,10 @@ def test_mcp_config_file_error():
             [model]
             name = "test-model"
             provider = "anthropic"
-            
+
             [prompt]
             system_prompt = "Test system prompt"
-            
+
             [mcp]
             config_path = "non-existent-config.json"
             """)

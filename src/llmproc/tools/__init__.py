@@ -6,44 +6,56 @@ It also provides a registry to retrieve tool handlers and schemas by name.
 
 import logging
 
-from . import mcp
-from .calculator import calculator
-from .exceptions import (
-    ToolError, 
-    ToolNotFoundError, 
-    ToolRegistrationError,
-    ToolExecutionError,
-    ToolConfigurationError
+from llmproc.common.results import ToolResult
+
+# Import file descriptor constants directly from constants module
+from llmproc.file_descriptors.constants import (
+    FD_TO_FILE_TOOL_DEF as fd_to_file_tool_def,
 )
-from .file_descriptor import (
-    fd_to_file_tool, fd_to_file_tool_def,
-    file_descriptor_instructions, file_descriptor_base_instructions,
-    fd_user_input_instructions, reference_instructions,
-    read_fd_tool, read_fd_tool_def
+from llmproc.file_descriptors.constants import (
+    FILE_DESCRIPTOR_INSTRUCTIONS as file_descriptor_instructions,
 )
-from .fork import fork_tool, fork_tool_def
-from .function_tools import register_tool, create_tool_from_function
-from .read_file import read_file
-from .spawn import spawn_tool, spawn_tool_def
+from llmproc.file_descriptors.constants import (
+    READ_FD_TOOL_DEF as read_fd_tool_def,
+)
+from llmproc.file_descriptors.constants import (
+    REFERENCE_INSTRUCTIONS as reference_instructions,
+)
+from llmproc.file_descriptors.constants import (
+    USER_INPUT_INSTRUCTIONS as fd_user_input_instructions,
+)
+from llmproc.tools.builtin.calculator import calculator
+from llmproc.tools.builtin.fd_tools import fd_to_file_tool, read_fd_tool
+from llmproc.tools.builtin.fork import fork_tool, fork_tool_def
+
+# Import from integration module (replaces old utils imports)
+from llmproc.tools.builtin.integration import copy_tool_from_source_to_target, register_fork_tool, register_spawn_tool, register_system_tools
+from llmproc.tools.builtin.integration import register_fd_tool as register_file_descriptor_tools
+from llmproc.tools.builtin.list_dir import list_dir
+from llmproc.tools.builtin.read_file import read_file
+from llmproc.tools.builtin.spawn import SPAWN_TOOL_SCHEMA as spawn_tool_def
+from llmproc.tools.builtin.spawn import spawn_tool
+
+# Import file descriptor instructions
+# The instruction text provides guidance on how to use file descriptors in prompts
+# Import tools registry
+# Import all tools - these imports will register themselves
+from . import registry_data
+from .exceptions import ToolConfigurationError, ToolError, ToolExecutionError, ToolNotFoundError, ToolRegistrationError
+from .function_tools import create_tool_from_function, register_tool
 from .tool_manager import ToolManager
-from .tool_registry import ToolRegistry, ToolSchema, ToolHandler
-from .tool_result import ToolResult
-from .utils import (
-    get_tool,
-    list_available_tools,
-    register_system_tools,
-    register_spawn_tool,
-    register_fork_tool,
-    register_calculator_tool,
-    register_read_file_tool,
-    register_file_descriptor_tools
-)
+from .tool_registry import ToolHandler, ToolRegistry, ToolSchema
+
+# Register all function-based tools in the central registry
+registry_data.register("calculator", calculator)
+registry_data.register("read_file", read_file)
+registry_data.register("list_dir", list_dir)
+# Add new function-based tools here when needed
 
 # Set up logger
 logger = logging.getLogger(__name__)
 
-
-# Registry of available system tools (kept for backward compatibility)
+# Define system tools dictionary
 _SYSTEM_TOOLS = {
     "spawn": (spawn_tool, spawn_tool_def),
     "fork": (fork_tool, fork_tool_def),
@@ -53,24 +65,34 @@ _SYSTEM_TOOLS = {
     "fd_to_file": (fd_to_file_tool, fd_to_file_tool_def),
 }
 
-
+# Export all tools and utilities
 __all__ = [
+    # Function-based tools
+    "calculator",
+    "read_file",
+    "list_dir",
+    # Add new function-based tools to exports here
+    # Special tools
     "spawn_tool",
     "spawn_tool_def",
     "fork_tool",
     "fork_tool_def",
-    "calculator",
+    # File descriptor tools
     "read_fd_tool",
     "read_fd_tool_def",
     "fd_to_file_tool",
     "fd_to_file_tool_def",
-    "read_file",
+    # Instructions
     "file_descriptor_instructions",
-    "file_descriptor_base_instructions",
     "fd_user_input_instructions",
     "reference_instructions",
-    "get_tool",
-    "list_available_tools",
+    # Utilities (from integration)
+    "register_system_tools",
+    "register_spawn_tool",
+    "register_fork_tool",
+    "register_file_descriptor_tools",
+    "copy_tool_from_source_to_target",
+    # Classes
     "ToolSchema",
     "ToolHandler",
     "ToolRegistry",
@@ -80,14 +102,8 @@ __all__ = [
     "ToolRegistrationError",
     "ToolExecutionError",
     "ToolConfigurationError",
-    "register_system_tools",
-    "register_spawn_tool",
-    "register_fork_tool",
-    "register_calculator_tool",
-    "register_read_file_tool",
-    "register_file_descriptor_tools",
+    # Functions from function_tools
     "ToolResult",
-    "mcp",
     "register_tool",
     "create_tool_from_function",
 ]

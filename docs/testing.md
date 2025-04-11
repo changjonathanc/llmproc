@@ -130,7 +130,7 @@ def test_parameter_handling():
         system_prompt="Test system prompt",
         parameters={"temperature": 0.7}
     )
-    
+
     assert process.api_params["temperature"] == 0.7
 
 # API test that requires credentials
@@ -139,13 +139,13 @@ async def test_actual_api_call():
     """Test an actual API call (requires API keys)."""
     if "OPENAI_API_KEY" not in os.environ:
         pytest.skip("OpenAI API key not available")
-    
+
     process = LLMProcess(
         model_name="gpt-4o-mini",
         provider="openai",
         system_prompt="You are a test assistant."
     )
-    
+
     response = await process.run("Say hello")
     assert response
     assert isinstance(response, str)

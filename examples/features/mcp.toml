@@ -20,7 +20,8 @@ config_path = "../../config/mcp_servers.json"
 [mcp.tools]
 # Only configure servers that are available in your config/mcp_servers.json
 # This server is available in the default config
-sequential-thinking = "all"
+# Added the everything server with the add tool
+everything = ["add"]
 # use "all" to enable all tools in a server, or ["tool1", "tool2"] for specific tools in a server
 
 # NOTE: If you add servers or tools that aren't available in the configuration,

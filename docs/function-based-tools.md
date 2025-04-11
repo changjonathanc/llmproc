@@ -130,15 +130,16 @@ program = (
     LLMProgram(
         model_name="claude-3-7-sonnet",
         provider="anthropic",
-        system_prompt="You are a helpful assistant."
+        system_prompt="You are a helpful assistant.",
+        parameters={"max_tokens": 1024}  # Required parameter
     )
-    .add_tool(get_calculator)
-    .add_tool(get_weather)
-    .add_tool(fetch_data)
+    .set_enabled_tools([get_calculator, get_weather, fetch_data])  # Enable multiple tools at once
     .add_preload_file("context.txt")
     .add_linked_program("expert", expert_program, "A specialized expert program")
-    .compile()
 )
+
+# Create process from the program
+process = await program.start()
 ```
 
 ## Mixed Tool Types

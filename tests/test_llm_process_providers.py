@@ -94,9 +94,7 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
     process = LLMProcess(program=program)
 
     # Mock the internal async method to return a known value
-    with patch.object(
-        process, "_async_run", return_value="Test response from Anthropic"
-    ):
+    with patch.object(process, "_async_run", return_value="Test response from Anthropic"):
         # Use asyncio.run to handle the async run method
         response = asyncio.run(process.run("Hello!"))
 

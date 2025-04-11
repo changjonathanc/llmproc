@@ -8,7 +8,9 @@ display_name = "Claude 3.7 Sonnet (Token-Efficient Tools)"
 
 [prompt]
 system_prompt = """You are a helpful assistant that uses tools effectively.
-When appropriate, use available tools to provide the most accurate and helpful responses."""
+When appropriate, use available tools to provide the most accurate and helpful responses.
+Be as concise as possible.
+"""
 
 [parameters]
 max_tokens = 20000
