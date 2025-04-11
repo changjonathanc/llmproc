@@ -28,7 +28,6 @@ program = (
         system_prompt="You are a helpful assistant."
     )
     .add_tool(get_calculator)
-    .compile()
 )
 
 # Start the LLM process
@@ -152,7 +151,6 @@ program = (
     LLMProgram(...)
     .add_tool(get_calculator)
     .add_tool({"name": "read_file", "enabled": True})
-    .compile()
 )
 ```
 
@@ -178,7 +176,7 @@ When the LLM tries to call this tool with `y=0`, it will receive a proper error 
 
 ## Initialization
 
-Function tools are processed during program compilation. The `compile()` method:
+Function tools are processed during process initialization. When you call `program.start()`:
 
 1. Extracts schema information from type hints and docstrings
 2. Creates async-compatible tool handlers

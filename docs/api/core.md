@@ -7,8 +7,7 @@ This document serves as the canonical reference for the core API structure of th
 ```
 LLMProgram
 ├── from_toml()     # Load program from TOML
-├── compile()       # Internal validation (rarely needed directly)
-├── start()         # Create and initialize a process (preferred method)
+├── start()         # Create and initialize a process (handles validation automatically)
 └── tool_manager    # Central manager for all tools
 
 LLMProcess

@@ -2,6 +2,8 @@
 
 LLMProc provides a fluent, Pythonic SDK interface for creating and configuring LLM programs. This guide describes how to use the Python SDK features implemented in [RFC018](../RFC/RFC018_python_sdk.md).
 
+The SDK follows the Unix-inspired operating system model where programs (configuration) are distinct from processes (runtime instances). For the rationale behind this design, see the [API Design FAQ](../FAQ.md).
+
 ## Fluent API
 
 The fluent API allows for method chaining to create and configure LLM programs:
@@ -92,7 +94,7 @@ main_program = (
 Programs are initialized and converted to processes with a single call to `start()`:
 
 ```python
-# Start the process - this handles compilation automatically
+# Start the process - this handles all initialization automatically
 process = await program.start()
 ```
 

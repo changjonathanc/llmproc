@@ -10,7 +10,7 @@ When a tool produces output that's too large to fit directly into the context wi
 2. Returns a preview with the file descriptor reference
 3. Allows the LLM to read the full content in pages using the `read_fd` tool
 
-This system is inspired by Unix file descriptors and is designed to be intuitive for LLMs to understand and use.
+This system is inspired by Unix file descriptors and is designed to be intuitive for LLMs to understand and use. For the design rationale behind this approach, see the [API Design FAQ](../FAQ.md#whats-the-purpose-of-the-file-descriptor-system).
 
 ## Design
 

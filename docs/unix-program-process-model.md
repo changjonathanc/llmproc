@@ -1,19 +1,21 @@
 # Unix-Inspired Program/Process Model
 
-LLMProc implements a Unix-inspired approach to separating program configuration from process execution. This document explains the design principles, architecture, and usage of this model.
+LLMProc implements a Unix-inspired operating system approach to separating program configuration from process execution. This document explains the design principles, architecture, and usage of this model.
 
 ## Core Concepts
 
 The Unix model provides a clear distinction between:
 
-1. **Program**: Static definition and configuration
-2. **Process**: Runtime execution and state
+1. **Program**: Static definition and configuration (similar to an executable in Unix)
+2. **Process**: Runtime execution and state (similar to a running process in Unix)
 
 This separation offers several advantages:
 - **Cleaner Architecture**: Clear responsibilities for each component
 - **Improved Testability**: Components can be tested in isolation
 - **Reduced Dependencies**: Eliminates circular dependencies
 - **Better Resource Management**: Clear lifecycle for resources
+
+For the design rationale behind this architecture, see the [API Design FAQ](../FAQ.md#why-separate-program-and-process-in-the-api).
 
 ## Architecture Overview
 
@@ -257,7 +259,7 @@ When working with the Unix-inspired model, avoid these common anti-patterns:
 # ANTI-PATTERN: Direct construction bypasses proper initialization
 process = LLMProcess(program=program)  # WRONG!
 
-# CORRECT PATTERN: Use the async factory method
+# CORRECT PATTERN: Use the start() method
 process = await program.start()  # Correct!
 ```
 

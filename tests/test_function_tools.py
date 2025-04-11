@@ -263,8 +263,7 @@ def test_program_with_function_tools():
     assert any(func is get_calculator for func in function_tools)
     assert any(func is search_documents for func in function_tools)
 
-    # Compile the program to process the function tools
-    program.compile()
+    # Function tools are processed when the process is started
 
     # Verify tools appear in the API-ready schema
     tool_schemas = program.tool_manager.get_tool_schemas()
@@ -289,9 +288,6 @@ async def test_tool_enabling_methods(basic_program):
     # Enable tools using set_enabled_tools
     program.set_enabled_tools([get_weather])
     program.set_enabled_tools(program.get_enabled_tools() + [get_calculator, search_documents])
-
-    # Compile the program
-    program.compile()
 
     # Verify expected tools are in the enabled list
     expected_tools = ["weather_info", "get_calculator", "search_documents"]
@@ -360,8 +356,7 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     # Enable function tools using set_enabled_tools
     program.set_enabled_tools([get_weather, get_calculator])
 
-    # Compile the program to process function tools
-    program.compile()
+    # Function tools are processed when the process is started
     
     # Verify function tools are enabled in program configuration
     enabled_tools = program.get_enabled_tools()
@@ -381,8 +376,7 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     
     # Set only specific tools as enabled
     program2.set_enabled_tools(["calculator", "read_file"])
-    program2.compile()
-
+    
     # Verify that built-in tools are enabled in configuration
     assert "calculator" in program2.tools["enabled"]
     assert "read_file" in program2.tools["enabled"]
@@ -415,7 +409,6 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     # Test a completely different approach - start with weather tool only
     weather_program = create_program()
     weather_program.set_enabled_tools([get_weather])
-    weather_program.compile()
     
     # Create a process with just the weather tool
     weather_process = await weather_program.start()
@@ -449,8 +442,8 @@ async def test_function_tool_execution(create_program):
     # Set enabled tools
     program.set_enabled_tools([get_calculator])
 
-    # Compile and start the process
-    process = await program.compile().start()
+    # Start the process
+    process = await program.start()
 
     # Check that the tool is registered in the process
     tool_defs = process.tools

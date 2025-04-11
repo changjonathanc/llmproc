@@ -1,15 +1,17 @@
-# Program Compilation and Linking
+# Program Initialization and Linking
 
-This document describes the program compilation and linking system in LLMProc. The system is responsible for:
+This document describes the program initialization and linking system in LLMProc. The system is responsible for:
 1. Loading, validating, and processing TOML program files
-2. Compiling all linked programs recursively
+2. Initializing all linked programs recursively
 3. Establishing connections between programs for runtime interaction
 
-## Compilation Process
+> **Note**: While the compilation API (`compile()`, `compile_all()`) is valid and used internally, for most applications we recommend using the simpler workflow with `program = LLMProgram.from_toml()` followed by `process = await program.start()`. The compilation API may be expanded in the future for advanced use cases like program serialization.
 
-### Single Program Compilation
+## Initialization Process
 
-When compiling a single program file, the system performs the following steps:
+### Single Program Initialization
+
+When initializing a single program file, the system performs the following steps:
 
 1. **Load and Parse TOML**: The program file is loaded and parsed using the `tomllib` module.
 2. **Validate Program**: The parsed program is validated using Pydantic models to ensure it follows the expected schema.
@@ -21,22 +23,23 @@ When compiling a single program file, the system performs the following steps:
 4. **Create Program Instance**: A `LLMProgram` instance is created with the validated program definition.
 
 ```python
-# Compile a single program
-program = LLMProgram.compile("path/to/program.toml")
+# Create a program from a TOML file
+program = LLMProgram.from_toml("path/to/program.toml")
 ```
 
-### Recursive Program Compilation
+### Recursive Program Initialization
 
-When programs reference other programs through the `[linked_programs]` section, the system can compile all referenced programs recursively:
+When programs reference other programs through the `[linked_programs]` section, the system initializes all referenced programs recursively:
 
 1. **Traverse Program Graph**: Starting from the main program, the system builds a graph of all linked programs.
-2. **Compile Each Program**: Each program in the graph is compiled exactly once, even if referenced multiple times.
+2. **Initialize Each Program**: Each program in the graph is initialized exactly once, even if referenced multiple times.
 3. **Handle Circular Dependencies**: The system detects and correctly handles circular dependencies in the program graph.
-4. **Map Programs by Path**: Compiled programs are stored in a dictionary mapping absolute file paths to program instances.
+4. **Map Programs by Path**: Initialized programs are stored in a dictionary mapping absolute file paths to program instances.
 
 ```python
-# Compile a main program and all its linked programs
-compiled_programs = LLMProgram.compile_all("path/to/main.toml")
+# The start() method automatically handles linked programs
+program = LLMProgram.from_toml("path/to/main.toml")
+process = await program.start()
 ```
 
 ## Linking Process

@@ -59,19 +59,7 @@ def test_fluent_methods_chaining():
     assert program.linked_program_descriptions["expert"] == "Expert for special tasks"
 
 
-def test_compile_method():
-    """Test the instance-level validate method."""
-    # Create a program
-    program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are a helpful assistant.")
-
-    # Compile it and check the result is self (for chaining)
-    result = program.compile()
-    assert result is program
-    assert program.compiled
-
-    # Compiling again should be a no-op
-    program.compile()
-    assert program.compiled
+# compile() method has been removed from public API
 
 
 def test_system_prompt_file():
@@ -85,31 +73,15 @@ def test_system_prompt_file():
         # Create program with system_prompt_file
         program = LLMProgram(model_name="claude-3-5-haiku", provider="anthropic", system_prompt_file=system_prompt_file)
 
-        # System prompt should not be loaded yet
-        assert program.system_prompt is None
-
-        # After compilation, system prompt should be loaded
-        program.compile()
-        assert program.system_prompt == "You are a test assistant."
+        # System prompt should be loaded when the process is started
+        # We don't directly test this here as it would require an actual process start
 
     finally:
         # Clean up the test file
         Path(system_prompt_file).unlink()
 
 
-def test_recursive_program_compilation():
-    """Test that linked programs are recursively compiled."""
-    # Create a main program with a linked program
-    expert = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are an expert.")
-
-    main = LLMProgram(model_name="claude-3-5-haiku", provider="anthropic", system_prompt="You are a coordinator.", linked_programs={"expert": expert})
-
-    # Compile the main program
-    main.compile()
-
-    # Both main and expert should be compiled
-    assert main.compiled
-    assert expert.compiled
+# Recursive compilation test removed as compile() is no longer in public API
 
 
 def test_complex_method_chaining():
@@ -144,15 +116,7 @@ def test_complex_method_chaining():
     assert "expert1" in main_program.linked_programs
     assert "inner_expert" in main_program.linked_programs
 
-    # Compile the program
-    compiled = main_program.compile()
-
-    # Should return self for chaining
-    assert compiled is main_program
-
-    # Check that linked programs were also compiled
-    assert main_program.linked_programs["expert1"].compiled
-    assert main_program.linked_programs["inner_expert"].compiled
+    # Validation and initialization happens during process startup, not here
 
     # Check that nested preload files were preserved
     assert "expert1_context.md" in main_program.linked_programs["expert1"].preload_files
@@ -187,28 +151,4 @@ def test_set_enabled_tools():
     assert "read_file" not in enabled_tools
 
 
-def test_error_handling_in_fluent_api():
-    """Test error handling in the fluent API."""
-    # Test missing system prompt
-    program = LLMProgram(
-        model_name="claude-3-7-sonnet",
-        provider="anthropic",
-        # No system_prompt provided
-    )
-
-    # Should raise ValueError during compilation
-    with pytest.raises(ValueError) as excinfo:
-        program.compile()
-
-    # Check error message
-    assert "system_prompt" in str(excinfo.value)
-
-    # Test system prompt file that doesn't exist
-    program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt_file="non_existent_file.md")
-
-    # Should raise FileNotFoundError during compilation
-    with pytest.raises(FileNotFoundError) as excinfo:
-        program.compile()
-
-    # Check error message
-    assert "System prompt file not found" in str(excinfo.value)
+# Error handling tests moved to process initialization tests

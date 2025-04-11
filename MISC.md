@@ -1,18 +1,6 @@
 # LLMProc - Miscellaneous Notes & Details
 
-This document contains additional information supplementing the main README.md. For detailed documentation, see the `/docs` directory.
-
-## Terminology & Core Concepts
-
-**Note on "Agent" terminology**: We deliberately avoid using the term "agent" in LLMProc as it has varied definitions in the AI community. Some view agents as the underlying technology where LLMs have agency to decide what tools to call, while others view agents as user-facing programs that users interact with. To maintain clarity, we focus on the Unix-like "process" metaphor throughout LLMProc.
-
-The LLMProc project follows a Unix-inspired program/process model:
-
-- **Program**: Immutable configuration that describes what to run (similar to a Unix executable)
-- **Process**: Runtime instance created from a Program (similar to a running process in Unix)
-- **Runtime Context**: System for dependency injection to tools during execution
-
-For more details on this architecture, see [unix-program-process-model.md](docs/unix-program-process-model.md).
+This document contains additional information supplementing the main README.md. For detailed documentation, see the `/docs` directory. For design rationales and API decisions, see [FAQ.md](FAQ.md).
 
 ## Installation Details
 
@@ -89,38 +77,12 @@ Optimizes token usage for tool calls with Claude 3.7+.
 
 See [token-efficient-tool-use.md](docs/token-efficient-tool-use.md)
 
-## Design Philosophy
-
-### Unix-Inspired Architecture
-LLMProc treats LLMs as computing processes:
-- Each model is a process defined by a program (TOML file)
-- It maintains state between executions
-- It interacts with the system through defined interfaces
-
-The library functions as a kernel:
-- Implements system calls for LLM processes
-- Manages resources across processes
-- Creates a standardized interface with the environment
-
-### Performance Considerations
+## Performance Considerations
 
 - **Resource Usage**: Each Process instance requires memory for its state
 - **API Costs**: Using multiple processes results in multiple API calls
 - **Linked Programs**: Program linking creates additional processes with separate API calls
 - **Selective MCP Usage**: MCP tools now use selective initialization for better performance
-
-## Common Patterns
-
-```python
-# Create a program (configuration)
-program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic")
-
-# Create a process from the program (runtime instance)
-process = await program.start()
-
-# Use the process
-await process.run("Hello, Claude!")
-```
 
 **Note on `compile()` method**: The public `compile()` method is intended to be used primarily when implementing program serialization/export functionality. For typical usage, the `start()` method handles necessary validation internally. Consider direct use of `program.start()` in most cases.
 

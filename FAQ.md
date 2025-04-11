@@ -1,0 +1,101 @@
+# LLMProc API Design FAQ
+
+## Core Architecture
+
+### Why use "process/program" terminology instead of "agent"?
+
+The term "agent" has inconsistent meanings in the AI community. Some use it for LLMs with tool-calling capabilities, others for user-facing assistants, and still others for autonomous systems with their own goals. This ambiguity makes it problematic as a core architectural concept.
+
+Instead, LLMProc adopts Unix-inspired process/program terminology. This provides clearer semantics that most developers already understand: programs define what to run, processes are running instances. This distinction maps cleanly to the different concerns in LLM applications.
+
+### Why separate Program and Process in the API?
+
+The separation between configuration (Program) and runtime state (Process) emerged from practical experience building LLM applications. As systems grew more complex, keeping these concerns separate became increasingly important.
+
+Program objects are immutable configurations that define model parameters, tools, and system prompts. Process objects contain the mutable state - conversation history, current context, and runtime resources. This separation creates cleaner architecture with several benefits:
+
+- Validation happens at a clear boundary when creating a process
+- Configuration can be analyzed, serialized, and shared independently
+- Runtime resources can be properly managed through process lifecycles
+- Testing becomes simpler with clear separation of concerns
+
+The typical usage pattern reflects this separation:
+
+```python
+program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic")
+process = await program.start()  # Validation happens here
+```
+
+### Why does run() not return a string?
+
+The run() method returns a RunResult object rather than a string because execution involves more than just generating text. The method follows the semantics of a debugger's run command: execute until a natural stopping point.
+
+This design accounts for several realities of LLM execution:
+- An LLM might complete a turn without producing a text response
+- Execution often involves multiple tool calls that need to be tracked
+- Applications frequently need metadata about the execution process
+
+For users who just want the text response, the API provides a clear path:
+
+```python
+result = await process.run("Hello")
+message = process.get_last_message()  # Get text response if available
+```
+
+## Configuration and Tools
+
+### Why use TOML for configuration rather than JSON or YAML?
+
+TOML was chosen because:
+- It's portable, simple, and easy to read & write for both humans and LLMs
+- It doesn't depend on the implementation, which has changed during development
+- It provides a declarative way to describe the entire program in a single file
+- Section headers create natural organization for different configuration aspects
+
+### What's the purpose of the file descriptor system?
+
+The file descriptor approach solves several problems elegantly:
+- It provides automatic paging for all tool calls, preventing context window issues
+- It creates a unified paging interface without requiring each tool to implement its own
+- The LLM can reference content by identifier without copying large text
+- It follows Unix-like patterns familiar to developers
+
+### Why implement program linking as a "spawn" tool?
+
+We designed the spawn tool to follow the idea of program linking in Unix:
+- It gives LLMs agency to decide when to delegate tasks
+- Each process runs independently with its own configuration and state
+- It creates clear API boundaries between processes
+- The pattern maps to how programs link to other programs in computing systems
+
+This has been particularly useful for creating expert systems where different models specialize in different tasks.
+
+## Advanced Features
+
+### When to use fork() and goto()?
+
+Both of these tools are powerful and can sometimes be used to achieve similar goals. Here's when to use each:
+
+- Fork is uniquely suited for performing multiple tasks in parallel. Use it when you need to explore different solution paths simultaneously. The challenge is managing potential race conditions across forked processes.
+
+- Goto was designed specifically to address these race condition issues. It keeps a single task running, letting you reset the conversation to a previous point when needed.
+
+- You can use goto() effectively after completing tasks that consumed a lot of context window. For example:
+  - After code renaming across multiple files (with many tool calls), use goto() to compact the steps into a single summary.
+  - When debugging goes down an incorrect path, use goto() to discard those steps, preserve the lessons learned, and continue with a better approach.
+
+### How do I monitor what's happening during process execution?
+
+We have callbacks! The callback system provides visibility into execution without blocking the main application flow:
+
+```python
+callbacks = {
+    "on_tool_start": lambda tool_name, args: log_start(tool_name),
+    "on_tool_end": lambda tool_name, result: log_result(result),
+    "on_completion": lambda result: save_metrics(result)
+}
+
+result = await process.run("Your query", callbacks=callbacks)
+```
+
+This approach enables real-time monitoring, custom metrics collection, and integration with external logging systems. You can see examples of callback usage in the CLI implementation at `src/llmproc/cli.py`.

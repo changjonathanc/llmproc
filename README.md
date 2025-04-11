@@ -3,9 +3,7 @@
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Status](https://img.shields.io/badge/status-active-green)
 
-A Unix-inspired framework for building powerful LLM applications that lets you spawn specialized models, manage large outputs, and enhance context with file preloading.
-
-> LLMProc treats language models as processes: spawn them, fork them, link them together, and handle their I/O with a familiar Unix-like approach.
+LLMProc: A Unix-inspired operating system for language models. Like processes in an OS, LLMs execute instructions, make system calls, manage resources, and communicate with each other - enabling powerful multi-model applications with sophisticated I/O management.
 
 ## Table of Contents
 
@@ -160,19 +158,18 @@ llmproc-prompt ./config.toml -E              # Without environment info
 - [Testing Guide](./docs/testing.md): Testing and validation
 - For complete reference, see [reference.toml](./examples/reference.toml)
 
-For advanced usage and implementation details, see [MISC.md](MISC.md).
+For advanced usage and implementation details, see [MISC.md](MISC.md). For design rationales and API decisions, see [FAQ.md](FAQ.md).
 
 ## Design Philosophy
 
-LLMProc treats LLMs as computing processes:
-- Each model is a process defined by a program (TOML file)
-- It maintains state between executions
-- It interacts with the system through defined interfaces
+LLMProc treats LLMs as processes in a Unix-inspired operating system framework:
 
-The library functions as a kernel:
-- Implements system calls for LLM processes
-- Manages resources across processes
-- Creates a standardized interface with the environment
+- LLMs function as processes that execute prompts and make tool calls
+- Tools operate at both user and kernel levels, with system tools able to modify process state
+- The Process abstraction naturally maps to Unix concepts like spawn, fork, goto, and IPC
+- This architecture provides a foundation for evolving toward a more complete LLM operating system
+
+For in-depth explanations of these design decisions, see our [API Design FAQ](./FAQ.md).
 
 ## Roadmap
 

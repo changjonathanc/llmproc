@@ -90,8 +90,7 @@ async def test_program_linking_description_in_example_with_api():
     expert_description = "Weather forecasting expert with meteorological knowledge"
     main_program.add_linked_program("weather_expert", expert_program, expert_description)
 
-    # Compile and start the main process
-    main_program.compile()
+    # Start the main process
     process = await main_program.start()
 
     # Verify the process has the linked program descriptions

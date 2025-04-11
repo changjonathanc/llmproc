@@ -227,8 +227,7 @@ def test_llm_program_set_tool_aliases(mock_anthropic, mock_env):
     # Check that aliases were stored in tools dict
     assert program.tools["aliases"] == {"calc": "calculator", "read": "read_file"}
     
-    # Compile the program to register aliases with the tool manager
-    program.compile()
+    # Aliases are registered directly with the tool manager when set
     
     # Check that aliases were registered with the tool manager
     # Verify aliases directly in the runtime registry
@@ -312,10 +311,7 @@ async def test_llm_process_with_mcp_tool_aliases(
     # Directly register the alias with the registry since this is primarily what we want to test
     program.tool_manager.runtime_registry.register_aliases({"now": namespaced_tool_name})
     
-    # Compile the program
-    program.compile()
-    
-    # Create the process
+    # Create the process using start() which handles validation and initialization
     process = await LLMProcess.create(program)
     
     # Since we're testing MCP tool registration in an altered API environment,
@@ -356,10 +352,7 @@ async def test_calling_tools_with_aliases(mock_anthropic, mock_mcp_registry, moc
     # Add alias for calculator
     program.set_tool_aliases({"calc": "calculator"})
     
-    # Compile the program
-    program.compile()
-    
-    # Create the process but avoid actual initialization
+    # Create the process using start() which handles validation and initialization but avoid actual initialization
     with patch("llmproc.llm_process.LLMProcess.__init__", return_value=None):
         process = LLMProcess.__new__(LLMProcess)
         process.program = program
@@ -440,10 +433,7 @@ async def test_alias_error_messages(mock_anthropic, mock_env):
     # Add aliases for calculator and a non-existent tool
     program.set_tool_aliases({"calc": "calculator", "invalid": "non_existent_tool"})
     
-    # Compile the program
-    program.compile()
-    
-    # Create the process but avoid actual initialization
+    # Create the process using start() which handles validation and initialization but avoid actual initialization
     with patch("llmproc.llm_process.LLMProcess.__init__", return_value=None):
         process = LLMProcess.__new__(LLMProcess)
         process.program = program

@@ -10,7 +10,7 @@ LLMs often find themselves in conversational states where:
 3. The LLM realizes it needs to restart from an earlier point with improved context
 4. A complex reasoning path led to a dead end, requiring a different approach
 
-With the GOTO tool, LLMs can autonomously reset the conversation to a more productive state, much like time travel within the conversation.
+With the GOTO tool, LLMs can autonomously reset the conversation to a more productive state, much like time travel within the conversation. This follows the Unix-inspired design philosophy where processes have control over their state. For more on when to use this feature versus the fork tool, see the [API Design FAQ](../FAQ.md#when-to-use-fork-and-goto).
 
 ## Key Features
 

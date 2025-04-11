@@ -19,10 +19,9 @@ sequenceDiagram
     rect rgb(70, 80, 120)
         Note right of User: Configuration Phase
         User->>Program: LLMProgram.from_toml("config.toml")
-        Program->>Program: compile()
-        Note over Program: Validate configuration
-        Note over Program: Register tools 
-        Note over Program: Prepare file descriptors
+        Note over Program: Load configuration
+        Note over Program: Define tools and schemas
+        Note over Program: Configure system prompt 
     end
 
     %% Initialization Phase
@@ -139,8 +138,7 @@ flowchart TB
 
 - **Key methods**:
   - `from_toml(path)`: Load configuration from TOML file
-  - `compile()`: Validate and prepare program for execution
-  - `start()`: Create fully initialized LLMProcess instance
+  - `start()`: Create fully initialized LLMProcess instance (handles validation automatically)
   - `set_enabled_tools(tools)`: Configure available tools
   - `set_tool_aliases(aliases)`: Set user-friendly aliases
   - `configure_file_descriptor(enabled)`: Configure FD system
@@ -259,10 +257,6 @@ The `LLMProgram` class represents a program configuration for an LLM, including 
 def from_toml(cls, toml_path: Union[str, Path], include_linked: bool = True) -> "LLMProgram":
     """Load and compile a program from a TOML file."""
 
-@classmethod
-def compile(cls, toml_path: Union[str, Path], include_linked: bool = True,
-            check_linked_files: bool = True, return_all: bool = False) -> Union["LLMProgram", Dict[str, "LLMProgram"]]:
-    """Compile a program with advanced options."""
 ```
 
 ### Instance Methods

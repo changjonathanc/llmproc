@@ -4,6 +4,8 @@
 
 The Program Linking feature allows LLM processes to communicate with each other through the "spawn" system call. This enables primary processes to delegate queries to specialized processes that have different system prompts, preloaded files, and parameters.
 
+Following Unix design principles, processes can spawn other processes to perform specialized tasks, creating a natural delegation pattern. For the design rationale behind this approach, see the [API Design FAQ](../FAQ.md#why-implement-program-linking-as-a-spawn-tool).
+
 ## Use Cases
 
 1. **Knowledge Specialization**: Create specialized processes with domain-specific knowledge by preloading different files for each process.
@@ -90,7 +92,7 @@ import asyncio
 from llmproc import LLMProgram
 
 async def main():
-    # Load and compile the main program with linked programs
+    # Load the main program with linked programs
     main_program = LLMProgram.from_toml("path/to/main.toml")
 
     # Start the process with async initialization

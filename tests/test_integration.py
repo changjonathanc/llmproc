@@ -32,7 +32,7 @@ class TestIntegration:
             provider="test-provider",
             system_prompt="Test prompt"
         )
-        program.compile()
+        # Program validation happens during process startup
         
         # Create a simplified mock process
         process = MagicMock(spec=LLMProcess)

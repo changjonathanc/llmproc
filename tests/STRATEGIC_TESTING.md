@@ -114,14 +114,14 @@ def test_example_syntax():
     # Get all example programs
     example_files = glob.glob("examples/**/*.toml", recursive=True)
     
-    # Validate each program compiles without errors
+    # Validate each program loads without errors
     for example in example_files:
         try:
             program = LLMProgram.from_toml(example)
-            program.compile()  # Just compile, don't run
-            assert True, f"{example} compiled successfully"
+            # Validation happens during from_toml
+            assert True, f"{example} loaded successfully"
         except Exception as e:
-            pytest.fail(f"Failed to compile {example}: {str(e)}")
+            pytest.fail(f"Failed to load {example}: {str(e)}")
 ```
 
 ## Test Suite Organization
