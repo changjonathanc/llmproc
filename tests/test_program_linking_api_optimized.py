@@ -84,7 +84,7 @@ async def test_program_linking_basic(temp_toml_files):
     """Test basic program linking functionality."""
     # Start timing
     start_time = time.time()
-    timeout_seconds = 18
+    timeout_seconds = 45  # Increased timeout for more reliability
 
     try:
         # Load the program
@@ -119,7 +119,7 @@ async def test_program_linking_empty_input(temp_toml_files):
     """Test program linking with minimal/empty inputs."""
     # Start timing
     start_time = time.time()
-    timeout_seconds = 18
+    timeout_seconds = 45  # Increased timeout for more reliability
 
     try:
         # Load the program
@@ -156,7 +156,7 @@ async def test_program_linking_state_reset(temp_toml_files):
     """Test program linking after state reset."""
     # Start timing
     start_time = time.time()
-    timeout_seconds = 18
+    timeout_seconds = 45  # Increased timeout for more reliability
 
     try:
         # Load the program

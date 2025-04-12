@@ -194,28 +194,11 @@ class ToolRegistry:
         try:
             handler = self.tool_handlers[resolved_name]
             
-            # Extract parameters from args dictionary using function signature
-            sig = inspect.signature(handler)
-            
-            # Function uses explicit parameters
-            kwargs = {}
-            
-            # Extract parameters from args dictionary
-            
-            # Process parameters based on function signature
-            for param_name, param in sig.parameters.items():
-                # Skip internal process context parameters if they're not provided
-                if param_name == "runtime_context" and param_name not in args:
-                    continue
-                    
-                # Extract parameter from the args dictionary if available
-                if param_name in args:
-                    kwargs[param_name] = args[param_name]
-            
-            # Parameters prepared for handler
-            
-            # Call with extracted parameters
-            result = await handler(**kwargs)
+            # Directly pass the args dictionary as keyword arguments to the handler.
+            # The handler created by prepare_tool_handler expects **kwargs
+            # and will perform its own signature checking against the original function.
+            # This avoids the issue of ToolRegistry inspecting the wrapper's signature.
+            result = await handler(**args)
             
             # If this was an aliased tool, add a note to the result for debugging
             if name != resolved_name and isinstance(result, ToolResult):

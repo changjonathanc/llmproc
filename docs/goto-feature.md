@@ -79,15 +79,28 @@ The tool definition includes guidance for the LLM on:
 - XML formatting for time travel messages
 - What happens after using the tool (state reset)
 
-## Demo Script
+## Demo Scripts
 
-The repository includes a demo script that showcases the GOTO feature. You can run it with:
+The repository includes demo scripts that showcase the GOTO feature:
+
+### Interactive Demo
 
 ```bash
 python examples/scripts/goto_demo.py
 ```
 
 This interactive demo allows you to experience the time travel capability directly and provides visual feedback when time travel occurs.
+
+### Context Compaction Demo
+
+```bash
+python dev/scripts/goto_context_compaction_demo.py
+```
+
+This demo specifically demonstrates how GOTO can be used to compact large context windows while preserving knowledge:
+- Reads and processes a large file (README.md)
+- Uses GOTO to compact the conversation with a summary
+- Shows token usage reduction while maintaining key information
 
 ## Testing
 

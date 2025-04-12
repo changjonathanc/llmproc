@@ -1,6 +1,6 @@
 [project]
 name = "llmproc"
-version = "0.4.0"
+version = "0.4.1"
 description = "A simple framework for LLM-powered applications"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -110,6 +110,7 @@ disallow_incomplete_defs = true
 
 [dependency-groups]
 dev = [
+    "pytest-anyio>=0.0.0",
     "pytest-asyncio>=0.26.0",
 ]
 

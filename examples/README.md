@@ -5,7 +5,7 @@ This directory contains examples demonstrating LLMProc features and configuratio
 ## Quick Start
 
 - [**reference.toml**](./reference.toml): Comprehensive reference with all configuration options
-- [**openai/minimal.toml**](./openai/minimal.toml): Simplest possible configuration
+- [**openai/gpt-4o-mini.toml**](./openai/gpt-4o-mini.toml): Simple configuration with GPT-4o mini
 
 ## Directory Structure
 
@@ -27,6 +27,7 @@ This directory contains examples demonstrating LLMProc features and configuratio
   - **prompt-caching.toml**: Prompt caching
   - **mcp.toml**: MCP protocol support
   - **fork.toml**: Fork system call
+  - **goto.toml**: GOTO for context management
   - **file-descriptor/**: File descriptor system
   - **program-linking/**: Program linking (LLM-to-LLM communication)
 
@@ -37,6 +38,7 @@ This directory contains examples demonstrating LLMProc features and configuratio
 - [**scripts/**](./scripts/): Python script examples
   - **program-compiler-example.py**: Program compiler usage
   - **callback-demo.py**: Callback demonstrations
+  - **goto_context_compaction_demo.py**: GOTO for efficient context management
 
 ## Running Examples
 
@@ -44,14 +46,15 @@ Use the `llmproc-demo` command-line tool:
 
 ```bash
 # Basic examples
-llmproc-demo ./examples/openai/minimal.toml
 llmproc-demo ./examples/openai/gpt-4o-mini.toml
+llmproc-demo ./examples/openai/gpt-4o.toml
 llmproc-demo ./examples/anthropic/claude-3-haiku.toml
 llmproc-demo ./examples/gemini/gemini-2.0-flash-direct.toml
 
 # Feature examples
 llmproc-demo ./examples/features/preload.toml
 llmproc-demo ./examples/features/fork.toml
+llmproc-demo ./examples/features/goto.toml
 
 # Advanced examples
 llmproc-demo ./examples/features/file-descriptor/main.toml

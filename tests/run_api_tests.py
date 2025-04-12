@@ -109,7 +109,7 @@ def main():
     parser.add_argument(
         "--workers", 
         type=int, 
-        default=2,
+        default=6,
         help="Number of parallel workers (default: 2)"
     )
     parser.add_argument(

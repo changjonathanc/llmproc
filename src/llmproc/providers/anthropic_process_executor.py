@@ -101,6 +101,7 @@ class AnthropicProcessExecutor:
         iterations = 0
         while iterations < max_iterations:
             iterations += 1
+            goto_executed_this_turn = False  # Flag to track GOTO execution
 
             logger.debug(f"Making API call {iterations}/{max_iterations}")
 
@@ -229,9 +230,15 @@ class AnthropicProcessExecutor:
                                 error_msg = f"Invalid tool arguments format for '{tool_name}'. Expected a dictionary but got: {type(tool_args)}"
                                 logger.error(error_msg)
                                 result = ToolResult.from_error(error_msg)
-
+                                
                         # Fire callback for tool end if provided
                         safe_callback(on_tool_end, tool_name, result, callback_name="on_tool_end")
+
+                        # Check if GOTO was just executed and set flag
+                        if tool_name == "goto":
+                            logger.info(f"GOTO tool executed. Setting flag to skip appending messages for this tool response.")
+                            goto_executed_this_turn = True
+                            break  # Exit the loop processing tools for this API response
 
                         # PHASE 3: This file descriptor eligibility check is complex and could be simplified with a
                         # _should_use_file_descriptor(process, tool_name, tool_result) helper function.
@@ -276,15 +283,19 @@ class AnthropicProcessExecutor:
                 # PHASE 3: The state update could be made more intentional with a
                 # _update_state_with_tool_results(process, response, tool_results) helper function.
 
-                # Update state with response and tool results
-                # Add assistant message with GOTO ID
-                append_message_with_id(process, "assistant", response.content)
-                
-                # Add tool results to state using append_message_with_id
-                for tool_result in tool_results:
-                    # Tool result already has the correct structure with "role": "user"
-                    # and "content" is a list with tool result data
-                    append_message_with_id(process, tool_result["role"], tool_result["content"])
+                # Only update state if GOTO was NOT executed in this turn
+                if not goto_executed_this_turn:
+                    # Update state with response and tool results
+                    # Add assistant message with GOTO ID
+                    append_message_with_id(process, "assistant", response.content)
+                    
+                    # Add tool results to state using append_message_with_id
+                    for tool_result in tool_results:
+                        # Tool result already has the correct structure with "role": "user"
+                        # and "content" is a list with tool result data
+                        append_message_with_id(process, tool_result["role"], tool_result["content"])
+                else:
+                    logger.debug("GOTO executed this turn, skipping state update for assistant/tool results.")
 
         if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
@@ -371,14 +382,11 @@ class AnthropicProcessExecutor:
             dict: Token count information or error message
         """
         try:
-            # Transform state and system prompt to API format
-            # Add a dummy message for empty state to ensure the API call works
-            if not process.state:
-                # Use a temporary copy to avoid modifying the actual state
-                temp_state = [{"role": "user", "content": "Hi"}]
-                api_messages = state_to_api_messages(temp_state, add_cache=False)
-            else:
-                api_messages = state_to_api_messages(process.state, add_cache=False)
+            # Create a copy of the state and always append a dummy user message
+            # This prevents API errors with trailing whitespace in final assistant messages
+            state_copy = (process.state or []).copy()
+            state_copy.append({"role": "user", "content": "Hi"})
+            api_messages = state_to_api_messages(state_copy, add_cache=False)
 
             # Handle system prompt format
             system_prompt = process.enriched_system_prompt
@@ -410,6 +418,7 @@ class AnthropicProcessExecutor:
             return {"input_tokens": input_tokens, "context_window": window_size, "percentage": percentage, "remaining_tokens": remaining}
 
         except Exception as e:
+            logger.warning(f"Token counting failed: {str(e)}")
             return {"error": str(e)}
 
     #

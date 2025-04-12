@@ -37,34 +37,35 @@ See [MISC.md](MISC.md) for additional installation options and provider configur
 ### Python usage
 
 ```python
+# Full example: examples/multiply_example.py
 import asyncio
 from llmproc import LLMProgram, register_tool
 
+
 @register_tool()
-def calculate(expression: str) -> dict:
-    return {"result": eval(expression, {"__builtins__": {}})}
+def multiply(a: float, b: float) -> dict:
+    """Multiply two numbers and return the result."""
+    return {"result": a * b}  # Expected: π * e = 8.539734222677128
+
 
 async def main():
-    # You can load a program from a TOML file
-    program = LLMProgram.from_toml('examples/anthropic/claude-3-5-haiku.toml')
-
-    # Or create a program with the python API
-    program = (
-        LLMProgram(
-            model_name="claude-3-7-sonnet-20250219",
-            provider="anthropic",
-            system_prompt="You are a helpful assistant.",
-            parameters={"max_tokens": 1024}  # Required parameter
-        )
-        .set_enabled_tools([calculate])  # Enable the calculate tool
+    program = LLMProgram(
+        model_name="claude-3-7-sonnet-20250219", 
+        provider="anthropic",
+        system_prompt="You're a helpful assistant.",
+        parameters={"max_tokens": 1024}
     )
-
-    # Start and use the process
+    
+    program.set_enabled_tools([multiply])
+    
     process = await program.start()
-    result = await process.run('What is 125 * 48?')
+    await process.run("Can you multiply 3.14159265359 by 2.71828182846?")
+    
     print(process.get_last_message())
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### CLI usage
@@ -95,7 +96,7 @@ LLMProc offers a Unix-inspired toolkit for building sophisticated LLM applicatio
 ### Process Management - Unix-like LLM Orchestration
 - **[Program Linking](./examples/features/program-linking/main.toml)** - Spawn specialized LLM processes for delegated tasks
 - **[Fork Tool](./examples/features/fork.toml)** - Create process copies with shared conversation state
-- **[GOTO (Time Travel)](./examples/features/goto.toml)** - Reset conversations to previous points
+- **[GOTO (Time Travel)](./examples/features/goto.toml)** - Reset conversations to previous points with [context compaction demo](./examples/scripts/goto_context_compaction_demo.py)
 
 ### Large Content Handling - Sophisticated I/O Management
 - **[File Descriptor System](./examples/features/file-descriptor/main.toml)** - Unix-like pagination for large outputs

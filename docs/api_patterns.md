@@ -84,7 +84,7 @@ For simple scripts or applications without complex async requirements, LLMProc p
 from llmproc import LLMProgram
 
 # Load program from TOML
-program = LLMProgram.from_toml('examples/minimal.toml')
+program = LLMProgram.from_toml('examples/openai/gpt-4o-mini.toml')
 
 # Start the process (creates event loop internally for sync calls)
 process = program.start()  

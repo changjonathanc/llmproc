@@ -265,15 +265,19 @@ def test_program_with_function_tools():
 
     # Function tools are processed when the process is started
 
+    # Process function tools to register handlers and schemas
+    program.tool_manager.process_function_tools()
+    
     # Verify tools appear in the API-ready schema
     tool_schemas = program.tool_manager.get_tool_schemas()
     tool_names = [schema["name"] for schema in tool_schemas]
     assert "get_calculator" in tool_names
     assert "search_documents" in tool_names
     
-    # Verify tools are enabled
-    assert "get_calculator" in program.tools["enabled"]
-    assert "search_documents" in program.tools["enabled"]
+    # Verify tools are enabled (using the proper method for single source of truth)
+    enabled_tools = program.get_enabled_tools()
+    assert "get_calculator" in enabled_tools
+    assert "search_documents" in enabled_tools
     
     # At this point, the tools are properly registered and can be called
     # This is tested in test_function_tool_execution
@@ -294,6 +298,9 @@ async def test_tool_enabling_methods(basic_program):
     enabled_tools = program.get_enabled_tools()
     for tool_name in expected_tools:
         assert tool_name in enabled_tools
+    
+    # Process function tools to register handlers and schemas
+    program.tool_manager.process_function_tools()
     
     # Verify custom name from decorator works
     tool_schemas = program.tool_manager.get_tool_schemas()
@@ -378,8 +385,9 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     program2.set_enabled_tools(["calculator", "read_file"])
     
     # Verify that built-in tools are enabled in configuration
-    assert "calculator" in program2.tools["enabled"]
-    assert "read_file" in program2.tools["enabled"]
+    enabled_tools = program2.get_enabled_tools()
+    assert "calculator" in enabled_tools
+    assert "read_file" in enabled_tools
     
     # Note: Function tools remain in the enabled_tools list due to how function tools are processed
     # But their behavior should be correctly updated based on the API's schema list

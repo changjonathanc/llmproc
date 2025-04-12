@@ -53,7 +53,7 @@ def test_cli_reset_command():
 
         runner = CliRunner()
         # Simulate user entering "reset" then "exit"
-        result = runner.invoke(main, ["examples/minimal.toml"],
+        result = runner.invoke(main, ["examples/openai/gpt-4o-mini.toml"],
                               input="Hello\nreset\nexit\n")
 
         assert "Conversation state has been reset" in result.output
@@ -122,8 +122,8 @@ async def test_api_error_recovery():
 async def test_concurrent_processes():
     """Test multiple processes running concurrently."""
     # Create multiple process instances with different programs
-    program1 = LLMProgram.from_toml("examples/minimal.toml")
-    program2 = LLMProgram.from_toml("examples/anthropic.toml")
+    program1 = LLMProgram.from_toml("examples/openai/gpt-4o-mini.toml")
+    program2 = LLMProgram.from_toml("examples/anthropic/claude-3-5-haiku.toml")
 
     # Start the processes
     process1 = await program1.start()
@@ -166,7 +166,7 @@ async def test_concurrent_processes():
 @pytest.mark.asyncio
 async def test_long_conversation():
     """Test a conversation with many turns."""
-    program = LLMProgram.from_toml("examples/minimal.toml")
+    program = LLMProgram.from_toml("examples/openai/gpt-4o-mini.toml")
     process = await program.start()
 
     # Mock API responses

@@ -174,9 +174,6 @@ class LLMProgram:
         # Tool management is now handled directly by the ToolManager
         # Process function tools to ensure they're properly prepared for registration
         self.tool_manager.process_function_tools()
-        
-        # Update tools["enabled"] with the latest from tool_manager for backward compatibility
-        self.tools["enabled"] = self.tool_manager.get_enabled_tools()
 
         # Resolve File Descriptor and Tools dependencies
         self._resolve_fd_tool_dependencies()

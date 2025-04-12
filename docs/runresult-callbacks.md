@@ -31,7 +31,7 @@ import asyncio
 from llmproc import LLMProgram
 
 async def main():
-    program = LLMProgram.from_toml("examples/minimal.toml")
+    program = LLMProgram.from_toml("examples/openai/gpt-4o-mini.toml")
     process = await program.start()
 
     # Run returns a RunResult object

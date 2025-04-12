@@ -18,56 +18,58 @@ logger = logging.getLogger(__name__)
 # Tool definition that will be registered with the tool registry
 GOTO_TOOL_DEFINITION = {
     "name": "goto",
-    "description": """Reset the conversation to a previous point using a message ID. This tool enables "time travel" capabilities, allowing recovery from conversational dead-ends or misunderstandings.
+    "description": """Reset the conversation to a previous point using a message ID. This tool enables "time travel" capabilities, allowing you to discard the most recent messages and start over from a previous point in time.
 
 WHEN TO USE THIS TOOL:
+- You finished a task that consumed a lot of context window but you don't need to keep the intermediate steps.
+- You tried something but it didn't work, and you want to go back and try a different approach while compacting the conversation history.
 - The user explicitly asks you to go back in the conversation
-- The conversation has gone off-track or down an unproductive path
-- You want to restart from an earlier point with a different strategy
-- You want to compress context after multiple tool operations
-
-IMPORTANT: Only use this tool ONCE per response. Never call GOTO multiple times in succession.
 
 HOW IT WORKS:
-- Each message has a unique ID shown as [msg_X] at the start of the message
+- Each message will have a unique ID shown as [msg_X] at the start of the message
 - Specify which message to return to using its ID (e.g., "msg_0" for the very beginning)
-- Provide a new message that will replace all messages after that point
+- Provide a new message that will replace all messages after that point. This is your chance to summarize what you've done and what you'll do next.
 
-CRITICAL INSTRUCTIONS:
-1. When asked to "go back to the beginning", always use "msg_0" as the position.
-2. Include a clear, concise message explaining why you're using GOTO and what you'll do next.
-3. After using GOTO, your next response should directly address the user's request.
-4. Never use GOTO multiple times in succession - it must be used at most once per turn.
 
 WHAT HAPPENS AFTER USING GOTO:
 - The system will RESET the conversation history to the specified point
 - All messages after that point will be deleted from history
-- Your "message" parameter text will be added with special <time_travel> XML tags
-- In your next turn, you'll see the truncated history with your special message
-- You should respond directly to the user's request WITHOUT referring to the time travel
+- Your "message" parameter will be split into system note and assistant message parts using XML tags
+- In your next turn, you should completely disregard any previous context and focus only on the new topic
+- The conversation history has been reset, so never reference topics from before the GOTO
+
+
+Before using GOTO:
+[msg_0..6] some conversation
+[msg_7] User: can you fix the depreciation warnings in the tests?
+[msg_8..20] Assistant: (executes tool to fix depreciation warnings)
+[msg_21] User: let's compact the history and focus on the other issue next.
+[msg_22] Assistant: calls goto(position="msg_7", message="we've successfully fixed the depreciation warnings. and user wants to focus on the other issue next.")
+
 
 EXAMPLE OF WHAT YOU'LL SEE:
+If you see this, it means the GOTO tool was used. You should infer from the system message and assistant message and continue.
 
-Before using goto:
-[msg_0] User: Hello, what can you help me with?
-[msg_1] Assistant: I can help with reading files, calculations, and more.
-[msg_2] User: Can you explain how black holes work?
-[msg_3] Assistant: Black holes are regions of spacetime where gravity is so strong...
+[msg_0..6] some conversation
+[msg_7] User:
+<system_message>
+GOTO tool used. Conversation reset to message msg_7. 17 messages were removed.
+</system_message>
+<original_message_to_be_ignored>
+can you fix the depreciation warnings in the tests?
+</original_message_to_be_ignored>
+<time_travel_message>
+we've successfully fixed the depreciation warnings. and user wants to focus on the other issue next.
+</time_travel_message>
 
-After you call: goto(position="msg_0", message="Let's start over and talk about AI instead.")
+you can either
+1. simply acknowledging the GOTO and wait for new user input
+2. if there's explicit instruction in the time travel message, follow it
 
-You'll see something like this:
-[msg_0] User: Hello, what can you help me with?
-[msg_1] User: [SYSTEM NOTE: Conversation reset to message msg_0. 3 messages were removed.]
 
-<time_travel>
-Let's start over and talk about AI instead.
-</time_travel>
-
-Then you should respond directly about AI without mentioning the time travel.
-
-NOTE: After using this tool, the conversation will continue from the specified point,
-and messages after that point will be forgotten. Only use this tool when necessary.
+NOTE: This tool performs a COMPLETE RESET of the conversation context to the specified point.
+It is like starting a new conversation from that point. All context from messages after the reset point
+is completely removed and should be considered forgotten.
 """,
     "input_schema": {
         "type": "object",
@@ -88,18 +90,18 @@ and messages after that point will be forgotten. Only use this tool when necessa
 
 def find_position_by_id(state, message_id):
     """Find a message position in conversation history by its ID.
-    
+
     Args:
         state: Conversation state
         message_id: The message ID to find (e.g., "msg_3")
-        
+
     Returns:
         Index of the found message or None
     """
     # Handle empty state
     if not state:
         return None
-        
+
     # Validate message_id format
     if not isinstance(message_id, str) or not message_id.startswith("msg_"):
         return None
@@ -135,20 +137,20 @@ async def handle_goto(
     runtime_context: Optional[Any] = None
 ):
     """Reset conversation to a previous point identified by message ID.
-    
+
     Args:
         position: Message ID to go back to (e.g., msg_3)
         message: Detailed message explaining why you're going back and what new approach you'll take
         runtime_context: Runtime context dictionary containing dependencies needed by the tool.
             Required keys: 'process' (LLMProcess instance)
-        
+
     Returns:
         ToolResult with success or error information
     """
     # Get process from runtime context
     if not runtime_context or "process" not in runtime_context:
         return ToolResult.from_error("Missing process in runtime_context - cannot perform time travel")
-        
+
     process = runtime_context["process"]
 
     # Define error message templates
@@ -189,29 +191,28 @@ async def handle_goto(
     # Debug the truncation
     logger.info(f"Before truncation, state has {len(process.state)} messages")
     logger.info(f"Will keep messages up to index {target_index}")
-    
+
     # Truncate history after target
-    process.state = process.state[:target_index+1]
-    
+    original_content = process.state[target_index]["content"]
+    process.state = process.state[:target_index]
+
     logger.info(f"After truncation, state has {len(process.state)} messages")
 
     # Optionally add new message
     if message:
-        # Always wrap the message in time_travel tags (removing existing ones if present)
-        clean_message = message
+        # Use the message directly
+        # Calculate the number of messages that were removed (this was before truncation)
+        original_message_count = process.time_travel_history[-1]["from_message_count"]
+        removed_message_count = original_message_count - (target_index + 1)
 
-        # Remove existing tags if present to avoid duplication
-        if "<time_travel>" in clean_message and "</time_travel>" in clean_message:
-            clean_message = clean_message.replace("<time_travel>", "").replace("</time_travel>", "")
-
-        # Wrap with time_travel tags
-        formatted_message = f"<time_travel>\n{clean_message.strip()}\n</time_travel>"
-
-        # Add a system note about the time travel
-        system_note = f"[SYSTEM NOTE: Conversation reset to message {position}. {len(process.state) - (target_index + 1)} messages were removed.]"
+        # Format the system note with system_message tags
+        system_note = f"<system_message> GOTO tool used. Conversation reset to message {position}. {removed_message_count} messages were removed. </system_message>"
+        original_message = f"<original_message_to_be_ignored>\n{original_content}\n</original_message_to_be_ignored>"
+        # Format the assistant message with time_travel_message tags
+        formatted_message = f"<time_travel_message>\n{message}\n</time_travel_message>"
 
         # Combine the system note with the user's message
-        final_message = f"{system_note}\n\n{formatted_message}"
+        final_message = f"{system_note}\n{original_message}\n{formatted_message}"
 
         # Use append_message_with_id to ensure it gets a proper ID
         append_message_with_id(process, "user", final_message)

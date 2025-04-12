@@ -21,7 +21,7 @@ KEY POINTS ABOUT TIME TRAVEL:
 - Use the goto tool ONLY when explicitly asked to restart or reset the conversation
 - Each message has a unique ID like [msg_0], [msg_1] which you can reference
 - Using goto will reset history to that point - everything after will be forgotten
-- After using goto, respond directly to the user's request without mentioning time travel
+- After observing goto is used, acknowledge it and return for next user message.
 
 The goto tool's detailed instructions will guide you on proper usage. Use this capability wisely to improve the conversation when needed."""
 

@@ -131,13 +131,14 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
                 "on_response": lambda content: cli_logger.info(f"Received response: {content[:50]}..."),
             }
 
-        # Check if we're in non-interactive mode
-        if prompt or non_interactive:
-            # Non-interactive mode with single prompt
-            user_prompt = prompt
+        # Check if we're in non-interactive mode 
+        # Important: prompt='' is considered non-interactive with empty prompt
+        if prompt is not None or non_interactive:
+            # Non-interactive mode with single prompt (empty prompt is valid)
+            user_prompt = prompt if prompt is not None else ""
 
-            # If no prompt is provided but non-interactive flag is set, read from stdin
-            if not user_prompt and non_interactive:
+            # If no prompt is provided and non-interactive flag is set, read from stdin
+            if prompt is None and non_interactive:
                 if not sys.stdin.isatty():  # Check if input is being piped in
                     user_prompt = sys.stdin.read().strip()
                 else:
@@ -146,13 +147,19 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
                         err=True,
                     )
                     sys.exit(1)
-
+                    
+            # Report mode
             cli_logger.info("Running in non-interactive mode with single prompt")
 
             # Track time for this run
             start_time = time.time()
 
-            # Run the process with the provided prompt
+            # Exit with error on empty prompts
+            if user_prompt.strip() == "":
+                click.echo("Error: Empty prompt provided. Please provide a non-empty prompt with --prompt.", err=True)
+                sys.exit(1)
+                
+            # Run the process with the processed prompt
             run_result = asyncio.run(process.run(user_prompt, callbacks=callbacks))
 
             # Get the elapsed time

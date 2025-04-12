@@ -265,24 +265,25 @@ class LLMProcess:
             if processed_user_input != user_input:
                 logger.info(f"Large user input ({len(user_input)} chars) converted to file descriptor")
 
-        # Add processed user input to state
-        self.state.append({"role": "user", "content": processed_user_input})
+        # NOTE: We don't add the user message to the state here.
+        # Provider-specific executors will add it with proper IDs and formatting.
+        # This prevents duplicate user messages in the conversation history.
 
         # Create provider-specific process executors
         if self.provider == "openai":
             # Use the OpenAI process executor (simplified version)
             executor = OpenAIProcessExecutor()
-            run_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
+            run_result = await executor.run(self, processed_user_input, max_iterations, callbacks, run_result)
 
         elif self.provider in ANTHROPIC_PROVIDERS:
             # Use the stateless AnthropicProcessExecutor for both direct Anthropic API and Vertex AI
             executor = AnthropicProcessExecutor()
-            run_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
+            run_result = await executor.run(self, processed_user_input, max_iterations, callbacks, run_result)
 
         elif self.provider in GEMINI_PROVIDERS:
             # Use the GeminiProcessExecutor for both direct API and Vertex AI
             executor = GeminiProcessExecutor()
-            run_result = await executor.run(self, user_input, max_iterations, callbacks, run_result)
+            run_result = await executor.run(self, processed_user_input, max_iterations, callbacks, run_result)
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
 
