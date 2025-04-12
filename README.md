@@ -1,5 +1,9 @@
 # LLMProc
 
+<p align="center">
+  <img src="assets/images/logo.png" alt="LLMProc Logo" width="600">
+</p>
+
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Status](https://img.shields.io/badge/status-active-green)
 
