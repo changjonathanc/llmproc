@@ -14,5 +14,4 @@ from llmproc import LLMProcess
 from llmproc.config.program_loader import ProgramLoader
 from llmproc.program import LLMProgram
 
-# Note: The sequential thinking test has been removed since we now use the add tool instead
-# See test_mcp_add_tool.py for the new MCP tool test
+# See test_mcp_add_tool.py for MCP tool tests using the add tool

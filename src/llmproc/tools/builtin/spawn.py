@@ -1,7 +1,7 @@
 """Spawn system call for LLMProcess to create new processes from linked programs."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from llmproc.common.results import ToolResult
 from llmproc.tools.context_aware import context_aware
@@ -77,9 +77,9 @@ spawn_tool_def = SPAWN_TOOL_SCHEMA
 async def spawn_tool(
     program_name: str,
     query: str,
-    additional_preload_files: Optional[List[str]] = None,
-    runtime_context: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    additional_preload_files: Optional[list[str]] = None,
+    runtime_context: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """Create a new process from a linked program to handle a specific query.
 
     This system call allows one LLM process to create a new process from a linked program
@@ -99,17 +99,19 @@ async def spawn_tool(
         ValueError: If the program_name is not found in linked programs
     """
     # Log arguments for debugging
-    logger.debug(f"spawn_tool called with args: program_name={program_name}, query={query}, additional_preload_files={additional_preload_files}")
-    
+    logger.debug(
+        f"spawn_tool called with args: program_name={program_name}, query={query}, additional_preload_files={additional_preload_files}"
+    )
+
     # Get process from runtime context
     if not runtime_context or "process" not in runtime_context:
         error_msg = "Spawn system call requires runtime_context with process"
         logger.error(f"SPAWN ERROR: {error_msg}")
         return ToolResult.from_error(error_msg)
-    
+
     # Get process from runtime context
     llm_process = runtime_context["process"]
-    
+
     if not hasattr(llm_process, "linked_programs"):
         error_msg = "Spawn system call requires a parent LLMProcess with linked_programs defined"
         logger.error(f"SPAWN ERROR: {error_msg}")
@@ -122,7 +124,10 @@ async def spawn_tool(
         for name, program in linked_programs.items():
             description = ""
             # Try to get the description from various possible sources
-            if hasattr(llm_process, "linked_program_descriptions") and name in llm_process.linked_program_descriptions:
+            if (
+                hasattr(llm_process, "linked_program_descriptions")
+                and name in llm_process.linked_program_descriptions
+            ):
                 description = llm_process.linked_program_descriptions[name]
             elif hasattr(program, "description") and program.description:
                 description = program.description
@@ -141,18 +146,12 @@ async def spawn_tool(
         # Get the linked program object
         linked_program = linked_programs[program_name]
 
-        # Check if linked_program is already an LLMProcess or needs instantiation
-        if hasattr(linked_program, "run"):
-            # It's already a process instance, use it directly
-            linked_process = linked_program
-        else:
-            # It's a Program object, instantiate it as a process using the proper factory method
-            linked_process = await linked_program.start()
+        # Import from program_exec to ensure consistent process creation
+        from llmproc.program_exec import create_process
 
-        # Preload additional files if provided
-        if additional_preload_files:
-            logger.debug(f"Preloading files for child process: {additional_preload_files}")
-            linked_process.preload_files(additional_preload_files)
+        # In the new architecture, linked_program should always be an LLMProgram instance
+        # We create a process on-demand each time spawn is called
+        linked_process = await create_process(linked_program, additional_preload_files)
 
         # Process file descriptor system if it's available in the parent process
         if hasattr(llm_process, "fd_manager") and llm_process.file_descriptor_enabled:
@@ -160,7 +159,10 @@ async def spawn_tool(
             linked_process.file_descriptor_enabled = True
 
             # Create a FileDescriptorManager for the child if it doesn't already have one
-            if not hasattr(linked_process, "fd_manager") or linked_process.fd_manager is None:
+            if (
+                not hasattr(linked_process, "fd_manager")
+                or linked_process.fd_manager is None
+            ):
                 from llmproc.file_descriptors import FileDescriptorManager
 
                 linked_process.fd_manager = FileDescriptorManager(
@@ -171,19 +173,22 @@ async def spawn_tool(
                 )
 
             # Copy settings from parent to child
-            linked_process.references_enabled = getattr(llm_process, "references_enabled", False)
+            linked_process.references_enabled = getattr(
+                llm_process, "references_enabled", False
+            )
 
             # Copy all reference file descriptors (they are automatically shared)
             # This enables the child to access references created in the parent
             if linked_process.references_enabled:
                 for fd_id, fd_data in llm_process.fd_manager.file_descriptors.items():
-                    if fd_id.startswith("ref:") and fd_id not in linked_process.fd_manager.file_descriptors:
-                        linked_process.fd_manager.file_descriptors[fd_id] = fd_data.copy()
+                    if (
+                        fd_id.startswith("ref:")
+                        and fd_id not in linked_process.fd_manager.file_descriptors
+                    ):
+                        linked_process.fd_manager.file_descriptors[fd_id] = (
+                            fd_data.copy()
+                        )
                         logger.debug(f"Copied reference {fd_id} to child process")
-
-            # Reset enriched system prompt to include new preloaded content
-            if hasattr(linked_process, "enriched_system_prompt"):
-                linked_process.enriched_system_prompt = None
 
         # Execute the query on the process
         await linked_process.run(query)

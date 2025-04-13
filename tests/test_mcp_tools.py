@@ -15,10 +15,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llmproc import LLMProcess
-from llmproc.program import LLMProgram
 from llmproc.common.results import ToolResult
+from llmproc.program import LLMProgram
 from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
 from llmproc.tools.mcp.manager import MCPManager
+from tests.conftest import create_test_llmprocess_directly
 
 
 @pytest.fixture
@@ -122,20 +123,20 @@ def mock_mcp_registry():
         yield mock_aggregator
 
 
-# This test has been removed as it relied on the removed process_response_content function
-# We will need to implement a new test when we create a replacement error handling utility
-@pytest.mark.skip("Test removed because process_response_content has been removed")
+# Legacy test replaced by more appropriate error handling tests
+@pytest.mark.skip("Test no longer relevant to current architecture")
 @pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
-async def test_process_response_content(mock_mcp_registry, mock_time_response):
-    """This test has been removed as it relied on the removed process_response_content function."""
+async def test_process_response_content():
+    """Legacy test that is no longer needed with current architecture."""
     pass
 
 
-@patch("llmproc.llm_process.HAS_MCP", True)
+@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
-@patch("llmproc.llm_process.asyncio.run")
-def test_llm_process_with_time_tool(mock_asyncio_run, mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config):
+@patch("asyncio.run")
+def test_llm_process_with_time_tool(
+    mock_asyncio_run, mock_anthropic, mock_env, time_mcp_config
+):
     """Test LLMProcess with the time tool."""
     # Setup mock client
     mock_client = MagicMock()
@@ -151,21 +152,21 @@ def test_llm_process_with_time_tool(mock_asyncio_run, mock_anthropic, mock_mcp_r
         mcp_config_path=time_mcp_config,
         mcp_tools={"time": ["current"]},
     )
-    
+
     # Use the proper pattern with mocked start() since this is a synchronous test
-    with patch.object(program, 'start') as mock_start:
+    with patch.object(program, "start") as mock_start:
         # Create mock process that would be returned by start()
-        process = LLMProcess(program=program, skip_tool_init=True)
-        
+        process = create_test_llmprocess_directly(program=program)
+
         # Set empty api_params to avoid None error
         process.api_params = {}
-        
+
         # Set mcp_enabled for testing
         process.mcp_enabled = True
-        
+
         # Configure mock to return our process
         mock_start.return_value = process
-        
+
         # In a real implementation, we would use:
         # process = await program.start()
 
@@ -180,9 +181,9 @@ def test_llm_process_with_time_tool(mock_asyncio_run, mock_anthropic, mock_mcp_r
 
 
 @pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
+@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
-async def test_run_with_time_tool(mock_anthropic, mock_mcp_registry, mock_env, time_mcp_config):
+async def test_run_with_time_tool(mock_anthropic, mock_env, time_mcp_config):
     """Test the async run method with the time tool."""
     # Setup mock client
     mock_client = MagicMock()
@@ -199,17 +200,17 @@ async def test_run_with_time_tool(mock_anthropic, mock_mcp_registry, mock_env, t
             mcp_config_path=time_mcp_config,
             mcp_tools={"time": ["current"]},
         )
-    
+
     # Use the proper pattern with AsyncMock since this is an async test
     mock_start = AsyncMock()
     program.start = mock_start
-    
+
     # Create mock process that would be returned by start()
-    process = LLMProcess(program=program, skip_tool_init=True)
-    
+    process = create_test_llmprocess_directly(program=program)
+
     # Configure mock to return our process
     mock_start.return_value = process
-    
+
     # In a real implementation, we would use:
     # process = await program.start()
 
@@ -225,7 +226,9 @@ async def test_run_with_time_tool(mock_anthropic, mock_mcp_registry, mock_env, t
     process._async_run = AsyncMock(return_value=mock_run_result)
 
     # Patch get_last_message to return our expected response
-    process.get_last_message = MagicMock(return_value="The current time is 2022-03-10T00:00:00Z")
+    process.get_last_message = MagicMock(
+        return_value="The current time is 2022-03-10T00:00:00Z"
+    )
 
     # Call the run method
     result = await process.run("What time is it now?")
@@ -245,7 +248,15 @@ async def test_run_with_time_tool(mock_anthropic, mock_mcp_registry, mock_env, t
 def mock_mcp_config():
     """Create a temporary MCP config file for testing."""
     with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
-        config = {"mcpServers": {"existing-server": {"type": "stdio", "command": "/bin/echo", "args": ["mock server"]}}}
+        config = {
+            "mcpServers": {
+                "existing-server": {
+                    "type": "stdio",
+                    "command": "/bin/echo",
+                    "args": ["mock server"],
+                }
+            }
+        }
         json.dump(config, tmp)
         tmp_path = tmp.name
 
@@ -254,11 +265,13 @@ def mock_mcp_config():
 
 
 @pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
+@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
-async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
+async def test_unknown_server_error(
+    mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config
+):
     """Test that MCPManager handles unknown servers gracefully."""
     # Setup mock client
     mock_client = MagicMock()
@@ -268,7 +281,7 @@ async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_
     mock_mcp_registry = MagicMock()
     mock_mcp_registry.ServerRegistry = mock_server_registry
     mock_mcp_registry.MCPAggregator = mock_aggregator
-    
+
     # Add necessary methods to the mocked mcp_registry module
     mock_mcp_registry.get_definitions = MagicMock()
     mock_mcp_registry.register_tool = MagicMock()
@@ -276,9 +289,11 @@ async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_
     # Setup mock instances
     mock_server_registry_instance = MagicMock()
     mock_server_registry.from_config.return_value = mock_server_registry_instance
-    
+
     # Setup mock filter_servers to return the same mock registry
-    mock_server_registry_instance.filter_servers = MagicMock(return_value=mock_server_registry_instance)
+    mock_server_registry_instance.filter_servers = MagicMock(
+        return_value=mock_server_registry_instance
+    )
 
     mock_agg_instance = AsyncMock()
     mock_aggregator.return_value = mock_agg_instance
@@ -300,18 +315,20 @@ async def test_unknown_server_error(mock_server_registry, mock_aggregator, mock_
         # The behavior has changed - we now log a warning instead of raising an error
         # Use program.start() instead of LLMProcess.create() for proper initialization
         process = await program.start()
-        
+
         # Verify that the process was created successfully despite no tools being registered
         assert process is not None
         assert process.mcp_enabled is True
 
 
 @pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
+@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
-async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config):
+async def test_unknown_tool_error(
+    mock_server_registry, mock_aggregator, mock_anthropic, mock_mcp_config
+):
     """Test that MCPManager handles unknown tools gracefully."""
     # Setup mock client
     mock_client = MagicMock()
@@ -321,7 +338,7 @@ async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_an
     mock_mcp_registry = MagicMock()
     mock_mcp_registry.ServerRegistry = mock_server_registry
     mock_mcp_registry.MCPAggregator = mock_aggregator
-    
+
     # Add necessary methods to the mocked mcp_registry module
     mock_mcp_registry.get_definitions = MagicMock()
     mock_mcp_registry.register_tool = MagicMock()
@@ -329,9 +346,11 @@ async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_an
     # Setup mock instances
     mock_server_registry_instance = MagicMock()
     mock_server_registry.from_config.return_value = mock_server_registry_instance
-    
+
     # Setup mock filter_servers to return the same mock registry
-    mock_server_registry_instance.filter_servers = MagicMock(return_value=mock_server_registry_instance)
+    mock_server_registry_instance.filter_servers = MagicMock(
+        return_value=mock_server_registry_instance
+    )
 
     mock_agg_instance = AsyncMock()
     mock_aggregator.return_value = mock_agg_instance
@@ -360,7 +379,7 @@ async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_an
         # The behavior has changed - we now log a warning instead of raising an error
         # Use program.start() instead of LLMProcess.create() for proper initialization
         process = await program.start()
-        
+
         # Verify that the process was created successfully despite no tools being registered
         assert process is not None
         assert process.mcp_enabled is True
@@ -369,63 +388,61 @@ async def test_unknown_tool_error(mock_server_registry, mock_aggregator, mock_an
 @pytest.mark.asyncio
 async def test_mcp_tools_in_tool_manager():
     """Test that MCP tools are properly registered in the tool manager.
-    
+
     This test verifies that the integration functions correctly register MCP tools
     in the tool registry and update the enabled_tools list.
     """
     # Import the tools modules we want to test
-    from llmproc.tools.tool_registry import ToolRegistry
-    from llmproc.tools.tool_manager import ToolManager
-    from llmproc.tools.mcp.manager import MCPManager
     from llmproc.tools.mcp.integration import register_runtime_mcp_tools
-    
+    from llmproc.tools.tool_manager import ToolManager
+    from llmproc.tools.tool_registry import ToolRegistry
+
     # Create a namespaced tool name
     namespaced_tool_name = f"test-server{MCP_TOOL_SEPARATOR}test-tool"
-    
+
     # Create handler and schema for our test tool
     async def mock_handler(args):
         return ToolResult(content={"test": "result"}, is_error=False)
-        
+
     tool_schema = {
         "name": namespaced_tool_name,
         "description": "Test tool description",
-        "parameters": {
-            "type": "object",
-            "properties": {}
-        }
+        "parameters": {"type": "object", "properties": {}},
     }
-    
+
     # Create and set up registries
     mcp_registry = ToolRegistry()
     runtime_registry = ToolRegistry()
-    
+
     # Create a tool manager that uses the runtime registry
     tool_manager = ToolManager()
     tool_manager.runtime_registry = runtime_registry
     runtime_registry.tool_manager = tool_manager
-    
+
     # Register the MCP tool in the MCP registry
     mcp_registry.register_tool(namespaced_tool_name, mock_handler, tool_schema)
-    
+
     # Create an initial list of enabled tools
     enabled_tools = ["some_other_tool"]
     tool_manager.enabled_tools = enabled_tools.copy()
-    
+
     # Call the integration function to register MCP tools
-    registered_count = register_runtime_mcp_tools(mcp_registry, runtime_registry, tool_manager.enabled_tools)
-    
+    registered_count = register_runtime_mcp_tools(
+        mcp_registry, runtime_registry, tool_manager.enabled_tools
+    )
+
     # Verify one tool was registered
     assert registered_count == 1
-    
+
     # Verify the tool is registered in the runtime registry
     assert namespaced_tool_name in runtime_registry.tool_handlers
-    
+
     # Verify the tool was added to the enabled_tools list
     assert namespaced_tool_name in tool_manager.enabled_tools
-    
+
     # Get tool definitions from the tool manager
     tool_schemas = tool_manager.get_tool_schemas()
     tool_names = [t.get("name") for t in tool_schemas]
-    
+
     # Verify the tool appears in the schemas
     assert namespaced_tool_name in tool_names, "MCP tool not found in tool schemas"

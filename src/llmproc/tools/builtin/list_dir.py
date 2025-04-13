@@ -4,10 +4,10 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Optional
 
-from llmproc.tools.function_tools import register_tool
 from llmproc.common.results import ToolResult
+from llmproc.tools.function_tools import register_tool
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -18,13 +18,11 @@ logger = logging.getLogger(__name__)
     param_descriptions={
         "directory_path": "Absolute or relative path to the directory to list. Defaults to current working directory if not specified.",
         "show_hidden": "Whether to include hidden files and directories in the listing. Defaults to False.",
-        "detailed": "Whether to show detailed information (size, permissions, modification time) for each item. Defaults to False."
+        "detailed": "Whether to show detailed information (size, permissions, modification time) for each item. Defaults to False.",
     },
 )
 async def list_dir(
-    directory_path: str = ".", 
-    show_hidden: bool = False, 
-    detailed: bool = False
+    directory_path: str = ".", show_hidden: bool = False, detailed: bool = False
 ) -> str:
     """List directory contents with options for showing hidden files and detailed information.
 
@@ -59,9 +57,9 @@ async def list_dir(
         dir_items = []
         for item in path.iterdir():
             # Skip hidden files if show_hidden is False
-            if not show_hidden and item.name.startswith('.'):
+            if not show_hidden and item.name.startswith("."):
                 continue
-                
+
             if detailed:
                 # Get file stats
                 stats = item.stat()
@@ -70,23 +68,25 @@ async def list_dir(
                 # Format last modified time
                 mtime = _format_time(stats.st_mtime)
                 # Get type indicator (directory, file, etc.)
-                type_indicator = 'd' if item.is_dir() else 'f'
+                type_indicator = "d" if item.is_dir() else "f"
                 # Add detailed item info
-                dir_items.append(f"{type_indicator} {item.name} (Size: {size}, Modified: {mtime})")
+                dir_items.append(
+                    f"{type_indicator} {item.name} (Size: {size}, Modified: {mtime})"
+                )
             else:
                 # Add simple item name with type indicator
                 dir_items.append(f"{'d' if item.is_dir() else 'f'} {item.name}")
-        
+
         # Sort items (directories first, then files)
         dir_items.sort()
-        
+
         # Format the output
         if not dir_items:
             return f"Directory '{path}' is empty."
-        
-        result = f"Contents of '{path}':\n" + '\n'.join(dir_items)
+
+        result = f"Contents of '{path}':\n" + "\n".join(dir_items)
         return result
-        
+
     except Exception as e:
         error_msg = f"Error listing directory {directory_path}: {str(e)}"
         logger.error(error_msg)
@@ -95,7 +95,7 @@ async def list_dir(
 
 def _format_size(size_bytes: int) -> str:
     """Format file size in a human-readable format."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size_bytes < 1024.0:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0

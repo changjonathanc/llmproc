@@ -178,10 +178,6 @@ For in-depth explanations of these design decisions, see our [API Design FAQ](./
 
 ## Roadmap
 
-### 0.5.0
-- internal refactor & cleanup
-
-### 0.6.0 +
 - Persistent children & inter-process communication
 - llmproc mcp server
 - Streaming api support

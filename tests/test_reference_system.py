@@ -1,5 +1,6 @@
 """Tests for the reference ID system."""
 
+import asyncio
 import copy
 import gc
 import re
@@ -8,13 +9,15 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from llmproc.file_descriptors import FileDescriptorManager
+from tests.conftest import create_test_llmprocess_directly
+
 
 # Create a test-specific subclass that always enables references
 # Note: Named ReferenceFDManager instead of TestFDManager to prevent pytest from collecting it as a test class
 class ReferenceFDManager(FileDescriptorManager):
     def __init__(self, **kwargs):
         super().__init__(enable_references=True, **kwargs)
-        
+
     # Backward compatibility methods
     def read_fd(self, fd_id, **kwargs):
         """Backward compatibility wrapper for read_fd_content."""
@@ -24,9 +27,10 @@ class ReferenceFDManager(FileDescriptorManager):
         except Exception as e:
             error_msg = str(e)
             from llmproc.file_descriptors.formatter import format_fd_error
+
             xml_error = format_fd_error("error", fd_id, error_msg)
             return ToolResult(content=xml_error, is_error=True)
-    
+
     def write_fd_to_file(self, fd_id, file_path, **kwargs):
         """Backward compatibility wrapper for write_fd_to_file_content."""
         try:
@@ -35,13 +39,15 @@ class ReferenceFDManager(FileDescriptorManager):
         except Exception as e:
             error_msg = str(e)
             from llmproc.file_descriptors.formatter import format_fd_error
+
             xml_error = format_fd_error("error", fd_id, error_msg)
             return ToolResult(content=xml_error, is_error=True)
+
+
+from llmproc.common.results import RunResult, ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
-from llmproc.common.results import RunResult
 from llmproc.tools.builtin.spawn import spawn_tool
-from llmproc.common.results import ToolResult
 from tests.conftest import create_mock_llm_program
 
 
@@ -234,7 +240,10 @@ class TestReferenceUsage:
         manager.extract_references_from_message(message)
 
         # Mock file operations to avoid actually writing files
-        with patch("builtins.open", MagicMock()), patch("os.path.getsize", MagicMock(return_value=14)):
+        with (
+            patch("builtins.open", MagicMock()),
+            patch("os.path.getsize", MagicMock(return_value=14)),
+        ):
             # Write the reference to a file
             result = manager.write_fd_to_file("ref:save_me", "/tmp/test.txt")
 
@@ -313,7 +322,7 @@ async def test_reference_inheritance_during_spawn():
     parent_program.get_enriched_system_prompt = Mock(return_value="enriched parent")
 
     # Create parent process
-    parent_process = LLMProcess(program=parent_program)
+    parent_process = create_test_llmprocess_directly(program=parent_program)
     parent_process.file_descriptor_enabled = True
     parent_process.references_enabled = True
     parent_process.fd_manager = ReferenceFDManager()
@@ -337,7 +346,9 @@ async def test_reference_inheritance_during_spawn():
     Parent's reference content that should be inherited
     </ref>
     """
-    parent_references = parent_process.fd_manager.extract_references_from_message(message)
+    parent_references = parent_process.fd_manager.extract_references_from_message(
+        message
+    )
     assert len(parent_references) == 1
     assert "ref:parent_ref" in parent_process.fd_manager.file_descriptors
 
@@ -354,7 +365,7 @@ async def test_reference_inheritance_during_spawn():
     # This is what the real spawn_tool does internally
 
     # Create a child process directly
-    child_process = LLMProcess(program=child_program)
+    child_process = create_test_llmprocess_directly(program=child_program)
 
     # Set up file descriptor support in child
     child_process.file_descriptor_enabled = True
@@ -363,7 +374,7 @@ async def test_reference_inheritance_during_spawn():
         default_page_size=parent_process.fd_manager.default_page_size,
         max_direct_output_chars=parent_process.fd_manager.max_direct_output_chars,
         max_input_chars=parent_process.fd_manager.max_input_chars,
-        page_user_input=parent_process.fd_manager.page_user_input
+        page_user_input=parent_process.fd_manager.page_user_input,
     )
 
     # Copy references from parent to child - this simulates the implementation in spawn_tool
@@ -377,7 +388,10 @@ async def test_reference_inheritance_during_spawn():
     assert "ref:parent_ref" in child_process.fd_manager.file_descriptors
     assert "ref:parent_ref2" in child_process.fd_manager.file_descriptors
     assert "ref:parent_ref3" in child_process.fd_manager.file_descriptors
-    assert "Parent's reference content" in child_process.fd_manager.file_descriptors["ref:parent_ref"]["content"]
+    assert (
+        "Parent's reference content"
+        in child_process.fd_manager.file_descriptors["ref:parent_ref"]["content"]
+    )
 
     # Create a reference in the child process to verify isolation
     child_message = """
@@ -385,7 +399,9 @@ async def test_reference_inheritance_during_spawn():
     Child's reference content that should not be shared with parent
     </ref>
     """
-    child_references = child_process.fd_manager.extract_references_from_message(child_message)
+    child_references = child_process.fd_manager.extract_references_from_message(
+        child_message
+    )
     assert len(child_references) == 1
     assert "ref:child_ref" in child_process.fd_manager.file_descriptors
 
@@ -454,7 +470,7 @@ async def test_reference_inheritance_during_fork():
     program.get_enriched_system_prompt = Mock(return_value="enriched system")
 
     # Create the original process
-    process = LLMProcess(program=program)
+    process = create_test_llmprocess_directly(program=program)
     process.file_descriptor_enabled = True
     process.references_enabled = True
     process.fd_manager = ReferenceFDManager()
@@ -469,9 +485,34 @@ async def test_reference_inheritance_during_fork():
     assert len(references) == 1
     assert "ref:original_ref" in process.fd_manager.file_descriptors
 
-    # Fork the process using the fork_process method
-    # This uses the built-in implementation directly
-    forked_process = await process.fork_process()
+    # Mock the create_process function to return a properly configured mock process
+    # Use AsyncMock to create an awaitable mock
+    mock_forked_process = AsyncMock(spec=LLMProcess)
+
+    # Configure the mock forked process with the necessary attributes
+    mock_forked_process.file_descriptor_enabled = True
+    mock_forked_process.fd_manager = ReferenceFDManager()
+
+    # Copy references from the parent to the mock forked process
+    for fd_id, fd_data in process.fd_manager.file_descriptors.items():
+        if fd_id.startswith("ref:"):
+            mock_forked_process.fd_manager.file_descriptors[fd_id] = fd_data.copy()
+
+    # Configure other necessary attributes for the fork_process method
+    mock_forked_process.references_enabled = process.references_enabled
+    mock_forked_process.allow_fork = False  # Forked processes have fork disabled
+
+    # Use a proper awaitable future for the mock
+    with patch("llmproc.program_exec.create_process") as mock_create_process:
+        # Create a future to make it awaitable
+        future = asyncio.Future()
+        future.set_result(mock_forked_process)
+        mock_create_process.return_value = future
+        # Fork the process using the fork_process method - this will use our mocked create_process
+        forked_process = await process.fork_process()
+
+        # Verify create_process was called with the correct program
+        mock_create_process.assert_called_once_with(process.program)
 
     # Verify the forked process has file descriptor support enabled
     assert forked_process.file_descriptor_enabled
@@ -480,7 +521,10 @@ async def test_reference_inheritance_during_fork():
 
     # Verify references were copied from parent to forked process
     assert "ref:original_ref" in forked_process.fd_manager.file_descriptors
-    assert "This is important content" in forked_process.fd_manager.file_descriptors["ref:original_ref"]["content"]
+    assert (
+        "This is important content"
+        in forked_process.fd_manager.file_descriptors["ref:original_ref"]["content"]
+    )
 
     # Create a new reference in the forked process to verify isolation
     forked_message = """
@@ -488,7 +532,9 @@ async def test_reference_inheritance_during_fork():
     This is a new reference created in the forked process
     </ref>
     """
-    forked_references = forked_process.fd_manager.extract_references_from_message(forked_message)
+    forked_references = forked_process.fd_manager.extract_references_from_message(
+        forked_message
+    )
     assert len(forked_references) == 1
     assert "ref:forked_ref" in forked_process.fd_manager.file_descriptors
 

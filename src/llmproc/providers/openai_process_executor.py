@@ -45,7 +45,9 @@ class OpenAIProcessExecutor:
 
         # Check if tools are configured but not yet supported
         if process.tools and len(process.tools) > 0:
-            raise ValueError("Tool usage is not yet supported for OpenAI models in this implementation. Please use a model without tools, or use the Anthropic provider for tool support.")
+            raise ValueError(
+                "Tool usage is not yet supported for OpenAI models in this implementation. Please use a model without tools, or use the Anthropic provider for tool support."
+            )
 
         # Add user message to conversation history
         process.state.append({"role": "user", "content": user_prompt})
@@ -55,13 +57,17 @@ class OpenAIProcessExecutor:
 
         # First add system message if present
         if process.enriched_system_prompt:
-            formatted_messages.append({"role": "system", "content": process.enriched_system_prompt})
+            formatted_messages.append(
+                {"role": "system", "content": process.enriched_system_prompt}
+            )
 
         # Then add conversation history
         for message in process.state:
             # Add user and assistant messages
             if message["role"] in ["user", "assistant"]:
-                formatted_messages.append({"role": message["role"], "content": message["content"]})
+                formatted_messages.append(
+                    {"role": message["role"], "content": message["content"]}
+                )
 
         # Create a new RunResult if one wasn't provided
         if run_result is None:

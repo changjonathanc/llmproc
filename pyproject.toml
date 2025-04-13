@@ -1,6 +1,6 @@
 [project]
 name = "llmproc"
-version = "0.4.1"
+version = "0.5.0"
 description = "A simple framework for LLM-powered applications"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -53,15 +53,18 @@ all = [
 packages = ["llmproc"]
 package-dir = {"" = "src"}
 
-[tool.ruff.format]
-# Line length set on the root level
-indent-style = "space"
-quote-style = "double"
-
 [tool.ruff]
-line-length = 200
+# This sets the hard limit for both linting and formatting
+# The formatter will try to keep lines under this length when possible
+line-length = 120
 target-version = "py311"
 exclude = ["dev/"]
+
+[tool.ruff.format]
+# The formatter will try to keep lines under line-length when possible
+# but won't reformat existing lines unless they exceed this length
+indent-style = "space"
+quote-style = "double"
 
 [tool.ruff.lint]
 select = [
@@ -87,13 +90,22 @@ ignore = [
     "D100",  # Missing docstring in public module
     "D101",  # Missing docstring in public class
     "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
     "D107",  # Missing docstring in __init__
+    "D205",  # 1 blank line required between summary line and description
     "D415",  # First line should end with punctuation
     "N806",  # Variable in function should be lowercase
     "UP007",  # Use X | Y for type annotations
     "F841",  # Unused variables (primarily in tests)
     "UP022",  # Prefer capture_output over stdout/stderr=PIPE (in tests)
+    # Additional ignores
+    "B007",  # Unused loop control variable
+    "W291",  # Trailing whitespace
+    "W293",  # Blank line contains whitespace
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402", "F811"]  # Allow imports not at top and fixture redefinition in tests
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

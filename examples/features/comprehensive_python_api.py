@@ -115,18 +115,32 @@ async def main():
             model_name="claude-3-7-sonnet-20250219",
             provider="anthropic",
             system_prompt="You are a helpful assistant that can coordinate with specialized experts.",
-            parameters={"temperature": 0.7, "max_tokens": 8192, "top_p": 0.95, "top_k": 40},
+            parameters={
+                "temperature": 0.7,
+                "max_tokens": 8192,
+                "top_p": 0.95,
+                "top_k": 40,
+            },
             display_name="Comprehensive Assistant",
         )
         # Add tools
         .set_enabled_tools([calculate, summarize_text])
         # Add specialized programs
-        .add_linked_program("math_expert", math_expert, "Expert in mathematics and calculations")
-        .add_linked_program("code_expert", code_expert, "Expert in programming and software development")
+        .add_linked_program(
+            "math_expert", math_expert, "Expert in mathematics and calculations"
+        )
+        .add_linked_program(
+            "code_expert", code_expert, "Expert in programming and software development"
+        )
         # Configure environment info
         .configure_env_info(["working_directory", "platform", "date"])
         # Configure file descriptor system
-        .configure_file_descriptor(enabled=True, max_direct_output_chars=8000, default_page_size=4000, enable_references=True)
+        .configure_file_descriptor(
+            enabled=True,
+            max_direct_output_chars=8000,
+            default_page_size=4000,
+            enable_references=True,
+        )
         # Configure thinking capability
         .configure_thinking(enabled=True, budget_tokens=8192)
         # Enable token-efficient tools

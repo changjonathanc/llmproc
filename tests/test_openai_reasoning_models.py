@@ -32,14 +32,18 @@ def test_reasoning_model_detection():
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock()
     mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Test response"), finish_reason="stop")]
+    mock_response.choices = [
+        MagicMock(message=MagicMock(content="Test response"), finish_reason="stop")
+    ]
     mock_client.chat.completions.create.return_value = mock_response
 
     mock_reasoning_process.client = mock_client
     mock_non_reasoning_process.client = mock_client
 
     # Create patch for the API call to avoid actually making the call
-    with patch.object(mock_client.chat.completions, "create", return_value=mock_response) as mock_create:
+    with patch.object(
+        mock_client.chat.completions, "create", return_value=mock_response
+    ) as mock_create:
         # The test: Check parameter transformation for reasoning models
         # For this test, we'll directly access the internal transformation code and verify
         # that it correctly transforms the parameters without running the full API call
@@ -52,7 +56,9 @@ def test_reasoning_model_detection():
         if is_reasoning_model:
             # Reasoning models use max_completion_tokens instead of max_tokens
             if "max_tokens" in reasoning_api_params:
-                reasoning_api_params["max_completion_tokens"] = reasoning_api_params.pop("max_tokens")
+                reasoning_api_params["max_completion_tokens"] = (
+                    reasoning_api_params.pop("max_tokens")
+                )
         else:
             # Remove reasoning_effort for non-reasoning models
             if "reasoning_effort" in reasoning_api_params:
@@ -67,13 +73,17 @@ def test_reasoning_model_detection():
 
         # Now do the same for non-reasoning model
         non_reasoning_api_params = mock_non_reasoning_process.api_params.copy()
-        is_reasoning_model = mock_non_reasoning_process.model_name.startswith(("o1", "o3"))
+        is_reasoning_model = mock_non_reasoning_process.model_name.startswith(
+            ("o1", "o3")
+        )
 
         # Handle reasoning model specific parameters
         if is_reasoning_model:
             # Reasoning models use max_completion_tokens instead of max_tokens
             if "max_tokens" in non_reasoning_api_params:
-                non_reasoning_api_params["max_completion_tokens"] = non_reasoning_api_params.pop("max_tokens")
+                non_reasoning_api_params["max_completion_tokens"] = (
+                    non_reasoning_api_params.pop("max_tokens")
+                )
         else:
             # Remove reasoning_effort for non-reasoning models
             if "reasoning_effort" in non_reasoning_api_params:
@@ -108,13 +118,21 @@ def test_config_validation():
 
     # Test invalid reasoning_effort value
     with pytest.raises(ValueError) as excinfo:
-        LLMProgramConfig(model=ModelConfig(name="o3-mini", provider="openai"), parameters={"reasoning_effort": "invalid"})
+        LLMProgramConfig(
+            model=ModelConfig(name="o3-mini", provider="openai"),
+            parameters={"reasoning_effort": "invalid"},
+        )
     assert "Invalid reasoning_effort value" in str(excinfo.value)
 
     # Test conflicting max_tokens and max_completion_tokens
     with pytest.raises(ValueError) as excinfo:
-        LLMProgramConfig(model=ModelConfig(name="o3-mini", provider="openai"), parameters={"max_tokens": 1000, "max_completion_tokens": 2000})
-    assert "Cannot specify both 'max_tokens' and 'max_completion_tokens'" in str(excinfo.value)
+        LLMProgramConfig(
+            model=ModelConfig(name="o3-mini", provider="openai"),
+            parameters={"max_tokens": 1000, "max_completion_tokens": 2000},
+        )
+    assert "Cannot specify both 'max_tokens' and 'max_completion_tokens'" in str(
+        excinfo.value
+    )
 
 
 @pytest.mark.llm_api

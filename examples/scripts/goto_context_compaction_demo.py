@@ -9,7 +9,7 @@ to free up context window space while preserving key insights.
 import asyncio
 import logging
 import sys
-from typing import Dict, Any
+from typing import Any
 
 from llmproc import LLMProgram
 
@@ -21,30 +21,34 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 class SimpleTracker:
     """Minimal tracker for GOTO usage and token counts."""
-    
+
     def __init__(self):
         self.goto_used = False
         self.token_counts = []
-        
-    def on_tool_start(self, tool_name: str, tool_args: Dict[str, Any]) -> None:
+
+    def on_tool_start(self, tool_name: str, tool_args: dict[str, Any]) -> None:
         """Track when GOTO is used."""
         if tool_name == "goto":
             self.goto_used = True
             print(f"\n🔄 GOTO: returning to {tool_args.get('position', 'unknown')}")
-            
+
     def on_tool_end(self, tool_name: str, result: Any) -> None:
         """Track when GOTO completes."""
         if tool_name == "goto":
-            print(f"✅ GOTO completed")
-    
+            print("✅ GOTO completed")
+
     async def record_tokens(self, process: Any, label: str) -> None:
         """Simple token usage recording."""
         try:
             token_count = await process.count_tokens()
-            if token_count and isinstance(token_count, dict) and 'error' not in token_count:
-                tokens = token_count.get('input_tokens', 'N/A')
-                window = token_count.get('context_window', 'N/A')
-                percent = token_count.get('percentage', 'N/A')
+            if (
+                token_count
+                and isinstance(token_count, dict)
+                and "error" not in token_count
+            ):
+                tokens = token_count.get("input_tokens", "N/A")
+                window = token_count.get("context_window", "N/A")
+                percent = token_count.get("percentage", "N/A")
                 print(f"📊 {label}: {tokens}/{window} tokens ({percent:.1f}%)")
                 self.token_counts.append({"label": label, "count": tokens})
         except Exception as e:
@@ -69,7 +73,6 @@ async def run_demo() -> int:
         After reading them, provide:
         1. A list of the main features and capabilities of this library
         2. A summary of the key design decisions explained in the FAQ""",
-        
         # Task 2: Use GOTO to compact
         """Thank you for that detailed summary! Now our context window is getting full.
         
@@ -80,26 +83,22 @@ async def run_demo() -> int:
         3. 2-3 important design decisions from the FAQ
         
         NOTE: after time travel, acknowledge and return immediately.""",
-        
         # Task 3: Test knowledge retention
         """Now that we've compacted our conversation, which feature do you find most interesting?
         
         IMPORTANT: Please DO NOT use the read_file tool again. Answer based only on what you
-        already know from our previous conversation."""
+        already know from our previous conversation.""",
     ]
-    
+
     try:
         print("\n📋 Initializing GOTO Demo...")
-        
+
         # Create the program directly with the same config as goto.toml
         program = LLMProgram(
             model_name="claude-3-7-sonnet-20250219",
             provider="anthropic",
             display_name="Claude 3.7 with GOTO",
-            parameters={
-                "temperature": 0.3,
-                "max_tokens": 1000
-            },
+            parameters={"temperature": 0.3, "max_tokens": 1000},
             system_prompt="""You are an assistant with time travel capabilities. You can use the 'goto' tool to reset the conversation to an earlier point when needed.
 
 KEY POINTS ABOUT TIME TRAVEL:
@@ -108,50 +107,55 @@ KEY POINTS ABOUT TIME TRAVEL:
 - Using goto will reset history to that point - everything after will be forgotten
 - After observing goto is used, acknowledge it and return for next user message.
 
-The goto tool's detailed instructions will guide you on proper usage. Use this capability wisely to improve the conversation when needed."""
+The goto tool's detailed instructions will guide you on proper usage. Use this capability wisely to improve the conversation when needed.""",
         )
-        
+
         # Ensure required tools are enabled
         program.set_enabled_tools(["goto", "read_file"])
-        
+
         # Start process
         process = await program.start()
         tracker = SimpleTracker()
-        callbacks = {"on_tool_start": tracker.on_tool_start, "on_tool_end": tracker.on_tool_end}
-        
+        callbacks = {
+            "on_tool_start": tracker.on_tool_start,
+            "on_tool_end": tracker.on_tool_end,
+        }
+
         # Run conversation
         for i, message in enumerate(conversation):
             step_name = ["Read files", "GOTO compaction", "Knowledge check"][i]
-            print(f"\n--- STEP {i+1}: {step_name} ---")
-            
+            print(f"\n--- STEP {i + 1}: {step_name} ---")
+
             # Record tokens before steps 2 and 3
             if i > 0:
-                await tracker.record_tokens(process, f"Before step {i+1}")
-            
+                await tracker.record_tokens(process, f"Before step {i + 1}")
+
             # Process message
-            print_msg("User", message, simplified=(i==0))
+            print_msg("User", message, simplified=(i == 0))
             await process.run(message, callbacks=callbacks)
             response = process.get_last_message()
-            print_msg("Assistant", response, simplified=(i==0))
-            
+            print_msg("Assistant", response, simplified=(i == 0))
+
             # Record tokens after each step
-            await tracker.record_tokens(process, f"After step {i+1}")
-        
+            await tracker.record_tokens(process, f"After step {i + 1}")
+
         # Simple summary
         print("\n--- SUMMARY ---")
         print("• GOTO compaction reduced tokens while preserving knowledge")
-        
+
         # Basic token comparison
         if len(tracker.token_counts) >= 4:
             before_goto = tracker.token_counts[1]["count"]  # Before GOTO
-            after_goto = tracker.token_counts[2]["count"]   # After GOTO
+            after_goto = tracker.token_counts[2]["count"]  # After GOTO
             if before_goto and after_goto:
                 reduction = before_goto - after_goto
-                reduction_pct = (reduction / before_goto * 100) if before_goto > 0 else 0
+                reduction_pct = (
+                    (reduction / before_goto * 100) if before_goto > 0 else 0
+                )
                 print(f"• Token reduction: {reduction} tokens ({reduction_pct:.1f}%)")
-        
+
         return 0
-        
+
     except Exception as e:
         print(f"\n❌ Error: {e}")
         return 1

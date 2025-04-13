@@ -19,7 +19,9 @@ from llmproc.common.results import ToolResult
 logger = logging.getLogger(__name__)
 
 
-def register_tool(name: str = None, description: str = None, param_descriptions: dict[str, str] = None):
+def register_tool(
+    name: str = None, description: str = None, param_descriptions: dict[str, str] = None
+):
     """Decorator to register a function as a tool.
 
     Args:
@@ -85,7 +87,9 @@ def extract_docstring_params(func: Callable) -> dict[str, dict[str, str]]:
     if args_match:
         args_text = args_match.group(1)
         # Find all parameter descriptions
-        param_matches = re.finditer(r"\n\s+(\w+):\s*(.*?)(?=\n\s+\w+:|$)", args_text, re.DOTALL)
+        param_matches = re.finditer(
+            r"\n\s+(\w+):\s*(.*?)(?=\n\s+\w+:|$)", args_text, re.DOTALL
+        )
         for match in param_matches:
             param_name = match.group(1)
             param_desc = match.group(2).strip()
@@ -100,7 +104,12 @@ def extract_docstring_params(func: Callable) -> dict[str, dict[str, str]]:
     return params
 
 
-def type_to_json_schema(type_hint: Any, param_name: str, docstring_params: dict[str, dict[str, str]], explicit_descriptions: dict[str, str] = None) -> dict[str, Any]:
+def type_to_json_schema(
+    type_hint: Any,
+    param_name: str,
+    docstring_params: dict[str, dict[str, str]],
+    explicit_descriptions: dict[str, str] = None,
+) -> dict[str, Any]:
     """Convert a Python type hint to a JSON schema type.
 
     Args:
@@ -131,7 +140,9 @@ def type_to_json_schema(type_hint: Any, param_name: str, docstring_params: dict[
             non_none_args = [arg for arg in args if arg is not type(None)]
             if non_none_args:
                 # Convert the non-None type
-                return type_to_json_schema(non_none_args[0], param_name, docstring_params)
+                return type_to_json_schema(
+                    non_none_args[0], param_name, docstring_params
+                )
 
     # Handle basic types
     if type_hint is str:
@@ -179,7 +190,10 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
     func_name = getattr(func, "_tool_name", func.__name__)
 
     # Start with the basic schema
-    schema = {"name": func_name, "input_schema": {"type": "object", "properties": {}, "required": []}}
+    schema = {
+        "name": func_name,
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    }
 
     # Get the docstring for the function
     docstring = inspect.getdoc(func)
@@ -214,7 +228,9 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
         param_type = type_hints.get(param_name, Any)
 
         # Convert the type to JSON schema
-        param_schema = type_to_json_schema(param_type, param_name, docstring_params, explicit_descriptions)
+        param_schema = type_to_json_schema(
+            param_type, param_name, docstring_params, explicit_descriptions
+        )
 
         # Add to properties
         schema["input_schema"]["properties"][param_name] = param_schema
@@ -263,7 +279,7 @@ def prepare_tool_handler(func: Callable) -> Callable:
                     function_kwargs[param_name] = kwargs[param_name]
 
             # Debug line removed
-            
+
             # Call the function
             if is_async:
                 # Call async function

@@ -15,14 +15,17 @@ from llmproc.config.program_loader import ProgramLoader
 from llmproc.program import LLMProgram
 
 
-@pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="Missing ANTHROPIC_API_KEY environment variable")
+@pytest.mark.skipif(
+    not os.environ.get("ANTHROPIC_API_KEY"),
+    reason="Missing ANTHROPIC_API_KEY environment variable",
+)
 @pytest.mark.llm_api
 @pytest.mark.essential_api  # Mark as essential for fast testing
 @pytest.mark.asyncio
 async def test_mcp_add_tool_integration():
     """
     NOTE: This test has been modified to accommodate the fix for the tool_calls tracking issue.
-    
+
     The fix ensures that RunResult.add_tool_call() properly updates both tool_call_infos and tool_calls,
     which maintains backward compatibility with tests that check the tool_calls property.
     """
@@ -55,34 +58,35 @@ async def test_mcp_add_tool_integration():
 
     # There should be at least one tool registered with the "everything" prefix and "add" suffix
     add_tools = [name for name in tool_names if "add" in name and "everything" in name]
-    
+
     # Verify at least one add tool was registered
     assert len(add_tools) > 0, "No 'add' MCP tool was registered"
-    
+
     # Add detailed diagnostic information
     print("\n-------- MCP DIAGNOSTIC INFORMATION --------")
     print(f"MCP configuration path: {program.mcp_config_path}")
     print(f"MCP tools configuration: {program.mcp_tools}")
     print(f"Available tool names: {tool_names}")
-    
+
     # Check internal state of MCP manager
     if hasattr(process.tool_manager, "mcp_manager"):
         mcp_manager = process.tool_manager.mcp_manager
         print(f"MCP Manager initialized: {mcp_manager.initialized}")
         print(f"MCP Manager enabled: {mcp_manager.is_enabled()}")
         print(f"MCP Manager has aggregator: {mcp_manager.aggregator is not None}")
-        
+
         if mcp_manager.aggregator:
             try:
                 # Try to get tool list
                 import asyncio
+
                 servers = asyncio.run(mcp_manager.aggregator.list_servers())
                 print(f"Available servers: {servers}")
             except Exception as e:
                 print(f"Error listing servers: {e}")
     else:
         print("No MCP Manager found in tool_manager")
-        
+
     # Check tool registry for MCP tools
     mcp_tools = [t for t in tool_names if "__" in t]
     print(f"All MCP-like tools: {mcp_tools}")
@@ -99,14 +103,16 @@ async def test_mcp_add_tool_integration():
     expected_result = "135445.2484494363"
 
     # Basic validation - should contain the exact answer
-    assert expected_result in response, f"Response doesn't contain the exact answer '{expected_result}': {response}"
+    assert expected_result in response, (
+        f"Response doesn't contain the exact answer '{expected_result}': {response}"
+    )
 
     # Should have used the tool - check the result
     # The tool_calls list should be populated by add_tool_call in RunResult
     assert len(result.tool_calls) > 0, "No tool calls were made"
-    
+
     # Also verify tool_call_infos is populated
     assert len(result.tool_call_infos) > 0, "No tool call infos were recorded"
-    
+
     # Log the response for verification
     print(f"\nResponse: {response}")

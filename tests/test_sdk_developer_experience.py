@@ -10,7 +10,11 @@ from llmproc.program import LLMProgram
 def test_fluent_program_creation():
     """Test creating a program with the fluent interface."""
     # Create a basic program
-    program = LLMProgram(model_name="claude-3-5-haiku", provider="anthropic", system_prompt="You are a helpful assistant.")
+    program = LLMProgram(
+        model_name="claude-3-5-haiku",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant.",
+    )
 
     # Should not be compiled yet
     assert not program.compiled
@@ -27,28 +31,53 @@ def test_fluent_program_creation():
 def test_program_linking():
     """Test linking programs together."""
     # Create main program
-    main_program = LLMProgram(model_name="claude-3-5-haiku", provider="anthropic", system_prompt="You are a helpful coordinator.")
+    main_program = LLMProgram(
+        model_name="claude-3-5-haiku",
+        provider="anthropic",
+        system_prompt="You are a helpful coordinator.",
+    )
 
     # Create expert program
-    expert_program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are a specialized expert.")
+    expert_program = LLMProgram(
+        model_name="claude-3-7-sonnet",
+        provider="anthropic",
+        system_prompt="You are a specialized expert.",
+    )
 
     # Link them using the fluent interface
-    main_program.add_linked_program("expert", expert_program, "Expert for specialized tasks")
+    main_program.add_linked_program(
+        "expert", expert_program, "Expert for specialized tasks"
+    )
 
     # Check the linking was done correctly
     assert "expert" in main_program.linked_programs
     assert main_program.linked_programs["expert"] == expert_program
-    assert main_program.linked_program_descriptions["expert"] == "Expert for specialized tasks"
+    assert (
+        main_program.linked_program_descriptions["expert"]
+        == "Expert for specialized tasks"
+    )
 
 
 def test_fluent_methods_chaining():
     """Test chaining multiple fluent methods."""
     # Create and configure a program with method chaining
     program = (
-        LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are a helpful assistant.")
+        LLMProgram(
+            model_name="claude-3-7-sonnet",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant.",
+        )
         .add_preload_file("example1.md")
         .add_preload_file("example2.md")
-        .add_linked_program("expert", LLMProgram(model_name="claude-3-5-haiku", provider="anthropic", system_prompt="You are an expert."), "Expert for special tasks")
+        .add_linked_program(
+            "expert",
+            LLMProgram(
+                model_name="claude-3-5-haiku",
+                provider="anthropic",
+                system_prompt="You are an expert.",
+            ),
+            "Expert for special tasks",
+        )
     )
 
     # Verify everything was configured correctly
@@ -59,7 +88,7 @@ def test_fluent_methods_chaining():
     assert program.linked_program_descriptions["expert"] == "Expert for special tasks"
 
 
-# compile() method has been removed from public API
+# API now compiles programs automatically when needed
 
 
 def test_system_prompt_file():
@@ -71,7 +100,11 @@ def test_system_prompt_file():
 
     try:
         # Create program with system_prompt_file
-        program = LLMProgram(model_name="claude-3-5-haiku", provider="anthropic", system_prompt_file=system_prompt_file)
+        program = LLMProgram(
+            model_name="claude-3-5-haiku",
+            provider="anthropic",
+            system_prompt_file=system_prompt_file,
+        )
 
         # System prompt should be loaded when the process is started
         # We don't directly test this here as it would require an actual process start
@@ -87,7 +120,11 @@ def test_system_prompt_file():
 def test_complex_method_chaining():
     """Test more complex method chaining scenarios."""
     # Create nested programs with method chaining
-    inner_expert = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are an inner expert.")
+    inner_expert = LLMProgram(
+        model_name="claude-3-7-sonnet",
+        provider="anthropic",
+        system_prompt="You are an inner expert.",
+    )
 
     # Function-based test tool
     def test_tool(query: str) -> str:
@@ -103,10 +140,22 @@ def test_complex_method_chaining():
 
     # Create the main program with fluent chaining
     main_program = (
-        LLMProgram(model_name="gpt-4o", provider="openai", system_prompt="You are a coordinator.")
+        LLMProgram(
+            model_name="gpt-4o",
+            provider="openai",
+            system_prompt="You are a coordinator.",
+        )
         .add_preload_file("context1.md")
         .add_preload_file("context2.md")
-        .add_linked_program("expert1", LLMProgram(model_name="claude-3-5-haiku", provider="anthropic", system_prompt="Expert 1").add_preload_file("expert1_context.md"), "First level expert")
+        .add_linked_program(
+            "expert1",
+            LLMProgram(
+                model_name="claude-3-5-haiku",
+                provider="anthropic",
+                system_prompt="Expert 1",
+            ).add_preload_file("expert1_context.md"),
+            "First level expert",
+        )
         .add_linked_program("inner_expert", inner_expert, "Special inner expert")
         .set_enabled_tools([test_tool])  # Using set_enabled_tools instead of add_tool
     )
@@ -125,7 +174,11 @@ def test_complex_method_chaining():
 def test_set_enabled_tools():
     """Test setting enabled built-in tools."""
     # Create a program
-    program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are a helpful assistant.")
+    program = LLMProgram(
+        model_name="claude-3-7-sonnet",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant.",
+    )
 
     # Set enabled tools
     result = program.set_enabled_tools(["calculator", "read_file"])

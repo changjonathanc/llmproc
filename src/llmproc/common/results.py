@@ -100,17 +100,17 @@ class ToolResult:
 @dataclass
 class RunResult:
     """Contains metadata about a process run.
-    
+
     This class captures information about an LLMProcess run, including:
     - API call information (raw responses from API providers)
     - Tool call information
     - Timing information for the run
-    
+
     Note About Tool Tracking:
     This class maintains two synchronized collections for tool calls:
     - tool_calls: List of (name, args, result) tuples - simple format for basic tracking
     - tool_call_infos: List of detailed dictionaries with comprehensive tool call information
-    
+
     The add_tool_call() method populates both collections to ensure they remain in sync.
     """
 
@@ -120,24 +120,24 @@ class RunResult:
     tool_calls: list[tuple[str, dict, Any]] = field(default_factory=list)
     last_message: str = ""
     token_counts: dict[str, int] = field(default_factory=dict)
-    
+
     # Primary data storage
     api_call_infos: list[dict[str, Any]] = field(default_factory=list)
     tool_call_infos: list[dict[str, Any]] = field(default_factory=list)
     start_time: float = field(default_factory=time.time)
     end_time: float | None = None
     duration_ms: int = 0
-    
+
     @property
     def api_calls(self) -> int:
         """Get number of API calls made."""
         return len(self.api_call_infos)
-    
+
     @property
     def total_interactions(self) -> int:
         """Get total number of interactions (API calls + tool calls)."""
         return self.api_calls + len(self.tool_calls)
-    
+
     def add_api_call(self, info: dict[str, Any]) -> None:
         """Record information about an API call."""
         self.api_call_infos.append(info)
@@ -146,7 +146,7 @@ class RunResult:
         """Record information about a tool call."""
         # Store the tool call info in the dedicated collection
         self.tool_call_infos.append(info)
-        
+
         # Also update the tool_calls list to maintain consistency
         # This is not for backward compatibility but for ensuring both collections
         # track the same information
@@ -154,13 +154,13 @@ class RunResult:
             # Add a tuple in the format (name, args, result) expected by tool_calls
             args = info.get("args", {})
             self.tool_calls.append((info["tool_name"], args, None))
-        
+
     def complete(self) -> "RunResult":
         """Mark the run as complete and calculate duration."""
         self.end_time = time.time()
         self.duration_ms = int((self.end_time - self.start_time) * 1000)
         return self
-        
+
     @property
     def cached_tokens(self) -> int:
         """Return the total number of tokens retrieved from cache."""

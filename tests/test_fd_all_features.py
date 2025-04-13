@@ -11,7 +11,13 @@ from llmproc.program import LLMProgram
 @pytest.fixture
 def all_features_program():
     """Load the all_features.toml example program."""
-    program_path = Path(__file__).parent.parent / "examples" / "features" / "file-descriptor" / "all_features.toml"
+    program_path = (
+        Path(__file__).parent.parent
+        / "examples"
+        / "features"
+        / "file-descriptor"
+        / "all_features.toml"
+    )
     return LLMProgram.from_toml(program_path)
 
 
@@ -64,23 +70,20 @@ async def test_process_initialization(all_features_program):
     print(f"References Enabled: {process.references_enabled}")
     print(f"Page User Input: {process.fd_manager.page_user_input}")
 
-    # Check that enriched system prompt has all required instructions
-    enriched_prompt = process.program.get_enriched_system_prompt(process)
+    # Use the enriched_system_prompt generated during process creation
+    assert process.enriched_system_prompt is not None
 
-    # Debug output showing what's included
-    if process.file_descriptor_enabled:
-        print("File Descriptor Instructions included")
-    if process.fd_manager.page_user_input:
-        print("User Input Paging Instructions included")
-    if process.references_enabled:
-        print("Reference Instructions included")
+    # Now, verify the inclusion of FD instructions by directly checking the enriched_system_prompt
+    fd_base_present = "<file_descriptor_instructions>" in process.enriched_system_prompt
+    user_input_present = (
+        "<fd_user_input_instructions>" in process.enriched_system_prompt
+    )
+    references_present = "<reference_instructions>" in process.enriched_system_prompt
 
-    # Basic check for all instruction sections - note the file_descriptor_instructions tag
-    # doesn't match the variable name (file_descriptor_base_instructions)
-    fd_base_present = "<file_descriptor_instructions>" in enriched_prompt
-    user_input_present = "<fd_user_input_instructions>" in enriched_prompt
-    references_present = "<reference_instructions>" in enriched_prompt
-
-    assert fd_base_present, "File descriptor base instructions missing from system prompt"
-    assert user_input_present, "User input paging instructions missing from system prompt"
+    assert fd_base_present, (
+        "File descriptor base instructions missing from system prompt"
+    )
+    assert user_input_present, (
+        "User input paging instructions missing from system prompt"
+    )
     assert references_present, "Reference instructions missing from system prompt"

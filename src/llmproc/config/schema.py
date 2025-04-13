@@ -26,7 +26,9 @@ class ModelConfig(BaseModel):
         """Validate that the provider is supported."""
         supported_providers = {"openai", "anthropic", "vertex"}
         if v not in supported_providers:
-            raise ValueError(f"Provider '{v}' not supported. Must be one of: {', '.join(supported_providers)}")
+            raise ValueError(
+                f"Provider '{v}' not supported. Must be one of: {', '.join(supported_providers)}"
+            )
         return v
 
     @model_validator(mode="after")
@@ -74,7 +76,12 @@ class PromptConfig(BaseModel):
         # First check for system_prompt_file (takes precedence)
         if self.system_prompt_file:
             try:
-                file_path = resolve_path(self.system_prompt_file, base_dir, must_exist=True, error_prefix="System prompt file")
+                file_path = resolve_path(
+                    self.system_prompt_file,
+                    base_dir,
+                    must_exist=True,
+                    error_prefix="System prompt file",
+                )
                 return file_path.read_text()
             except FileNotFoundError as e:
                 # Re-raise the error with the same message
@@ -101,7 +108,9 @@ class MCPToolsConfig(RootModel):
         """Validate that tool configurations are either lists or 'all'."""
         for server, tools in v.items():
             if not isinstance(tools, list) and tools != "all":
-                raise ValueError(f"Tool configuration for server '{server}' must be 'all' or a list of tool names")
+                raise ValueError(
+                    f"Tool configuration for server '{server}' must be 'all' or a list of tool names"
+                )
         return v
 
 
@@ -184,17 +193,23 @@ class LLMProgramConfig(BaseModel):
         if "reasoning_effort" in v:
             valid_values = {"low", "medium", "high"}
             if v["reasoning_effort"] not in valid_values:
-                raise ValueError(f"Invalid reasoning_effort value '{v['reasoning_effort']}'. Must be one of: {', '.join(valid_values)}")
+                raise ValueError(
+                    f"Invalid reasoning_effort value '{v['reasoning_effort']}'. Must be one of: {', '.join(valid_values)}"
+                )
 
         # Remove validation for deprecated thinking_budget parameter
 
         # Check for token parameter conflicts
         if "max_tokens" in v and "max_completion_tokens" in v:
-            raise ValueError("Cannot specify both 'max_tokens' and 'max_completion_tokens'. Use 'max_tokens' for standard models and 'max_completion_tokens' for reasoning models.")
+            raise ValueError(
+                "Cannot specify both 'max_tokens' and 'max_completion_tokens'. Use 'max_tokens' for standard models and 'max_completion_tokens' for reasoning models."
+            )
 
         # Validate extra_headers structure if present
         if "extra_headers" in v and not isinstance(v["extra_headers"], dict):
-            raise ValueError("parameters.extra_headers must be a dictionary of header key-value pairs")
+            raise ValueError(
+                "parameters.extra_headers must be a dictionary of header key-value pairs"
+            )
 
         # Validate thinking structure if present
         if "thinking" in v:
@@ -204,19 +219,28 @@ class LLMProgramConfig(BaseModel):
 
             # Check for required fields
             if "type" in thinking and thinking["type"] not in ["enabled", "disabled"]:
-                raise ValueError("parameters.thinking.type must be 'enabled' or 'disabled'")
+                raise ValueError(
+                    "parameters.thinking.type must be 'enabled' or 'disabled'"
+                )
 
             # Check budget_tokens if present
             if "budget_tokens" in thinking:
                 budget = thinking["budget_tokens"]
                 if not isinstance(budget, int):
-                    raise ValueError("parameters.thinking.budget_tokens must be an integer")
+                    raise ValueError(
+                        "parameters.thinking.budget_tokens must be an integer"
+                    )
                 if budget < 0:
-                    raise ValueError("parameters.thinking.budget_tokens must be non-negative")
+                    raise ValueError(
+                        "parameters.thinking.budget_tokens must be non-negative"
+                    )
                 if budget > 0 and budget < 1024:
                     import warnings
 
-                    warnings.warn(f"parameters.thinking.budget_tokens set to {budget}, but Claude requires minimum 1024. This will likely fail at runtime.", stacklevel=2)
+                    warnings.warn(
+                        f"parameters.thinking.budget_tokens set to {budget}, but Claude requires minimum 1024. This will likely fail at runtime.",
+                        stacklevel=2,
+                    )
 
         return v
 
@@ -289,7 +313,10 @@ class LLMProgramConfig(BaseModel):
         if self.parameters:
             for param_name in self.parameters:
                 if param_name not in known_parameters:
-                    warnings.warn(f"Unknown API parameter '{param_name}' in configuration. This may be a typo or a newer parameter not yet recognized.", stacklevel=2)
+                    warnings.warn(
+                        f"Unknown API parameter '{param_name}' in configuration. This may be a typo or a newer parameter not yet recognized.",
+                        stacklevel=2,
+                    )
 
             # Check if using OpenAI reasoning model - in this case we need special parameter handling
             is_reasoning_model = False
@@ -298,7 +325,10 @@ class LLMProgramConfig(BaseModel):
 
                 # If using a reasoning model, suggest recommended parameters
                 if is_reasoning_model and "reasoning_effort" not in self.parameters:
-                    warnings.warn("OpenAI reasoning model detected (o1, o3). For better results, consider adding the 'reasoning_effort' parameter (low, medium, high).", stacklevel=2)
+                    warnings.warn(
+                        "OpenAI reasoning model detected (o1, o3). For better results, consider adding the 'reasoning_effort' parameter (low, medium, high).",
+                        stacklevel=2,
+                    )
 
             # Check if using Claude 3.7 thinking model
             is_claude_thinking_model = False
@@ -310,19 +340,45 @@ class LLMProgramConfig(BaseModel):
                 pass
 
             # Check if reasoning_effort used with non-OpenAI provider
-            if "reasoning_effort" in self.parameters and hasattr(self, "model") and self.model.provider != "openai":
-                warnings.warn("The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. It will be ignored for other providers.", stacklevel=2)
-                
+            if (
+                "reasoning_effort" in self.parameters
+                and hasattr(self, "model")
+                and self.model.provider != "openai"
+            ):
+                warnings.warn(
+                    "The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. It will be ignored for other providers.",
+                    stacklevel=2,
+                )
+
             # Check if thinking parameters used with non-Claude provider or non-3.7 Claude
-            if "thinking" in self.parameters and hasattr(self, "model") and (self.model.provider != "anthropic" or not self.model.name.startswith("claude-3-7")):
-                warnings.warn("The 'thinking' parameter is only supported with Claude 3.7+ models. It will be ignored for other providers.", stacklevel=2)
+            if (
+                "thinking" in self.parameters
+                and hasattr(self, "model")
+                and (
+                    self.model.provider != "anthropic"
+                    or not self.model.name.startswith("claude-3-7")
+                )
+            ):
+                warnings.warn(
+                    "The 'thinking' parameter is only supported with Claude 3.7+ models. It will be ignored for other providers.",
+                    stacklevel=2,
+                )
 
             # Validate that reasoning models use max_completion_tokens
             if hasattr(self, "model") and self.model.provider == "openai":
                 if is_reasoning_model and "max_tokens" in self.parameters:
-                    warnings.warn("OpenAI reasoning models (o1, o3) should use 'max_completion_tokens' instead of 'max_tokens'. Your configuration may fail at runtime.", stacklevel=2)
-                elif not is_reasoning_model and "max_completion_tokens" in self.parameters:
-                    warnings.warn("'max_completion_tokens' is only for OpenAI reasoning models (o1, o3). Standard models should use 'max_tokens' instead.", stacklevel=2)
+                    warnings.warn(
+                        "OpenAI reasoning models (o1, o3) should use 'max_completion_tokens' instead of 'max_tokens'. Your configuration may fail at runtime.",
+                        stacklevel=2,
+                    )
+                elif (
+                    not is_reasoning_model
+                    and "max_completion_tokens" in self.parameters
+                ):
+                    warnings.warn(
+                        "'max_completion_tokens' is only for OpenAI reasoning models (o1, o3). Standard models should use 'max_tokens' instead.",
+                        stacklevel=2,
+                    )
 
         return self
 

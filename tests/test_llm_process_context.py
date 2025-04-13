@@ -1,18 +1,19 @@
 """Tests for LLMProcess integration with runtime context."""
 
 import asyncio
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from llmproc.program import LLMProgram
-from llmproc.llm_process import LLMProcess
-from llmproc.tools.context_aware import context_aware
+import pytest
+
 from llmproc.common.results import ToolResult
+from llmproc.llm_process import LLMProcess
+from llmproc.program import LLMProgram
+from llmproc.tools.context_aware import context_aware
 
 
 class TestLLMProcessContextIntegration:
     """Tests for LLMProcess integration with runtime context."""
-    
+
     @pytest.fixture
     def mock_program(self):
         """Create a mock program with tool manager."""
@@ -27,21 +28,29 @@ class TestLLMProcessContextIntegration:
         program.linked_programs = {}
         program.tool_manager = MagicMock()
         return program
-    
+
     @pytest.mark.asyncio
     async def test_process_sets_runtime_context(self, mock_program):
         """Test that LLMProcess sets runtime context on its tool manager."""
-        # Mock the get_provider_client function to avoid actual API calls
-        with patch("llmproc.llm_process.get_provider_client") as mock_get_client:
-            mock_get_client.return_value = MagicMock()
-            
-            # Create a process
-            process = LLMProcess(mock_program)
-            
-            # Verify that set_runtime_context was called on the tool manager
-            mock_program.tool_manager.set_runtime_context.assert_called_once()
-            
-            # Verify that the context includes the process
-            context = mock_program.tool_manager.set_runtime_context.call_args[0][0]
-            assert "process" in context
-            assert context["process"] is process
+        # Import the create_test_llmprocess_directly helper
+        from tests.conftest import create_test_llmprocess_directly
+
+        # Create a process with our helper function, but preserve the original tool_manager
+        tool_manager = mock_program.tool_manager
+        process = create_test_llmprocess_directly(
+            program=mock_program,
+            tool_manager=tool_manager,  # Use the original mock tool_manager
+        )
+
+        # Manually set up runtime context to simulate program_exec.setup_runtime_context
+        from llmproc.program_exec import setup_runtime_context
+
+        setup_runtime_context(process)
+
+        # Verify that set_runtime_context was called on the tool manager
+        tool_manager.set_runtime_context.assert_called_once()
+
+        # Verify that the context includes the process
+        context = tool_manager.set_runtime_context.call_args[0][0]
+        assert "process" in context
+        assert context["process"] is process

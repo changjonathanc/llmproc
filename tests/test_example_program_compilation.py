@@ -59,10 +59,14 @@ def test_compile_all_example_programs():
 
             # Check for linked program descriptions if applicable
             if hasattr(program, "linked_programs") and program.linked_programs:
-                assert hasattr(program, "linked_program_descriptions"), f"Missing linked_program_descriptions in {toml_file}"
+                assert hasattr(program, "linked_program_descriptions"), (
+                    f"Missing linked_program_descriptions in {toml_file}"
+                )
 
                 # Print out programs with descriptions for debugging
-                descriptions_count = sum(1 for desc in program.linked_program_descriptions.values() if desc)
+                descriptions_count = sum(
+                    1 for desc in program.linked_program_descriptions.values() if desc
+                )
                 if descriptions_count > 0:
                     print(f"Found {descriptions_count} descriptions in {toml_file}")
 
@@ -74,7 +78,9 @@ def test_compile_all_example_programs():
         for file, error in failed_files:
             print(f"Failed to compile {file}: {error}")
 
-        pytest.fail(f"Failed to compile {len(failed_files)} out of {len(toml_files)} files")
+        pytest.fail(
+            f"Failed to compile {len(failed_files)} out of {len(toml_files)} files"
+        )
     else:
         print(f"Successfully compiled all {success_count} TOML files")
 

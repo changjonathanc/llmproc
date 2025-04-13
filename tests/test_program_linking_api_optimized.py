@@ -10,8 +10,8 @@ This version implements the recommendations from RFC027:
 
 import os
 import sys
-import time
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -102,7 +102,9 @@ async def test_program_linking_basic(temp_toml_files):
         # Test timing
         duration = time.time() - start_time
         print(f"\nTest completed in {duration:.2f} seconds")
-        assert duration < timeout_seconds, f"Test took too long: {duration:.2f}s > {timeout_seconds}s timeout"
+        assert duration < timeout_seconds, (
+            f"Test took too long: {duration:.2f}s > {timeout_seconds}s timeout"
+        )
 
     except Exception as e:
         # End timing on error
@@ -139,7 +141,9 @@ async def test_program_linking_empty_input(temp_toml_files):
         # Test timing
         duration = time.time() - start_time
         print(f"\nTest completed in {duration:.2f} seconds")
-        assert duration < timeout_seconds, f"Test took too long: {duration:.2f}s > {timeout_seconds}s timeout"
+        assert duration < timeout_seconds, (
+            f"Test took too long: {duration:.2f}s > {timeout_seconds}s timeout"
+        )
 
     except Exception as e:
         # End timing on error
@@ -174,12 +178,16 @@ async def test_program_linking_state_reset(temp_toml_files):
         # Send a query after reset - should still work
         await process.run("What is the sky color?", max_iterations=3)
         reset_response = process.get_last_message()
-        assert "blue" in reset_response.lower(), "Expected 'blue' in response after reset"
+        assert "blue" in reset_response.lower(), (
+            "Expected 'blue' in response after reset"
+        )
 
         # Test timing
         duration = time.time() - start_time
         print(f"\nTest completed in {duration:.2f} seconds")
-        assert duration < timeout_seconds, f"Test took too long: {duration:.2f}s > {timeout_seconds}s timeout"
+        assert duration < timeout_seconds, (
+            f"Test took too long: {duration:.2f}s > {timeout_seconds}s timeout"
+        )
 
     except Exception as e:
         # End timing on error

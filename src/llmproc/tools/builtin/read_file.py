@@ -5,8 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from llmproc.tools.function_tools import register_tool
 from llmproc.common.results import ToolResult
+from llmproc.tools.function_tools import register_tool
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 @register_tool(
     description="Reads a file from the file system and returns its contents.",
-    param_descriptions={"file_path": "Absolute or relative path to the file to read. For security reasons, certain directories may be inaccessible."},
+    param_descriptions={
+        "file_path": "Absolute or relative path to the file to read. For security reasons, certain directories may be inaccessible."
+    },
 )
 async def read_file(file_path: str) -> str:
     """Read a file and return its contents.

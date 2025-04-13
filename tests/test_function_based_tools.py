@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from llmproc.tools.builtin import calculator, read_file
 from llmproc.common.results import ToolResult
+from llmproc.tools.builtin import calculator, read_file
 
 
 @pytest.mark.asyncio

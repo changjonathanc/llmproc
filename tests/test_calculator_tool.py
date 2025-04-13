@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from llmproc.tools.builtin.calculator import calculator, safe_eval
 from llmproc.common.results import ToolResult
+from llmproc.tools.builtin.calculator import calculator, safe_eval
 
 
 @pytest.mark.asyncio
@@ -222,7 +222,10 @@ async def test_calculator_tool_error_handling():
     result = await calculator("sqrt(-1)")
     assert isinstance(result, ToolResult)
     assert result.is_error
-    assert "math domain error" in result.content.lower() or "cannot convert" in result.content.lower()
+    assert (
+        "math domain error" in result.content.lower()
+        or "cannot convert" in result.content.lower()
+    )
 
     # Function with wrong number of arguments
     result = await calculator("sin()")

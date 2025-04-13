@@ -23,7 +23,9 @@ def test_cli_interactive_mode():
     mock_program = MagicMock()
     mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
-    mock_program.start = AsyncMock(return_value=mock_process)
+
+    # Use a regular MagicMock instead of AsyncMock to avoid coroutine warnings
+    mock_program.start = MagicMock()
 
     # Patch various functions and classes to avoid actual API calls
     with (
@@ -41,7 +43,13 @@ def test_cli_interactive_mode():
         mock_run.return_value = MagicMock()  # Mock RunResult
         mock_exists.return_value = True  # Make Path.exists() return True
         mock_suffix.return_value = ".toml"  # Set the suffix to .toml
-        mock_absolute.return_value = Path("/fake/path/test.toml")  # Mock Path.absolute()
+        mock_absolute.return_value = Path(
+            "/fake/path/test.toml"
+        )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Create a temporary example file
         with runner.isolated_filesystem():
@@ -63,7 +71,9 @@ def test_cli_non_interactive_mode():
     mock_program = MagicMock()
     mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
-    mock_program.start = AsyncMock(return_value=mock_process)
+
+    # Use a regular MagicMock instead of AsyncMock to avoid coroutine warnings
+    mock_program.start = MagicMock()
 
     # Patch various functions and classes to avoid actual API calls
     with (
@@ -77,10 +87,15 @@ def test_cli_non_interactive_mode():
     ):
         # Set up the mocks
         mock_llm_program.from_toml.return_value = mock_program
-        mock_run.return_value = MagicMock()  # Mock RunResult
         mock_exists.return_value = True  # Make Path.exists() return True
         mock_suffix.return_value = ".toml"  # Set the suffix to .toml
-        mock_absolute.return_value = Path("/fake/path/test.toml")  # Mock Path.absolute()
+        mock_absolute.return_value = Path(
+            "/fake/path/test.toml"
+        )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Create a temporary example file
         with runner.isolated_filesystem():
@@ -102,7 +117,9 @@ def test_cli_stdin_non_interactive_mode():
     mock_program = MagicMock()
     mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
-    mock_program.start = AsyncMock(return_value=mock_process)
+
+    # Use a regular MagicMock instead of AsyncMock to avoid coroutine warnings
+    mock_program.start = MagicMock()
 
     # Patch various functions and classes to avoid actual API calls
     with (
@@ -117,16 +134,23 @@ def test_cli_stdin_non_interactive_mode():
     ):
         # Set up the mocks
         mock_llm_program.from_toml.return_value = mock_program
-        mock_run.return_value = MagicMock()  # Mock RunResult
         mock_isatty.return_value = False  # Simulate stdin having data
         mock_exists.return_value = True  # Make Path.exists() return True
         mock_suffix.return_value = ".toml"  # Set the suffix to .toml
-        mock_absolute.return_value = Path("/fake/path/test.toml")  # Mock Path.absolute()
+        mock_absolute.return_value = Path(
+            "/fake/path/test.toml"
+        )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Create a temporary example file
         with runner.isolated_filesystem():
             # Run the CLI with the test file and --non-interactive
-            result = runner.invoke(main, ["test.toml", "--non-interactive"], input="Hello from stdin")
+            result = runner.invoke(
+                main, ["test.toml", "--non-interactive"], input="Hello from stdin"
+            )
 
         # Verify that the code ran as expected
         assert mock_llm_program.from_toml.called

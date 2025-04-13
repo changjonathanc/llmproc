@@ -332,19 +332,6 @@ Returns:
     Dictionary of API parameters for LLM API calls
 """
 
-GET_ENRICHED_SYSTEM_PROMPT = """Get enhanced system prompt with preloaded files and environment info.
-
-This combines the basic system prompt with preloaded files and optional
-environment information based on the env_info configuration.
-
-Args:
-    process_instance: Optional LLMProcess instance for accessing preloaded content
-    include_env: Whether to include environment information (default: True)
-
-Returns:
-    Complete system prompt ready for API calls
-"""
-
 FROM_TOML = """Create a program from a TOML file.
 
 This method delegates to ProgramLoader.from_toml for backward compatibility.

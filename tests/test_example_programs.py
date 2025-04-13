@@ -32,7 +32,10 @@ def api_keys_available():
     """Check if required API keys are available."""
     has_openai = "OPENAI_API_KEY" in os.environ
     has_anthropic = "ANTHROPIC_API_KEY" in os.environ
-    has_vertex = "GOOGLE_APPLICATION_CREDENTIALS" in os.environ or "GOOGLE_CLOUD_PROJECT" in os.environ
+    has_vertex = (
+        "GOOGLE_APPLICATION_CREDENTIALS" in os.environ
+        or "GOOGLE_CLOUD_PROJECT" in os.environ
+    )
 
     return has_openai and has_anthropic and has_vertex
 
@@ -66,8 +69,16 @@ def test_test_structure():
                 program = tomli.load(f)
                 # Basic validation of required fields
                 # Check for model configuration in either the root or in a model section
-                has_model_info = ("model_name" in program and "provider" in program) or ("model" in program and "name" in program["model"] and "provider" in program["model"])
-                assert has_model_info, f"Program {program_path} missing model information"
+                has_model_info = (
+                    "model_name" in program and "provider" in program
+                ) or (
+                    "model" in program
+                    and "name" in program["model"]
+                    and "provider" in program["model"]
+                )
+                assert has_model_info, (
+                    f"Program {program_path} missing model information"
+                )
             except tomli.TOMLDecodeError as e:
                 pytest.fail(f"Invalid TOML in {program_path}: {e}")
 
@@ -97,8 +108,10 @@ async def test_example_program(program_path):
 
     # Skip certain providers if you need to
     provider = get_provider_from_program(program_path)
-    if (provider in ["anthropic_vertex", "gemini_vertex"] and 
-        "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ):
+    if (
+        provider in ["anthropic_vertex", "gemini_vertex"]
+        and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
+    ):
         pytest.skip("Vertex AI credentials not available")
 
     # Create and start process using two-step pattern
@@ -106,11 +119,13 @@ async def test_example_program(program_path):
     process = await program.start()
 
     # Send a simple test query
-    test_query = "Respond with a short one-sentence confirmation that you received this message."
+    test_query = (
+        "Respond with a short one-sentence confirmation that you received this message."
+    )
 
     # Run the process and get the response
     result = await process.run(test_query)
-    
+
     # Get response from RunResult
     response = process.get_last_message()
 
@@ -129,10 +144,17 @@ async def test_minimal_functionality():
         pytest.skip("API keys not available for testing")
 
     # Use the more reliable example program
-    program_path = Path(__file__).parent.parent / "examples" / "openai" / "gpt-4o-mini.toml"
+    program_path = (
+        Path(__file__).parent.parent / "examples" / "openai" / "gpt-4o-mini.toml"
+    )
     if not program_path.exists():
-        program_path = Path(__file__).parent.parent / "examples" / "anthropic" / "claude-3-5-haiku.toml"
-    
+        program_path = (
+            Path(__file__).parent.parent
+            / "examples"
+            / "anthropic"
+            / "claude-3-5-haiku.toml"
+        )
+
     program = LLMProgram.from_toml(program_path)
     process = await program.start()
 
@@ -156,27 +178,39 @@ async def test_mcp_tool_functionality():
     process = await program.start()
 
     # Send a simple request that should trigger a tool
-    result = await process.run("Tell me what tools you have access to. Just list the tool names.")
+    result = await process.run(
+        "Tell me what tools you have access to. Just list the tool names."
+    )
     response = process.get_last_message()
 
     # Check if response includes tool information
-    assert any(term in response.lower() for term in ["tool", "function", "capability"]), "Expected model to mention tools in response"
+    assert any(
+        term in response.lower() for term in ["tool", "function", "capability"]
+    ), "Expected model to mention tools in response"
 
 
 @pytest.mark.llm_api
 @pytest.mark.release_api  # This test is already covered by test_program_linking_api_optimized.py in the extended tier
-@pytest.mark.skip(reason="Covered by test_program_linking_basic in test_program_linking_api_optimized.py")
+@pytest.mark.skip(
+    reason="Covered by test_program_linking_basic in test_program_linking_api_optimized.py"
+)
 @pytest.mark.asyncio
 async def test_program_linking_functionality():
     """Test program_linking/main.toml with spawn tool execution.
-    
+
     NOTE: This test is redundant and is skipped. The same functionality is tested more
     efficiently in test_program_linking_api_optimized.py. See STRATEGIC_TESTING.md for details.
     """
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    program_path = Path(__file__).parent.parent / "examples" / "features" / "program-linking" / "main.toml"
+    program_path = (
+        Path(__file__).parent.parent
+        / "examples"
+        / "features"
+        / "program-linking"
+        / "main.toml"
+    )
     program = LLMProgram.from_toml(program_path)
     process = await program.start()
 
@@ -185,7 +219,9 @@ async def test_program_linking_functionality():
     response = process.get_last_message()
 
     # Check for common terms that should appear in a response
-    assert "hello" in response.lower() and "world" in response.lower(), "Expected response to include 'Hello, World!'"
+    assert "hello" in response.lower() and "world" in response.lower(), (
+        "Expected response to include 'Hello, World!'"
+    )
 
     # We don't need to verify the actual tool usage in the message content
     # Just check that we got a valid response that matches our expected text
@@ -200,16 +236,22 @@ async def test_file_preload_functionality():
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    program_path = Path(__file__).parent.parent / "examples" / "features" / "preload.toml"
+    program_path = (
+        Path(__file__).parent.parent / "examples" / "features" / "preload.toml"
+    )
     program = LLMProgram.from_toml(program_path)
     process = await program.start()
 
     # Ask about content that should be in the preloaded files
-    result = await process.run("Based on the information preloaded from the README.md file, what is the purpose of the llmproc library? Keep your response under 50 words.")
+    result = await process.run(
+        "Based on the information preloaded from the README.md file, what is the purpose of the llmproc library? Keep your response under 50 words."
+    )
     response = process.get_last_message()
 
     # Check for terms that should be in the response based on README content
-    assert any(term in response.lower() for term in ["api", "llm", "process", "interface"]), "Expected response to reference content from preloaded README.md"
+    assert any(
+        term in response.lower() for term in ["api", "llm", "process", "interface"]
+    ), "Expected response to reference content from preloaded README.md"
 
 
 @pytest.mark.llm_api
@@ -220,13 +262,15 @@ async def test_claude_code_comprehensive():
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    program_path = Path(__file__).parent.parent / "examples" / "claude-code" / "claude-code.toml"
+    program_path = (
+        Path(__file__).parent.parent / "examples" / "claude-code" / "claude-code.toml"
+    )
     program = LLMProgram.from_toml(program_path)
     process = await program.start()
 
     # Use a simple prompt to test basic functionality
     preload_result = await process.run("Please say 'Hello, Claude!'")
-    
+
     # Get response from RunResult
     preload_response = process.get_last_message()
 
@@ -234,13 +278,17 @@ async def test_claude_code_comprehensive():
     assert "hello" in preload_response.lower(), "Expected response to include greeting"
 
     # Test a simpler tool execution - just mention that tools exist
-    tool_result = await process.run("What tools do you have access to? Just list them briefly.")
-    
+    tool_result = await process.run(
+        "What tools do you have access to? Just list them briefly."
+    )
+
     # Get response from RunResult
     tool_response = process.get_last_message()
 
     # Just check for a non-empty response since tools may be named differently
-    assert tool_response and len(tool_response) > 10, "Expected a substantive response about tools"
+    assert tool_response and len(tool_response) > 10, (
+        "Expected a substantive response about tools"
+    )
 
 
 @pytest.mark.llm_api
@@ -260,7 +308,10 @@ async def test_provider_specific_functionality():
 
     for program_name in provider_programs:
         # Skip anthropic_vertex test if credentials aren't available
-        if "vertex" in program_name and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+        if (
+            "vertex" in program_name
+            and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
+        ):
             continue
 
         program_path = Path(__file__).parent.parent / "examples" / program_name
@@ -274,10 +325,14 @@ async def test_provider_specific_functionality():
 
         # Verify that we got a response (not empty) and it contains our test identifier
         assert response, f"Expected non-empty response from {program_name}"
-        assert "TEST_CONNECTION_SUCCESS_12345" in response, f"Expected echo response from {program_name} to include the test identifier"
+        assert "TEST_CONNECTION_SUCCESS_12345" in response, (
+            f"Expected echo response from {program_name} to include the test identifier"
+        )
 
 
-def run_cli_with_input(program_path: Path, input_text: str, timeout: int | None = 30) -> str:
+def run_cli_with_input(
+    program_path: Path, input_text: str, timeout: int | None = 30
+) -> str:
     """Run the llmproc-demo CLI with a program file and input text.
 
     Args:
@@ -321,9 +376,16 @@ def test_cli_with_minimal_example():
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    program_path = Path(__file__).parent.parent / "examples" / "openai" / "gpt-4o-mini.toml"
+    program_path = (
+        Path(__file__).parent.parent / "examples" / "openai" / "gpt-4o-mini.toml"
+    )
     if not program_path.exists():
-        program_path = Path(__file__).parent.parent / "examples" / "anthropic" / "claude-3-5-haiku.toml"
+        program_path = (
+            Path(__file__).parent.parent
+            / "examples"
+            / "anthropic"
+            / "claude-3-5-haiku.toml"
+        )
 
     # Use a unique test string that the model should echo back
     unique_test_string = "TEST_STRING_XYZ123_ECHO_THIS_BACK"
@@ -333,10 +395,14 @@ def test_cli_with_minimal_example():
     output = run_cli_with_input(program_path, prompt)
 
     # Check if the CLI ran successfully and echoed back our test string
-    assert unique_test_string in output, f"Expected CLI output to echo back the test string: {unique_test_string}"
+    assert unique_test_string in output, (
+        f"Expected CLI output to echo back the test string: {unique_test_string}"
+    )
 
     # Check if program information is shown
-    assert any(term in output for term in ["Program Summary", "Configuration"]), "Expected CLI to show program information"
+    assert any(term in output for term in ["Program Summary", "Configuration"]), (
+        "Expected CLI to show program information"
+    )
 
 
 @pytest.mark.llm_api
@@ -346,7 +412,13 @@ def test_cli_with_program_linking():
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    program_path = Path(__file__).parent.parent / "examples" / "features" / "program-linking" / "main.toml"
+    program_path = (
+        Path(__file__).parent.parent
+        / "examples"
+        / "features"
+        / "program-linking"
+        / "main.toml"
+    )
 
     # Run the CLI with a simple query that should trigger the spawn tool
     output = run_cli_with_input(
@@ -356,7 +428,9 @@ def test_cli_with_program_linking():
     )
 
     # Check if the response includes the expected greeting
-    assert "hello" in output.lower() and "world" in output.lower(), "Expected CLI output to include greeting"
+    assert "hello" in output.lower() and "world" in output.lower(), (
+        "Expected CLI output to include greeting"
+    )
 
 
 @pytest.mark.llm_api
@@ -397,8 +471,12 @@ def test_cli_with_all_programs(program_name):
         )
 
         # Check for our unique test string
-        assert unique_id in output, f"Expected CLI using {program_name} to echo back '{unique_id}'"
-        assert any(term in output for term in ["Program Summary", "Configuration"]), f"Expected CLI using {program_name} to show program information"
+        assert unique_id in output, (
+            f"Expected CLI using {program_name} to echo back '{unique_id}'"
+        )
+        assert any(term in output for term in ["Program Summary", "Configuration"]), (
+            f"Expected CLI using {program_name} to show program information"
+        )
 
     except subprocess.TimeoutExpired:
         pytest.fail(f"CLI with {program_name} timed out")
@@ -436,15 +514,28 @@ def test_error_handling_and_recovery():
         )
 
         # Verify error is reported
-        assert result.returncode != 0, "Expected non-zero return code for invalid program"
-        assert "error" in result.stderr.lower() or "error" in result.stdout.lower(), "Expected error message for invalid program"
+        assert result.returncode != 0, (
+            "Expected non-zero return code for invalid program"
+        )
+        assert "error" in result.stderr.lower() or "error" in result.stdout.lower(), (
+            "Expected error message for invalid program"
+        )
 
     # Now test with a valid program to make sure the system recovers
-    program_path = Path(__file__).parent.parent / "examples" / "openai" / "gpt-4o-mini.toml"
+    program_path = (
+        Path(__file__).parent.parent / "examples" / "openai" / "gpt-4o-mini.toml"
+    )
     if not program_path.exists():
-        program_path = Path(__file__).parent.parent / "examples" / "anthropic" / "claude-3-5-haiku.toml"
-    
+        program_path = (
+            Path(__file__).parent.parent
+            / "examples"
+            / "anthropic"
+            / "claude-3-5-haiku.toml"
+        )
+
     output = run_cli_with_input(program_path, "Say hello.")
 
     # Check for success
-    assert "hello" in output.lower(), "Expected successful response after error recovery"
+    assert "hello" in output.lower(), (
+        "Expected successful response after error recovery"
+    )

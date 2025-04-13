@@ -77,7 +77,9 @@ def test_get_anthropic_vertex_provider(mock_vertex, mock_env):
 
     client = get_provider_client("anthropic_vertex", "claude-3-5-haiku@20241022")
 
-    mock_vertex.assert_called_once_with(project_id="test-vertex-project", region="us-central1-vertex")
+    mock_vertex.assert_called_once_with(
+        project_id="test-vertex-project", region="us-central1-vertex"
+    )
     assert client == mock_client
 
 
@@ -94,7 +96,9 @@ def test_get_anthropic_vertex_provider_with_params(mock_vertex, mock_env):
         region="europe-west4",
     )
 
-    mock_vertex.assert_called_once_with(project_id="custom-project", region="europe-west4")
+    mock_vertex.assert_called_once_with(
+        project_id="custom-project", region="europe-west4"
+    )
     assert client == mock_client
 
 
@@ -119,9 +123,7 @@ def test_get_gemini_vertex_provider(mock_genai, mock_env):
     client = get_provider_client(PROVIDER_GEMINI_VERTEX, "gemini-2.0-flash")
 
     mock_genai.Client.assert_called_once_with(
-        vertexai=True,
-        project="test-google-project",
-        location="us-central1-vertex"
+        vertexai=True, project="test-google-project", location="us-central1-vertex"
     )
     assert client == mock_client
 
@@ -140,9 +142,7 @@ def test_get_gemini_vertex_provider_with_params(mock_genai, mock_env):
     )
 
     mock_genai.Client.assert_called_once_with(
-        vertexai=True,
-        project="custom-project",
-        location="europe-west4"
+        vertexai=True, project="custom-project", location="europe-west4"
     )
     assert client == mock_client
 

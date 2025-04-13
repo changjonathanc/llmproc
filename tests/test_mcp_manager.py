@@ -119,31 +119,33 @@ async def test_mcp_manager_initialization(mock_mcp_registry, time_mcp_config, mo
     """Test basic MCPManager initialization."""
     # Import here to avoid circular imports
     from llmproc.tools.mcp import MCPManager
-    
+
     # Create manager instance
-    manager = MCPManager(config_path=time_mcp_config, tools_config={"time": ["current"]})
-    
+    manager = MCPManager(
+        config_path=time_mcp_config, tools_config={"time": ["current"]}
+    )
+
     # Verify initial state
     assert manager.config_path == time_mcp_config
     assert manager.tools_config == {"time": ["current"]}
     assert manager.aggregator is None
     assert manager.initialized is False
-    
+
     # Verify is_enabled returns True
     assert manager.is_enabled() is True
-    
+
     # Mock tool registry
     mock_tool_registry = MagicMock()
     mock_tool_registry.get_definitions.return_value = [{"name": "time__current"}]
     mock_tool_registry.tool_manager = MagicMock()
     mock_tool_registry.tool_manager.enabled_tools = []
-    
+
     # Mock process
     mock_process = MagicMock()
-    
+
     # Initialize the manager with updated signature (remove process param)
     success = await manager.initialize(mock_tool_registry)
-    
+
     # Verify successful initialization
     assert success is True
     assert manager.initialized is True
@@ -155,31 +157,31 @@ async def test_mcp_manager_empty_config(mock_mcp_registry):
     """Test MCPManager with empty configuration."""
     # Import here to avoid circular imports
     from llmproc.tools.mcp import MCPManager
-    
+
     # Create manager instance with empty configuration
     manager = MCPManager()
-    
+
     # Verify initial state
     assert manager.config_path is None
     assert manager.tools_config == {}
     assert manager.aggregator is None
     assert manager.initialized is False
-    
+
     # Verify is_enabled returns False
     assert manager.is_enabled() is False
-    
+
     # Verify is_valid_configuration returns False
     assert manager.is_valid_configuration() is False
-    
+
     # Mock tool registry
     mock_tool_registry = MagicMock()
-    
+
     # Mock process
     mock_process = MagicMock()
-    
+
     # Initialize the manager - should return False because configuration is invalid
     success = await manager.initialize(mock_tool_registry)
-    
+
     # Verify initialization was skipped
     assert success is False
     assert manager.initialized is False
@@ -190,32 +192,33 @@ async def test_mcp_manager_with_all_tools(mock_mcp_registry, time_mcp_config, mo
     """Test MCPManager with 'all' tools configuration."""
     # Import here to avoid circular imports
     from llmproc.tools.mcp import MCPManager
-    
+
     # Create manager instance with "all" tools configuration
     manager = MCPManager(config_path=time_mcp_config, tools_config={"time": "all"})
-    
+
     # Mock tool registry
     mock_tool_registry = MagicMock()
     mock_tool_registry.get_definitions.return_value = [{"name": "time__current"}]
     mock_tool_registry.tool_manager = MagicMock()
     mock_tool_registry.tool_manager.enabled_tools = []
-    
+
     # Mock process
     mock_process = MagicMock()
-    
+
     # Initialize the manager
     success = await manager.initialize(mock_tool_registry)
-    
+
     # Verify successful initialization
     assert success is True
     assert manager.initialized is True
-    
+
     # Verify tool filter has "all" configured correctly
     from mcp_registry import MCPAggregator
+
     MCPAggregator.assert_called_once()
     # The second argument to the constructor should be the tool_filter
     args, kwargs = MCPAggregator.call_args
-    assert kwargs.get('tool_filter') == {"time": None}  # None means "all" tools
+    assert kwargs.get("tool_filter") == {"time": None}  # None means "all" tools
 
 
 @pytest.mark.asyncio
@@ -223,48 +226,52 @@ async def test_mcp_manager_error_handling(mock_mcp_registry, time_mcp_config, mo
     """Test MCPManager error handling during initialization."""
     # Import here to avoid circular imports
     from llmproc.tools.mcp import MCPManager
-    
+
     # Create manager instance
-    manager = MCPManager(config_path=time_mcp_config, tools_config={"time": ["current"]})
-    
+    manager = MCPManager(
+        config_path=time_mcp_config, tools_config={"time": ["current"]}
+    )
+
     # Mock tool registry to return no tools
     mock_tool_registry = MagicMock()
     mock_tool_registry.get_definitions.return_value = []
-    
+
     # Mock process
     mock_process = MagicMock()
-    
+
     # Mock list_tools to return empty tools which will cause validation error
     mock_mcp_registry.list_tools = AsyncMock(return_value={})
-    
+
     # Initialize the manager - should log a warning but not raise an error
     result = await manager.initialize(mock_tool_registry)
-    
+
     # Initialization should succeed despite no tools being registered
     assert result is True
 
 
 @pytest.mark.asyncio
 @patch("llmproc.tools.mcp.manager.MCPManager.is_valid_configuration", return_value=True)
-async def test_mcp_manager_no_servers(mock_is_valid, mock_mcp_registry, time_mcp_config, mock_env):
+async def test_mcp_manager_no_servers(
+    mock_is_valid, mock_mcp_registry, time_mcp_config, mock_env
+):
     """Test MCPManager with no servers in config."""
     # Import here to avoid circular imports
     from llmproc.tools.mcp import MCPManager
-    
+
     # Create manager instance with empty tools config
     manager = MCPManager(config_path=time_mcp_config, tools_config={})
-    
+
     # Mock tool registry
     mock_tool_registry = MagicMock()
-    
+
     # Mock process
     mock_process = MagicMock()
-    
+
     # Initialize the manager
     success = await manager.initialize(mock_tool_registry)
-    
+
     # Verify initialization was successful but no tools were registered
     assert success is True
-    
+
     # Verify our mock is_valid_configuration was called
-    mock_is_valid.assert_called
+    mock_is_valid.assert_called_once()

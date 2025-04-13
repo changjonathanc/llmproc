@@ -2,9 +2,14 @@
 
 import datetime
 import getpass
+import logging
 import os
 import platform
+import warnings
 from pathlib import Path
+from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class EnvInfoBuilder:
@@ -81,7 +86,84 @@ class EnvInfoBuilder:
         return env_info
 
     @staticmethod
-    def build_preload_content(preloaded_content: dict) -> str:
+    def _warn_preload(
+        message: str,
+        specified_path: str,
+        resolved_path: Path,
+        error: Optional[Exception] = None,
+    ):
+        """Helper to issue consistent warnings for preloading issues.
+
+        Args:
+            message: Base warning message
+            specified_path: The path as specified in the configuration
+            resolved_path: The resolved path
+            error: Optional exception that occurred
+        """
+        full_message = (
+            f"{message} - Specified: '{specified_path}', Resolved: '{resolved_path}'"
+        )
+        if error:
+            full_message += f", Error: {error}"
+        warnings.warn(full_message, stacklevel=3)
+
+    @staticmethod
+    def load_files(
+        file_paths: list[str], base_dir: Optional[Path] = None
+    ) -> dict[str, str]:
+        """Load content from multiple files.
+
+        Args:
+            file_paths: List of file paths to load
+            base_dir: Base directory for resolving relative paths, defaults to current directory
+
+        Returns:
+            Dictionary mapping file paths to their content
+        """
+        if not file_paths:
+            return {}
+
+        base_dir = base_dir or Path(".")
+        content_dict = {}
+
+        for file_path_str in file_paths:
+            # Resolve relative paths against the base directory
+            path = Path(file_path_str)
+            if not path.is_absolute():
+                path = (base_dir / path).resolve()
+            else:
+                path = path.resolve()  # Resolve absolute paths too
+
+            try:
+                if not path.exists():
+                    EnvInfoBuilder._warn_preload(
+                        "Preload file not found", file_path_str, path
+                    )
+                    continue  # Skip missing files
+
+                if not path.is_file():
+                    EnvInfoBuilder._warn_preload(
+                        "Preload path is not a file", file_path_str, path
+                    )
+                    continue  # Skip non-files
+
+                content = path.read_text()
+                content_dict[str(path)] = content
+                logger.debug(f"Successfully preloaded content from: {path}")
+
+            except OSError as e:
+                EnvInfoBuilder._warn_preload(
+                    "Error reading preload file", file_path_str, path, e
+                )
+            except Exception as e:  # Catch other potential errors
+                EnvInfoBuilder._warn_preload(
+                    "Unexpected error preloading file", file_path_str, path, e
+                )
+
+        return content_dict
+
+    @staticmethod
+    def build_preload_content(preloaded_content: dict[str, str]) -> str:
         """Build preloaded content string.
 
         Args:
@@ -105,7 +187,9 @@ class EnvInfoBuilder:
     def get_enriched_system_prompt(
         base_prompt: str,
         env_config: dict,
-        preloaded_content: dict = None,
+        preloaded_content: Optional[dict[str, str]] = None,
+        preload_files: Optional[list[str]] = None,
+        base_dir: Optional[Path] = None,
         include_env: bool = True,
         file_descriptor_enabled: bool = False,
         references_enabled: bool = False,
@@ -116,7 +200,9 @@ class EnvInfoBuilder:
         Args:
             base_prompt: Base system prompt
             env_config: Environment configuration dictionary
-            preloaded_content: Dictionary mapping file paths to content
+            preloaded_content: Dictionary mapping file paths to content (deprecated, prefer preload_files)
+            preload_files: List of file paths to preload
+            base_dir: Base directory for resolving relative paths in preload_files
             include_env: Whether to include environment information
             file_descriptor_enabled: Whether file descriptor system is enabled
             references_enabled: Whether reference ID system is enabled
@@ -151,9 +237,21 @@ class EnvInfoBuilder:
 
             parts.append(reference_instructions)
 
-        # Add preloaded content if available
+        # Handle preloaded content
+        combined_content = {}
+
+        # Load files if file paths are provided
+        if preload_files:
+            file_content = EnvInfoBuilder.load_files(preload_files, base_dir)
+            combined_content.update(file_content)
+
+        # Also support direct preloaded content for backward compatibility
         if preloaded_content:
-            preload_content = EnvInfoBuilder.build_preload_content(preloaded_content)
+            combined_content.update(preloaded_content)
+
+        # Add preloaded content if available
+        if combined_content:
+            preload_content = EnvInfoBuilder.build_preload_content(combined_content)
             if preload_content:
                 parts.append(preload_content)
 

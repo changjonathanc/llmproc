@@ -59,7 +59,9 @@ def validate_reasoning_parameters(program):
     assert "max_tokens" not in program.parameters
 
     # Return effort level and token limit for specific assertions
-    return program.parameters["reasoning_effort"], program.parameters["max_completion_tokens"]
+    return program.parameters["reasoning_effort"], program.parameters[
+        "max_completion_tokens"
+    ]
 
 
 # Test parameter validation without requiring API access

@@ -159,7 +159,7 @@ flowchart TB
   - `run(user_input, max_iterations)`: Process user input
   - `call_tool(tool_name, **kwargs)`: Call a tool by name
   - `get_state()`: Return current conversation state
-  - `reset_state(keep_system_prompt)`: Clear conversation history
+  - `reset_state(keep_system_prompt)`: Clear conversation history (⚠️ Experimental API)
   - `count_tokens()`: Calculate token usage
   - `get_last_message()`: Get most recent model response
   - `fork_process()`: Create a copy with the same state
@@ -302,7 +302,7 @@ def get_last_message(self) -> str:
     """Get the most recent assistant message text."""
 
 def reset_state(self, keep_system_prompt: bool = True, keep_preloaded: bool = True) -> None:
-    """Reset the conversation state."""
+    """Reset the conversation state. ⚠️ Experimental API - may change in future versions."""
 
 def get_state(self) -> list[dict[str, str]]:
     """Return the current conversation state."""

@@ -4,7 +4,12 @@ import os
 from pathlib import Path
 
 
-def resolve_path(file_path: str | Path, base_dir: Path | None = None, must_exist: bool = True, error_prefix: str = "File") -> Path:
+def resolve_path(
+    file_path: str | Path,
+    base_dir: Path | None = None,
+    must_exist: bool = True,
+    error_prefix: str = "File",
+) -> Path:
     """Resolve a file path, optionally relative to a base directory.
 
     This is a common utility function used across the codebase for resolving
@@ -33,7 +38,9 @@ def resolve_path(file_path: str | Path, base_dir: Path | None = None, must_exist
 
     # Check if the file exists if required
     if must_exist and not abs_path.exists():
-        raise FileNotFoundError(f"{error_prefix} not found - Specified: '{file_path}', Resolved: '{os.path.abspath(file_path)}'")
+        raise FileNotFoundError(
+            f"{error_prefix} not found - Specified: '{file_path}', Resolved: '{os.path.abspath(file_path)}'"
+        )
 
     return abs_path
 

@@ -21,25 +21,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger("llmproc.cli")
 
+
 def get_logger(quiet=False):
     """Get a logger with the appropriate level based on quiet mode."""
     if quiet:
         # Set llmproc.cli logger to ERROR level in quiet mode
         logger.setLevel(logging.ERROR)
-        
+
         # Also reduce logging from httpx and llmproc modules
         logging.getLogger("httpx").setLevel(logging.ERROR)
         logging.getLogger("llmproc.llm_process").setLevel(logging.ERROR)
-        
+
         # Suppress Pydantic warnings
         import warnings
+
         warnings.filterwarnings("ignore", module="pydantic")
     return logger
 
 
 @click.command()
 @click.argument("program_path", required=True)
-@click.option("--prompt", "-p", help="Run in non-interactive mode with the given prompt")
+@click.option(
+    "--prompt", "-p", help="Run in non-interactive mode with the given prompt"
+)
 @click.option(
     "--non-interactive",
     "-n",
@@ -63,7 +67,10 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
     3. Non-interactive with stdin: Use --non-interactive/-n and pipe input
     """
     # Only show header in interactive mode or if verbose logging is enabled
-    if not (prompt or non_interactive) or logging.getLogger("llmproc").level == logging.DEBUG:
+    if (
+        not (prompt or non_interactive)
+        or logging.getLogger("llmproc").level == logging.DEBUG
+    ):
         click.echo("LLMProc CLI Demo")
         click.echo("----------------")
 
@@ -83,7 +90,7 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
 
         # Get logger with appropriate level
         cli_logger = get_logger(quiet)
-        
+
         # Use the new API: load program first, then start it asynchronously
         cli_logger.info(f"Loading program from: {selected_program_abs}")
         program = LLMProgram.from_toml(selected_program_abs)
@@ -126,12 +133,18 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
             callbacks = {}
         else:
             callbacks = {
-                "on_tool_start": lambda tool_name, args: cli_logger.info(f"Using tool: {tool_name}"),
-                "on_tool_end": lambda tool_name, result: cli_logger.info(f"Tool {tool_name} completed"),
-                "on_response": lambda content: cli_logger.info(f"Received response: {content[:50]}..."),
+                "on_tool_start": lambda tool_name, args: cli_logger.info(
+                    f"Using tool: {tool_name}"
+                ),
+                "on_tool_end": lambda tool_name, result: cli_logger.info(
+                    f"Tool {tool_name} completed"
+                ),
+                "on_response": lambda content: cli_logger.info(
+                    f"Received response: {content[:50]}..."
+                ),
             }
 
-        # Check if we're in non-interactive mode 
+        # Check if we're in non-interactive mode
         # Important: prompt='' is considered non-interactive with empty prompt
         if prompt is not None or non_interactive:
             # Non-interactive mode with single prompt (empty prompt is valid)
@@ -147,7 +160,7 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
                         err=True,
                     )
                     sys.exit(1)
-                    
+
             # Report mode
             cli_logger.info("Running in non-interactive mode with single prompt")
 
@@ -156,9 +169,12 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
 
             # Exit with error on empty prompts
             if user_prompt.strip() == "":
-                click.echo("Error: Empty prompt provided. Please provide a non-empty prompt with --prompt.", err=True)
+                click.echo(
+                    "Error: Empty prompt provided. Please provide a non-empty prompt with --prompt.",
+                    err=True,
+                )
                 sys.exit(1)
-                
+
             # Run the process with the processed prompt
             run_result = asyncio.run(process.run(user_prompt, callbacks=callbacks))
 
@@ -166,7 +182,9 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
             elapsed = time.time() - start_time
 
             # Log run result information
-            cli_logger.info(f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s")
+            cli_logger.info(
+                f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s"
+            )
 
             # Get the last assistant message and just print the raw response
             response = process.get_last_message()
@@ -175,14 +193,18 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
         else:
             # Interactive mode
             if not quiet:
-                click.echo("\nStarting interactive chat session. Type 'exit' or 'quit' to end.")
+                click.echo(
+                    "\nStarting interactive chat session. Type 'exit' or 'quit' to end."
+                )
 
             # Show initial token count for Anthropic models (unless in quiet mode)
             if not quiet and process.provider in ANTHROPIC_PROVIDERS:
                 try:
                     token_info = asyncio.run(process.count_tokens())
                     if token_info and "input_tokens" in token_info:
-                        click.echo(f"Initial context size: {token_info['input_tokens']:,} tokens ({token_info['percentage']:.1f}% of {token_info['context_window']:,} token context window)")
+                        click.echo(
+                            f"Initial context size: {token_info['input_tokens']:,} tokens ({token_info['percentage']:.1f}% of {token_info['context_window']:,} token context window)"
+                        )
                 except Exception as e:
                     cli_logger.warning(f"Failed to count initial tokens: {str(e)}")
 
@@ -195,7 +217,9 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
                         if token_info and "input_tokens" in token_info:
                             token_display = f" [Tokens: {token_info['input_tokens']:,}/{token_info['context_window']:,}]"
                     except Exception as e:
-                        cli_logger.warning(f"Failed to count tokens for prompt: {str(e)}")
+                        cli_logger.warning(
+                            f"Failed to count tokens for prompt: {str(e)}"
+                        )
 
                 user_input = click.prompt(f"\nYou{token_display}", prompt_suffix="> ")
 
@@ -225,7 +249,9 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
 
                 # Log basic info
                 if run_result.api_calls > 0:
-                    cli_logger.info(f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s")
+                    cli_logger.info(
+                        f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s"
+                    )
 
                 # Get the last assistant message
                 response = process.get_last_message()
@@ -237,7 +263,11 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
                     click.echo(f"\n{process.display_name}> {response}")
 
                 # Display token usage stats if available (unless in quiet mode)
-                if not quiet and hasattr(run_result, "total_tokens") and run_result.total_tokens > 0:
+                if (
+                    not quiet
+                    and hasattr(run_result, "total_tokens")
+                    and run_result.total_tokens > 0
+                ):
                     click.echo(
                         f"[API calls: {run_result.api_calls}, "
                         f"Tool calls: {run_result.tool_calls}, "

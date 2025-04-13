@@ -9,8 +9,8 @@ import logging
 from typing import Any, Optional
 
 from llmproc.common.results import ToolResult
-from llmproc.utils.message_utils import append_message_with_id
 from llmproc.tools.context_aware import context_aware
+from llmproc.utils.message_utils import append_message_with_id
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -76,15 +76,15 @@ is completely removed and should be considered forgotten.
         "properties": {
             "position": {
                 "type": "string",
-                "description": "Message ID to go back to (e.g., msg_3)"
+                "description": "Message ID to go back to (e.g., msg_3)",
             },
             "message": {
                 "type": "string",
-                "description": "Detailed message explaining why you're going back and what new approach you'll take (or summarizing what was accomplished)."
-            }
+                "description": "Detailed message explaining why you're going back and what new approach you'll take (or summarizing what was accomplished).",
+            },
         },
-        "required": ["position", "message"]
-    }
+        "required": ["position", "message"],
+    },
 }
 
 
@@ -117,7 +117,7 @@ def find_position_by_id(state, message_id):
 
     # If not found, try numeric extraction as a fallback
     try:
-        msg_num = int(message_id.split('_')[1])
+        msg_num = int(message_id.split("_")[1])
         if 0 <= msg_num < len(state):
             return msg_num
     except (IndexError, ValueError):
@@ -132,9 +132,7 @@ def find_position_by_id(state, message_id):
 
 @context_aware
 async def handle_goto(
-    position: str,
-    message: str,
-    runtime_context: Optional[Any] = None
+    position: str, message: str, runtime_context: Optional[Any] = None
 ):
     """Reset conversation to a previous point identified by message ID.
 
@@ -149,7 +147,9 @@ async def handle_goto(
     """
     # Get process from runtime context
     if not runtime_context or "process" not in runtime_context:
-        return ToolResult.from_error("Missing process in runtime_context - cannot perform time travel")
+        return ToolResult.from_error(
+            "Missing process in runtime_context - cannot perform time travel"
+        )
 
     process = runtime_context["process"]
 
@@ -157,36 +157,46 @@ async def handle_goto(
     error_messages = {
         "invalid_id_format": "Invalid message ID: {}. Must be in format 'msg_X' where X is a message number.",
         "id_not_found": "Could not find message with ID: {}. Available IDs range from msg_0 to msg_{}.",
-        "cannot_go_forward": "Cannot go forward in time. Message {} is at or beyond the current point."
+        "cannot_go_forward": "Cannot go forward in time. Message {} is at or beyond the current point.",
     }
 
     if not position or not position.startswith("msg_"):
-        return ToolResult.from_error(error_messages["invalid_id_format"].format(position))
+        return ToolResult.from_error(
+            error_messages["invalid_id_format"].format(position)
+        )
 
     # Find target position in history by message ID
     target_index = find_position_by_id(process.state, position)
     if target_index is None:
         # Show available range in error message
         max_id = len(process.state) - 1
-        return ToolResult.from_error(error_messages["id_not_found"].format(position, max_id))
+        return ToolResult.from_error(
+            error_messages["id_not_found"].format(position, max_id)
+        )
 
     # Check if trying to go forward instead of backward
     if target_index >= len(process.state) - 1:
-        return ToolResult.from_error(error_messages["cannot_go_forward"].format(position))
+        return ToolResult.from_error(
+            error_messages["cannot_go_forward"].format(position)
+        )
 
     # Log the operation
-    logger.info(f"GOTO: Resetting conversation from {len(process.state)} messages to {target_index+1} messages")
+    logger.info(
+        f"GOTO: Resetting conversation from {len(process.state)} messages to {target_index + 1} messages"
+    )
 
     # Store time travel metadata in process
     if not hasattr(process, "time_travel_history"):
         process.time_travel_history = []
 
-    process.time_travel_history.append({
-        "timestamp": datetime.datetime.now().isoformat(),
-        "from_message_count": len(process.state),
-        "to_message_count": target_index + 1,
-        "position_reference": position
-    })
+    process.time_travel_history.append(
+        {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "from_message_count": len(process.state),
+            "to_message_count": target_index + 1,
+            "position_reference": position,
+        }
+    )
 
     # Debug the truncation
     logger.info(f"Before truncation, state has {len(process.state)} messages")
@@ -221,6 +231,4 @@ async def handle_goto(
             f"Conversation reset to message {position}. Added time travel message."
         )
     else:
-        return ToolResult.from_success(
-            f"Conversation reset to message {position}."
-        )
+        return ToolResult.from_success(f"Conversation reset to message {position}.")

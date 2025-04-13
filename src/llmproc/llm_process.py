@@ -6,10 +6,11 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 
+from llmproc.common.results import RunResult, ToolResult
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.program import LLMProgram
 from llmproc.providers import get_provider_client
@@ -17,17 +18,7 @@ from llmproc.providers.anthropic_process_executor import AnthropicProcessExecuto
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS, GEMINI_PROVIDERS
 from llmproc.providers.gemini_process_executor import GeminiProcessExecutor
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
-from llmproc.common.results import RunResult, ToolResult
 from llmproc.tools import ToolManager, file_descriptor_instructions
-
-# Check if mcp-registry is installed
-HAS_MCP = False
-try:
-    import mcp_registry  # noqa
-
-    HAS_MCP = True
-except ImportError:
-    pass
 
 load_dotenv()
 
@@ -40,153 +31,123 @@ class LLMProcess:
 
     def __init__(
         self,
+        # Program reference
         program: LLMProgram,
-        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
-        skip_tool_init: bool = False,
+        # Model and provider information
+        model_name: str,
+        provider: str,
+        original_system_prompt: str,
+        system_prompt: str,
+        display_name: Optional[str] = None,
+        base_dir: Optional[Path] = None,
+        api_params: dict[str, Any] = None,
+        # Runtime state
+        state: list[dict[str, Any]] = None,
+        enriched_system_prompt: Optional[str] = None,
+        allow_fork: bool = True,
+        # Client
+        client: Any = None,
+        # File descriptor system
+        fd_manager: Optional[FileDescriptorManager] = None,
+        file_descriptor_enabled: bool = False,
+        references_enabled: bool = False,
+        # Linked programs
+        linked_programs: dict[str, LLMProgram] = None,
+        linked_program_descriptions: dict[str, str] = None,
+        has_linked_programs: Optional[bool] = None,
+        # Tool management
+        tool_manager: ToolManager = None,
+        enabled_tools: list[str] = None,
+        # MCP configuration
+        mcp_config_path: Optional[str] = None,
+        mcp_tools: dict[str, Any] = None,
+        mcp_enabled: Optional[bool] = None,
     ) -> None:
-        """Initialize LLMProcess from a compiled program.
-        
+        """Initialize LLMProcess with pre-computed state.
+
         ⚠️ WARNING: DO NOT USE THIS CONSTRUCTOR DIRECTLY! ⚠️
-        
-        ALWAYS use the async factory method `await program.start()` instead, which properly
-        handles initialization following the Unix-inspired pattern:
-        
+
+        ALWAYS use the async factory method `await program.start()` instead,
+        which properly handles initialization following the Unix-inspired pattern:
+
         ```python
         program = LLMProgram.from_toml("config.toml")
         process = await program.start()  # CORRECT WAY TO CREATE PROCESS
         ```
-        
-        Direct instantiation with `LLMProcess(program=...)` will cause issues with:
-        - Context-aware tools (spawn, goto, fd_tools)
-        - Runtime dependency injection
-        - MCP tool registration
-        - Proper initialization order
-        
+
+        This constructor expects pre-computed state from program_exec.prepare_process_state
+        and is not designed for direct use.
+
         Args:
-            program: A compiled LLMProgram instance
-            linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
-            skip_tool_init: Internal flag to skip tool initialization (for use with factory methods)
+            program: The compiled LLMProgram reference
+            model_name: Model name
+            provider: Provider name
+            original_system_prompt: Original system prompt
+            system_prompt: System prompt (may be modified)
+            display_name: Display name
+            base_dir: Base directory
+            api_params: API parameters
+            state: Conversation state
+            enriched_system_prompt: Enriched system prompt
+            allow_fork: Whether forking is allowed
+            client: Provider client
+            fd_manager: File descriptor manager
+            file_descriptor_enabled: Whether file descriptor system is enabled
+            references_enabled: Whether references are enabled
+            linked_programs: Linked programs
+            linked_program_descriptions: Linked program descriptions
+            has_linked_programs: Whether linked programs exist
+            tool_manager: Tool manager
+            enabled_tools: Enabled tools
+            mcp_config_path: MCP config path
+            mcp_tools: MCP tools
+            mcp_enabled: Whether MCP is enabled
+            _tools_need_initialization: Whether tools need initialization
 
         Raises:
-            NotImplementedError: If the provider is not implemented
-            ImportError: If the required package for a provider is not installed
-            FileNotFoundError: If required files (system prompt file, MCP config file) cannot be found
-            ValueError: If MCP is enabled but provider is not anthropic
-
-        Notes:
-            This constructor exists primarily for internal use and testing.
-            For all production code, ALWAYS use `await program.start()` instead.
-            Direct instantiation will likely result in broken context-aware tools.
+            ValueError: If required parameters are missing
         """
-        # Store the program reference
+        # Basic validation for required parameters
+        if not model_name or not provider:
+            raise ValueError("model_name and provider are required for LLMProcess initialization")
+
+        # Store all provided state attributes
         self.program = program
-        
-        # Use the common initialization method
-        self._initialize_from_program(program, linked_programs_instances, skip_tool_init)
+        self.model_name = model_name
+        self.provider = provider
+        self.original_system_prompt = original_system_prompt
+        self.system_prompt = system_prompt
+        self.display_name = display_name
+        self.base_dir = base_dir
+        self.api_params = api_params or {}
+        self.parameters = {}  # Parameters are already processed in program
 
-    @classmethod
-    async def create(
-        cls,
-        program: LLMProgram,
-        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
-    ) -> "LLMProcess":
-        """Create and fully initialize an LLMProcess asynchronously.
-        
-        ⚠️ INTERNAL API - DO NOT USE DIRECTLY ⚠️
-        
-        ALWAYS use LLMProgram.start() instead of this factory method:
-        
-        ```python
-        program = LLMProgram.from_toml("config.toml")
-        process = await program.start()  # Correct pattern - never use LLMProcess.create()
-        ```
-        
-        This factory method implements the Unix-inspired initialization approach (RFC053):
-        1. Get tool configuration from program
-        2. Initialize tools with configuration (without process)
-        3. Create process with pre-initialized tools
-        4. Runtime context is automatically set up during initialization
+        # Runtime state
+        self.state = state or []
+        self.enriched_system_prompt = enriched_system_prompt
+        self.allow_fork = allow_fork
 
-        Args:
-            program: The LLMProgram to use
-            linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
+        # Client
+        self.client = client
 
-        Returns:
-            A fully initialized LLMProcess
+        # File descriptor system
+        self.fd_manager = fd_manager
+        self.file_descriptor_enabled = file_descriptor_enabled
+        self.references_enabled = references_enabled
 
-        Raises:
-            All exceptions from __init__, plus:
-            RuntimeError: If MCP initialization fails
-            ValueError: If a server specified in mcp_tools is not found in available tools
-            
-        Notes:
-            This is an implementation detail used by LLMProgram.start() and should not be
-            called directly by users. It exists to maintain a clean separation between
-            the configuration (program) and runtime (process) phases.
-        """
-        # Phase 1: Get tool configuration from program
-        # This is the configuration-based approach from RFC053 that avoids circular dependencies
-        tool_config = program.get_tool_configuration(linked_programs_instances)
-        
-        # Phase 2: Initialize tools with configuration (without process)
-        # This avoids circular dependencies between process and tools
-        await program.tool_manager.initialize_tools(tool_config)
-        
-        # Phase 3: Create process instance with pre-initialized tools
-        # Skip tool initialization in constructor since we've already initialized them
-        instance = cls(program, linked_programs_instances, skip_tool_init=True)
-                
-        # Check for any deferred tool initializations
-        if hasattr(instance, "_tools_need_initialization") and instance._tools_need_initialization:
-            logger.info("Running remaining deferred tool initializations")
-            instance._tools_need_initialization = False
+        # Linked programs
+        self.linked_programs = linked_programs or {}
+        self.linked_program_descriptions = linked_program_descriptions or {}
+        self.has_linked_programs = has_linked_programs if has_linked_programs is not None else bool(linked_programs)
 
-        return instance
-        
+        # Tool management
+        self.tool_manager = tool_manager
+        self.enabled_tools = enabled_tools or []
 
-    def _setup_runtime_context(self) -> None:
-        """Set up runtime context for tool execution.
-        
-        This helper method creates a runtime context dictionary containing all dependencies
-        needed by context-aware tools, and sets it on the tool manager. Tools that are
-        decorated with @context_aware will receive this context at runtime.
-        """
-        runtime_context = {
-            "process": self,
-            "fd_manager": self.fd_manager,
-            "linked_programs": self.linked_programs,
-            "linked_program_descriptions": self.linked_program_descriptions,
-        }
-        self.tool_manager.set_runtime_context(runtime_context)
-        logger.debug(f"Runtime context set with keys: {', '.join(runtime_context.keys())}")
-    
-    def preload_files(self, file_paths: list[str]) -> None:
-        """Preload files and add their content to the preloaded_content dictionary.
-
-        This method loads file content into memory but does not modify the state.
-        The enriched system prompt with preloaded content will be generated on first run.
-        Missing files will generate warnings but won't cause errors.
-
-        Args:
-            file_paths: List of file paths to preload
-        """
-        for file_path in file_paths:
-            path = Path(file_path)
-            if not path.exists():
-                # Issue a clear warning with both specified and resolved paths
-                warnings.warn(
-                    f"Preload file not found - Specified: '{file_path}', Resolved: '{os.path.abspath(file_path)}'",
-                    stacklevel=2,
-                )
-                continue
-
-            content = path.read_text()
-            self.preloaded_content[str(path)] = content
-
-        # Reset the enriched system prompt if it was already generated
-        # so it will be regenerated with the new preloaded content
-        if self.enriched_system_prompt is not None:
-            self.enriched_system_prompt = None
+        # MCP configuration
+        self.mcp_config_path = mcp_config_path
+        self.mcp_tools = mcp_tools or {}
+        self.mcp_enabled = mcp_enabled if mcp_enabled is not None else (mcp_config_path is not None)
 
     async def run(self, user_input: str, max_iterations: int = 10, callbacks: dict = None) -> "RunResult":
         """Run the LLM process with user input asynchronously.
@@ -242,18 +203,8 @@ class LLMProcess:
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
 
-        # Check if tools need initialization (happens if LLMProcess was created within an event loop)
-        if hasattr(self, "_tools_need_initialization") and self._tools_need_initialization:
-            logger.info("Initializing tools before first run (deferred from __init__)")
-            await self._initialize_tools()
-            self._tools_need_initialization = False
-
         # MCP tools should already be initialized during program.start()
         # No need for lazy initialization here
-
-        # Generate enriched system prompt on first run
-        if self.enriched_system_prompt is None:
-            self.enriched_system_prompt = self.program.get_enriched_system_prompt(process_instance=self, include_env=True)
 
         # Process user input through file descriptor manager if enabled
         processed_user_input = user_input
@@ -318,30 +269,20 @@ class LLMProcess:
         """
         return self.state.copy()
 
-    # _initialize_mcp_tools method has been removed.
-    # MCP initialization is now handled entirely by the ToolManager
-    # as part of the _initialize_tools method, which delegates to
-    # ToolManager.initialize_tools.
-
-    def reset_state(self, keep_system_prompt: bool = True, keep_preloaded: bool = True, keep_file_descriptors: bool = True) -> None:
+    def reset_state(self, keep_system_prompt: bool = True, keep_file_descriptors: bool = True) -> None:
         """Reset the conversation state.
 
         Args:
             keep_system_prompt: Whether to keep the system prompt for the next API call
-            keep_preloaded: Whether to keep preloaded file content
             keep_file_descriptors: Whether to keep file descriptor content
 
         Note:
             State only contains user/assistant messages, not system message.
             System message is stored separately in enriched_system_prompt.
+            Preloaded content is now considered immutable and is always kept.
         """
         # Clear the conversation state (user/assistant messages)
         self.state = []
-
-        # Handle preloaded content
-        if not keep_preloaded:
-            # Clear preloaded content
-            self.preloaded_content = {}
 
         # If we're not keeping the system prompt, reset it to original
         if not keep_system_prompt:
@@ -358,50 +299,6 @@ class LLMProcess:
             )
             # Copy over the FD-related tools registry
             self.fd_manager.fd_related_tools = self.fd_manager.fd_related_tools.union(self.fd_manager._FD_RELATED_TOOLS)
-
-        # Always reset the enriched system prompt - it will be regenerated on next run
-        # with the correct combination of system prompt and preloaded content
-        self.enriched_system_prompt = None
-
-    async def _initialize_tools(self) -> None:
-        """Initialize all system tools.
-
-        This method uses the configuration-based approach to handle tool initialization,
-        which avoids circular dependencies between LLMProcess and tools. The steps are:
-        
-        1. Get tool configuration from the program
-        2. Delegate to the tool_manager.initialize_tools method for all registration
-        
-        This two-step approach follows the Unix-inspired initialization pattern (RFC053).
-
-        Returns:
-            None
-
-        Raises:
-            ImportError: If MCP is enabled but mcp-registry package is not installed
-            ValueError: If MCP is enabled with an unsupported provider
-        """
-        # Basic validation for MCP tools
-        if self._needs_async_init:
-            if not HAS_MCP:
-                raise ImportError("MCP features require the mcp-registry package. Install it with 'pip install mcp-registry'.")
-
-            # Currently only support Anthropic with MCP
-            if self.provider != "anthropic":
-                raise ValueError("MCP features are currently only supported with the Anthropic provider")
-
-        # Get tool configuration from the program
-        # This extracts all necessary configuration for tools without circular references
-        tool_config = self.program.get_tool_configuration()
-        
-        # Delegate to the ToolManager's initialize_tools method with configuration
-        # This method handles loading builtin tools, registering enabled tools,
-        # and initializing MCP tools if MCP is enabled
-        await self.tool_manager.initialize_tools(tool_config)
-        
-        # Log the enabled tools
-        enabled_tools = self.tool_manager.get_enabled_tools()
-        logger.info(f"Initialized {len(enabled_tools)} tools using ToolManager: {', '.join(enabled_tools)}")
 
     @property
     def tools(self) -> list:
@@ -430,144 +327,6 @@ class LLMProcess:
             Dictionary mapping tool names to their handler functions.
         """
         return self.tool_manager.runtime_registry.tool_handlers
-        
-    def _initialize_file_descriptor(self, program: LLMProgram) -> None:
-        """Initialize file descriptor subsystem based on program configuration."""
-        # By the time we get here, program has been compiled and dependencies between
-        # FD system and tools have been resolved. If file_descriptor.enabled is True,
-        # we can proceed with initialization without additional checks.
-        if hasattr(program, "file_descriptor"):
-            fd_config = program.file_descriptor
-            enabled = fd_config.get("enabled", False)
-            
-            if enabled:
-                # Create file descriptor manager with configuration
-                self.references_enabled = fd_config.get("enable_references", False)
-                self.fd_manager = FileDescriptorManager(
-                    default_page_size=fd_config.get("default_page_size", 4000),
-                    max_direct_output_chars=fd_config.get("max_direct_output_chars", 8000),
-                    max_input_chars=fd_config.get("max_input_chars", 8000),
-                    page_user_input=fd_config.get("page_user_input", True),
-                    enable_references=self.references_enabled,
-                )
-                self.file_descriptor_enabled = True
-                logger.info(f"File descriptor enabled: page_size={self.fd_manager.default_page_size}, references={self.references_enabled}")
-            
-    def _initialize_linked_programs(self, program: LLMProgram, linked_programs_instances: dict[str, "LLMProcess"] | None = None) -> None:
-        """Initialize linked programs from provided instances or program configuration."""
-        if linked_programs_instances:
-            self.linked_programs = linked_programs_instances
-            self.has_linked_programs = bool(linked_programs_instances)
-        elif hasattr(program, "linked_programs") and program.linked_programs:
-            self.linked_programs = program.linked_programs
-            self.has_linked_programs = bool(program.linked_programs)
-            
-        if hasattr(program, "linked_program_descriptions"):
-            self.linked_program_descriptions = program.linked_program_descriptions
-            
-    def _initialize_preloaded_content(self, program: LLMProgram) -> None:
-        """Load any preloaded files from program configuration."""
-        if hasattr(program, "preload_files") and program.preload_files:
-            self.preload_files(program.preload_files)
-            
-    def _initialize_from_program(
-        self, 
-        program: LLMProgram, 
-        linked_programs_instances: dict[str, "LLMProcess"] | None = None,
-        skip_tool_init: bool = False
-    ) -> None:
-        """Common initialization method for both __init__ and create().
-        
-        This follows the Unix-inspired program/process model from RFC053, where:
-        1. Program (static definition) provides the configuration
-        2. Process (runtime instance) is initialized from this configuration
-        3. Runtime context is established for tool execution
-        
-        This centralized method handles all common initialization steps to avoid
-        code duplication between synchronous and asynchronous initialization paths.
-        
-        Args:
-            program: The compiled LLMProgram to initialize from
-            linked_programs_instances: Optional pre-initialized process instances  
-            skip_tool_init: Whether to skip tool initialization (should be True when
-                            tools are initialized before process creation in Unix pattern)
-        
-        Note:
-            Direct usage of this method is not recommended. Use LLMProgram.start()
-            for the cleanest initialization flow.
-        """
-        # Extract core attributes from program
-        self.model_name = program.model_name
-        self.provider = program.provider
-        self.system_prompt = program.system_prompt
-        self.display_name = program.display_name
-        self.base_dir = program.base_dir
-        self.api_params = program.api_params
-        self.parameters = {}  # Parameters are already processed in program
-        
-        # Initialize state tracking
-        self.preloaded_content = {}
-        self.enriched_system_prompt = None
-        self.original_system_prompt = self.system_prompt
-        self.state = []
-        self.allow_fork = True
-        
-        # Initialize tool configuration
-        self.enabled_tools = []
-        if hasattr(program, "tools") and program.tools:
-            self.enabled_tools = program.tools.get("enabled", [])
-        self.tool_manager = program.tool_manager
-        
-        # Initialize MCP configuration
-        self.mcp_config_path = getattr(program, "mcp_config_path", None)
-        self.mcp_tools = getattr(program, "mcp_tools", {})
-        self.mcp_enabled = self.mcp_config_path is not None
-        self._needs_async_init = self.mcp_config_path is not None
-        
-        # Initialize file descriptor subsystem
-        self.file_descriptor_enabled = False
-        self.fd_manager = None
-        self.references_enabled = False
-        
-        # Initialize linked programs
-        self.linked_programs = {}
-        self.has_linked_programs = False
-        self.linked_program_descriptions = {}
-        
-        # Use the helper methods for specific initialization tasks
-        self._initialize_linked_programs(program, linked_programs_instances)
-        self._initialize_file_descriptor(program)
-        
-        # Initialize client
-        project_id = getattr(program, "project_id", None)
-        region = getattr(program, "region", None)
-        self.client = get_provider_client(self.provider, self.model_name, project_id, region)
-        
-        # Set up runtime context for tools
-        self._setup_runtime_context()
-        
-        # Initialize preloaded content
-        self._initialize_preloaded_content(program)
-        
-        # Check if OpenAI provider is used with tools (not yet supported)
-        if self.provider == "openai" and self.enabled_tools:
-            raise ValueError("Tool usage is not yet supported for OpenAI models in this implementation.")
-            
-        # Handle tool initialization based on the initialization path
-        self._tools_need_initialization = False
-        if not skip_tool_init:
-            try:
-                # Check if we're already in an event loop
-                asyncio.get_running_loop()
-                # If we get here, we're in an event loop, which means we can't use asyncio.run
-                logger.warning("LLMProcess initialized from within an existing event loop - deferring tool initialization")
-                self._tools_need_initialization = True
-            except RuntimeError:
-                # Not in an event loop, safe to use asyncio.run
-                asyncio.run(self._initialize_tools())
-        else:
-            # Skip initialization when using Unix-inspired pattern (RFC053)
-            logger.info("Skipping tool initialization (Unix-inspired initialization)")
 
     async def call_tool(self, tool_name: str, **kwargs) -> Any:
         """Call a tool by name with the given arguments.
@@ -579,7 +338,7 @@ class LLMProcess:
         Args:
             tool_name: The name of the tool to call
             **kwargs: The keyword arguments to pass to the tool
-            
+
         Returns:
             The result of the tool execution or an error ToolResult
         """
@@ -663,37 +422,58 @@ class LLMProcess:
         process is created with the same state and configuration. The forked
         process is completely independent and can run separate tasks.
 
+        This method follows the standard Unix pattern where:
+        1. A new base process is created through the standard program_exec.create_process path
+        2. Runtime state is copied from parent to child
+        3. State-specific configurations are preserved
+
         Returns:
             A new LLMProcess instance that is a deep copy of this one
+
+        Raises:
+            RuntimeError: If forking is not allowed for this process
         """
-        # Create a new instance of LLMProcess with the same program
-        forked_process = LLMProcess(program=self.program)
+        # Check if forking is allowed for this process
+        if not self.allow_fork:
+            raise RuntimeError("Forking is not allowed for this process")
+
+        # Get a display name for logging, using fallbacks for test environments
+        display_name = "unknown"
+        try:
+            if hasattr(self.program, "display_name") and self.program.display_name:
+                display_name = self.program.display_name
+            elif hasattr(self, "model_name") and self.model_name:
+                display_name = self.model_name
+        except (AttributeError, TypeError):
+            # Handle mock objects or missing attributes in tests
+            pass
+
+        logger.info(f"Forking process for program: {display_name}")
+
+        # 1. Create a new base process using the standard program_exec.create_process flow
+        # This ensures all dependencies are properly initialized through the same path
+        # as program.start(), maintaining consistency across the codebase
+        from llmproc.program_exec import create_process
+
+        forked_process = await create_process(self.program)
+
+        # 2. Copy runtime state from parent to child
+        # Deep copy to ensure complete independence between parent and child processes
+        forked_process.state = copy.deepcopy(self.state)
 
         # Copy the enriched system prompt if it exists
         if hasattr(self, "enriched_system_prompt") and self.enriched_system_prompt:
             forked_process.enriched_system_prompt = self.enriched_system_prompt
 
-        # Deep copy the conversation state
-        forked_process.state = copy.deepcopy(self.state)
-
-        # Copy any preloaded content
-        if hasattr(self, "preloaded_content") and self.preloaded_content:
-            forked_process.preloaded_content = copy.deepcopy(self.preloaded_content)
-
-        # No need to copy tools and tool_handlers - they are properties now
-
-        # If the parent process had MCP enabled, set it in the fork
-        if self.mcp_enabled:
-            forked_process.mcp_enabled = True
-            
-            # Copy the MCPManager reference from tool_manager if it exists
-            if hasattr(self.tool_manager, "mcp_manager") and self.tool_manager.mcp_manager:
-                # We don't need to create a new mcp_manager, just share the reference
-                # since tool_manager already handles initialization
-                pass
-
-        # If the parent process had file descriptors enabled, copy the manager and its state
-        if self.file_descriptor_enabled and self.fd_manager:
+        # 3. Deep copy FD manager state if FD is enabled
+        # File descriptor system state needs special handling to ensure
+        # complete independence between parent and child
+        if (
+            hasattr(self, "file_descriptor_enabled")
+            and self.file_descriptor_enabled
+            and hasattr(self, "fd_manager")
+            and self.fd_manager
+        ):
             forked_process.file_descriptor_enabled = True
             forked_process.fd_manager = copy.deepcopy(self.fd_manager)
 
@@ -701,15 +481,33 @@ class LLMProcess:
             forked_process.references_enabled = getattr(self, "references_enabled", False)
 
             # Ensure user input handling settings are copied correctly
-            if not hasattr(forked_process.fd_manager, "page_user_input"):
-                forked_process.fd_manager.page_user_input = getattr(self.fd_manager, "page_user_input", False)
-            if not hasattr(forked_process.fd_manager, "max_input_chars"):
-                forked_process.fd_manager.max_input_chars = getattr(self.fd_manager, "max_input_chars", 8000)
+            if hasattr(self.fd_manager, "file_descriptors") and hasattr(forked_process, "fd_manager"):
+                if not hasattr(forked_process.fd_manager, "page_user_input"):
+                    forked_process.fd_manager.page_user_input = getattr(self.fd_manager, "page_user_input", False)
+                if not hasattr(forked_process.fd_manager, "max_input_chars"):
+                    forked_process.fd_manager.max_input_chars = getattr(self.fd_manager, "max_input_chars", 8000)
 
-        # Prevent forked processes from forking again
+                try:
+                    fd_count = len(getattr(forked_process.fd_manager, "file_descriptors", {}))
+                    logger.debug(f"Deep copied FD manager state during fork. Copied {fd_count} FDs.")
+                except (AttributeError, TypeError):
+                    # Handle mock objects in tests
+                    pass
+
+        # 4. Prevent the forked process from forking again
+        # This prevents potential issues with deep fork chains
         forked_process.allow_fork = False
 
-        # Preserve any other state we need
-        # Note: We don't copy tool handlers as they're already set up in the constructor
+        # Get forked display name for logging, using fallbacks for test environments
+        forked_display = "unknown"
+        try:
+            if hasattr(forked_process, "display_name") and forked_process.display_name:
+                forked_display = forked_process.display_name
+            elif hasattr(forked_process, "model_name") and forked_process.model_name:
+                forked_display = forked_process.model_name
+        except (AttributeError, TypeError):
+            # Handle mock objects or missing attributes in tests
+            pass
 
+        logger.info(f"Fork successful. New process created for {forked_display}")
         return forked_process

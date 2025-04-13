@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from llmproc.tools.builtin.read_file import read_file
 from llmproc.common.results import ToolResult
+from llmproc.tools.builtin.read_file import read_file
 
 
 @pytest.mark.asyncio
@@ -49,14 +49,18 @@ async def test_read_file_nonexistent():
 async def test_read_file_error_handling():
     """Test error handling when file read fails."""
     # Create a mock path that raises an exception when read
-    with patch("pathlib.Path.read_text", side_effect=PermissionError("Permission denied")):
+    with patch(
+        "pathlib.Path.read_text", side_effect=PermissionError("Permission denied")
+    ):
         # Call the tool
         result = await read_file("/some/path.txt")
 
         # Check error response
         assert isinstance(result, ToolResult)
         assert result.is_error
-        assert "File not found" in result.content or "Permission denied" in result.content
+        assert (
+            "File not found" in result.content or "Permission denied" in result.content
+        )
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,13 @@ import pytest
 
 from llmproc import LLMProgram, register_tool
 from llmproc.tools import ToolResult
-from llmproc.tools.function_tools import create_tool_from_function, extract_docstring_params, function_to_tool_schema, prepare_tool_handler, type_to_json_schema
+from llmproc.tools.function_tools import (
+    create_tool_from_function,
+    extract_docstring_params,
+    function_to_tool_schema,
+    prepare_tool_handler,
+    type_to_json_schema,
+)
 
 # Set up debug logging
 logging.basicConfig(level=logging.INFO)
@@ -18,22 +24,26 @@ logger = logging.getLogger(__name__)
 # Set up logging for tests
 logger.info("Running function tools tests")
 
+
 @pytest.fixture(autouse=True)
 def patch_process_for_tests():
     """Patch LLMProcess.call_tool for more stable testing.
-    
+
     This ensures tests can still use both styles of parameters during the transition.
     """
     import llmproc.llm_process
+
     original_call_tool = llmproc.llm_process.LLMProcess.call_tool
-    
+
     # Define patched version that supports both styles consistently
     async def patched_call_tool(self, tool_name, args=None, **kwargs):
         if args is not None and isinstance(args, dict):
             # Using original style: process.call_tool("tool", {"param": "value"})
             handler = self.tool_handlers.get(tool_name)
             if not handler:
-                return ToolResult.from_error(f"Tool '{tool_name}' not found. Available: {list(self.tool_handlers.keys())}")
+                return ToolResult.from_error(
+                    f"Tool '{tool_name}' not found. Available: {list(self.tool_handlers.keys())}"
+                )
             try:
                 # Extract params from the dict and pass as kwargs
                 return await handler(**args)
@@ -43,15 +53,17 @@ def patch_process_for_tests():
             # Using new style: process.call_tool("tool", param="value")
             handler = self.tool_handlers.get(tool_name)
             if not handler:
-                return ToolResult.from_error(f"Tool '{tool_name}' not found. Available: {list(self.tool_handlers.keys())}")
+                return ToolResult.from_error(
+                    f"Tool '{tool_name}' not found. Available: {list(self.tool_handlers.keys())}"
+                )
             try:
                 return await handler(**kwargs)
             except Exception as e:
                 return ToolResult.from_error(f"Error in tool '{tool_name}': {str(e)}")
-    
+
     # Apply the patch just for this test
     llmproc.llm_process.LLMProcess.call_tool = patched_call_tool
-    
+
     # Run the test, then restore original implementation
     yield
     llmproc.llm_process.LLMProcess.call_tool = original_call_tool
@@ -60,7 +72,11 @@ def patch_process_for_tests():
 @pytest.fixture
 def basic_program():
     """Create a basic program for testing."""
-    program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are a helpful assistant.")
+    program = LLMProgram(
+        model_name="claude-3-7-sonnet",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant.",
+    )
     return program
 
 
@@ -79,7 +95,9 @@ def get_calculator(x: int, y: int) -> int:
 
 
 # Function with complex types
-def search_documents(query: str, limit: int = 5, categories: list[str] | None = None) -> list[dict[str, Any]]:
+def search_documents(
+    query: str, limit: int = 5, categories: list[str] | None = None
+) -> list[dict[str, Any]]:
     """Search documents by query.
 
     Args:
@@ -92,13 +110,20 @@ def search_documents(query: str, limit: int = 5, categories: list[str] | None = 
     """
     # Dummy implementation
     if categories:
-        return [{"id": i, "title": f"Result {i} for {query} in {categories[0]}"} for i in range(min(3, limit))]
+        return [
+            {"id": i, "title": f"Result {i} for {query} in {categories[0]}"}
+            for i in range(min(3, limit))
+        ]
     else:
-        return [{"id": i, "title": f"Result {i} for {query}"} for i in range(min(3, limit))]
+        return [
+            {"id": i, "title": f"Result {i} for {query}"} for i in range(min(3, limit))
+        ]
 
 
 # Decorated function with custom name and description
-@register_tool(name="weather_info", description="Get weather information for a location")
+@register_tool(
+    name="weather_info", description="Get weather information for a location"
+)
 def get_weather(location: str, units: str = "celsius") -> dict[str, Any]:
     """Get weather for a location.
 
@@ -115,7 +140,12 @@ def get_weather(location: str, units: str = "celsius") -> dict[str, Any]:
     else:
         temp = 22
 
-    return {"location": location, "temperature": temp, "units": units, "conditions": "Sunny"}
+    return {
+        "location": location,
+        "temperature": temp,
+        "units": units,
+        "conditions": "Sunny",
+    }
 
 
 # Async function
@@ -250,14 +280,18 @@ def test_create_tool_from_function():
 def test_program_with_function_tools():
     """Test adding and using function-based tools in a program."""
     # Create a program
-    program = LLMProgram(model_name="claude-3-7-sonnet", provider="anthropic", system_prompt="You are a helpful assistant with tools.")
-    
+    program = LLMProgram(
+        model_name="claude-3-7-sonnet",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant with tools.",
+    )
+
     # Set enabled tools with function tools
     program.set_enabled_tools([get_calculator, search_documents])
 
     # Check that tools were added to the function_tools list in the tool_manager
     assert len(program.tool_manager.function_tools) == 2
-    
+
     # Verify the tools are the ones we specified
     function_tools = program.tool_manager.function_tools
     assert any(func is get_calculator for func in function_tools)
@@ -267,18 +301,21 @@ def test_program_with_function_tools():
 
     # Process function tools to register handlers and schemas
     program.tool_manager.process_function_tools()
+
+    # Process function tools to register handlers and schemas
+    program.tool_manager.process_function_tools()
     
     # Verify tools appear in the API-ready schema
     tool_schemas = program.tool_manager.get_tool_schemas()
     tool_names = [schema["name"] for schema in tool_schemas]
     assert "get_calculator" in tool_names
     assert "search_documents" in tool_names
-    
+
     # Verify tools are enabled (using the proper method for single source of truth)
     enabled_tools = program.get_enabled_tools()
     assert "get_calculator" in enabled_tools
     assert "search_documents" in enabled_tools
-    
+
     # At this point, the tools are properly registered and can be called
     # This is tested in test_function_tool_execution
 
@@ -291,65 +328,73 @@ async def test_tool_enabling_methods(basic_program):
 
     # Enable tools using set_enabled_tools
     program.set_enabled_tools([get_weather])
-    program.set_enabled_tools(program.get_enabled_tools() + [get_calculator, search_documents])
+    program.set_enabled_tools(
+        program.get_enabled_tools() + [get_calculator, search_documents]
+    )
 
     # Verify expected tools are in the enabled list
     expected_tools = ["weather_info", "get_calculator", "search_documents"]
     enabled_tools = program.get_enabled_tools()
     for tool_name in expected_tools:
         assert tool_name in enabled_tools
-    
+
     # Process function tools to register handlers and schemas
     program.tool_manager.process_function_tools()
-    
+
     # Verify custom name from decorator works
     tool_schemas = program.tool_manager.get_tool_schemas()
     has_weather_tool = any(schema["name"] == "weather_info" for schema in tool_schemas)
     assert has_weather_tool
-    
+
     # Verify tool schemas have correct structure
     calculator_schema = None
     for schema in tool_schemas:
         if schema["name"] == "get_calculator":
             calculator_schema = schema
             break
-    
+
     assert calculator_schema is not None
     assert "input_schema" in calculator_schema
     assert "properties" in calculator_schema["input_schema"]
     assert "x" in calculator_schema["input_schema"]["properties"]
     assert "y" in calculator_schema["input_schema"]["properties"]
-    
+
     # Verify weather tool schema has custom name from decorator
     weather_schema = None
     for schema in tool_schemas:
         if schema["name"] == "weather_info":
             weather_schema = schema
             break
-    
+
     assert weather_schema is not None
     assert "Get weather information" in weather_schema["description"]
-    
+
     # Create a process to test actual tool execution
     process = await program.start()
-    
+
     # Check if the tool is registered as expected
-    assert "weather_info" in process.tool_handlers, "weather_info tool is not registered in handlers"
-    
+    assert "weather_info" in process.tool_handlers, (
+        "weather_info tool is not registered in handlers"
+    )
+
     # Test weather tool with explicit parameters
     weather_result = await process.call_tool("weather_info", location="New York")
     assert isinstance(weather_result, ToolResult)
-    assert not weather_result.is_error, f"Error in weather tool: {weather_result.content}"
+    assert not weather_result.is_error, (
+        f"Error in weather tool: {weather_result.content}"
+    )
     assert "location" in weather_result.content
     assert "New York" in str(weather_result.content)
-    
+
     # Test calculator tool
     calc_result = await process.call_tool("get_calculator", x=5, y=9)
     assert not calc_result.is_error
     assert calc_result.content == 14  # Note: this is x + y, not expression
-    
+
     # Test search tool
-    search_result = await process.call_tool("search_documents", query="example", limit=2)
+    search_result = await process.call_tool(
+        "search_documents", query="example", limit=2
+    )
     assert not search_result.is_error
     assert len(search_result.content) == 2  # Should return 2 results based on limit
 
@@ -364,74 +409,80 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     program.set_enabled_tools([get_weather, get_calculator])
 
     # Function tools are processed when the process is started
-    
+
     # Verify function tools are enabled in program configuration
     enabled_tools = program.get_enabled_tools()
     assert "weather_info" in enabled_tools
     assert "get_calculator" in enabled_tools
-    
+
     # Start the process to test actual tool execution
     process = await program.start()
-    
+
     # Verify function tools work by calling them
     weather_result = await process.call_tool("weather_info", location="London")
     assert not weather_result.is_error
     assert "London" in str(weather_result.content)
-    
+
     # Create a new program without adding function tools first
     program2 = create_program()
-    
+
     # Set only specific tools as enabled
     program2.set_enabled_tools(["calculator", "read_file"])
-    
+
     # Verify that built-in tools are enabled in configuration
     enabled_tools = program2.get_enabled_tools()
     assert "calculator" in enabled_tools
     assert "read_file" in enabled_tools
-    
+
     # Note: Function tools remain in the enabled_tools list due to how function tools are processed
     # But their behavior should be correctly updated based on the API's schema list
-    
+
     # Start the process to test tool execution
     process2 = await program2.start()
-    
-    # Check what tools are actually available to the LLM API 
+
+    # Check what tools are actually available to the LLM API
     process_tools = process2.tools
     tool_names = [tool["name"] for tool in process_tools]
-    
+
     # Verify that only the enabled built-in tools are included in the API schema
     assert "calculator" in tool_names
     assert "read_file" in tool_names
-    
+
     # Verify that disabled tools return error results when called
     weather_result = await process2.call_tool("weather_info", location="Paris")
     assert weather_result.is_error
     # With our patched version, the error message is different
-    assert "not found" in weather_result.content.lower() or "not enabled" in weather_result.content.lower()
-    
+    assert (
+        "not found" in weather_result.content.lower()
+        or "not enabled" in weather_result.content.lower()
+    )
+
     # Verify that enabled built-in calculator tool works
     calc_result = await process2.call_tool("calculator", expression="7+3")
     assert not calc_result.is_error
     assert calc_result.content == "10"
-    
+
     # Test a completely different approach - start with weather tool only
     weather_program = create_program()
     weather_program.set_enabled_tools([get_weather])
-    
+
     # Create a process with just the weather tool
     weather_process = await weather_program.start()
-    
+
     # Verify weather tool works
     weather_result = await weather_process.call_tool("weather_info", location="Tokyo")
     assert not weather_result.is_error
     assert "Tokyo" in str(weather_result.content)
-    
+
     # Verify calculator tool doesn't work because it was never added
     calc_result = await weather_process.call_tool("get_calculator", x=1, y=2)
     assert calc_result.is_error
     # With our patched version, the error message is different
-    assert "not found" in calc_result.content.lower() or "not enabled" in calc_result.content.lower()
-    
+    assert (
+        "not found" in calc_result.content.lower()
+        or "not enabled" in calc_result.content.lower()
+    )
+
     # Verify the tool schemas that are actually available to the LLM API
     process_tools = weather_process.tools
     tool_names = [tool["name"] for tool in process_tools]
@@ -446,7 +497,7 @@ async def test_function_tool_execution(create_program):
     program = create_program(
         system_prompt="You are a helpful assistant with tools.",
     )
-    
+
     # Set enabled tools
     program.set_enabled_tools([get_calculator])
 

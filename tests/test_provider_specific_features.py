@@ -10,7 +10,7 @@ from llmproc.providers.anthropic_process_executor import (
     AnthropicProcessExecutor,
     add_cache_to_message,
     system_to_api_format,
-    tools_to_api_format
+    tools_to_api_format,
 )
 
 # Define constants for model versions to make updates easier
@@ -27,11 +27,15 @@ class TestProviderSpecificFeatures:
         assert is_direct_anthropic
 
         # Test Vertex AI provider detection
-        is_direct_anthropic = "anthropic" in "anthropic_vertex" and "vertex" not in "anthropic_vertex"
+        is_direct_anthropic = (
+            "anthropic" in "anthropic_vertex" and "vertex" not in "anthropic_vertex"
+        )
         assert not is_direct_anthropic
 
         # Test combined provider strings
-        is_direct_anthropic = "anthropic" in "anthropic-vertex" and "vertex" not in "anthropic-vertex"
+        is_direct_anthropic = (
+            "anthropic" in "anthropic-vertex" and "vertex" not in "anthropic-vertex"
+        )
         assert not is_direct_anthropic
 
     def test_cache_control_parameters(self):
@@ -47,14 +51,20 @@ class TestProviderSpecificFeatures:
         assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
 
         # Test with structured message
-        message = {"role": "user", "content": [{"type": "text", "text": "Hello, world!"}]}
+        message = {
+            "role": "user",
+            "content": [{"type": "text", "text": "Hello, world!"}],
+        }
         add_cache_to_message(message)
 
         # Check that cache was added to structured content
         assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
 
         # Test with tool result
-        message = {"role": "user", "content": [{"type": "tool_result", "content": "Calculator result"}]}
+        message = {
+            "role": "user",
+            "content": [{"type": "tool_result", "content": "Calculator result"}],
+        }
         add_cache_to_message(message)
 
         # Check that cache was added to tool result
@@ -84,7 +94,10 @@ class TestProviderSpecificFeatures:
     def test_tools_cache_control(self):
         """Test adding cache control to tools."""
         # Test with tools array
-        tools = [{"name": "calculator", "description": "Use this to perform calculations"}, {"name": "web_search", "description": "Search the web for information"}]
+        tools = [
+            {"name": "calculator", "description": "Use this to perform calculations"},
+            {"name": "web_search", "description": "Search the web for information"},
+        ]
 
         result = tools_to_api_format(tools, add_cache=True)
 
@@ -113,7 +126,10 @@ class TestProviderSpecificFeatures:
         extra_headers = {}
 
         # Apply token-efficient tools logic
-        if "anthropic" in mock_process.provider.lower() and mock_process.model_name.startswith("claude-3-7"):
+        if (
+            "anthropic" in mock_process.provider.lower()
+            and mock_process.model_name.startswith("claude-3-7")
+        ):
             if "anthropic-beta" not in extra_headers:
                 extra_headers["anthropic-beta"] = "token-efficient-tools-2025-02-19"
             elif "token-efficient-tools" not in extra_headers["anthropic-beta"]:
@@ -128,7 +144,10 @@ class TestProviderSpecificFeatures:
         extra_headers = {}
 
         # Apply token-efficient tools logic for Vertex AI
-        if "anthropic" in mock_process.provider.lower() and mock_process.model_name.startswith("claude-3-7"):
+        if (
+            "anthropic" in mock_process.provider.lower()
+            and mock_process.model_name.startswith("claude-3-7")
+        ):
             if "anthropic-beta" not in extra_headers:
                 extra_headers["anthropic-beta"] = "token-efficient-tools-2025-02-19"
             elif "token-efficient-tools" not in extra_headers["anthropic-beta"]:
@@ -143,12 +162,17 @@ class TestProviderSpecificFeatures:
         mock_process.model_name = "claude-3-5-sonnet"
         extra_headers = {"anthropic-beta": "token-efficient-tools-2025-02-19"}
 
-        with patch("llmproc.providers.anthropic_process_executor.logger") as mock_logger:
+        with patch(
+            "llmproc.providers.anthropic_process_executor.logger"
+        ) as mock_logger:
             # Check warning logic
             if (
                 "anthropic-beta" in extra_headers
                 and "token-efficient-tools" in extra_headers["anthropic-beta"]
-                and ("anthropic" not in mock_process.provider.lower() or not mock_process.model_name.startswith("claude-3-7"))
+                and (
+                    "anthropic" not in mock_process.provider.lower()
+                    or not mock_process.model_name.startswith("claude-3-7")
+                )
             ):
                 # Warning if token-efficient tools header is present but not supported
                 mock_logger.warning(
@@ -173,7 +197,9 @@ class TestProviderSpecificFeaturesIntegration:
         """Get Vertex AI project ID from environment variable."""
         return os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID")
 
-    @pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="No Anthropic API key found")
+    @pytest.mark.skipif(
+        not os.environ.get("ANTHROPIC_API_KEY"), reason="No Anthropic API key found"
+    )
     async def test_cache_control_with_direct_anthropic(self, anthropic_api_key):
         """Test that cache control parameters work with direct Anthropic API."""
         from llmproc import LLMProgram
@@ -185,7 +211,8 @@ class TestProviderSpecificFeaturesIntegration:
         program = LLMProgram(
             model_name=CLAUDE_MODEL,
             provider="anthropic",
-            system_prompt="You are a helpful assistant. " + ("This is filler content. " * 500),
+            system_prompt="You are a helpful assistant. "
+            + ("This is filler content. " * 500),
             parameters={
                 "max_tokens": 1000,
             },
@@ -221,7 +248,10 @@ class TestProviderSpecificFeaturesIntegration:
             # Test passes if we get usage metrics (cache evidence is ideal but hard to test reliably)
             assert True
 
-    @pytest.mark.skipif(not os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID"), reason="No Vertex AI project ID found")
+    @pytest.mark.skipif(
+        not os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID"),
+        reason="No Vertex AI project ID found",
+    )
     async def test_token_efficient_tools_vertex(self, vertex_project_id):
         """Test that token-efficient tools works with Vertex AI."""
         import time
@@ -245,7 +275,16 @@ class TestProviderSpecificFeaturesIntegration:
         calculator_tool = {
             "name": "calculator",
             "description": "Use this tool to perform calculations",
-            "input_schema": {"type": "object", "properties": {"expression": {"type": "string", "description": "The mathematical expression to evaluate"}}, "required": ["expression"]},
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "The mathematical expression to evaluate",
+                    }
+                },
+                "required": ["expression"],
+            },
         }
 
         try:
@@ -256,7 +295,12 @@ class TestProviderSpecificFeaturesIntegration:
             response_standard = await client.messages.create(
                 model="claude-3-7-sonnet@20250219",
                 max_tokens=1024,
-                messages=[{"role": "user", "content": "What is the square root of 256? Please use the calculator tool."}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "What is the square root of 256? Please use the calculator tool.",
+                    }
+                ],
                 tools=[calculator_tool],
                 system="You are a helpful AI assistant that uses tools when appropriate.",
             )
@@ -268,7 +312,12 @@ class TestProviderSpecificFeaturesIntegration:
             response_efficient = await client.messages.create(
                 model="claude-3-7-sonnet@20250219",
                 max_tokens=1024,
-                messages=[{"role": "user", "content": "What is the square root of 256? Please use the calculator tool."}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "What is the square root of 256? Please use the calculator tool.",
+                    }
+                ],
                 tools=[calculator_tool],
                 system="You are a helpful AI assistant that uses tools when appropriate.",
                 extra_headers={"anthropic-beta": "token-efficient-tools-2025-02-19"},
@@ -280,11 +329,17 @@ class TestProviderSpecificFeaturesIntegration:
 
             # Calculate percentage reduction
             difference = output_tokens_standard - output_tokens_efficient
-            percent_reduction = (difference / output_tokens_standard) * 100 if output_tokens_standard > 0 else 0
+            percent_reduction = (
+                (difference / output_tokens_standard) * 100
+                if output_tokens_standard > 0
+                else 0
+            )
 
             # Significant reduction indicates feature is supported
             # Note: we use a very small threshold here as even a small reduction confirms it's working
-            assert percent_reduction > 0, "Expected some token reduction with token-efficient tools on Vertex AI"
+            assert percent_reduction > 0, (
+                "Expected some token reduction with token-efficient tools on Vertex AI"
+            )
 
         except Exception as e:
             pytest.fail(f"Error testing token-efficient tools on Vertex AI: {e}")

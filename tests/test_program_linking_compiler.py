@@ -84,7 +84,9 @@ def test_compile_all_programs():
                 # Get utility from helper
                 utility_program = linked_program.linked_programs.get("utility")
                 if utility_program:
-                    compiled_programs[str(utility_program_path.resolve())] = utility_program
+                    compiled_programs[str(utility_program_path.resolve())] = (
+                        utility_program
+                    )
             elif name == "math":
                 compiled_programs[str(math_program_path.resolve())] = linked_program
 
@@ -202,7 +204,8 @@ def test_circular_dependency():
         assert program_b.linked_programs["a"] is program_a  # Same object reference
 
 
-def test_from_toml_with_linked_programs():
+@pytest.mark.asyncio
+async def test_from_toml_with_linked_programs():
     """Test LLMProgram.from_toml with linked programs."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create test programs
@@ -235,24 +238,38 @@ def test_from_toml_with_linked_programs():
             """)
 
         # Mock the get_provider_client function to avoid API calls
-        with unittest.mock.patch("llmproc.providers.get_provider_client") as mock_get_client:
+        with (
+            unittest.mock.patch(
+                "llmproc.providers.get_provider_client"
+            ) as mock_get_client,
+            unittest.mock.patch(
+                "llmproc.program_exec.create_process"
+            ) as mock_create_process,
+        ):
             mock_get_client.return_value = unittest.mock.MagicMock()
 
-            # Create a process using the two-step pattern
-            from llmproc.program import LLMProgram
-
+            # Load the program from TOML with linked programs
             program = LLMProgram.from_toml(main_program_path)
 
-            # Mock the start method to avoid actual async initialization
-            with unittest.mock.patch("llmproc.program.LLMProgram.start") as mock_start:
-                process = LLMProcess(program=program)
-                mock_start.return_value = process
+            # Import the test helper to create a proper process
+            from tests.conftest import create_test_llmprocess_directly
+
+            # Create a process instance with our test helper
+            process = create_test_llmprocess_directly(
+                program=program, has_linked_programs=True
+            )
+
+            # Mock the create_process function to return our test process
+            mock_create_process.return_value = process
+
+            # Call start() to trigger process creation flow
+            await program.start()
 
             # Check that the process was created correctly
             assert process.model_name == "main-model"
             assert process.provider == "anthropic"
 
-            # Check that linked programs were initialized
+            # Check that linked programs were loaded as program objects
             assert "helper" in process.linked_programs
 
             helper = process.linked_programs["helper"]

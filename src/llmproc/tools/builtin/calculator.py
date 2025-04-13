@@ -4,8 +4,8 @@ import ast
 import math
 import operator
 
-from llmproc.tools.function_tools import register_tool
 from llmproc.common.results import ToolResult
+from llmproc.tools.function_tools import register_tool
 
 # Allowed binary operators
 ALLOWED_OPERATORS = {

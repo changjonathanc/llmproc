@@ -6,11 +6,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from llmproc.common.results import ToolResult
+from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
-from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.tools.builtin.fd_tools import fd_to_file_tool
-from llmproc.common.results import ToolResult
+from tests.conftest import create_test_llmprocess_directly
 
 
 @pytest.mark.asyncio
@@ -24,7 +25,7 @@ async def test_fd_to_file_tool():
     # Create a process with mocked provider client
     with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
         mock_get_provider.return_value = Mock()
-        process = LLMProcess(program=program)
+        process = create_test_llmprocess_directly(program=program)
 
         # Manually enable file descriptors
         process.file_descriptor_enabled = True
@@ -43,9 +44,9 @@ async def test_fd_to_file_tool():
 
         # Call the tool with runtime_context
         result = await fd_to_file_tool(
-            fd=fd_id, 
-            file_path=tmp_path, 
-            runtime_context={"fd_manager": process.fd_manager}
+            fd=fd_id,
+            file_path=tmp_path,
+            runtime_context={"fd_manager": process.fd_manager},
         )
 
     try:
@@ -76,7 +77,7 @@ async def test_fd_to_file_invalid_fd():
     # Create a process with mocked provider client
     with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
         mock_get_provider.return_value = Mock()
-        process = LLMProcess(program=program)
+        process = create_test_llmprocess_directly(program=program)
 
         # Manually enable file descriptors
         process.file_descriptor_enabled = True
@@ -88,9 +89,9 @@ async def test_fd_to_file_invalid_fd():
 
         # Call the tool with invalid FD and runtime_context
         result = await fd_to_file_tool(
-            fd="fd:999", 
-            file_path=tmp_path, 
-            runtime_context={"fd_manager": process.fd_manager}
+            fd="fd:999",
+            file_path=tmp_path,
+            runtime_context={"fd_manager": process.fd_manager},
         )
 
     # Check result
@@ -109,7 +110,7 @@ async def test_fd_to_file_invalid_path():
     # Create a process with mocked provider client
     with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
         mock_get_provider.return_value = Mock()
-        process = LLMProcess(program=program)
+        process = create_test_llmprocess_directly(program=program)
 
         # Manually enable file descriptors
         process.file_descriptor_enabled = True
@@ -127,9 +128,9 @@ async def test_fd_to_file_invalid_path():
 
         # Call the tool with runtime_context
         result = await fd_to_file_tool(
-            fd=fd_id, 
-            file_path=invalid_path, 
-            runtime_context={"fd_manager": process.fd_manager}
+            fd=fd_id,
+            file_path=invalid_path,
+            runtime_context={"fd_manager": process.fd_manager},
         )
 
     # Check result
@@ -141,7 +142,9 @@ async def test_fd_to_file_invalid_path():
 async def test_fd_to_file_no_process():
     """Test fd_to_file without a valid process."""
     # Call the tool without runtime_context
-    result = await fd_to_file_tool(fd="fd:1", file_path="test.txt", runtime_context=None)
+    result = await fd_to_file_tool(
+        fd="fd:1", file_path="test.txt", runtime_context=None
+    )
 
     # Check result
     assert result.is_error

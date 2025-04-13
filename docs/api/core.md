@@ -13,7 +13,7 @@ LLMProgram
 LLMProcess
 ├── run()           # Run with user input and callbacks
 ├── get_last_message() # Get response text
-├── reset_state()   # Reset conversation state
+├── reset_state()   # Reset conversation state (⚠️ Experimental API)
 ├── call_tool()     # Call a tool by name
 ├── count_tokens()  # Count tokens in current conversation
 └── get_state()     # Get full conversation state

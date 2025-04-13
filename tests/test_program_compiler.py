@@ -8,54 +8,7 @@ import pytest
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 
-
-def test_get_enriched_system_prompt_include_env_parameter():
-    """Test the get_enriched_system_prompt method with include_env parameter."""
-    # Create a basic program
-    program = LLMProgram(
-        model_name="test-model",
-        provider="anthropic",
-        system_prompt="Test system prompt",
-        env_info={"variables": ["working_directory"]},
-    )
-
-    # Create a mock process instance
-    process = LLMProcess(program=program)
-
-    # Test the method with include_env=True
-    enriched_prompt = program.get_enriched_system_prompt(process_instance=process, include_env=True)
-
-    # Verify it includes environment info
-    assert "<env>" in enriched_prompt
-    assert "working_directory:" in enriched_prompt
-
-    # Test the method with include_env=False
-    enriched_prompt = program.get_enriched_system_prompt(process_instance=process, include_env=False)
-
-    # Verify it does not include environment info
-    assert "<env>" not in enriched_prompt
-
-
-def test_get_enriched_system_prompt_default():
-    """Test the get_enriched_system_prompt method without include_env parameter."""
-    # Create a basic program
-    program = LLMProgram(
-        model_name="test-model",
-        provider="anthropic",
-        system_prompt="Test system prompt",
-        env_info={"variables": ["working_directory"]},
-    )
-
-    # Create a mock process instance
-    process = LLMProcess(program=program)
-
-    # Test the method without specifying include_env
-    enriched_prompt = program.get_enriched_system_prompt(process_instance=process)
-
-    # Verify the behavior when include_env is not specified
-    # By default, it should include environment info if configured
-    assert "<env>" in enriched_prompt
-    assert "working_directory:" in enriched_prompt
+# These tests have been moved to test_env_info_builder.py, which tests EnvInfoBuilder directly
 
 
 def test_program_compile_with_env_info():
@@ -83,16 +36,6 @@ def test_program_compile_with_env_info():
         # Verify env_info was properly loaded
         assert program.env_info["variables"] == ["working_directory", "date"]
         assert program.env_info["custom_var"] == "custom value"
-
-        # Create process and test enriched prompt
-        process = LLMProcess(program=program)
-        enriched_prompt = program.get_enriched_system_prompt(process_instance=process)
-
-        # Verify environment info is included
-        assert "<env>" in enriched_prompt
-        assert "working_directory:" in enriched_prompt
-        assert "date:" in enriched_prompt
-        assert "custom_var: custom value" in enriched_prompt
 
 
 def test_program_linking_with_env_info():
@@ -131,17 +74,14 @@ def test_program_linking_with_env_info():
             test_program = "{linked_program_path}"
             """)
 
-        # Compile and instantiate the main program
+        # Compile the main program
         program = LLMProgram.from_toml(main_program_path)
-        process = LLMProcess(program=program)
 
-        # Verify the linked program was initialized
-        assert "test_program" in process.linked_programs
-
-        # Test that the main program's get_enriched_system_prompt works
-        enriched_prompt = program.get_enriched_system_prompt(process_instance=process)
-        assert "<env>" in enriched_prompt
-        assert "working_directory:" in enriched_prompt
+        # Verify that linked programs are correctly loaded and compiled
+        assert "test_program" in program.linked_programs
+        assert program.linked_programs["test_program"].model_name == "linked-model"
+        assert program.linked_programs["test_program"].provider == "anthropic"
+        assert program.env_info["variables"] == ["working_directory"]
 
 
 # Original tests from the file

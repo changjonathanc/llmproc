@@ -5,15 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from llmproc.common.results import RunResult
 from llmproc.providers.anthropic_process_executor import (
     AnthropicProcessExecutor,
+    add_cache_to_message,
+    is_cacheable_content,
     state_to_api_messages,
     system_to_api_format,
     tools_to_api_format,
-    is_cacheable_content,
-    add_cache_to_message
 )
-from llmproc.common.results import RunResult
 
 
 class TestPromptCaching:
@@ -39,7 +39,10 @@ class TestPromptCaching:
                 for content in msg["content"]:
                     assert "cache_control" not in content
             else:
-                assert not isinstance(msg.get("content"), list) or "cache_control" not in msg["content"][0]
+                assert (
+                    not isinstance(msg.get("content"), list)
+                    or "cache_control" not in msg["content"][0]
+                )
 
     def test_state_to_api_messages_with_cache(self):
         """Test state_to_api_messages with caching enabled."""
@@ -75,8 +78,16 @@ class TestPromptCaching:
         state = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Let me check something"},
-            {"role": "tool", "tool_name": "calculator", "tool_args": {"a": 1, "b": 2}, "content": "3"},
-            {"role": "user", "content": [{"type": "tool_result", "content": "Result: 3"}]},
+            {
+                "role": "tool",
+                "tool_name": "calculator",
+                "tool_args": {"a": 1, "b": 2},
+                "content": "3",
+            },
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "content": "Result: 3"}],
+            },
             {"role": "assistant", "content": "The result is 3"},
         ]
 
@@ -147,14 +158,16 @@ class TestPromptCaching:
         run_result = RunResult()
 
         # Add an API call with caching metrics
-        run_result.add_api_call({
-            "usage": {
-                "input_tokens": 100,
-                "output_tokens": 50,
-                "cache_read_input_tokens": 20,
-                "cache_creation_input_tokens": 80,
+        run_result.add_api_call(
+            {
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cache_read_input_tokens": 20,
+                    "cache_creation_input_tokens": 80,
+                }
             }
-        })
+        )
 
         # Test metrics
         assert run_result.input_tokens == 100
@@ -168,12 +181,12 @@ class TestPromptCaching:
         assert not is_cacheable_content("")
         assert not is_cacheable_content("   ")
         assert not is_cacheable_content(None)
-        
+
         # Test with valid content
         assert is_cacheable_content("Hello")
         assert is_cacheable_content({"type": "text", "text": "Hello"})
         assert is_cacheable_content({"type": "tool_result", "content": "Result"})
-        
+
         # Test with invalid content
         assert not is_cacheable_content({"type": "text", "text": ""})
         assert not is_cacheable_content({"type": "tool_result", "content": ""})
@@ -187,12 +200,12 @@ class TestPromptCaching:
         assert message["content"][0]["type"] == "text"
         assert message["content"][0]["text"] == "Hello"
         assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
-        
+
         # Test with list content
         message = {"role": "user", "content": [{"type": "text", "text": "Hello"}]}
         add_cache_to_message(message)
         assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
-        
+
         # Test with empty content (should not add cache)
         message = {"role": "user", "content": ""}
         add_cache_to_message(message)

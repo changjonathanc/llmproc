@@ -22,9 +22,12 @@ class TestOpenAIProcessExecutor:
             tools={"enabled": ["spawn"]},  # Enable a tool
         )
 
+        # Import the test helper
+        from tests.conftest import create_test_llmprocess_directly
+
         # Creating a process should raise an error
         with pytest.raises(ValueError) as excinfo:
-            process = LLMProcess(program=program)
+            process = create_test_llmprocess_directly(program=program)
 
         # Check error message
         assert "Tool usage is not yet supported for OpenAI" in str(excinfo.value)
@@ -86,7 +89,9 @@ class TestOpenAIProcessExecutor:
 
         # Mock the API call to raise an exception
         process.client = MagicMock()
-        process.client.chat.completions.create = AsyncMock(side_effect=Exception("API error"))
+        process.client.chat.completions.create = AsyncMock(
+            side_effect=Exception("API error")
+        )
 
         # Create the executor
         executor = OpenAIProcessExecutor()

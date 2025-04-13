@@ -6,10 +6,11 @@ provider = "gemini"
 display_name = "Gemini 2.5 Pro (Direct API)"
 
 [parameters]
-temperature = 0.7
-max_tokens = 8192
+max_tokens = 16384 # good default, don't change it
 
 [prompt]
 system_prompt = """You are a helpful AI assistant powered by Google's Gemini 2.5 Pro model.
 Your goal is to provide accurate, helpful, and safe responses to user queries.
 """
+
+# gemini doesn't support tools yet but it supports file preloading

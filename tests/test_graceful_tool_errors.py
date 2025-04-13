@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llmproc.tools import ToolManager
 from llmproc.common.results import ToolResult
+from llmproc.tools import ToolManager
 
 
 @pytest.fixture
@@ -18,9 +18,13 @@ def tool_manager():
         return ToolResult.from_success("Test tool success")
 
     # Register the tool
-    manager.runtime_registry.register_tool("test_tool", test_tool_handler, {"name": "test_tool", "description": "A test tool"})
-    
-    # Enable the tool 
+    manager.runtime_registry.register_tool(
+        "test_tool",
+        test_tool_handler,
+        {"name": "test_tool", "description": "A test tool"},
+    )
+
+    # Enable the tool
     manager.enabled_tools.append("test_tool")
 
     return manager
@@ -41,7 +45,9 @@ async def test_call_nonexistent_tool(tool_manager):
     result = await tool_manager.call_tool("nonexistent_tool", {})
     assert isinstance(result, ToolResult)
     assert result.is_error
-    assert "not enabled" in result.content.lower()  # Now returns "not enabled" instead of "not found"
+    assert (
+        "not enabled" in result.content.lower()
+    )  # Now returns "not enabled" instead of "not found"
 
 
 @pytest.mark.asyncio
@@ -52,8 +58,12 @@ async def test_tool_execution_error(tool_manager):
     async def error_tool_handler(**kwargs):
         raise ValueError("Test error")
 
-    tool_manager.runtime_registry.register_tool("error_tool", error_tool_handler, {"name": "error_tool", "description": "A tool that errors"})
-    
+    tool_manager.runtime_registry.register_tool(
+        "error_tool",
+        error_tool_handler,
+        {"name": "error_tool", "description": "A tool that errors"},
+    )
+
     # Enable the error tool
     tool_manager.enabled_tools.append("error_tool")
 

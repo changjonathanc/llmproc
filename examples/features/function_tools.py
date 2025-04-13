@@ -57,12 +57,23 @@ def weather_lookup(location: str, unit: str = "celsius") -> dict[str, Any]:
         Weather information for the location
     """
     # Simulate weather lookup
-    temps = {"New York": {"celsius": 22, "fahrenheit": 72}, "London": {"celsius": 18, "fahrenheit": 64}, "Tokyo": {"celsius": 26, "fahrenheit": 79}, "Sydney": {"celsius": 20, "fahrenheit": 68}}
+    temps = {
+        "New York": {"celsius": 22, "fahrenheit": 72},
+        "London": {"celsius": 18, "fahrenheit": 64},
+        "Tokyo": {"celsius": 26, "fahrenheit": 79},
+        "Sydney": {"celsius": 20, "fahrenheit": 68},
+    }
 
     # Default to a moderate temperature if location not found
     temp = temps.get(location, {"celsius": 21, "fahrenheit": 70})
 
-    return {"location": location, "temperature": temp[unit.lower()] if unit.lower() in temp else temp["celsius"], "unit": unit.lower(), "conditions": "Sunny", "humidity": "60%"}
+    return {
+        "location": location,
+        "temperature": temp[unit.lower()] if unit.lower() in temp else temp["celsius"],
+        "unit": unit.lower(),
+        "conditions": "Sunny",
+        "humidity": "60%",
+    }
 
 
 async def main():
@@ -80,7 +91,11 @@ async def main():
     def on_response(message):
         print(f"\n🤖 Model response received (length: {len(message['content'])})")
 
-    callbacks = {"on_tool_start": on_tool_start, "on_tool_end": on_tool_end, "on_response": on_response}
+    callbacks = {
+        "on_tool_start": on_tool_start,
+        "on_tool_end": on_tool_end,
+        "on_response": on_response,
+    }
 
     # Create a program with function tools
     system_prompt = """You are a helpful assistant with access to the following tools:
@@ -118,7 +133,9 @@ rather than generating the answer yourself. Show your work by explaining the res
 
     # Check for API key
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("\nNote: To run with actual LLM, set ANTHROPIC_API_KEY environment variable.")
+        print(
+            "\nNote: To run with actual LLM, set ANTHROPIC_API_KEY environment variable."
+        )
         print("For this example, we'll demonstrate how the functions work directly.")
         return
 
@@ -160,7 +177,9 @@ rather than generating the answer yourself. Show your work by explaining the res
     except Exception as e:
         print(f"\nError running LLM: {str(e)}")
         print("This is expected when running the example without proper setup.")
-        print("The main purpose of this example is to demonstrate function-based tool registration.")
+        print(
+            "The main purpose of this example is to demonstrate function-based tool registration."
+        )
 
 
 if __name__ == "__main__":

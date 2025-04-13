@@ -228,8 +228,8 @@ elif self.provider == "my_provider":
 ### Process Execution
 
 1. **State Management**:
-   - Use reset_state() between conversation sessions
-   - Keep preloaded content when appropriate with keep_preloaded=True
+   - ⚠️ The reset_state() method is experimental and may change in future releases
+   - Consider process context to be immutable after creation
 
 2. **Error Handling**:
    - Always use try/except around process.run() calls

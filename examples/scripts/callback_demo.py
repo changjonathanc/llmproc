@@ -17,7 +17,11 @@ from pathlib import Path
 from llmproc import LLMProgram
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
 logger = logging.getLogger("callback_demo")
 
 
@@ -45,7 +49,9 @@ class ToolProgressTracker:
 
         # Clear the spinner line
         if self.active_tools:
-            sys.stdout.write("\r" + " " * (20 + sum(len(t) for t in self.active_tools)) + "\r")
+            sys.stdout.write(
+                "\r" + " " * (20 + sum(len(t) for t in self.active_tools)) + "\r"
+            )
             sys.stdout.flush()
 
     def stop(self):
@@ -96,7 +102,11 @@ async def main():
         print(f"Process initialized in {init_time:.2f} seconds")
 
         # Step 3: Prepare callbacks
-        callbacks = {"on_tool_start": tracker.on_tool_start, "on_tool_end": tracker.on_tool_end, "on_response": lambda content: logger.debug(f"Response: {content[:30]}...")}
+        callbacks = {
+            "on_tool_start": tracker.on_tool_start,
+            "on_tool_end": tracker.on_tool_end,
+            "on_response": lambda content: logger.debug(f"Response: {content[:30]}..."),
+        }
 
         # Step 4: Run with user input
         while True:

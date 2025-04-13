@@ -1,6 +1,6 @@
 """Utility functions for Anthropic API integration.
 
-This module contains utility functions for interacting with the Anthropic API, 
+This module contains utility functions for interacting with the Anthropic API,
 including message formatting, cache control, and general helper functions.
 
 These functions were extracted from AnthropicProcessExecutor to improve
@@ -9,7 +9,7 @@ code organization and testability while maintaining the same functionality.
 
 import copy
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 
@@ -43,7 +43,7 @@ def is_cacheable_content(content: Any) -> bool:
     return True
 
 
-def add_cache_to_message(message: Dict[str, Any]) -> None:
+def add_cache_to_message(message: dict[str, Any]) -> None:
     """
     Add cache control to a message.
 
@@ -52,7 +52,10 @@ def add_cache_to_message(message: Dict[str, Any]) -> None:
     """
     if isinstance(message.get("content"), list):
         for content in message["content"]:
-            if isinstance(content, dict) and content.get("type") in ["text", "tool_result"]:
+            if isinstance(content, dict) and content.get("type") in [
+                "text",
+                "tool_result",
+            ]:
                 # Only add cache control if there's actual content
                 if is_cacheable_content(content):
                     content["cache_control"] = {"type": "ephemeral"}
@@ -60,27 +63,33 @@ def add_cache_to_message(message: Dict[str, Any]) -> None:
     elif isinstance(message.get("content"), str):
         # Convert string content to structured format with cache, but only if not empty
         if is_cacheable_content(message.get("content")):
-            message["content"] = [{"type": "text", "text": message["content"], "cache_control": {"type": "ephemeral"}}]
+            message["content"] = [
+                {
+                    "type": "text",
+                    "text": message["content"],
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
 
 
-def add_message_ids(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def add_message_ids(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Add message IDs to the content of each message.
-    
+
     Args:
         messages: List of messages to add IDs to
-        
+
     Returns:
         Messages with IDs added to their content
     """
     for i, msg in enumerate(messages):
         # Use the stored goto_id or generate one if not present
         msg_id = msg.get("goto_id", f"msg_{i}")
-        
+
         # Remove goto_id field since Anthropic API doesn't accept extra fields
         if "goto_id" in msg:
             del msg["goto_id"]
-        
+
         # Add message ID as a prefix to content
         if isinstance(msg.get("content"), str):
             msg["content"] = f"[{msg_id}] {msg.get('content', '')}"
@@ -90,11 +99,13 @@ def add_message_ids(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 if isinstance(content, dict) and content.get("type") == "text":
                     content["text"] = f"[{msg_id}] {content.get('text', '')}"
                     break
-    
+
     return messages
 
 
-def state_to_api_messages(state: List[Dict[str, Any]], add_cache: bool = True) -> List[Dict[str, Any]]:
+def state_to_api_messages(
+    state: list[dict[str, Any]], add_cache: bool = True
+) -> list[dict[str, Any]]:
     """
     Transform conversation state to API-ready messages, adding message IDs and cache control points.
 
@@ -107,7 +118,7 @@ def state_to_api_messages(state: List[Dict[str, Any]], add_cache: bool = True) -
     """
     # Create a deep copy to avoid modifying the original state
     messages = copy.deepcopy(state)
-    
+
     # Add message IDs to the content of each message
     messages = add_message_ids(messages)
 
@@ -127,7 +138,10 @@ def state_to_api_messages(state: List[Dict[str, Any]], add_cache: bool = True) -
             is_tool_message = False
             if isinstance(msg.get("content"), list):
                 for content in msg["content"]:
-                    if isinstance(content, dict) and content.get("type") == "tool_result":
+                    if (
+                        isinstance(content, dict)
+                        and content.get("type") == "tool_result"
+                    ):
                         is_tool_message = True
                         break
 
@@ -143,7 +157,9 @@ def state_to_api_messages(state: List[Dict[str, Any]], add_cache: bool = True) -
     return messages
 
 
-def system_to_api_format(system_prompt: Union[str, List[Dict[str, Any]]], add_cache: bool = True) -> Union[str, List[Dict[str, Any]]]:
+def system_to_api_format(
+    system_prompt: Union[str, list[dict[str, Any]]], add_cache: bool = True
+) -> Union[str, list[dict[str, Any]]]:
     """
     Transform system prompt to API-ready format with cache control.
 
@@ -160,7 +176,13 @@ def system_to_api_format(system_prompt: Union[str, List[Dict[str, Any]]], add_ca
     if isinstance(system_prompt, str):
         # Add cache to the entire system prompt, but only if the prompt is not empty
         if is_cacheable_content(system_prompt):
-            return [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+            return [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
         else:
             return system_prompt  # Return as is if empty
     elif isinstance(system_prompt, list):
@@ -171,7 +193,9 @@ def system_to_api_format(system_prompt: Union[str, List[Dict[str, Any]]], add_ca
         return system_prompt
 
 
-def tools_to_api_format(tools: Optional[List[Dict[str, Any]]], add_cache: bool = True) -> Optional[List[Dict[str, Any]]]:
+def tools_to_api_format(
+    tools: Optional[list[dict[str, Any]]], add_cache: bool = True
+) -> Optional[list[dict[str, Any]]]:
     """
     Transform tools to API-ready format with cache control.
 
@@ -198,32 +222,12 @@ def tools_to_api_format(tools: Optional[List[Dict[str, Any]]], add_cache: bool =
     return tools_copy
 
 
-def add_token_efficient_header_if_needed(process: Any, headers: Dict[str, str]) -> Dict[str, str]:
-    """
-    Add token-efficient tools header if appropriate for the model.
-    
-    Args:
-        process: The LLMProcess instance
-        headers: The headers dictionary to modify
-        
-    Returns:
-        The updated headers dictionary
-    """
-    if process.provider in ANTHROPIC_PROVIDERS and process.model_name.startswith("claude-3-7"):
-        header_value = "token-efficient-tools-2025-02-19"
-
-        if "anthropic-beta" not in headers:
-            headers["anthropic-beta"] = header_value
-        elif "token-efficient-tools" not in headers["anthropic-beta"]:
-            headers["anthropic-beta"] += f",{header_value}"
-
-    return headers
-
-
-def safe_callback(callback_fn: Optional[callable], *args, callback_name: str = "callback") -> None:
+def safe_callback(
+    callback_fn: Optional[callable], *args, callback_name: str = "callback"
+) -> None:
     """
     Safely execute a callback, catching and logging exceptions.
-    
+
     Args:
         callback_fn: The callback function to execute
         *args: Arguments to pass to the callback
@@ -238,27 +242,31 @@ def safe_callback(callback_fn: Optional[callable], *args, callback_name: str = "
         logger.warning(f"Error in {callback_name} callback: {str(e)}")
 
 
-def contains_tool_calls(response_content: List[Any]) -> bool:
+def contains_tool_calls(response_content: list[Any]) -> bool:
     """
     Check if response contains tool calls.
-    
+
     Args:
         response_content: The content section of the response
-        
+
     Returns:
         True if the response contains tool calls, False otherwise
     """
-    return any(getattr(content, "type", None) == "tool_use" for content in response_content)
+    return any(
+        getattr(content, "type", None) == "tool_use" for content in response_content
+    )
 
 
-def add_token_efficient_header_if_needed(process, extra_headers: Dict[str, str] = None) -> Dict[str, str]:
+def add_token_efficient_header_if_needed(
+    process, extra_headers: dict[str, str] = None
+) -> dict[str, str]:
     """
     Add token-efficient tools header if appropriate for the model.
-    
+
     Args:
         process: The LLMProcess instance
         extra_headers: Existing extra headers dictionary
-        
+
     Returns:
         Updated extra headers dictionary
     """
@@ -268,56 +276,79 @@ def add_token_efficient_header_if_needed(process, extra_headers: Dict[str, str] 
     else:
         # Create a copy to avoid modifying the original
         extra_headers = extra_headers.copy()
-        
+
     # For test compatibility, check if this is a mock where we should always add the header
-    is_test_mock = (hasattr(process, "_extract_mock_name") and 
-                   hasattr(process, "provider") and 
-                   process.provider in ANTHROPIC_PROVIDERS and 
-                   hasattr(process, "model_name") and 
-                   process.model_name.startswith("claude-3-7"))
-    
+    is_test_mock = (
+        hasattr(process, "_extract_mock_name")
+        and hasattr(process, "provider")
+        and process.provider in ANTHROPIC_PROVIDERS
+        and hasattr(process, "model_name")
+        and process.model_name.startswith("claude-3-7")
+    )
+
     if is_test_mock:
-        if "anthropic-beta" in extra_headers and "token-efficient-tools-2025-02-19" not in extra_headers["anthropic-beta"]:
+        if (
+            "anthropic-beta" in extra_headers
+            and "token-efficient-tools-2025-02-19"
+            not in extra_headers["anthropic-beta"]
+        ):
             # Append to existing header value
-            extra_headers["anthropic-beta"] = f"{extra_headers['anthropic-beta']},token-efficient-tools-2025-02-19"
+            extra_headers["anthropic-beta"] = (
+                f"{extra_headers['anthropic-beta']},token-efficient-tools-2025-02-19"
+            )
         else:
             # Set new header value
             extra_headers["anthropic-beta"] = "token-efficient-tools-2025-02-19"
         return extra_headers
-        
+
     # For normal operation, check if token-efficient tools should be enabled
     token_efficient_enabled = False
-    
+
     # Check in parameters (if they exist)
     if hasattr(process, "parameters"):
         param_headers = process.parameters.get("extra_headers", {})
-        if isinstance(param_headers, dict) and param_headers.get("anthropic-beta") == "token-efficient-tools-2025-02-19":
+        if (
+            isinstance(param_headers, dict)
+            and param_headers.get("anthropic-beta")
+            == "token-efficient-tools-2025-02-19"
+        ):
             token_efficient_enabled = True
-    
+
     # Check in api_params as fallback
     if hasattr(process, "api_params"):
         api_headers = process.api_params.get("extra_headers", {})
-        if isinstance(api_headers, dict) and api_headers.get("anthropic-beta") == "token-efficient-tools-2025-02-19":
+        if (
+            isinstance(api_headers, dict)
+            and api_headers.get("anthropic-beta") == "token-efficient-tools-2025-02-19"
+        ):
             token_efficient_enabled = True
-            
+
     # Apply the header if conditions are met
-    if (token_efficient_enabled and
-        hasattr(process, "provider") and
-        process.provider in ANTHROPIC_PROVIDERS and 
-        hasattr(process, "model_name") and
-        process.model_name.startswith("claude-3-7")):
-        
+    if (
+        token_efficient_enabled
+        and hasattr(process, "provider")
+        and process.provider in ANTHROPIC_PROVIDERS
+        and hasattr(process, "model_name")
+        and process.model_name.startswith("claude-3-7")
+    ):
         # Add or append to the header
-        if "anthropic-beta" in extra_headers and "token-efficient-tools-2025-02-19" not in extra_headers["anthropic-beta"]:
+        if (
+            "anthropic-beta" in extra_headers
+            and "token-efficient-tools-2025-02-19"
+            not in extra_headers["anthropic-beta"]
+        ):
             # Append to existing header value
-            extra_headers["anthropic-beta"] = f"{extra_headers['anthropic-beta']},token-efficient-tools-2025-02-19"
+            extra_headers["anthropic-beta"] = (
+                f"{extra_headers['anthropic-beta']},token-efficient-tools-2025-02-19"
+            )
         else:
             # Set new header value
             extra_headers["anthropic-beta"] = "token-efficient-tools-2025-02-19"
-            
+
     return extra_headers
 
-def get_context_window_size(model_name: str, window_sizes: Dict[str, int]) -> int:
+
+def get_context_window_size(model_name: str, window_sizes: dict[str, int]) -> int:
     """
     Get the context window size for the given model.
 

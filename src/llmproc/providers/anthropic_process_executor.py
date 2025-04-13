@@ -12,28 +12,29 @@ except ImportError:
     AsyncAnthropic = None
     AsyncAnthropicVertex = None
 
-from llmproc.providers.constants import ANTHROPIC_PROVIDERS
-from llmproc.providers.utils import safe_callback
+from llmproc.common.results import RunResult, ToolResult
 from llmproc.providers.anthropic_utils import (
-    is_cacheable_content,
     add_cache_to_message,
     add_message_ids,
+    add_token_efficient_header_if_needed,
+    contains_tool_calls,
+    get_context_window_size,
+    is_cacheable_content,
     state_to_api_messages,
     system_to_api_format,
     tools_to_api_format,
-    add_token_efficient_header_if_needed,
-    contains_tool_calls,
-    get_context_window_size
 )
-from llmproc.common.results import RunResult
-from llmproc.common.results import ToolResult
+from llmproc.providers.constants import ANTHROPIC_PROVIDERS
+from llmproc.providers.utils import safe_callback
 from llmproc.utils.message_utils import append_message_with_id
 
 logger = logging.getLogger(__name__)
 
 
 PROMPT_FORCE_MODEL_RESPONSE = "Please respond with a text response"
-PROMPT_SUMMARIZE_CONVERSATION = "Please stop using tools and summarize your progress so far"
+PROMPT_SUMMARIZE_CONVERSATION = (
+    "Please stop using tools and summarize your progress so far"
+)
 
 
 class AnthropicProcessExecutor:
@@ -109,7 +110,11 @@ class AnthropicProcessExecutor:
             api_params = process.api_params.copy()
 
             # Extract extra headers if present
-            extra_headers = api_params.pop("extra_headers", {}) if "extra_headers" in api_params else {}
+            extra_headers = (
+                api_params.pop("extra_headers", {})
+                if "extra_headers" in api_params
+                else {}
+            )
 
             # Determine if we should use caching
             # Prompt caching is implemented via cache_control parameters in content
@@ -125,13 +130,20 @@ class AnthropicProcessExecutor:
             if (
                 "anthropic-beta" in extra_headers
                 and "token-efficient-tools" in extra_headers["anthropic-beta"]
-                and (process.provider not in ANTHROPIC_PROVIDERS or not process.model_name.startswith("claude-3-7"))
+                and (
+                    process.provider not in ANTHROPIC_PROVIDERS
+                    or not process.model_name.startswith("claude-3-7")
+                )
             ):
-                logger.warning(f"Token-efficient tools header is only supported by Claude 3.7 models. Currently using {process.model_name} on {process.provider}. The header will be ignored.")
+                logger.warning(
+                    f"Token-efficient tools header is only supported by Claude 3.7 models. Currently using {process.model_name} on {process.provider}. The header will be ignored."
+                )
 
             # Transform internal state to API-ready format with caching
             api_messages = state_to_api_messages(process.state, add_cache=use_caching)
-            api_system = system_to_api_format(process.enriched_system_prompt, add_cache=use_caching)
+            api_system = system_to_api_format(
+                process.enriched_system_prompt, add_cache=use_caching
+            )
             api_tools = tools_to_api_format(process.tools, add_cache=use_caching)
 
             # Make the API call with any extra headers
@@ -179,9 +191,15 @@ class AnthropicProcessExecutor:
                     # Extract text content for callback
                     text_content = ""
                     for c in response.content:
-                        if hasattr(c, "type") and c.type == "text" and hasattr(c, "text"):
+                        if (
+                            hasattr(c, "type")
+                            and c.type == "text"
+                            and hasattr(c, "text")
+                        ):
                             text_content += c.text
-                    safe_callback(on_response, text_content, callback_name="on_response")
+                    safe_callback(
+                        on_response, text_content, callback_name="on_response"
+                    )
 
                 for content in response.content:
                     if content.type == "text":
@@ -193,7 +211,12 @@ class AnthropicProcessExecutor:
                         tool_id = content.id
 
                         # Fire callback for tool start if provided
-                        safe_callback(on_tool_start, tool_name, tool_args, callback_name="on_tool_start")
+                        safe_callback(
+                            on_tool_start,
+                            tool_name,
+                            tool_args,
+                            callback_name="on_tool_start",
+                        )
 
                         # Track tool in run_result if available
                         if run_result:
@@ -223,7 +246,9 @@ class AnthropicProcessExecutor:
                             if isinstance(tool_args, dict):
                                 # Call the tool with explicit keyword arguments extracted from the input dict
                                 # process.call_tool already handles exceptions internally and returns a ToolResult
-                                logger.debug(f"Calling tool '{tool_name}' with parameters: {tool_args}")
+                                logger.debug(
+                                    f"Calling tool '{tool_name}' with parameters: {tool_args}"
+                                )
                                 result = await process.call_tool(tool_name, **tool_args)
                             else:
                                 # This case shouldn't happen with properly formatted API responses
@@ -232,7 +257,17 @@ class AnthropicProcessExecutor:
                                 result = ToolResult.from_error(error_msg)
                                 
                         # Fire callback for tool end if provided
-                        safe_callback(on_tool_end, tool_name, result, callback_name="on_tool_end")
+                        safe_callback(
+                            on_tool_end, tool_name, result, callback_name="on_tool_end"
+                        )
+
+                        # Check if GOTO was just executed and set flag
+                        if tool_name == "goto":
+                            logger.info(
+                                "GOTO tool executed. Setting flag to skip appending messages for this tool response."
+                            )
+                            goto_executed_this_turn = True
+                            break  # Exit the loop processing tools for this API response
 
                         # Check if GOTO was just executed and set flag
                         if tool_name == "goto":
@@ -254,14 +289,27 @@ class AnthropicProcessExecutor:
                             tool_result = result
 
                             # Check if file descriptor should be used for this tool result
-                            if hasattr(process, "file_descriptor_enabled") and process.file_descriptor_enabled and hasattr(process, "fd_manager") and process.fd_manager:
+                            if (
+                                hasattr(process, "file_descriptor_enabled")
+                                and process.file_descriptor_enabled
+                                and hasattr(process, "fd_manager")
+                                and process.fd_manager
+                            ):
                                 # Use helper to decide if FD is needed and create it if so
-                                processed_result, used_fd = process.fd_manager.create_fd_from_tool_result(tool_result.content, tool_name)
+                                processed_result, used_fd = (
+                                    process.fd_manager.create_fd_from_tool_result(
+                                        tool_result.content, tool_name
+                                    )
+                                )
 
                                 if used_fd:
-                                    logger.info(f"Tool result from '{tool_name}' exceeds {process.fd_manager.max_direct_output_chars} chars, creating file descriptor")
+                                    logger.info(
+                                        f"Tool result from '{tool_name}' exceeds {process.fd_manager.max_direct_output_chars} chars, creating file descriptor"
+                                    )
                                     tool_result = processed_result
-                                    logger.debug(f"Created file descriptor for tool result from '{tool_name}'")
+                                    logger.debug(
+                                        f"Created file descriptor for tool result from '{tool_name}'"
+                                    )
 
                         # Only convert to dict at the last moment when building the response
                         tool_result_dict = tool_result.to_dict()
@@ -288,14 +336,18 @@ class AnthropicProcessExecutor:
                     # Update state with response and tool results
                     # Add assistant message with GOTO ID
                     append_message_with_id(process, "assistant", response.content)
-                    
+
                     # Add tool results to state using append_message_with_id
                     for tool_result in tool_results:
                         # Tool result already has the correct structure with "role": "user"
                         # and "content" is a list with tool result data
-                        append_message_with_id(process, tool_result["role"], tool_result["content"])
+                        append_message_with_id(
+                            process, tool_result["role"], tool_result["content"]
+                        )
                 else:
-                    logger.debug("GOTO executed this turn, skipping state update for assistant/tool results.")
+                    logger.debug(
+                        "GOTO executed this turn, skipping state update for assistant/tool results."
+                    )
 
         if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
@@ -308,7 +360,9 @@ class AnthropicProcessExecutor:
         # Complete the RunResult and return it
         return run_result.complete()
 
-    async def run_till_text_response(self, process, user_prompt, max_iterations: int = 10) -> str:
+    async def run_till_text_response(
+        self, process, user_prompt, max_iterations: int = 10
+    ) -> str:
         """Run the process until a text response is generated.
 
         This is specifically designed for forked processes, where the child must respond with a text response, which will become the tool result for the parent.
@@ -392,7 +446,11 @@ class AnthropicProcessExecutor:
             system_prompt = process.enriched_system_prompt
 
             # Get tool definitions if available
-            api_tools = tools_to_api_format(process.tools, add_cache=False) if hasattr(process, "tools") else None
+            api_tools = (
+                tools_to_api_format(process.tools, add_cache=False)
+                if hasattr(process, "tools")
+                else None
+            )
 
             # Call Anthropic's count_tokens API
             params = {
@@ -410,12 +468,19 @@ class AnthropicProcessExecutor:
             response = await process.client.messages.count_tokens(**params)
 
             # Calculate context window percentage
-            window_size = get_context_window_size(process.model_name, self.CONTEXT_WINDOW_SIZES)
+            window_size = get_context_window_size(
+                process.model_name, self.CONTEXT_WINDOW_SIZES
+            )
             input_tokens = getattr(response, "input_tokens", 0)
             percentage = (input_tokens / window_size * 100) if window_size > 0 else 0
             remaining = max(0, window_size - input_tokens)
 
-            return {"input_tokens": input_tokens, "context_window": window_size, "percentage": percentage, "remaining_tokens": remaining}
+            return {
+                "input_tokens": input_tokens,
+                "context_window": window_size,
+                "percentage": percentage,
+                "remaining_tokens": remaining,
+            }
 
         except Exception as e:
             logger.warning(f"Token counting failed: {str(e)}")
@@ -437,7 +502,9 @@ class AnthropicProcessExecutor:
         # PHASE 3: Error handling here could be improved with _safe_callback pattern
         # and better validation of input parameters
         if not process.allow_fork:
-            return ToolResult.from_error("Forking is not allowed for this agent, possible reason: You are already a forked instance")
+            return ToolResult.from_error(
+                "Forking is not allowed for this agent, possible reason: You are already a forked instance"
+            )
 
         prompts = params["prompts"]
         logger.info(f"Forking conversation with {len(prompts)} prompts: {prompts}")
@@ -452,7 +519,12 @@ class AnthropicProcessExecutor:
             child.state.append(
                 {
                     "role": "assistant",
-                    "content": [content for content in last_assistant_response if content.type != "tool_use" or (content.type == "tool_use" and content.id == tool_id)],
+                    "content": [
+                        content
+                        for content in last_assistant_response
+                        if content.type != "tool_use"
+                        or (content.type == "tool_use" and content.id == tool_id)
+                    ],
                 }
             )
             # NOTE: return the fork result as tool result
@@ -471,11 +543,15 @@ class AnthropicProcessExecutor:
             # NOTE: run() will immediately add the prompt to the conversation as user message
             # I found this to work better than adding the prompt as the tool result
             executor = AnthropicProcessExecutor()  # Create a new executor for the child
-            response = await executor.run_till_text_response(child, user_prompt=prompt, max_iterations=20)
+            response = await executor.run_till_text_response(
+                child, user_prompt=prompt, max_iterations=20
+            )
             return {"id": i, "message": response}
 
         # Process all forks in parallel
-        responses = await asyncio.gather(*[process_fork(i, prompt) for i, prompt in enumerate(prompts)])
+        responses = await asyncio.gather(
+            *[process_fork(i, prompt) for i, prompt in enumerate(prompts)]
+        )
 
         # Return results as a ToolResult object
         return ToolResult.from_success(json.dumps(responses))

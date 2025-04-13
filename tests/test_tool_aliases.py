@@ -8,16 +8,16 @@ import json
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
 from llmproc import LLMProcess
+from llmproc.common.results import ToolResult
 from llmproc.program import LLMProgram
 from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
 from llmproc.tools.tool_manager import ToolManager
 from llmproc.tools.tool_registry import ToolRegistry
-from llmproc.common.results import ToolResult
 
 
 @pytest.fixture
@@ -106,51 +106,62 @@ def mock_mcp_registry():
 def test_tool_registry_aliases():
     """Test that tool aliases are correctly registered in ToolRegistry."""
     registry = ToolRegistry()
-    
+
     # Register a test tool
     registry.register_tool(
-        "test_tool", 
+        "test_tool",
         AsyncMock(return_value="test result"),
-        {"name": "test_tool", "description": "Test tool", "parameters": {}}
+        {"name": "test_tool", "description": "Test tool", "parameters": {}},
     )
-    
+
     # Register an alias for the tool
     aliases = {"t": "test_tool"}
     registry.register_aliases(aliases)
-    
+
     # Check that the alias was registered
     assert registry.tool_aliases == aliases
-    
+
     # Test alias resolution
     assert registry.tool_aliases.get("t", "t") == "test_tool"
-    assert registry.tool_aliases.get("test_tool", "test_tool") == "test_tool"  # Non-aliased name returns itself
-    assert registry.tool_aliases.get("unknown", "unknown") == "unknown"  # Unknown name returns itself
+    assert (
+        registry.tool_aliases.get("test_tool", "test_tool") == "test_tool"
+    )  # Non-aliased name returns itself
+    assert (
+        registry.tool_aliases.get("unknown", "unknown") == "unknown"
+    )  # Unknown name returns itself
 
 
 @pytest.mark.asyncio
 async def test_tool_registry_call_with_alias():
     """Test that tools can be called using their aliases."""
     registry = ToolRegistry()
-    
+
     # Create a mock handler - use a plain dictionary-style handler, since the test is about aliases not parameters
     mock_handler = AsyncMock(return_value=ToolResult.from_success("test result"))
-    
+
     # Register a test tool
     registry.register_tool(
-        "test_tool", 
+        "test_tool",
         mock_handler,
-        {"name": "test_tool", "description": "Test tool", "input_schema": {"type": "object", "properties": {"arg": {"type": "string"}}}}
+        {
+            "name": "test_tool",
+            "description": "Test tool",
+            "input_schema": {
+                "type": "object",
+                "properties": {"arg": {"type": "string"}},
+            },
+        },
     )
-    
+
     # Register an alias for the tool
     registry.register_aliases({"t": "test_tool"})
-    
+
     # Call the tool using its alias
     result = await registry.call_tool("t", {"arg": "value"})
-    
+
     # Check that the handler was called with the arguments
     mock_handler.assert_called_once()
-    
+
     # Check that the result is correct
     assert result.content == "test result"
 
@@ -159,20 +170,20 @@ def test_tool_manager_register_aliases():
     """Test that tool aliases are correctly registered in ToolManager."""
     # Create a tool manager
     manager = ToolManager()
-    
+
     # Register a test tool in the runtime registry
     manager.runtime_registry.register_tool(
-        "test_tool", 
+        "test_tool",
         AsyncMock(return_value="test result"),
-        {"name": "test_tool", "description": "Test tool", "parameters": {}}
+        {"name": "test_tool", "description": "Test tool", "parameters": {}},
     )
-    
+
     # Enable the tool
     manager.set_enabled_tools(["test_tool"])
-    
+
     # Register an alias
     manager.register_aliases({"t": "test_tool"})
-    
+
     # Check that the alias was registered in the runtime registry
     assert manager.runtime_registry.tool_aliases == {"t": "test_tool"}
 
@@ -181,32 +192,32 @@ def test_tool_manager_get_schemas_with_aliases():
     """Test that tool schemas include aliases when specified."""
     # Create a tool manager
     manager = ToolManager()
-    
+
     # Register a test tool in the runtime registry
     manager.runtime_registry.register_tool(
-        "test_tool", 
+        "test_tool",
         AsyncMock(return_value="test result"),
-        {"name": "test_tool", "description": "Test tool", "parameters": {}}
+        {"name": "test_tool", "description": "Test tool", "parameters": {}},
     )
-    
+
     # Enable the tool
     manager.set_enabled_tools(["test_tool"])
-    
+
     # Get schemas without aliases
     schemas_without_aliases = manager.get_tool_schemas()
     assert len(schemas_without_aliases) == 1
     assert schemas_without_aliases[0]["name"] == "test_tool"
-    
+
     # Register an alias
     manager.register_aliases({"t": "test_tool"})
-    
+
     # Get schemas with aliases
     schemas_with_aliases = manager.get_tool_schemas()
     assert len(schemas_with_aliases) == 1
     assert schemas_with_aliases[0]["name"] == "t"
 
 
-@patch("llmproc.llm_process.HAS_MCP", True)
+@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
 def test_llm_program_set_tool_aliases(mock_anthropic, mock_env):
     """Test that aliases can be set through LLMProgram.set_tool_aliases."""
@@ -215,20 +226,22 @@ def test_llm_program_set_tool_aliases(mock_anthropic, mock_env):
         model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
-        tools={"enabled": ["calculator", "read_file"]}
+        tools={"enabled": ["calculator", "read_file"]},
     )
-    
+
     # Set aliases directly in the runtime registry
-    program.tool_manager.runtime_registry.register_aliases({"calc": "calculator", "read": "read_file"})
-    
+    program.tool_manager.runtime_registry.register_aliases(
+        {"calc": "calculator", "read": "read_file"}
+    )
+
     # Also set via the standard method
     program.set_tool_aliases({"calc": "calculator", "read": "read_file"})
-    
+
     # Check that aliases were stored in tools dict
     assert program.tools["aliases"] == {"calc": "calculator", "read": "read_file"}
-    
+
     # Aliases are registered directly with the tool manager when set
-    
+
     # Check that aliases were registered with the tool manager
     # Verify aliases directly in the runtime registry
     aliases = program.tool_manager.runtime_registry.tool_aliases
@@ -236,22 +249,22 @@ def test_llm_program_set_tool_aliases(mock_anthropic, mock_env):
     assert "read" in aliases
     assert aliases["calc"] == "calculator"
     assert aliases["read"] == "read_file"
-    
+
     # Register the actual tools in the runtime registry since we're not using a real provider
     program.tool_manager.runtime_registry.register_tool(
-        "calculator", 
+        "calculator",
         AsyncMock(return_value="test result"),
-        {"name": "calculator", "description": "Test calculator", "parameters": {}}
+        {"name": "calculator", "description": "Test calculator", "parameters": {}},
     )
     program.tool_manager.runtime_registry.register_tool(
-        "read_file", 
+        "read_file",
         AsyncMock(return_value="test result"),
-        {"name": "read_file", "description": "Test read_file", "parameters": {}}
+        {"name": "read_file", "description": "Test read_file", "parameters": {}},
     )
-    
+
     # Enable the tools explicitly
     program.tool_manager.set_enabled_tools(["calculator", "read_file"])
-    
+
     # Now check that schemas use aliases
     schemas = program.tool_manager.get_tool_schemas()
     schema_names = [schema["name"] for schema in schemas]
@@ -262,39 +275,46 @@ def test_llm_program_set_tool_aliases(mock_anthropic, mock_env):
 
 
 @pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
+@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
 @patch("llmproc.tools.mcp.integration.register_runtime_mcp_tools")
 @patch("mcp_registry.MCPAggregator")
 @patch("mcp_registry.ServerRegistry")
 async def test_llm_process_with_mcp_tool_aliases(
-    mock_server_registry, mock_aggregator, mock_register_runtime_tools, mock_anthropic, mock_env, time_mcp_config
+    mock_server_registry,
+    mock_aggregator,
+    mock_register_runtime_tools,
+    mock_anthropic,
+    mock_env,
+    time_mcp_config,
 ):
     """Test LLMProcess with MCP tool aliases."""
     # Setup mock client
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
-    
+
     # Setup mock server registry
     mock_server_registry_instance = MagicMock()
     mock_server_registry.from_config.return_value = mock_server_registry_instance
-    
+
     # Setup mock aggregator
     mock_aggregator_instance = MagicMock()
     mock_aggregator.return_value = mock_aggregator_instance
-    
+
     # Create mock time tool
     mock_tool = MagicMock()
     mock_tool.name = "current"
     mock_tool.description = "Get the current time"
     mock_tool.inputSchema = {"type": "object", "properties": {}}
-    
+
     # Mock list_tools to return our server with the tool
     mock_aggregator_instance.list_tools = AsyncMock(return_value={"time": [mock_tool]})
-    
+
     # Mock _register_runtime_mcp_tools with a simpler approach
-    mock_register_runtime_tools.return_value = 1  # Return 1 indicating 1 tool was registered
-    
+    mock_register_runtime_tools.return_value = (
+        1  # Return 1 indicating 1 tool was registered
+    )
+
     # Create a program with MCP tools and aliases
     program = LLMProgram(
         model_name="claude-3-5-haiku-20241022",
@@ -303,39 +323,44 @@ async def test_llm_process_with_mcp_tool_aliases(
         mcp_config_path=time_mcp_config,
         mcp_tools={"time": ["current"]},
     )
-    
+
     # Add aliases for the MCP tool
     namespaced_tool_name = f"time{MCP_TOOL_SEPARATOR}current"
     program.set_tool_aliases({"now": namespaced_tool_name})
-    
+
     # Directly register the alias with the registry since this is primarily what we want to test
-    program.tool_manager.runtime_registry.register_aliases({"now": namespaced_tool_name})
-    
+    program.tool_manager.runtime_registry.register_aliases(
+        {"now": namespaced_tool_name}
+    )
+
     # Create the process using start() which handles validation and initialization
-    process = await LLMProcess.create(program)
-    
+    process = await program.start()
+
     # Since we're testing MCP tool registration in an altered API environment,
     # we'll simplify the test to focus on the core functionality:
     # setting and retrieving tool aliases
 
     # Make sure the program has the alias registered
     assert program.tools["aliases"]["now"] == namespaced_tool_name
-    
+
     # Verify that the alias is set in the LLMProgram registry
     assert "now" in program.tool_manager.runtime_registry.tool_aliases
-    
+
     # Verify the alias resolves correctly
-    assert program.tool_manager.runtime_registry.tool_aliases["now"] == namespaced_tool_name
-    
+    assert (
+        program.tool_manager.runtime_registry.tool_aliases["now"]
+        == namespaced_tool_name
+    )
+
     # This test successfully verifies that we can set and retrieve aliases in a program
     # and that they are preserved in the registry, which is the core functionality
     # being tested
 
 
 @pytest.mark.asyncio
-@patch("llmproc.llm_process.HAS_MCP", True)
+@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
-async def test_calling_tools_with_aliases(mock_anthropic, mock_mcp_registry, mock_env):
+async def test_calling_tools_with_aliases(mock_anthropic, mock_env):
     """Test calling tools using their aliases."""
     # Setup mock client
     mock_client = MagicMock()
@@ -346,12 +371,12 @@ async def test_calling_tools_with_aliases(mock_anthropic, mock_mcp_registry, moc
         model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
-        tools={"enabled": ["calculator"]}
+        tools={"enabled": ["calculator"]},
     )
-    
+
     # Add alias for calculator
     program.set_tool_aliases({"calc": "calculator"})
-    
+
     # Create the process using start() which handles validation and initialization but avoid actual initialization
     with patch("llmproc.llm_process.LLMProcess.__init__", return_value=None):
         process = LLMProcess.__new__(LLMProcess)
@@ -359,31 +384,35 @@ async def test_calling_tools_with_aliases(mock_anthropic, mock_mcp_registry, moc
         process.tool_manager = ToolManager()
         process.mcp_enabled = False
         process.enabled_tools = ["calculator"]
-    
+
     # Register calculator tool in the registry
     async def mock_calculator(args):
         return ToolResult.from_success(args["expression"] + " = 42")
-    
+
     # Register the calculator tool in all registries
     for registry_name in ["builtin_registry", "runtime_registry"]:
         registry = getattr(process.tool_manager, registry_name)
         registry.register_tool(
-            "calculator", 
+            "calculator",
             mock_calculator,
-            {"name": "calculator", "description": "Calculator tool", "input_schema": {"type": "object", "properties": {}}}
+            {
+                "name": "calculator",
+                "description": "Calculator tool",
+                "input_schema": {"type": "object", "properties": {}},
+            },
         )
-    
+
     # Only the actual tool name needs to be in enabled_tools
     # The alias is resolved to the actual tool name when checking if it's enabled
     process.tool_manager.enabled_tools = ["calculator"]
-    
+
     # Call the tool using the alias with explicit parameters
     result = await process.call_tool("calc", expression="2 + 40")
-    
+
     # Check that the result is returned - the actual content might vary
     # depending on which registry handles the call and how the tool is configured
     assert isinstance(result, ToolResult)
-    
+
     # If the tool was found and executed successfully
     if "2 + 40 = 42" in result.content:
         # Check that alias_info was added if it exists
@@ -402,15 +431,17 @@ def test_llm_program_alias_validation():
         model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
-        tools={"enabled": ["calculator", "read_file"]}
+        tools={"enabled": ["calculator", "read_file"]},
     )
-    
+
     # Test invalid aliases type
     with pytest.raises(ValueError, match="Expected dictionary of aliases"):
         program.set_tool_aliases(["calc", "read"])
-    
+
     # Test duplicate target tool (multiple aliases to same tool)
-    with pytest.raises(ValueError, match="Multiple aliases point to the same target tool"):
+    with pytest.raises(
+        ValueError, match="Multiple aliases point to the same target tool"
+    ):
         program.set_tool_aliases({"calc": "calculator", "calculate": "calculator"})
 
 
@@ -427,12 +458,12 @@ async def test_alias_error_messages(mock_anthropic, mock_env):
         model_name="claude-3-5-haiku-20241022",
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
-        tools={"enabled": ["calculator"]}
+        tools={"enabled": ["calculator"]},
     )
-    
+
     # Add aliases for calculator and a non-existent tool
     program.set_tool_aliases({"calc": "calculator", "invalid": "non_existent_tool"})
-    
+
     # Create the process using start() which handles validation and initialization but avoid actual initialization
     with patch("llmproc.llm_process.LLMProcess.__init__", return_value=None):
         process = LLMProcess.__new__(LLMProcess)
@@ -440,34 +471,38 @@ async def test_alias_error_messages(mock_anthropic, mock_env):
         process.tool_manager = ToolManager()
         process.mcp_enabled = False
         process.enabled_tools = ["calculator"]
-    
+
     # Register calculator tool that raises an exception
     async def mock_calculator_error(args):
         raise ValueError("Test error message")
-    
+
     # Register in all tool registries
     for registry_name in ["builtin_registry", "runtime_registry"]:
         registry = getattr(process.tool_manager, registry_name)
         registry.register_tool(
-            "calculator", 
+            "calculator",
             mock_calculator_error,
-            {"name": "calculator", "description": "Calculator tool", "input_schema": {"type": "object", "properties": {}}}
+            {
+                "name": "calculator",
+                "description": "Calculator tool",
+                "input_schema": {"type": "object", "properties": {}},
+            },
         )
-    
+
     # Only enable the actual tool name - the alias should be resolved automatically
     process.tool_manager.enabled_tools = ["calculator"]
-    
+
     # Call the tool using the alias with explicit parameters - should return error with alias info
     result = await process.call_tool("calc", expression="2 + 40")
-    
+
     # We should still get an error, but may be a different error message
     # since the tool is executed through a different path now
     assert result.is_error
     # The error could be either about the tool execution or not found/enabled
-    
+
     # Call the non-existent tool alias - should return tool not enabled error
     result = await process.call_tool("invalid")
-    
+
     # Check that the error is about the tool not being enabled
     assert result.is_error
     assert "Tool 'invalid' is not enabled" in result.content

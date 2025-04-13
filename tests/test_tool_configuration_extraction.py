@@ -5,11 +5,12 @@ correctly extracts all necessary configuration for tool initialization.
 """
 
 import os
-import pytest
 from unittest.mock import MagicMock, patch
 
-from llmproc.program import LLMProgram
+import pytest
+
 from llmproc.file_descriptors.manager import FileDescriptorManager
+from llmproc.program import LLMProgram
 
 
 def test_basic_tool_configuration():
@@ -20,10 +21,10 @@ def test_basic_tool_configuration():
         provider="anthropic",
         system_prompt="Test system prompt",
     )
-    
+
     # Extract configuration
     config = program.get_tool_configuration()
-    
+
     # Verify basic properties
     assert config["provider"] == "anthropic"
     assert config["mcp_config_path"] is None
@@ -44,12 +45,12 @@ def test_tool_configuration_with_mcp():
         provider="anthropic",
         system_prompt="Test system prompt",
         mcp_config_path="/path/to/config.json",
-        mcp_tools={"server1": ["tool1", "tool2"]}
+        mcp_tools={"server1": ["tool1", "tool2"]},
     )
-    
+
     # Extract configuration
     config = program.get_tool_configuration()
-    
+
     # Verify MCP properties
     assert config["mcp_config_path"] == "/path/to/config.json"
     assert config["mcp_tools"] == {"server1": ["tool1", "tool2"]}
@@ -59,22 +60,24 @@ def test_tool_configuration_with_mcp():
 def test_tool_configuration_with_linked_programs():
     """Test tool configuration with linked programs."""
     # Create a mock of linked_programs_instances instead of trying to use program.linked_programs
-    mock_linked_programs = {
-        "program1": MagicMock(),
-        "program2": MagicMock()
-    }
-    
+    mock_linked_programs = {"program1": MagicMock(), "program2": MagicMock()}
+
     # Create a program with linked program descriptions
     program = LLMProgram(
         model_name="test-model",
         provider="anthropic",
         system_prompt="Test system prompt",
-        linked_program_descriptions={"program1": "First program", "program2": "Second program"}
+        linked_program_descriptions={
+            "program1": "First program",
+            "program2": "Second program",
+        },
     )
-    
+
     # Extract configuration with the linked_programs_instances
-    config = program.get_tool_configuration(linked_programs_instances=mock_linked_programs)
-    
+    config = program.get_tool_configuration(
+        linked_programs_instances=mock_linked_programs
+    )
+
     # Verify linked program properties
     assert config["has_linked_programs"] is True
     assert len(config["linked_programs"]) == 2
@@ -97,13 +100,13 @@ def test_tool_configuration_with_file_descriptors():
             "max_direct_output_chars": 10000,
             "max_input_chars": 12000,
             "page_user_input": True,
-            "enable_references": True
-        }
+            "enable_references": True,
+        },
     )
-    
+
     # Extract configuration
     config = program.get_tool_configuration()
-    
+
     # Verify file descriptor properties
     assert config["file_descriptor_enabled"] is True
     assert isinstance(config["fd_manager"], FileDescriptorManager)
@@ -121,12 +124,12 @@ def test_tool_configuration_with_implicit_fd():
         model_name="test-model",
         provider="anthropic",
         system_prompt="Test system prompt",
-        tools={"enabled": ["read_fd"]}
+        tools={"enabled": ["read_fd"]},
     )
-    
+
     # Extract configuration
     config = program.get_tool_configuration()
-    
+
     # Verify file descriptor properties
     assert config["file_descriptor_enabled"] is True
     assert isinstance(config["fd_manager"], FileDescriptorManager)

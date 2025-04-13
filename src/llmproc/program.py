@@ -1,25 +1,5 @@
 """LLMProgram compiler for validating and loading LLM program configurations."""
 
-from llmproc._program_docs import (
-    LLMPROGRAM_CLASS,
-    INIT,
-    COMPILE_SELF,
-    ADD_LINKED_PROGRAM,
-    ADD_PRELOAD_FILE,
-    CONFIGURE_ENV_INFO,
-    CONFIGURE_FILE_DESCRIPTOR,
-    CONFIGURE_THINKING,
-    ENABLE_TOKEN_EFFICIENT_TOOLS,
-    SET_ENABLED_TOOLS,
-    SET_TOOL_ALIASES,
-    CONFIGURE_MCP,
-    ADD_TOOL,
-    COMPILE,
-    API_PARAMS,
-    GET_ENRICHED_SYSTEM_PROMPT,
-    FROM_TOML,
-)
-
 import logging
 import warnings
 from collections.abc import Callable
@@ -27,6 +7,24 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import llmproc
+from llmproc._program_docs import (
+    ADD_LINKED_PROGRAM,
+    ADD_PRELOAD_FILE,
+    ADD_TOOL,
+    API_PARAMS,
+    COMPILE,
+    COMPILE_SELF,
+    CONFIGURE_ENV_INFO,
+    CONFIGURE_FILE_DESCRIPTOR,
+    CONFIGURE_MCP,
+    CONFIGURE_THINKING,
+    ENABLE_TOKEN_EFFICIENT_TOOLS,
+    FROM_TOML,
+    INIT,
+    LLMPROGRAM_CLASS,
+    SET_ENABLED_TOOLS,
+    SET_TOOL_ALIASES,
+)
 from llmproc.env_info import EnvInfoBuilder
 
 # Set up logger
@@ -125,24 +123,27 @@ class LLMProgram:
                 if "enabled" in tools and isinstance(tools["enabled"], list):
                     # Call our own set_enabled_tools which delegates to ToolManager
                     self.set_enabled_tools(tools["enabled"])
-                    
+
                 # Register aliases if specified
                 if "aliases" in tools and isinstance(tools["aliases"], dict):
                     self.tool_manager.register_aliases(tools["aliases"])
             else:
                 # Default to empty tools dictionary if invalid format provided
                 import warnings
+
                 warnings.warn(
-                    f"Invalid format for tools parameter: expected dict, got {type(tools)}. " +
-                    "Defaulting to empty tools configuration.",
+                    f"Invalid format for tools parameter: expected dict, got {type(tools)}. "
+                    + "Defaulting to empty tools configuration.",
                     UserWarning,
-                    stacklevel=2
+                    stacklevel=2,
                 )
                 self.tools = {"enabled": [], "aliases": {}}
 
         self.linked_programs = linked_programs or {}
         self.linked_program_descriptions = linked_program_descriptions or {}
-        self.env_info = env_info or {"variables": []}  # Default to empty list (disabled)
+        self.env_info = env_info or {
+            "variables": []
+        }  # Default to empty list (disabled)
         self.file_descriptor = file_descriptor or {}
         self.base_dir = base_dir
 
@@ -158,7 +159,9 @@ class LLMProgram:
                 with open(self._system_prompt_file) as f:
                     self.system_prompt = f.read()
             except FileNotFoundError:
-                raise FileNotFoundError(f"System prompt file not found: {self._system_prompt_file}")
+                raise FileNotFoundError(
+                    f"System prompt file not found: {self._system_prompt_file}"
+                )
 
         # Validate required fields
         if not self.model_name or not self.provider or not self.system_prompt:
@@ -177,7 +180,7 @@ class LLMProgram:
 
         # Resolve File Descriptor and Tools dependencies
         self._resolve_fd_tool_dependencies()
-        
+
         # Handle linked programs recursively
         self._compile_linked_programs()
 
@@ -185,44 +188,47 @@ class LLMProgram:
         self.compiled = True
         return self
 
-    # _process_function_tools and _register_aliases have been removed 
-    # as this logic is now handled by the ToolManager directly
-
     def _resolve_fd_tool_dependencies(self) -> None:
         """Resolve dependencies between file descriptor system and FD tools.
-        
+
         This method ensures consistency between:
         1. File descriptor system configuration (self.file_descriptor)
         2. Enabled tools that interact with file descriptors (read_fd, fd_to_file)
-        
+
         The rules are:
         - If FD system is enabled, ensure read_fd tool is available
         - If FD tools are enabled but FD system isn't, enable the FD system
         """
         from llmproc.file_descriptors.constants import FD_RELATED_TOOLS
-        
+
         # Get current state
-        has_fd_config = hasattr(self, "file_descriptor") and isinstance(self.file_descriptor, dict)
+        has_fd_config = hasattr(self, "file_descriptor") and isinstance(
+            self.file_descriptor, dict
+        )
         fd_enabled = has_fd_config and self.file_descriptor.get("enabled", False)
         enabled_tools = self.tool_manager.get_enabled_tools()
         has_fd_tools = any(tool in FD_RELATED_TOOLS for tool in enabled_tools)
-        
+
         if fd_enabled and not has_fd_tools:
             # If FD system is enabled but no FD tools, add read_fd
             if "read_fd" not in enabled_tools:
                 new_enabled_tools = enabled_tools + ["read_fd"]
                 self.tool_manager.set_enabled_tools(new_enabled_tools)
                 # No need to update self.tools["enabled"] as tool_manager is the source of truth
-                logger.info("File descriptor system enabled, automatically adding read_fd tool")
-                
+                logger.info(
+                    "File descriptor system enabled, automatically adding read_fd tool"
+                )
+
         elif has_fd_tools and not fd_enabled:
             # If FD tools are enabled but FD system isn't, enable the FD system
             if not has_fd_config:
                 self.file_descriptor = {"enabled": True}
             else:
                 self.file_descriptor["enabled"] = True
-            logger.info("FD tools enabled, automatically enabling file descriptor system")
-    
+            logger.info(
+                "FD tools enabled, automatically enabling file descriptor system"
+            )
+
     def _compile_linked_programs(self) -> None:
         """Compile linked programs recursively."""
         compiled_linked = {}
@@ -235,19 +241,25 @@ class LLMProgram:
                     linked_program = LLMProgram.from_toml(program_or_path)
                     compiled_linked[name] = linked_program
                 except FileNotFoundError:
-                    warnings.warn(f"Linked program not found: {program_or_path}", stacklevel=2)
+                    warnings.warn(
+                        f"Linked program not found: {program_or_path}", stacklevel=2
+                    )
             elif isinstance(program_or_path, LLMProgram):
                 # It's already a program instance, compile it if not already compiled
                 if not program_or_path.compiled:
                     program_or_path._compile_self()
                 compiled_linked[name] = program_or_path
             else:
-                raise ValueError(f"Invalid linked program type for {name}: {type(program_or_path)}")
+                raise ValueError(
+                    f"Invalid linked program type for {name}: {type(program_or_path)}"
+                )
 
         # Replace linked_programs with compiled versions
         self.linked_programs = compiled_linked
 
-    def add_linked_program(self, name: str, program: "LLMProgram", description: str = "") -> "LLMProgram":
+    def add_linked_program(
+        self, name: str, program: "LLMProgram", description: str = ""
+    ) -> "LLMProgram":
         """Link another program to this one."""
         self.linked_programs[name] = program
         self.linked_program_descriptions[name] = description
@@ -267,7 +279,13 @@ class LLMProgram:
         return self
 
     def configure_file_descriptor(
-        self, enabled: bool = True, max_direct_output_chars: int = 8000, default_page_size: int = 4000, max_input_chars: int = 8000, page_user_input: bool = True, enable_references: bool = True
+        self,
+        enabled: bool = True,
+        max_direct_output_chars: int = 8000,
+        default_page_size: int = 4000,
+        max_input_chars: int = 8000,
+        page_user_input: bool = True,
+        enable_references: bool = True,
     ) -> "LLMProgram":
         """Configure the file descriptor system."""
         self.file_descriptor = {
@@ -280,14 +298,19 @@ class LLMProgram:
         }
         return self
 
-    def configure_thinking(self, enabled: bool = True, budget_tokens: int = 4096) -> "LLMProgram":
+    def configure_thinking(
+        self, enabled: bool = True, budget_tokens: int = 4096
+    ) -> "LLMProgram":
         """Configure Claude 3.7 thinking capability."""
         # Ensure parameters dict exists
         if self.parameters is None:
             self.parameters = {}
 
         # Configure thinking
-        self.parameters["thinking"] = {"type": "enabled" if enabled else "disabled", "budget_tokens": budget_tokens}
+        self.parameters["thinking"] = {
+            "type": "enabled" if enabled else "disabled",
+            "budget_tokens": budget_tokens,
+        }
         return self
 
     def enable_token_efficient_tools(self) -> "LLMProgram":
@@ -301,7 +324,9 @@ class LLMProgram:
             self.parameters["extra_headers"] = {}
 
         # Add header for token-efficient tools
-        self.parameters["extra_headers"]["anthropic-beta"] = "token-efficient-tools-2025-02-19"
+        self.parameters["extra_headers"]["anthropic-beta"] = (
+            "token-efficient-tools-2025-02-19"
+        )
         return self
 
     def set_enabled_tools(self, tools: list[Union[str, Callable]]) -> "LLMProgram":
@@ -317,62 +342,63 @@ class LLMProgram:
             self (for method chaining)
         """
         if not isinstance(tools, list):
-            raise ValueError(f"Expected a list of tools (strings or callables), got {type(tools)}")
+            raise ValueError(
+                f"Expected a list of tools (strings or callables), got {type(tools)}"
+            )
 
         # Delegate entirely to ToolManager's unified method that handles mixed lists
         # ToolManager is the single source of truth for enabled tools
         self.tool_manager.set_enabled_tools(tools)
 
         return self
-    
+
     def get_enabled_tools(self) -> list[str]:
         """Get the list of enabled tool names.
-        
+
         Returns:
             A list of the currently enabled tool names
-            
+
         Note:
             This method delegates to the tool_manager, which is the
             single source of truth for enabled tools.
         """
         return self.tool_manager.get_enabled_tools()
-        
+
     def set_tool_aliases(self, aliases: dict[str, str]) -> "LLMProgram":
         """Set tool aliases, merging with any existing aliases."""
         # Validate aliases is a dictionary
         if not isinstance(aliases, dict):
             raise ValueError(f"Expected dictionary of aliases, got {type(aliases)}")
-            
+
         # Check for one-to-one mapping (no multiple aliases to same target)
         targets = {}
         for alias, target in aliases.items():
             if target in targets:
                 raise ValueError(
-                    f"Multiple aliases point to the same target tool '{target}': "
-                    f"'{targets[target]}' and '{alias}'. One-to-one mapping is required."
+                    f"Multiple aliases point to the same target tool '{target}': '{targets[target]}' and '{alias}'. One-to-one mapping is required."
                 )
             targets[target] = alias
-        
+
         # Initialize tools dict if needed
         if not isinstance(self.tools, dict):
             self.tools = {}
-        
+
         if "aliases" not in self.tools:
             self.tools["aliases"] = {}
-        
+
         # Merge with existing aliases
         self.tools["aliases"].update(aliases)
-        
+
         return self
 
-    def configure_mcp(self, config_path: str, tools: dict[str, list[str] | str] = None) -> "LLMProgram":
+    def configure_mcp(
+        self, config_path: str, tools: dict[str, list[str] | str] = None
+    ) -> "LLMProgram":
         """Configure Model Context Protocol (MCP) tools."""
         self.mcp_config_path = config_path
         if tools:
             self.mcp_tools = tools
         return self
-
-    # add_tool method has been removed in favor of set_enabled_tools handling both strings and callables
 
     def compile(self) -> "LLMProgram":
         """Validate and compile this program."""
@@ -383,36 +409,6 @@ class LLMProgram:
     def api_params(self) -> dict[str, Any]:
         """Get API parameters for LLM API calls."""
         return self.parameters.copy() if self.parameters else {}
-
-    def get_enriched_system_prompt(self, process_instance=None, include_env=True):
-        """Get enhanced system prompt with preloaded files and environment info."""
-        # Use the EnvInfoBuilder to handle environment information and preloaded content
-        preloaded_content = {}
-        file_descriptor_enabled = False
-        references_enabled = False
-        page_user_input = False
-
-        if process_instance:
-            if hasattr(process_instance, "preloaded_content"):
-                preloaded_content = process_instance.preloaded_content
-            if hasattr(process_instance, "file_descriptor_enabled"):
-                file_descriptor_enabled = process_instance.file_descriptor_enabled
-            if hasattr(process_instance, "references_enabled"):
-                references_enabled = process_instance.references_enabled
-
-            # Check if user input paging is enabled
-            if hasattr(process_instance, "fd_manager"):
-                page_user_input = getattr(process_instance.fd_manager, "page_user_input", False)
-
-        return EnvInfoBuilder.get_enriched_system_prompt(
-            base_prompt=self.system_prompt,
-            env_config=self.env_info,
-            preloaded_content=preloaded_content,
-            include_env=include_env,
-            file_descriptor_enabled=file_descriptor_enabled,
-            references_enabled=references_enabled,
-            page_user_input=page_user_input,
-        )
 
     @classmethod
     def from_toml(cls, toml_file, **kwargs):
@@ -432,24 +428,23 @@ class LLMProgram:
         return ProgramLoader.from_toml(toml_file, **kwargs)
 
     def get_tool_configuration(
-        self,
-        linked_programs_instances: dict[str, Any] | None = None
+        self, linked_programs_instances: dict[str, Any] | None = None
     ) -> dict:
         """Create tool configuration dictionary for initialization.
-        
+
         This method extracts the necessary components from the program to initialize
         tools without requiring a process instance, avoiding circular dependencies.
-        
+
         Args:
             linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
-            
+
         Returns:
             Dictionary with tool configuration components
         """
         # Ensure the program is compiled
         if not self.compiled:
             self.compile()
-            
+
         # Extract core configuration properties
         config = {
             "provider": self.provider,
@@ -457,7 +452,7 @@ class LLMProgram:
             "mcp_tools": getattr(self, "mcp_tools", {}),
             "mcp_enabled": getattr(self, "mcp_config_path", None) is not None,
         }
-        
+
         # Handle linked programs
         linked_programs = {}
         if linked_programs_instances:
@@ -468,21 +463,24 @@ class LLMProgram:
             config["has_linked_programs"] = True
         else:
             config["has_linked_programs"] = False
-            
+
         config["linked_programs"] = linked_programs
-        
+
         # Add linked program descriptions if available
-        if hasattr(self, "linked_program_descriptions") and self.linked_program_descriptions:
+        if (
+            hasattr(self, "linked_program_descriptions")
+            and self.linked_program_descriptions
+        ):
             config["linked_program_descriptions"] = self.linked_program_descriptions
         else:
             config["linked_program_descriptions"] = {}
-            
+
         # Create file descriptor manager if needed
         fd_manager = None
         if hasattr(self, "file_descriptor"):
             fd_config = self.file_descriptor
             enabled = fd_config.get("enabled", False)
-            
+
             if enabled:
                 # Get configuration values with defaults
                 default_page_size = fd_config.get("default_page_size", 4000)
@@ -490,9 +488,10 @@ class LLMProgram:
                 max_input_chars = fd_config.get("max_input_chars", 8000)
                 page_user_input = fd_config.get("page_user_input", True)
                 enable_references = fd_config.get("enable_references", False)
-                
+
                 # Create fd_manager
                 from llmproc.file_descriptors.manager import FileDescriptorManager
+
                 fd_manager = FileDescriptorManager(
                     default_page_size=default_page_size,
                     max_direct_output_chars=max_direct_output_chars,
@@ -500,59 +499,41 @@ class LLMProgram:
                     page_user_input=page_user_input,
                     enable_references=enable_references,
                 )
-                
+
                 config["references_enabled"] = enable_references
-            
+
         config["fd_manager"] = fd_manager
         config["file_descriptor_enabled"] = fd_manager is not None
-        
+
         logger.info("Created tool configuration for initialization")
         return config
-        
+
     async def start(self) -> "LLMProcess":  # noqa: F821
         """Create and fully initialize an LLMProcess from this program.
-        
+
         ✅ THIS IS THE CORRECT WAY TO CREATE AN LLMPROCESS ✅
-        
+
         ```python
         program = LLMProgram.from_toml("config.toml")
         process = await program.start()  # Correct initialization pattern
         ```
-        
-        This method implements the Unix-inspired handoff from program (static definition)
-        to process (runtime instance) with proper dependency injection. The handoff follows these phases:
-        
-        1. Preparation: Ensure program is compiled and configuration is complete
-        2. Tool Initialization: Set up tools with configuration-based approach
-        3. Process Creation: Create process instance with initialized tools
-        4. Runtime Context Setup: Configure dependency injection for tools
-        5. Final Checks: Verify the process is ready for execution
-        
+
+        This method delegates the entire program-to-process creation logic
+        to the `llmproc.program_exec.create_process` function, which handles
+        compilation, tool initialization, process instantiation, and runtime
+        context setup in a modular way.
+
         ⚠️ IMPORTANT: Never use direct constructor `LLMProcess(program=...)` ⚠️
         Direct instantiation will result in broken context-aware tools (spawn, goto, fd_tools, etc.)
         and bypass the proper tool initialization sequence.
-        
+
         Returns:
             A fully initialized LLMProcess ready for execution with properly configured tools
         """
-        # Phase 1: Preparation - ensure program is compiled
-        if not self.compiled:
-            self.compile()
-            
-        # Phase 2: Tool Initialization - get tool configuration and initialize tools
-        # This follows the Unix-inspired pattern to avoid circular dependencies
-        tool_config = self.get_tool_configuration()
-        await self.tool_manager.initialize_tools(tool_config)
-        
-        # Phase 3: Process Creation - create process with pre-initialized tools
-        process = llmproc.LLMProcess(program=self, skip_tool_init=True)
-        
-        # Phase 4: Final Checks - verify process is properly initialized
-        # Log information about the created process
-        logger.info(f"Created process with model {process.model_name} ({process.provider})")
-        logger.info(f"Tools enabled: {len(process.enabled_tools)}")
-            
-        return process
+        # Delegate to the modular implementation in program_exec.py
+        from llmproc.program_exec import create_process
+
+        return await create_process(self)
 
 
 # Apply full docstrings to class and methods
@@ -568,8 +549,6 @@ LLMProgram.enable_token_efficient_tools.__doc__ = ENABLE_TOKEN_EFFICIENT_TOOLS
 LLMProgram.set_enabled_tools.__doc__ = SET_ENABLED_TOOLS
 LLMProgram.set_tool_aliases.__doc__ = SET_TOOL_ALIASES
 LLMProgram.configure_mcp.__doc__ = CONFIGURE_MCP
-# LLMProgram.add_tool.__doc__ = ADD_TOOL  # Removed
 LLMProgram.compile.__doc__ = COMPILE
 LLMProgram.api_params.__doc__ = API_PARAMS
-LLMProgram.get_enriched_system_prompt.__doc__ = GET_ENRICHED_SYSTEM_PROMPT
 # Skip from_toml as it's a staticmethod and docs can't be assigned

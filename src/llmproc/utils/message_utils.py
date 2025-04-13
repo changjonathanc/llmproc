@@ -4,12 +4,12 @@
 def append_message_with_id(process, role, content):
     """
     Append a message to the process state with an automatically generated GOTO ID.
-    
+
     Args:
         process: The LLMProcess instance
         role: The message role (user/assistant)
         content: The message content
-        
+
     Returns:
         The generated message ID
     """

@@ -96,8 +96,16 @@ def format_fd_file_result(result: dict[str, Any]) -> str:
         Formatted XML content
     """
     # Include create and exist_ok attributes if present
-    create_attr = f' create="{str(result.get("create", True)).lower()}"' if "create" in result else ""
-    exist_ok_attr = f' exist_ok="{str(result.get("exist_ok", True)).lower()}"' if "exist_ok" in result else ""
+    create_attr = (
+        f' create="{str(result.get("create", True)).lower()}"'
+        if "create" in result
+        else ""
+    )
+    exist_ok_attr = (
+        f' exist_ok="{str(result.get("exist_ok", True)).lower()}"'
+        if "exist_ok" in result
+        else ""
+    )
 
     xml = (
         f'<fd_file_result fd="{result["fd"]}" file_path="{result["file_path"]}" '
@@ -121,7 +129,12 @@ def format_fd_extraction(result: dict[str, Any]) -> str:
         Formatted XML content
     """
     # Common attributes for all extraction results
-    attributes = [f'source_fd="{result["source_fd"]}"', f'new_fd="{result["new_fd"]}"', f'mode="{result["mode"]}"', f'content_size="{result["content_size"]}"']
+    attributes = [
+        f'source_fd="{result["source_fd"]}"',
+        f'new_fd="{result["new_fd"]}"',
+        f'mode="{result["mode"]}"',
+        f'content_size="{result["content_size"]}"',
+    ]
 
     # Add position/range information based on provided data
     if "position" in result:

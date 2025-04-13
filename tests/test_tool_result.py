@@ -76,7 +76,10 @@ def test_tool_result_with_non_serializable_content():
     # Test with non-serializable in dictionary
     result = ToolResult({"obj": non_serializable})
     dict_result = result.to_dict()
-    assert "NonSerializable" in dict_result["content"] or "object" in dict_result["content"]  # Should contain some reference to our object
+    assert (
+        "NonSerializable" in dict_result["content"]
+        or "object" in dict_result["content"]
+    )  # Should contain some reference to our object
     assert dict_result["is_error"] is False
 
 

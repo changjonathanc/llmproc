@@ -5,15 +5,18 @@ including general helper functions for API interactions and error handling.
 """
 
 import logging
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
-def safe_callback(callback_fn: Optional[Callable], *args, callback_name: str = "callback") -> None:
+def safe_callback(
+    callback_fn: Optional[Callable], *args, callback_name: str = "callback"
+) -> None:
     """
     Safely execute a callback, catching and logging exceptions.
-    
+
     Args:
         callback_fn: The callback function to execute
         *args: Arguments to pass to the callback
@@ -28,7 +31,9 @@ def safe_callback(callback_fn: Optional[Callable], *args, callback_name: str = "
         logger.warning(f"Error in {callback_name} callback: {str(e)}")
 
 
-def get_context_window_size(model_name: str, window_sizes: Dict[str, int], default_size: int = 100000) -> int:
+def get_context_window_size(
+    model_name: str, window_sizes: dict[str, int], default_size: int = 100000
+) -> int:
     """
     Get the context window size for the given model.
 

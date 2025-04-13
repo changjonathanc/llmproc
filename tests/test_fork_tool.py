@@ -9,6 +9,7 @@ import pytest
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin.fork import fork_tool
+from tests.conftest import create_test_llmprocess_directly
 
 # Define example paths for easier maintenance
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
@@ -16,15 +17,23 @@ FEATURES_DIR = EXAMPLES_DIR / "features"
 FORK_EXAMPLE = FEATURES_DIR / "fork.toml"
 
 # Define constants for model versions to make updates easier
-CLAUDE_SMALL_MODEL = "claude-3-5-haiku@20241022"  # Vertex AI format (smaller/faster than Sonnet)
+CLAUDE_SMALL_MODEL = (
+    "claude-3-5-haiku@20241022"  # Vertex AI format (smaller/faster than Sonnet)
+)
 
 
 class TestForkTool:
     """Test the fork system call."""
 
-    def test_fork_registration(self):
+    @pytest.mark.asyncio
+    async def test_fork_registration(self):
         """Test that the fork tool is properly registered."""
-        # Create a minimal program with fork tool enabled
+        # Import the necessary modules for testing registration
+        from llmproc.tools.builtin.integration import load_builtin_tools
+        from llmproc.tools.tool_manager import ToolManager
+        from llmproc.tools.tool_registry import ToolRegistry
+
+        # Create a program with the fork tool enabled
         program = LLMProgram(
             model_name="test-model",
             provider="anthropic_vertex",
@@ -32,25 +41,38 @@ class TestForkTool:
             tools={"enabled": ["fork"]},
         )
 
-        # Create a process using the proper pattern with mocked start()
-        with patch.object(program, 'start') as mock_start:
-            # Create mock process that would be returned by start()
-            process = LLMProcess(program=program, skip_tool_init=True)
-            
-            # Add the fork tool to the process to simulate what would happen in start()
-            from llmproc.tools.builtin.fork import fork_tool_def
-            process.tool_manager.runtime_registry.register_tool("fork", lambda x: x, fork_tool_def)
-            process.tool_manager.enabled_tools.append("fork")
-            
-            # Configure mock to return our process
-            mock_start.return_value = process
-            
-            # In a real implementation, we would use:
-            # process = await program.start()
+        # Create a real registry and tool manager for registration
+        registry = ToolRegistry()
 
-        # Check that fork tool is registered
-        assert any(tool["name"] == "fork" for tool in process.tools)
-        assert "fork" in process.tool_handlers
+        # Load all builtin tools into the registry first
+        success = load_builtin_tools(registry)
+        assert success, "Failed to load builtin tools"
+
+        # Verify that the fork tool was registered in the registry
+        assert "fork" in registry.get_tool_names()
+
+        # Now create a tool manager that uses this registry
+        # (tool_manager.registry is actually called "runtime_registry" in the code)
+        tool_manager = ToolManager()
+
+        # In ToolManager, we need to set up the runtime_registry
+        # In real implementation, this is done during initialization
+        # We just copy the entire registry for simplicity
+        tool_manager.runtime_registry = registry
+
+        # Configure the tool manager to only enable the fork tool
+        tool_manager.enabled_tools = ["fork"]
+
+        # Check that fork tool is registered in the registry
+        assert "fork" in registry.get_tool_names()
+
+        # Get tool schemas that would be sent to the model
+        tool_schemas = tool_manager.get_tool_schemas()
+
+        # Verify fork tool is in the schemas
+        assert any(tool.get("name") == "fork" for tool in tool_schemas), (
+            f"Fork tool not found in: {tool_schemas}"
+        )
 
     @pytest.mark.asyncio
     async def test_fork_process_method(self):
@@ -66,20 +88,20 @@ class TestForkTool:
         # Since this is an async test, we can use AsyncMock
         mock_start = AsyncMock()
         program.start = mock_start
-        
+
         # Create mock process that would be returned by start()
-        process = LLMProcess(program=program, skip_tool_init=True)
+        process = create_test_llmprocess_directly(program=program)
         process.state = [
             {"role": "system", "content": "Test system prompt"},
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there"},
         ]
-        process.preloaded_content = {"test.txt": "Test content"}
+        # preloaded_content has been removed, using only enriched_system_prompt
         process.enriched_system_prompt = "Enriched prompt with content"
-        
+
         # Configure mock to return our process
         mock_start.return_value = process
-        
+
         # In a real implementation, we would use:
         # process = await program.start()
 
@@ -93,9 +115,7 @@ class TestForkTool:
         assert forked.state == process.state
         assert id(forked.state) != id(process.state)  # Different objects
 
-        # Check that preloaded content was copied
-        assert forked.preloaded_content == process.preloaded_content
-        assert id(forked.preloaded_content) != id(process.preloaded_content)  # Different objects
+        # preloaded_content has been removed, only enriched_system_prompt matters
 
         # Check that enriched system prompt was copied
         assert forked.enriched_system_prompt == process.enriched_system_prompt
@@ -115,7 +135,9 @@ class TestForkTool:
         runtime_context = {"process": mock_process}
 
         # Call the fork tool with runtime_context
-        result = await fork_tool(prompts=["Task 1", "Task 2"], runtime_context=runtime_context)
+        result = await fork_tool(
+            prompts=["Task 1", "Task 2"], runtime_context=runtime_context
+        )
 
         # Check that the result is a ToolResult with is_error=True
         from llmproc.common.results import ToolResult
@@ -158,24 +180,30 @@ class TestForkToolWithAPI:
         """Test the fork tool with actual API calls."""
         # Only run this test if we have API credentials (either Vertex AI or direct Anthropic)
         import os
-        
-        vertex_available = os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID") and os.environ.get("CLOUD_ML_REGION")
+
+        vertex_available = os.environ.get(
+            "ANTHROPIC_VERTEX_PROJECT_ID"
+        ) and os.environ.get("CLOUD_ML_REGION")
         anthropic_available = os.environ.get("ANTHROPIC_API_KEY")
-        
+
         if not (vertex_available or anthropic_available):
-            pytest.skip("No API credentials available (requires either ANTHROPIC_API_KEY or Vertex AI credentials)")
-            
+            pytest.skip(
+                "No API credentials available (requires either ANTHROPIC_API_KEY or Vertex AI credentials)"
+            )
+
         # Start timing
         start_time = time.time()
 
         # Create a program with a simplified test - smaller model, shorter prompt
         # Choose provider based on available credentials
-        provider = "anthropic" if os.environ.get("ANTHROPIC_API_KEY") else "anthropic_vertex"
+        provider = (
+            "anthropic" if os.environ.get("ANTHROPIC_API_KEY") else "anthropic_vertex"
+        )
         # For Anthropic direct API, change model format from "name@date" to "name-date"
         model_name = CLAUDE_SMALL_MODEL
         if provider == "anthropic" and "@" in CLAUDE_SMALL_MODEL:
             model_name = CLAUDE_SMALL_MODEL.replace("@", "-")
-            
+
         program = LLMProgram(
             model_name=model_name,  # Use smaller model
             provider=provider,
@@ -183,14 +211,14 @@ class TestForkToolWithAPI:
             parameters={"max_tokens": 150},  # Reduced token limit for faster tests
             tools={"enabled": ["fork"]},
         )
-        
+
         # Start the process
         process = await program.start()
 
         # Run a test query that asks for two very simple tasks
         result = await process.run(
-            "Fork yourself to do these two tasks: 1. Say hello. 2. Count to 3.", 
-            max_iterations=5
+            "Fork yourself to do these two tasks: 1. Say hello. 2. Count to 3.",
+            max_iterations=5,
         )
 
         # Get the last message
@@ -198,11 +226,13 @@ class TestForkToolWithAPI:
 
         # Check for task completion indicators
         assert "hello" in response.lower(), "Task 1 output not found"
-        assert any(str(num) in response for num in ["1", "2", "3"]), "Task 2 output not found"
-        
+        assert any(str(num) in response for num in ["1", "2", "3"]), (
+            "Task 2 output not found"
+        )
+
         # Print timing
         duration = time.time() - start_time
         print(f"\nTest completed in {duration:.2f} seconds")
-        
+
         # Verify test runs within reasonable time
         assert duration < 25.0, f"Test took too long: {duration:.2f}s > 25s timeout"

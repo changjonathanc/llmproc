@@ -40,48 +40,59 @@ class ToolRegistry:
         self.tool_definitions = []  # Tool schemas for API calls
         self.tool_handlers = {}  # Mapping of tool names to handler functions
         self.tool_aliases = {}  # Mapping of alias names to actual tool names
-        
+
     def clear(self):
         """Clear all registered tools and aliases.
-        
+
         Returns:
             self (for method chaining)
         """
         self.tool_handlers.clear()
         self.tool_definitions.clear()
         self.tool_aliases.clear()
-        
+
         logger.debug("Tool registry cleared.")
         return self
-        
+
     def clear_non_mcp_tools(self):
         """Clear only non-MCP tools from the registry.
-        
+
         This allows for selective clearing while preserving MCP tools,
         which might be managed separately.
-        
+
         Returns:
             self (for method chaining)
         """
         from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
-        
+
         # Identify MCP tools by their name format (containing separator)
-        mcp_tool_names = [name for name in self.tool_handlers 
-                         if MCP_TOOL_SEPARATOR in name]
-                         
+        mcp_tool_names = [
+            name for name in self.tool_handlers if MCP_TOOL_SEPARATOR in name
+        ]
+
         # Keep MCP tool definitions
-        mcp_definitions = [def_entry for def_entry in self.tool_definitions
-                          if def_entry.get("name", "") in mcp_tool_names]
-                          
+        mcp_definitions = [
+            def_entry
+            for def_entry in self.tool_definitions
+            if def_entry.get("name", "") in mcp_tool_names
+        ]
+
         # Clear everything except MCP tools
-        self.tool_handlers = {name: handler for name, handler in self.tool_handlers.items()
-                             if name in mcp_tool_names}
+        self.tool_handlers = {
+            name: handler
+            for name, handler in self.tool_handlers.items()
+            if name in mcp_tool_names
+        }
         self.tool_definitions = mcp_definitions
-        
-        logger.debug(f"Cleared non-MCP tools. Retained {len(mcp_tool_names)} MCP tools.")
+
+        logger.debug(
+            f"Cleared non-MCP tools. Retained {len(mcp_tool_names)} MCP tools."
+        )
         return self
 
-    def register_tool(self, name: str, handler: ToolHandler, definition: ToolSchema) -> ToolSchema:
+    def register_tool(
+        self, name: str, handler: ToolHandler, definition: ToolSchema
+    ) -> ToolSchema:
         """Register a tool with its handler and definition.
 
         Args:
@@ -116,7 +127,9 @@ class ToolRegistry:
         """
         if name not in self.tool_handlers:
             available_tools = ", ".join(self.tool_handlers.keys())
-            raise ValueError(f"Tool '{name}' not found. Available tools: {available_tools}")
+            raise ValueError(
+                f"Tool '{name}' not found. Available tools: {available_tools}"
+            )
         return self.tool_handlers[name]
 
     def list_tools(self) -> list[str]:
@@ -126,30 +139,32 @@ class ToolRegistry:
             A copy of the list of registered tool names to prevent external modification
         """
         return list(self.tool_handlers.keys())
-        
+
     def get_tool_names(self) -> list[str]:
         """Get list of registered tool names.
-        
+
         Returns:
             A copy of the list of all registered tool names to prevent external modification
         """
         return list(self.tool_handlers.keys())
-        
+
     def register_aliases(self, aliases: dict[str, str]) -> None:
         """Register aliases for tools.
-        
+
         Args:
             aliases: Dictionary mapping alias names to tool names
         """
         # Check for alias collision with existing tool names
         for alias, target in aliases.items():
             if alias in self.tool_handlers:
-                logger.warning(f"Alias '{alias}' conflicts with existing tool name - this may cause confusion")
-        
+                logger.warning(
+                    f"Alias '{alias}' conflicts with existing tool name - this may cause confusion"
+                )
+
         self.tool_aliases.update(aliases)
         if aliases:
             logger.debug(f"Registered {len(aliases)} tool aliases")
-        
+
     def get_definitions(self) -> list[ToolSchema]:
         """Get all tool definitions for API calls.
 
@@ -170,19 +185,23 @@ class ToolRegistry:
         """
         # Resolve alias if it exists, otherwise use the original name
         resolved_name = self.tool_aliases.get(name, name)
-        
+
         # Then check if the tool exists to handle "tool not found" errors
         if resolved_name not in self.tool_handlers:
             # Tool not found error
-            logger.warning(f"Tool not found error: Tool '{name}' (resolved to '{resolved_name}') not found")
+            logger.warning(
+                f"Tool not found error: Tool '{name}' (resolved to '{resolved_name}') not found"
+            )
 
             # Get list of available tools for the error message
             available_tools = self.list_tools()
-            
+
             # Add aliases to the error message if there are any
             alias_info = ""
             if self.tool_aliases:
-                alias_info = "\n\nAvailable aliases: " + ", ".join(f"{k} -> {v}" for k, v in self.tool_aliases.items())
+                alias_info = "\n\nAvailable aliases: " + ", ".join(
+                    f"{k} -> {v}" for k, v in self.tool_aliases.items()
+                )
 
             # Create a helpful error message
             formatted_msg = f"Error: Tool '{name}' not found.\n\nAvailable tools: {', '.join(available_tools)}{alias_info}\n\nPlease try again with one of the available tools."
@@ -193,18 +212,18 @@ class ToolRegistry:
         # If the tool exists, try to execute it
         try:
             handler = self.tool_handlers[resolved_name]
-            
+
             # Directly pass the args dictionary as keyword arguments to the handler.
             # The handler created by prepare_tool_handler expects **kwargs
             # and will perform its own signature checking against the original function.
             # This avoids the issue of ToolRegistry inspecting the wrapper's signature.
             result = await handler(**args)
-            
+
             # If this was an aliased tool, add a note to the result for debugging
             if name != resolved_name and isinstance(result, ToolResult):
                 # If the result is not a ToolResult, we don't modify it
                 result.alias_info = {"alias": name, "resolved": resolved_name}
-                
+
             return result
         except Exception as e:
             # Handle errors during tool execution
@@ -213,7 +232,7 @@ class ToolRegistry:
                 error_msg = f"Error executing tool '{name}' (aliased to '{resolved_name}'): {str(e)}"
             else:
                 error_msg = f"Error executing tool '{name}': {str(e)}"
-                
+
             logger.error(error_msg)
 
             return ToolResult.from_error(error_msg)

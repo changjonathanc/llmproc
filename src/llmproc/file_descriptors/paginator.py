@@ -24,7 +24,9 @@ def index_lines(content: str) -> tuple[list[int], int]:
     return lines, len(lines)
 
 
-def get_page_content(content: str, lines: list[int], page_size: int, start_pos: int) -> tuple[str, dict[str, Any]]:
+def get_page_content(
+    content: str, lines: list[int], page_size: int, start_pos: int
+) -> tuple[str, dict[str, Any]]:
     """Get content for a specific page position with line-aware pagination.
 
     Args:
@@ -44,7 +46,13 @@ def get_page_content(content: str, lines: list[int], page_size: int, start_pos: 
     # Handle case where start_char is beyond the content length
     if start_char >= len(content):
         # Return empty content with info showing we're beyond content
-        return "", {"start_line": total_lines, "end_line": total_lines, "continued": False, "truncated": False, "empty_page": True}
+        return "", {
+            "start_line": total_lines,
+            "end_line": total_lines,
+            "continued": False,
+            "truncated": False,
+            "empty_page": True,
+        }
 
     end_char = min(start_char + page_size, len(content))
 
@@ -141,7 +149,16 @@ def calculate_total_pages(content: str, lines: list[int], page_size: int) -> int
     return page_count
 
 
-def extract_content_by_mode(content: str, lines: list[int], mode: str, start: int, count: int, total_lines: int, page_size: int, total_pages: int) -> tuple[str, dict[str, Any]]:
+def extract_content_by_mode(
+    content: str,
+    lines: list[int],
+    mode: str,
+    start: int,
+    count: int,
+    total_lines: int,
+    page_size: int,
+    total_pages: int,
+) -> tuple[str, dict[str, Any]]:
     """Extract content from a string based on positioning mode.
 
     Args:
@@ -161,7 +178,9 @@ def extract_content_by_mode(content: str, lines: list[int], mode: str, start: in
     if mode == "line":
         # Validate line range
         if start < 1 or start > total_lines:
-            raise ValueError(f"Invalid line start position. Valid range: 1-{total_lines}")
+            raise ValueError(
+                f"Invalid line start position. Valid range: 1-{total_lines}"
+            )
 
         end_line = min(start + count - 1, total_lines)
 
@@ -197,7 +216,9 @@ def extract_content_by_mode(content: str, lines: list[int], mode: str, start: in
 
         # Validate char range
         if start < 0 or start >= content_length:
-            raise ValueError(f"Invalid character start position. Valid range: 0-{content_length - 1}")
+            raise ValueError(
+                f"Invalid character start position. Valid range: 0-{content_length - 1}"
+            )
 
         end_char = min(start + count, content_length)
 
@@ -252,7 +273,9 @@ def extract_content_by_mode(content: str, lines: list[int], mode: str, start: in
             last_page_info = None
 
             for p in range(start, end_page + 1):
-                section_content, position_info = get_page_content(content, lines, page_size, p)
+                section_content, position_info = get_page_content(
+                    content, lines, page_size, p
+                )
                 all_content.append(section_content)
 
                 if p == start:
@@ -278,7 +301,9 @@ def extract_content_by_mode(content: str, lines: list[int], mode: str, start: in
 
         else:
             # Single page case
-            content_to_return, position_info = get_page_content(content, lines, page_size, start)
+            content_to_return, position_info = get_page_content(
+                content, lines, page_size, start
+            )
 
             # Create the response metadata
             metadata = {

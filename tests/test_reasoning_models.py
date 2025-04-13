@@ -28,17 +28,28 @@ def test_reasoning_model_parameter_transformation():
     mock_low_process.model_name = "o3-mini"
 
     # Set up the API parameters for each reasoning level
-    mock_high_process.api_params = {"max_completion_tokens": 25000, "reasoning_effort": "high"}
+    mock_high_process.api_params = {
+        "max_completion_tokens": 25000,
+        "reasoning_effort": "high",
+    }
 
-    mock_medium_process.api_params = {"max_completion_tokens": 10000, "reasoning_effort": "medium"}
+    mock_medium_process.api_params = {
+        "max_completion_tokens": 10000,
+        "reasoning_effort": "medium",
+    }
 
-    mock_low_process.api_params = {"max_completion_tokens": 5000, "reasoning_effort": "low"}
+    mock_low_process.api_params = {
+        "max_completion_tokens": 5000,
+        "reasoning_effort": "low",
+    }
 
     # Mock client and response
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock()
     mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Test response"), finish_reason="stop")]
+    mock_response.choices = [
+        MagicMock(message=MagicMock(content="Test response"), finish_reason="stop")
+    ]
     mock_client.chat.completions.create.return_value = mock_response
 
     # Assign the same mock client to all processes
@@ -102,18 +113,29 @@ def test_reasoning_model_validation():
 
     # Test invalid reasoning_effort value
     with pytest.raises(ValueError) as excinfo:
-        LLMProgramConfig(model=ModelConfig(name="o3-mini", provider="openai"), parameters={"reasoning_effort": "invalid"})
+        LLMProgramConfig(
+            model=ModelConfig(name="o3-mini", provider="openai"),
+            parameters={"reasoning_effort": "invalid"},
+        )
     assert "Invalid reasoning_effort value" in str(excinfo.value)
 
     # Test all valid reasoning_effort values
     for effort in ["high", "medium", "low"]:
-        config = LLMProgramConfig(model=ModelConfig(name="o3-mini", provider="openai"), parameters={"reasoning_effort": effort})
+        config = LLMProgramConfig(
+            model=ModelConfig(name="o3-mini", provider="openai"),
+            parameters={"reasoning_effort": effort},
+        )
         assert config.parameters["reasoning_effort"] == effort
 
     # Test conflicting max_tokens and max_completion_tokens
     with pytest.raises(ValueError) as excinfo:
-        LLMProgramConfig(model=ModelConfig(name="o3-mini", provider="openai"), parameters={"max_tokens": 1000, "max_completion_tokens": 2000})
-    assert "Cannot specify both 'max_tokens' and 'max_completion_tokens'" in str(excinfo.value)
+        LLMProgramConfig(
+            model=ModelConfig(name="o3-mini", provider="openai"),
+            parameters={"max_tokens": 1000, "max_completion_tokens": 2000},
+        )
+    assert "Cannot specify both 'max_tokens' and 'max_completion_tokens'" in str(
+        excinfo.value
+    )
 
 
 def test_reasoning_model_display_names():

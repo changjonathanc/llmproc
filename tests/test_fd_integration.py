@@ -5,14 +5,13 @@ from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
+from llmproc.common.results import RunResult, ToolResult
 from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
-from llmproc.common.results import RunResult
 from llmproc.tools.builtin.fork import fork_tool
 from llmproc.tools.builtin.spawn import spawn_tool
-from llmproc.common.results import ToolResult
-from tests.conftest import create_mock_llm_program
+from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
 @pytest.mark.asyncio
@@ -26,7 +25,13 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     # Create a proper RunResult object
     mock_run_response = RunResult()
     # Add the API call info with the text field manually
-    mock_run_response.add_api_call({"model": "test-model", "provider": "anthropic", "text": 'Test response with reference: <ref id="test_ref">Test reference content</ref>'})
+    mock_run_response.add_api_call(
+        {
+            "model": "test-model",
+            "provider": "anthropic",
+            "text": 'Test response with reference: <ref id="test_ref">Test reference content</ref>',
+        }
+    )
 
     # Create process hierarchy:
     # parent -> child1 -> grandchild
@@ -59,22 +64,27 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     grandchild_program.display_name = "grandchild"
     grandchild_program.base_dir = None
     grandchild_program.api_params = {}
-    grandchild_program.get_enriched_system_prompt = Mock(return_value="enriched grandchild")
+    grandchild_program.get_enriched_system_prompt = Mock(
+        return_value="enriched grandchild"
+    )
 
     # Create a parent process using the proper initialization pattern
-    # For testing purposes, we mock the async start() method 
-    with patch.object(parent_program, 'start') as mock_start:
+    # For testing purposes, we mock the async start() method
+    with patch.object(parent_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        parent_process = LLMProcess(program=parent_program, skip_tool_init=True)
-        
+        parent_process = create_test_llmprocess_directly(program=parent_program)
+
         # Configure the mock to return our process
         mock_start.return_value = parent_process
-        
+
         # In a real implementation, we would use:
         # parent_process = await parent_program.start()
 
     # Set up linked programs
-    parent_process.linked_programs = {"child": child_program, "grandchild": grandchild_program}
+    parent_process.linked_programs = {
+        "child": child_program,
+        "grandchild": grandchild_program,
+    }
     parent_process.has_linked_programs = True
 
     # Create a mechanism to track created processes
@@ -82,7 +92,9 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
 
     # Mock the _spawn_child_process method to capture processes
     async def mock_spawn(process, program_name, *args, **kwargs):
-        child_process = LLMProcess(program=process.linked_programs[program_name])
+        child_process = create_test_llmprocess_directly(
+            program=process.linked_programs[program_name]
+        )
 
         # Enable file descriptors on the child
         child_process.file_descriptor_enabled = True
@@ -106,14 +118,18 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
         return child_process
 
     # Replace spawn_tool with our mock
-    async def mock_spawn_tool(program_name, query, additional_preload_fds=None, llm_process=None):
+    async def mock_spawn_tool(
+        program_name, query, additional_preload_fds=None, llm_process=None
+    ):
         child_process = await mock_spawn(llm_process, program_name, query)
 
         # Handle additional preload FDs
         if additional_preload_fds:
             for fd_id in additional_preload_fds:
                 if fd_id in llm_process.fd_manager.file_descriptors:
-                    child_process.fd_manager.file_descriptors[fd_id] = llm_process.fd_manager.file_descriptors[fd_id].copy()
+                    child_process.fd_manager.file_descriptors[fd_id] = (
+                        llm_process.fd_manager.file_descriptors[fd_id].copy()
+                    )
 
         return ToolResult(content=f"Spawned {program_name}")
 
@@ -121,7 +137,9 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     parent_process.file_descriptor_enabled = True
     parent_process.references_enabled = True
     parent_process.page_user_input = True
-    parent_process.fd_manager = FileDescriptorManager(page_user_input=True, enable_references=True)
+    parent_process.fd_manager = FileDescriptorManager(
+        page_user_input=True, enable_references=True
+    )
 
     # Step 1: Create a reference in parent process
     parent_message = """
@@ -130,7 +148,9 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     </ref>
     """
 
-    parent_references = parent_process.fd_manager.extract_references_from_message(parent_message)
+    parent_references = parent_process.fd_manager.extract_references_from_message(
+        parent_message
+    )
     assert len(parent_references) == 1
     assert "ref:parent_ref" in parent_process.fd_manager.file_descriptors
 
@@ -155,17 +175,20 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
 
     # Verify the user input was stored correctly
     assert fixed_fd_id in parent_process.fd_manager.file_descriptors
-    assert parent_process.fd_manager.file_descriptors[fixed_fd_id]["source"] == "user_input"
+    assert (
+        parent_process.fd_manager.file_descriptors[fixed_fd_id]["source"]
+        == "user_input"
+    )
 
     # Step 3: Create a child process using the proper initialization pattern
     # This simulates what spawn_tool would do but using the proper pattern
-    with patch.object(child_program, 'start') as mock_start:
+    with patch.object(child_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        child1 = LLMProcess(program=child_program, skip_tool_init=True)
-        
+        child1 = create_test_llmprocess_directly(program=child_program)
+
         # Configure the mock to return our process
         mock_start.return_value = child1
-        
+
         # In a real implementation, we would use:
         # child1 = await child_program.start()
 
@@ -211,13 +234,13 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
 
     # Step 5: Create a grandchild process using the proper initialization pattern
     # This simulates what spawn_tool would do but using the proper pattern
-    with patch.object(grandchild_program, 'start') as mock_start:
+    with patch.object(grandchild_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        grandchild = LLMProcess(program=grandchild_program, skip_tool_init=True)
-        
+        grandchild = create_test_llmprocess_directly(program=grandchild_program)
+
         # Configure the mock to return our process
         mock_start.return_value = grandchild
-        
+
         # In a real implementation, we would use:
         # grandchild = await grandchild_program.start()
 
@@ -233,7 +256,9 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
 
     # Additionally copy the explicit FD we would pass
     if "ref:child_ref" in child1.fd_manager.file_descriptors:
-        grandchild.fd_manager.file_descriptors["ref:child_ref"] = child1.fd_manager.file_descriptors["ref:child_ref"].copy()
+        grandchild.fd_manager.file_descriptors["ref:child_ref"] = (
+            child1.fd_manager.file_descriptors["ref:child_ref"].copy()
+        )
 
     # Store the grandchild process
     processes["grandchildren"].append(grandchild)
@@ -264,30 +289,34 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
     # Create two identical forked processes to test multiple process creation
     for _ in range(2):
         # Create a forked process with file descriptor sharing using proper initialization pattern
-        with patch.object(parent_process.program, 'start') as mock_start:
+        with patch.object(parent_process.program, "start") as mock_start:
             # Create a process that would be returned by start()
-            forked_process = LLMProcess(program=parent_process.program, skip_tool_init=True)
+            forked_process = create_test_llmprocess_directly(
+                program=parent_process.program
+            )
             forked_process.file_descriptor_enabled = True
             forked_process.references_enabled = True
             forked_process.fd_manager = FileDescriptorManager(enable_references=True)
-            
+
             # Configure the mock to return our process
             mock_start.return_value = forked_process
-            
+
             # In a real implementation, we would use:
             # forked_process = await parent_process.program.start()
-        
+
         # Copy all file descriptors from parent
         for fd_id, fd_data in parent_process.fd_manager.file_descriptors.items():
             forked_process.fd_manager.file_descriptors[fd_id] = fd_data.copy()
-            
+
         # Mock the run method
         forked_process.run = Mock(return_value=mock_run_response)
-        
+
         forked_processes.append(forked_process)
 
     # Create a simulated fork_result
-    fork_result = ToolResult(content=f"fork_results: Created {len(forked_processes)} forked processes")
+    fork_result = ToolResult(
+        content=f"fork_results: Created {len(forked_processes)} forked processes"
+    )
 
     # Get the fork results (tool returns array of tool results)
     fork_content = fork_result.content
@@ -295,18 +324,18 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
 
     # Now let's create a second child from parent to verify isolation
     # Create child2 process using the proper initialization pattern
-    with patch.object(child_program, 'start') as mock_start:
+    with patch.object(child_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        child2 = LLMProcess(program=child_program, skip_tool_init=True)
-        
+        child2 = create_test_llmprocess_directly(program=child_program)
+
         # Enable file descriptors on child2
         child2.file_descriptor_enabled = True
         child2.references_enabled = True
         child2.fd_manager = FileDescriptorManager(enable_references=True)
-        
+
         # Configure the mock to return our process
         mock_start.return_value = child2
-        
+
         # In a real implementation, we would use:
         # child2 = await child_program.start()
 
@@ -345,7 +374,13 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     # Create a proper RunResult object
     mock_run_response = RunResult()
     # Add the API call info with the text field manually
-    mock_run_response.add_api_call({"model": "test-model", "provider": "anthropic", "text": 'Test response with reference: <ref id="test_ref">Test reference content</ref>'})
+    mock_run_response.add_api_call(
+        {
+            "model": "test-model",
+            "provider": "anthropic",
+            "text": 'Test response with reference: <ref id="test_ref">Test reference content</ref>',
+        }
+    )
 
     # Create a process hierarchy with multiple levels
     # level1 -> level2 -> level3 -> level4
@@ -388,13 +423,13 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     level4_program.get_enriched_system_prompt = Mock(return_value="enriched level4")
 
     # Create the level1 process using the proper initialization pattern
-    with patch.object(level1_program, 'start') as mock_start:
+    with patch.object(level1_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        level1_process = LLMProcess(program=level1_program, skip_tool_init=True)
-        
+        level1_process = create_test_llmprocess_directly(program=level1_program)
+
         # Configure the mock to return our process
         mock_start.return_value = level1_process
-        
+
         # In a real implementation, we would use:
         # level1_process = await level1_program.start()
 
@@ -408,7 +443,12 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     level1_process.fd_manager = FileDescriptorManager(enable_references=True)
 
     # Create processes dictionary to track all processes created
-    processes = {"level1": level1_process, "level2": None, "level3": None, "level4": None}
+    processes = {
+        "level1": level1_process,
+        "level2": None,
+        "level3": None,
+        "level4": None,
+    }
 
     # Create references at each level
     level1_message = """
@@ -417,14 +457,22 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     </ref>
     """
 
-    level1_references = level1_process.fd_manager.extract_references_from_message(level1_message)
+    level1_references = level1_process.fd_manager.extract_references_from_message(
+        level1_message
+    )
     assert len(level1_references) == 1
     assert "ref:level1_ref" in level1_process.fd_manager.file_descriptors
 
     # Mock spawn tool functionality
-    async def mock_spawn_for_level(program_name, query, additional_preload_fds=None, runtime_context=None):
+    async def mock_spawn_for_level(
+        program_name, query, additional_preload_fds=None, runtime_context=None
+    ):
         # Extract process from runtime_context
-        llm_process = runtime_context["process"] if runtime_context and "process" in runtime_context else None
+        llm_process = (
+            runtime_context["process"]
+            if runtime_context and "process" in runtime_context
+            else None
+        )
         if not llm_process:
             return ToolResult.from_error("No process provided in runtime_context")
 
@@ -434,13 +482,13 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
 
         # Create the child process
         if next_level == "level2":
-            child_process = LLMProcess(program=level2_program)
+            child_process = create_test_llmprocess_directly(program=level2_program)
             child_process.linked_programs = {"level3": level3_program}
         elif next_level == "level3":
-            child_process = LLMProcess(program=level3_program)
+            child_process = create_test_llmprocess_directly(program=level3_program)
             child_process.linked_programs = {"level4": level4_program}
         elif next_level == "level4":
-            child_process = LLMProcess(program=level4_program)
+            child_process = create_test_llmprocess_directly(program=level4_program)
         else:
             raise ValueError(f"Unexpected program name: {program_name}")
 
@@ -460,7 +508,9 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
         if additional_preload_fds:
             for fd_id in additional_preload_fds:
                 if fd_id in llm_process.fd_manager.file_descriptors:
-                    child_process.fd_manager.file_descriptors[fd_id] = llm_process.fd_manager.file_descriptors[fd_id].copy()
+                    child_process.fd_manager.file_descriptors[fd_id] = (
+                        llm_process.fd_manager.file_descriptors[fd_id].copy()
+                    )
 
         # Store the process
         processes[next_level] = child_process
@@ -471,15 +521,15 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
         return ToolResult(content=f"Spawned {next_level}")
 
     # Create level2 process using the proper initialization pattern
-    with patch.object(level2_program, 'start') as mock_start:
+    with patch.object(level2_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        level2_process = LLMProcess(program=level2_program, skip_tool_init=True)
+        level2_process = create_test_llmprocess_directly(program=level2_program)
         level2_process.linked_programs = {"level3": level3_program}
         level2_process.has_linked_programs = True
-        
+
         # Configure the mock to return our process
         mock_start.return_value = level2_process
-        
+
         # In a real implementation, we would use:
         # level2_process = await level2_program.start()
 
@@ -510,20 +560,22 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     </ref>
     """
 
-    level2_references = processes["level2"].fd_manager.extract_references_from_message(level2_message)
+    level2_references = processes["level2"].fd_manager.extract_references_from_message(
+        level2_message
+    )
     assert len(level2_references) == 1
     assert "ref:level2_ref" in processes["level2"].fd_manager.file_descriptors
 
     # Create level3 process using the proper initialization pattern
-    with patch.object(level3_program, 'start') as mock_start:
+    with patch.object(level3_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        level3_process = LLMProcess(program=level3_program, skip_tool_init=True)
+        level3_process = create_test_llmprocess_directly(program=level3_program)
         level3_process.linked_programs = {"level4": level4_program}
         level3_process.has_linked_programs = True
-        
+
         # Configure the mock to return our process
         mock_start.return_value = level3_process
-        
+
         # In a real implementation, we would use:
         # level3_process = await level3_program.start()
 
@@ -555,18 +607,20 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
     </ref>
     """
 
-    level3_references = processes["level3"].fd_manager.extract_references_from_message(level3_message)
+    level3_references = processes["level3"].fd_manager.extract_references_from_message(
+        level3_message
+    )
     assert len(level3_references) == 1
     assert "ref:level3_ref" in processes["level3"].fd_manager.file_descriptors
 
     # Create level4 process using the proper initialization pattern
-    with patch.object(level4_program, 'start') as mock_start:
+    with patch.object(level4_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        level4_process = LLMProcess(program=level4_program, skip_tool_init=True)
-        
+        level4_process = create_test_llmprocess_directly(program=level4_program)
+
         # Configure the mock to return our process
         mock_start.return_value = level4_process
-        
+
         # In a real implementation, we would use:
         # level4_process = await level4_program.start()
 
@@ -609,7 +663,13 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
     # Create a proper RunResult object
     mock_run_response = RunResult()
     # Add the API call info with the text field manually
-    mock_run_response.add_api_call({"model": "test-model", "provider": "anthropic", "text": "Test response after processing user input"})
+    mock_run_response.add_api_call(
+        {
+            "model": "test-model",
+            "provider": "anthropic",
+            "text": "Test response after processing user input",
+        }
+    )
 
     # Create a program with file descriptor and spawn support
     parent_program = create_mock_llm_program()
@@ -632,13 +692,13 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
     child_program.get_enriched_system_prompt = Mock(return_value="enriched child")
 
     # Create parent process using the proper initialization pattern
-    with patch.object(parent_program, 'start') as mock_start:
+    with patch.object(parent_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        parent_process = LLMProcess(program=parent_program, skip_tool_init=True)
-        
+        parent_process = create_test_llmprocess_directly(program=parent_program)
+
         # Configure the mock to return our process
         mock_start.return_value = parent_process
-        
+
         # In a real implementation, we would use:
         # parent_process = await parent_program.start()
 
@@ -649,7 +709,9 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
     # Enable FD features with paging enabled
     parent_process.file_descriptor_enabled = True
     parent_process.references_enabled = True
-    parent_process.fd_manager = FileDescriptorManager(max_input_chars=1000, page_user_input=True, enable_references=True)
+    parent_process.fd_manager = FileDescriptorManager(
+        max_input_chars=1000, page_user_input=True, enable_references=True
+    )
 
     # Create a large user input
     large_input = "A" * 2000  # Well above the threshold
@@ -669,16 +731,22 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
     # Mock spawn tool functionality
     child_process = None
 
-    async def mock_spawn_tool_impl(program_name, query, additional_preload_fds=None, runtime_context=None):
+    async def mock_spawn_tool_impl(
+        program_name, query, additional_preload_fds=None, runtime_context=None
+    ):
         nonlocal child_process
 
         # Extract process from runtime_context
-        llm_process = runtime_context["process"] if runtime_context and "process" in runtime_context else None
+        llm_process = (
+            runtime_context["process"]
+            if runtime_context and "process" in runtime_context
+            else None
+        )
         if not llm_process:
             return ToolResult.from_error("No process provided in runtime_context")
-            
+
         # Create the child process
-        child_process = LLMProcess(program=child_program)
+        child_process = create_test_llmprocess_directly(program=child_program)
 
         # Enable file descriptors on the child
         child_process.file_descriptor_enabled = True
@@ -689,7 +757,9 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
         if additional_preload_fds:
             for fd_id in additional_preload_fds:
                 if fd_id in llm_process.fd_manager.file_descriptors:
-                    child_process.fd_manager.file_descriptors[fd_id] = llm_process.fd_manager.file_descriptors[fd_id].copy()
+                    child_process.fd_manager.file_descriptors[fd_id] = (
+                        llm_process.fd_manager.file_descriptors[fd_id].copy()
+                    )
 
         # Mock the run method
         child_process.run = Mock(return_value=mock_run_response)
@@ -697,13 +767,13 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
         return ToolResult(content=f"Spawned {program_name}")
 
     # Create the child process using the proper initialization pattern
-    with patch.object(child_program, 'start') as mock_start:
+    with patch.object(child_program, "start") as mock_start:
         # Create a process that would be returned by start()
-        child_process = LLMProcess(program=child_program, skip_tool_init=True)
-        
+        child_process = create_test_llmprocess_directly(program=child_program)
+
         # Configure the mock to return our process
         mock_start.return_value = child_process
-        
+
         # In a real implementation, we would use:
         # child_process = await child_program.start()
 
@@ -720,7 +790,9 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
 
     # Copy file descriptors from parent to child
     if fixed_fd_id in parent_process.fd_manager.file_descriptors:
-        child_process.fd_manager.file_descriptors[fixed_fd_id] = parent_process.fd_manager.file_descriptors[fixed_fd_id].copy()
+        child_process.fd_manager.file_descriptors[fixed_fd_id] = (
+            parent_process.fd_manager.file_descriptors[fixed_fd_id].copy()
+        )
 
     # Mock the run method
     child_process.run = Mock(return_value=mock_run_response)
@@ -740,15 +812,17 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
     assert fixed_fd_id in child_process.fd_manager.file_descriptors
 
     # Verify the content matches the original input
-    assert child_process.fd_manager.file_descriptors[fixed_fd_id]["content"] == large_input
+    assert (
+        child_process.fd_manager.file_descriptors[fixed_fd_id]["content"] == large_input
+    )
 
     # Use read_fd tool in the child to read the content
     from llmproc.tools.builtin.fd_tools import read_fd_tool
 
     read_result = await read_fd_tool(
-        fd=fixed_fd_id, 
+        fd=fixed_fd_id,
         read_all=True,
-        runtime_context={"fd_manager": child_process.fd_manager}
+        runtime_context={"fd_manager": child_process.fd_manager},
     )
 
     # Verify content was read correctly
@@ -766,7 +840,7 @@ async def test_reference_error_handling():
     try:
         manager.read_fd_content("ref:nonexistent")
         # Should have raised KeyError
-        assert False, "read_fd_content should have raised KeyError for non-existent reference"
+        raise AssertionError("read_fd_content should have raised KeyError for non-existent reference")
     except KeyError as e:
         # Verify error message
         assert "not found" in str(e)
@@ -786,16 +860,21 @@ async def test_reference_error_handling():
     try:
         manager.read_fd_content("ref:valid_ref", mode="line", start=100, count=1)
         # Should have raised ValueError
-        assert False, "read_fd_content should have raised ValueError for invalid line range"
+        raise AssertionError("read_fd_content should have raised ValueError for invalid line range")
     except ValueError as e:
         # Verify error message contains relevant error information
-        assert any(term in str(e).lower() for term in ["invalid", "range", "line", "parameter"])
+        assert any(
+            term in str(e).lower() for term in ["invalid", "range", "line", "parameter"]
+        )
 
     # Test writing a non-existent reference to a file
     from llmproc.tools.builtin.fd_tools import fd_to_file_tool
 
     # Mock open to avoid actually writing files
-    with patch("builtins.open", MagicMock()), patch("os.path.getsize", MagicMock(side_effect=Exception("File not found"))):
+    with (
+        patch("builtins.open", MagicMock()),
+        patch("os.path.getsize", MagicMock(side_effect=Exception("File not found"))),
+    ):
         # Create a mocked LLMProcess with the manager
         process = Mock()
         process.fd_manager = manager
@@ -806,7 +885,7 @@ async def test_reference_error_handling():
             mode="write",
             create=True,
             exist_ok=True,
-            runtime_context={"fd_manager": process.fd_manager}
+            runtime_context={"fd_manager": process.fd_manager},
         )
 
         # Verify error response

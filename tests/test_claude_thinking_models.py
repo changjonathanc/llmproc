@@ -27,11 +27,20 @@ def test_thinking_model_parameter_transformation():
     mock_low_process.model_name = "claude-3-7-sonnet-20250219"
 
     # Set up the API parameters for each thinking level with the nested structure
-    mock_high_process.api_params = {"max_tokens": 32768, "thinking": {"type": "enabled", "budget_tokens": 16000}}
+    mock_high_process.api_params = {
+        "max_tokens": 32768,
+        "thinking": {"type": "enabled", "budget_tokens": 16000},
+    }
 
-    mock_medium_process.api_params = {"max_tokens": 16384, "thinking": {"type": "enabled", "budget_tokens": 4000}}
+    mock_medium_process.api_params = {
+        "max_tokens": 16384,
+        "thinking": {"type": "enabled", "budget_tokens": 4000},
+    }
 
-    mock_low_process.api_params = {"max_tokens": 8192, "thinking": {"type": "enabled", "budget_tokens": 1024}}
+    mock_low_process.api_params = {
+        "max_tokens": 8192,
+        "thinking": {"type": "enabled", "budget_tokens": 1024},
+    }
 
     # Test parameter passing for each process
     for process in [mock_high_process, mock_medium_process, mock_low_process]:
@@ -54,9 +63,15 @@ def test_thinking_model_parameter_transformation():
 def test_thinking_model_configs():
     """Test that the thinking model configuration files load correctly."""
     # Load the three thinking model configurations
-    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
-    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
-    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-high.toml"
+    )
+    medium_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-medium.toml"
+    )
+    low_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-low.toml"
+    )
 
     # Verify high thinking configuration
     assert high_program.model_name == "claude-3-7-sonnet-20250219"
@@ -92,22 +107,38 @@ def test_thinking_model_validation():
 
     # Test invalid thinking structure (not a dict)
     with pytest.raises(ValueError) as excinfo:
-        LLMProgramConfig(model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"), parameters={"thinking": "not a dict"})
+        LLMProgramConfig(
+            model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"),
+            parameters={"thinking": "not a dict"},
+        )
     assert "parameters.thinking must be a dictionary" in str(excinfo.value)
 
     # Test invalid type value
     with pytest.raises(ValueError) as excinfo:
-        LLMProgramConfig(model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"), parameters={"thinking": {"type": "invalid", "budget_tokens": 4000}})
-    assert "parameters.thinking.type must be 'enabled' or 'disabled'" in str(excinfo.value)
+        LLMProgramConfig(
+            model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"),
+            parameters={"thinking": {"type": "invalid", "budget_tokens": 4000}},
+        )
+    assert "parameters.thinking.type must be 'enabled' or 'disabled'" in str(
+        excinfo.value
+    )
 
     # Test negative budget tokens
     with pytest.raises(ValueError) as excinfo:
-        LLMProgramConfig(model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"), parameters={"thinking": {"type": "enabled", "budget_tokens": -1000}})
-    assert "parameters.thinking.budget_tokens must be non-negative" in str(excinfo.value)
+        LLMProgramConfig(
+            model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"),
+            parameters={"thinking": {"type": "enabled", "budget_tokens": -1000}},
+        )
+    assert "parameters.thinking.budget_tokens must be non-negative" in str(
+        excinfo.value
+    )
 
     # Test budget tokens too small (warning)
     with pytest.warns(UserWarning):
-        config = LLMProgramConfig(model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"), parameters={"thinking": {"type": "enabled", "budget_tokens": 500}})
+        config = LLMProgramConfig(
+            model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"),
+            parameters={"thinking": {"type": "enabled", "budget_tokens": 500}},
+        )
         assert config.parameters["thinking"]["budget_tokens"] == 500
 
     # Test valid configurations
@@ -119,16 +150,25 @@ def test_thinking_model_validation():
     ]
 
     for params in valid_configs:
-        config = LLMProgramConfig(model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"), parameters=params)
+        config = LLMProgramConfig(
+            model=ModelConfig(name="claude-3-7-sonnet-20250219", provider="anthropic"),
+            parameters=params,
+        )
         assert "thinking" in config.parameters
 
 
 def test_thinking_model_display_names():
     """Test that thinking model display names are set correctly."""
     # Load the three thinking model configurations
-    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
-    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
-    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-high.toml"
+    )
+    medium_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-medium.toml"
+    )
+    low_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-low.toml"
+    )
 
     # Verify display names
     assert high_program.display_name == "Claude 3.7 Sonnet (High Thinking)"

@@ -11,10 +11,10 @@ Re-exporting tool functions for backward compatibility.
 from llmproc.tools.builtin.calculator import calculator
 from llmproc.tools.builtin.fd_tools import fd_to_file_tool, read_fd_tool
 from llmproc.tools.builtin.fork import fork_tool, fork_tool_def
-from llmproc.tools.builtin.goto import handle_goto, GOTO_TOOL_DEFINITION
+from llmproc.tools.builtin.goto import GOTO_TOOL_DEFINITION, handle_goto
 from llmproc.tools.builtin.list_dir import list_dir
 from llmproc.tools.builtin.read_file import read_file
-from llmproc.tools.builtin.spawn import spawn_tool, SPAWN_TOOL_SCHEMA
+from llmproc.tools.builtin.spawn import SPAWN_TOOL_SCHEMA, spawn_tool
 
 __all__ = [
     "calculator",

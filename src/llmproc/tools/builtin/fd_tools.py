@@ -6,7 +6,7 @@ FileDescriptorManager's methods.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from llmproc.common.results import ToolResult
 from llmproc.file_descriptors.formatter import format_fd_error
@@ -24,10 +24,10 @@ async def read_fd_tool(
     mode: str = "page",
     start: int = 1,
     count: int = 1,
-    runtime_context: Optional[Dict[str, Any]] = None,
+    runtime_context: Optional[dict[str, Any]] = None,
 ) -> ToolResult:
     """Read content from a file descriptor.
-    
+
     Args:
         fd: File descriptor ID to read from (e.g., "fd:12345" or "ref:example_id")
         read_all: If true, returns the entire content
@@ -37,7 +37,7 @@ async def read_fd_tool(
         count: Number of units to read (pages, lines, or characters)
         runtime_context: Runtime context dictionary containing dependencies needed by the tool.
             Required keys: 'fd_manager' (FileDescriptorManager instance)
-            
+
     Returns:
         ToolResult with content or a new file descriptor reference
     """
@@ -46,9 +46,9 @@ async def read_fd_tool(
         error_msg = "File descriptor operations require runtime_context with fd_manager"
         logger.error(f"READ_FD ERROR: {error_msg}")
         return ToolResult.from_error(error_msg)
-        
+
     fd_manager = runtime_context["fd_manager"]
-        
+
     try:
         xml_content = fd_manager.read_fd_content(
             fd_id=fd,
@@ -56,7 +56,7 @@ async def read_fd_tool(
             extract_to_new_fd=extract_to_new_fd,
             mode=mode,
             start=start,
-            count=count
+            count=count,
         )
         # Wrap successful result
         return ToolResult.from_success(xml_content)
@@ -86,7 +86,7 @@ async def fd_to_file_tool(
     mode: str = "write",
     create: bool = True,
     exist_ok: bool = True,
-    runtime_context: Optional[Dict[str, Any]] = None,
+    runtime_context: Optional[dict[str, Any]] = None,
 ) -> ToolResult:
     """Write file descriptor content to a file on disk.
 
@@ -107,16 +107,12 @@ async def fd_to_file_tool(
         error_msg = "File descriptor operations require runtime_context with fd_manager"
         logger.error(f"FD_TO_FILE ERROR: {error_msg}")
         return ToolResult.from_error(error_msg)
-        
+
     fd_manager = runtime_context["fd_manager"]
-        
+
     try:
         xml_content = fd_manager.write_fd_to_file_content(
-            fd_id=fd, 
-            file_path=file_path, 
-            mode=mode, 
-            create=create, 
-            exist_ok=exist_ok
+            fd_id=fd, file_path=file_path, mode=mode, create=create, exist_ok=exist_ok
         )
         # Wrap successful result
         return ToolResult.from_success(xml_content)

@@ -34,7 +34,9 @@ async def test_program_linking_descriptions_api(temp_dir):
         if os.environ.get(key_name):
             break
     else:
-        pytest.skip("VERTEX_AI_PROJECT or VERTEX_AI_LOCATION environment variables not set")
+        pytest.skip(
+            "VERTEX_AI_PROJECT or VERTEX_AI_LOCATION environment variables not set"
+        )
 
     # Create test files
     main_toml = temp_dir / "main.toml"
@@ -89,7 +91,10 @@ async def test_program_linking_descriptions_api(temp_dir):
     # Check that the descriptions were parsed correctly
     assert hasattr(program, "linked_program_descriptions")
     assert "expert" in program.linked_program_descriptions
-    assert program.linked_program_descriptions["expert"] == "Specialized expert with knowledge about program descriptions"
+    assert (
+        program.linked_program_descriptions["expert"]
+        == "Specialized expert with knowledge about program descriptions"
+    )
 
     # Check that the spawn tool shows descriptions
     spawn_tool = next((tool for tool in process.tools if tool["name"] == "spawn"), None)
@@ -114,4 +119,6 @@ async def test_program_linking_descriptions_api(temp_dir):
 
 
 if __name__ == "__main__":
-    asyncio.run(test_program_linking_descriptions_api(Path("tmp_test_descriptions_api")))
+    asyncio.run(
+        test_program_linking_descriptions_api(Path("tmp_test_descriptions_api"))
+    )

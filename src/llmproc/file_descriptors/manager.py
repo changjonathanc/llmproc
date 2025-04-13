@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional, Union
 
+from llmproc.common.results import ToolResult
 from llmproc.file_descriptors._docs_manager import (
     CREATE_FROM_TOOL_RESULT,
     EXTRACT_REFERENCES,
@@ -21,10 +22,23 @@ from llmproc.file_descriptors._docs_manager import (
     REGISTER_FD_TOOL,
 )
 from llmproc.file_descriptors.constants import FD_RELATED_TOOLS
-from llmproc.file_descriptors.formatter import format_fd_content, format_fd_error, format_fd_extraction, format_fd_file_result, format_fd_result
-from llmproc.file_descriptors.paginator import calculate_total_pages, extract_content_by_mode, get_page_content, index_lines
-from llmproc.file_descriptors.references import extract_references, format_user_input_reference
-from llmproc.common.results import ToolResult
+from llmproc.file_descriptors.formatter import (
+    format_fd_content,
+    format_fd_error,
+    format_fd_extraction,
+    format_fd_file_result,
+    format_fd_result,
+)
+from llmproc.file_descriptors.paginator import (
+    calculate_total_pages,
+    extract_content_by_mode,
+    get_page_content,
+    index_lines,
+)
+from llmproc.file_descriptors.references import (
+    extract_references,
+    format_user_input_reference,
+)
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -62,7 +76,9 @@ class FileDescriptorManager:
         """
         return tool_name in self.fd_related_tools
 
-    def create_fd_from_tool_result(self, content: str, tool_name: Optional[str] = None) -> tuple:
+    def create_fd_from_tool_result(
+        self, content: str, tool_name: Optional[str] = None
+    ) -> tuple:
         """Create a file descriptor from tool result content if needed.
 
         Args:
@@ -74,7 +90,11 @@ class FileDescriptorManager:
             or the FD result, and used_fd is a boolean indicating if FD was created
         """
         # Check if FD system should be used
-        if not isinstance(content, str) or (tool_name and self.is_fd_related_tool(tool_name)) or len(content) <= self.max_direct_output_chars:
+        if (
+            not isinstance(content, str)
+            or (tool_name and self.is_fd_related_tool(tool_name))
+            or len(content) <= self.max_direct_output_chars
+        ):
             return content, False
 
         # Create FD for large content
@@ -91,7 +111,9 @@ class FileDescriptorManager:
         """
         self.fd_related_tools.add(tool_name)
 
-    def create_fd_content(self, content: str, page_size: int | None = None, source: str = "tool_result") -> str:
+    def create_fd_content(
+        self, content: str, page_size: int | None = None, source: str = "tool_result"
+    ) -> str:
         """Create a new file descriptor for large content.
 
         Args:
@@ -123,7 +145,9 @@ class FileDescriptorManager:
         }
 
         # Generate preview content (first page)
-        preview_content, preview_info = get_page_content(content, lines, page_size, start_pos=1)
+        preview_content, preview_info = get_page_content(
+            content, lines, page_size, start_pos=1
+        )
 
         # Calculate the actual number of pages by simulating pagination
         num_pages = calculate_total_pages(content, lines, page_size)
@@ -143,13 +167,22 @@ class FileDescriptorManager:
             "source": source,
         }
 
-        logger.debug(f"Created file descriptor {fd_id} with {num_pages} pages, {total_lines} lines, source: {source}")
+        logger.debug(
+            f"Created file descriptor {fd_id} with {num_pages} pages, {total_lines} lines, source: {source}"
+        )
 
         # Format the response in standardized XML format
         return format_fd_result(fd_result)
-        
 
-    def read_fd_content(self, fd_id: str, read_all: bool = False, extract_to_new_fd: bool = False, mode: str = "page", start: int = 1, count: int = 1) -> str:
+    def read_fd_content(
+        self,
+        fd_id: str,
+        read_all: bool = False,
+        extract_to_new_fd: bool = False,
+        mode: str = "page",
+        start: int = 1,
+        count: int = 1,
+    ) -> str:
         """Read content from a file descriptor and return formatted XML string.
 
         Args:
@@ -183,7 +216,9 @@ class FileDescriptorManager:
 
         # Validate mode parameter
         if mode not in ["page", "line", "char"]:
-            error_msg = f"Invalid mode: {mode}. Valid options are 'page', 'line', or 'char'."
+            error_msg = (
+                f"Invalid mode: {mode}. Valid options are 'page', 'line', or 'char'."
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -254,9 +289,15 @@ class FileDescriptorManager:
 
         # Format the response in standardized XML format
         return format_fd_content(content_metadata)
-        
 
-    def write_fd_to_file_content(self, fd_id: str, file_path: str, mode: str = "write", create: bool = True, exist_ok: bool = True) -> str:
+    def write_fd_to_file_content(
+        self,
+        fd_id: str,
+        file_path: str,
+        mode: str = "write",
+        create: bool = True,
+        exist_ok: bool = True,
+    ) -> str:
         """Write file descriptor content to a file and return formatted XML string.
 
         Args:
@@ -338,7 +379,6 @@ class FileDescriptorManager:
 
         return format_fd_file_result(result)
 
-
     def handle_user_input(self, user_input: str) -> str:
         """Handle large user input by creating a file descriptor if needed.
 
@@ -361,7 +401,9 @@ class FileDescriptorManager:
         fd_id = fd_xml.split('fd="')[1].split('"')[0]
 
         # Format a user message that references the file descriptor
-        formatted_message = format_user_input_reference(user_input, fd_id, max_preview_chars=self.max_input_chars // 20)
+        formatted_message = format_user_input_reference(
+            user_input, fd_id, max_preview_chars=self.max_input_chars // 20
+        )
 
         return formatted_message
 
@@ -395,12 +437,19 @@ class FileDescriptorManager:
 
         return pages
 
-    def extract_references_from_message(self, assistant_message: str) -> list[dict[str, str]]:
+    def extract_references_from_message(
+        self, assistant_message: str
+    ) -> list[dict[str, str]]:
         """Extract references from an assistant message and store in FD system."""
         if not self.enable_references:
             return []
 
-        return extract_references(assistant_message=assistant_message, file_descriptors=self.file_descriptors, default_page_size=self.default_page_size, index_lines_func=index_lines)
+        return extract_references(
+            assistant_message=assistant_message,
+            file_descriptors=self.file_descriptors,
+            default_page_size=self.default_page_size,
+            index_lines_func=index_lines,
+        )
 
     def process_references(self, message: str) -> str:
         """Process references in an assistant message."""

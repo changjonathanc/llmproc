@@ -24,16 +24,24 @@ async def load_thinking_model(config_path: str) -> LLMProcess:
 def test_thinking_models_configuration():
     """Test that thinking model configurations load correctly with proper parameters."""
     # Load all three thinking model configurations
-    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
-    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
-    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-high.toml"
+    )
+    medium_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-medium.toml"
+    )
+    low_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-low.toml"
+    )
 
     # Verify high thinking configuration
     assert high_program.model_name == "claude-3-7-sonnet-20250219"
     assert high_program.provider == "anthropic"
     assert "thinking" in high_program.parameters
     assert high_program.parameters["thinking"]["type"] == "enabled"
-    assert high_program.parameters["thinking"]["budget_tokens"] == 8000  # Updated from 16000
+    assert (
+        high_program.parameters["thinking"]["budget_tokens"] == 8000
+    )  # Updated from 16000
     assert high_program.parameters["max_tokens"] == 16384  # Updated from 32768
 
     # Verify medium thinking configuration
@@ -76,9 +84,15 @@ def validate_thinking_parameters(program):
 def test_thinking_models_parameter_validation():
     """Test thinking model parameter validation without API access."""
     # Load all three thinking model configurations
-    high_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-high.toml")
-    medium_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-medium.toml")
-    low_program = LLMProgram.from_toml("examples/anthropic/claude-3-7-thinking-low.toml")
+    high_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-high.toml"
+    )
+    medium_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-medium.toml"
+    )
+    low_program = LLMProgram.from_toml(
+        "examples/anthropic/claude-3-7-thinking-low.toml"
+    )
 
     # Validate parameters for each model and check specific budget values
     high_budget = validate_thinking_parameters(high_program)
@@ -107,7 +121,9 @@ async def test_thinking_models_basic_functionality():
 
     # Load medium thinking model instead of high to avoid token limit issues
     # High thinking model has a max_tokens=32768 which requires streaming mode
-    medium_process = await load_thinking_model("examples/anthropic/claude-3-7-thinking-medium.toml")
+    medium_process = await load_thinking_model(
+        "examples/anthropic/claude-3-7-thinking-medium.toml"
+    )
 
     # Run the model
     result = await medium_process.run(simple_problem)

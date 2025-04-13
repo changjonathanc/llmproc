@@ -3,6 +3,7 @@
 from typing import Any
 
 from llmproc.common.results import ToolResult
+from llmproc.tools.context_aware import context_aware
 
 # Avoid circular import
 # LLMProcess is imported within the function
@@ -59,8 +60,6 @@ fork_tool_def = {
 }
 
 
-from llmproc.tools.context_aware import context_aware
-
 @context_aware
 async def fork_tool(
     prompts: list[str],
@@ -79,4 +78,6 @@ async def fork_tool(
         A dictionary with placeholder response
     """
     # This is just a placeholder - the real implementation is in the process executor
-    return ToolResult.from_error("Direct calls to fork_tool are not supported. This should be handled by the process executor.")
+    return ToolResult.from_error(
+        "Direct calls to fork_tool are not supported. This should be handled by the process executor."
+    )

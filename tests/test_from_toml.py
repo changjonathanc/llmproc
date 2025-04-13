@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from llmproc import LLMProcess, LLMProgram
+from tests.conftest import create_test_llmprocess_directly
 
 
 @pytest.fixture
@@ -30,26 +31,41 @@ def mock_env():
     os.environ.update(original_env)
 
 
-# Mock LLMProcess.create to avoid async initialization
+# Mock program.start to avoid async initialization
 @pytest.fixture
-def mock_create_method():
-    """Mock the async create method to make it synchronous for testing."""
-    original_create = LLMProcess.create
+def mock_start_method():
+    """Mock the async start method to make it synchronous for testing."""
+    original_start = LLMProgram.start
 
-    @classmethod
-    async def mock_create(cls, program, linked_programs_instances=None):
-        # Create instance with basic initialization (skipping async)
-        instance = cls(program, linked_programs_instances)
+    async def mock_start(self):
+        # Create instance with all required parameters but basic initialization
+        # Pass the program's attributes directly
+        instance = create_test_llmprocess_directly(
+            program=self,
+            model_name=self.model_name,
+            provider=self.provider,
+            original_system_prompt=self.system_prompt,
+            system_prompt=self.system_prompt,
+            # Generate a basic enriched system prompt that includes the original
+            enriched_system_prompt=f"System: {self.system_prompt}\n\nNo additional context.",
+        )
+
+        # Set API parameters
+        if hasattr(self, "api_params") and self.api_params:
+            instance.api_params = self.api_params
+
+        # Enable MCP if needed
         if hasattr(instance, "_needs_async_init") and instance._needs_async_init:
             instance.mcp_enabled = True
+
         return instance
 
-    LLMProcess.create = mock_create
+    LLMProgram.start = mock_start
     yield
-    LLMProcess.create = original_create
+    LLMProgram.start = original_start
 
 
-def test_from_toml_minimal(mock_env, mock_get_provider_client, mock_create_method):
+def test_from_toml_minimal(mock_env, mock_get_provider_client, mock_start_method):
     """Test loading from a minimal TOML configuration."""
     with NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as temp_file:
         temp_file.write("""
@@ -71,13 +87,16 @@ system_prompt = "You are a test assistant."
         assert process.model_name == "gpt-4o-mini"
         assert process.system_prompt == "You are a test assistant."
         assert process.state == []  # Empty until first run
-        assert process.enriched_system_prompt is None  # Not generated yet
+        assert (
+            process.enriched_system_prompt is not None
+        )  # Generated at initialization now
+        assert "You are a test assistant." in process.enriched_system_prompt
         assert process.parameters == {}
     finally:
         os.unlink(temp_path)
 
 
-def test_from_toml_complex(mock_env, mock_get_provider_client, mock_create_method):
+def test_from_toml_complex(mock_env, mock_get_provider_client, mock_start_method):
     """Test loading from a complex TOML configuration."""
     with TemporaryDirectory() as temp_dir:
         # Create a system prompt file
@@ -111,7 +130,10 @@ presence_penalty = 0.1
         assert process.model_name == "gpt-4o"
         assert process.system_prompt == "You are a complex test assistant."
         assert process.state == []  # Empty until first run
-        assert process.enriched_system_prompt is None  # Not generated yet
+        assert (
+            process.enriched_system_prompt is not None
+        )  # Generated at initialization now
+        assert "You are a complex test assistant." in process.enriched_system_prompt
         # Check that parameters are in api_params instead of parameters
         assert hasattr(process, "api_params")
         assert process.api_params.get("top_p") == 0.95

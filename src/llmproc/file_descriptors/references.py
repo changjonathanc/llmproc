@@ -16,7 +16,12 @@ from llmproc.file_descriptors.paginator import calculate_total_pages
 logger = logging.getLogger(__name__)
 
 
-def extract_references(assistant_message: str, file_descriptors: dict[str, dict[str, Any]], default_page_size: int, index_lines_func=None) -> list[dict[str, Any]]:
+def extract_references(
+    assistant_message: str,
+    file_descriptors: dict[str, dict[str, Any]],
+    default_page_size: int,
+    index_lines_func=None,
+) -> list[dict[str, Any]]:
     """Extract references from an assistant message and store them in the FD system.
 
     Args:
@@ -111,7 +116,9 @@ def extract_references(assistant_message: str, file_descriptors: dict[str, dict[
 
         # Check if we're overwriting an existing reference
         if fd_id in file_descriptors:
-            logger.warning(f"Overwriting existing reference '{ref_id}' with new content")
+            logger.warning(
+                f"Overwriting existing reference '{ref_id}' with new content"
+            )
 
         # Index the content for line-aware pagination
         lines, total_lines = index_lines_func(content)
@@ -134,14 +141,18 @@ def extract_references(assistant_message: str, file_descriptors: dict[str, dict[
         }
 
         # Store information about the reference
-        references.append({"id": ref_id, "fd_id": fd_id, "content": content, "length": len(content)})
+        references.append(
+            {"id": ref_id, "fd_id": fd_id, "content": content, "length": len(content)}
+        )
 
         logger.info(f"Created reference '{ref_id}' with {len(content)} characters")
 
     return references
 
 
-def format_user_input_reference(user_input: str, fd_id: str, max_preview_chars: int = 150) -> str:
+def format_user_input_reference(
+    user_input: str, fd_id: str, max_preview_chars: int = 150
+) -> str:
     """Format a user input reference for display to the LLM.
 
     Args:
@@ -164,6 +175,8 @@ def format_user_input_reference(user_input: str, fd_id: str, max_preview_chars: 
         f'Use read_fd(fd="{fd_id}") to access the content.'
     )
 
-    logger.info(f"Large user input ({len(user_input)} chars) stored in {fd_id}. Preview: {preview[:50]}...")
+    logger.info(
+        f"Large user input ({len(user_input)} chars) stored in {fd_id}. Preview: {preview[:50]}..."
+    )
 
     return formatted_message
