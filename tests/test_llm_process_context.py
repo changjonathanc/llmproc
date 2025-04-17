@@ -8,7 +8,7 @@ import pytest
 from llmproc.common.results import ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 
 
 class TestLLMProcessContextIntegration:

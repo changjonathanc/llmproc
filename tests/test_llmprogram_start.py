@@ -8,6 +8,7 @@ import pytest
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.providers.providers import get_provider_client
+from llmproc.tools.builtin import calculator
 
 
 @pytest.fixture
@@ -45,8 +46,8 @@ async def test_start_delegates_to_create_process(mock_create_process, test_progr
 
 @pytest.mark.asyncio
 async def test_llmprocess_create_removed(test_program):
-    """Test that LLMProcess.create() has been completely removed."""
-    # Verify that the 'create' method no longer exists on LLMProcess
+    """Test that program.start() is the API for process creation."""
+    # Verify the correct API is used
     assert not hasattr(LLMProcess, "create")
 
 
@@ -71,8 +72,8 @@ async def test_start_with_real_program(
         system_prompt="You are a test assistant.",
     )
 
-    # Set up some tools to verify they're properly passed through
-    program.set_enabled_tools(["calculator"])
+    # Set up some tools to verify they're properly passed through using function reference
+    program.register_tools([calculator])
 
     # Configure mock client
     mock_client_instance = MagicMock()
@@ -93,9 +94,7 @@ async def test_start_with_real_program(
     mock_process.model_name = program.model_name  # Set expected attributes
     mock_process.provider = program.provider
     mock_process.tool_manager = MagicMock()  # Needs a tool manager
-    mock_process.tool_manager.get_enabled_tools.return_value = [
-        "calculator"
-    ]  # Example tool
+    mock_process.tool_manager.get_registered_tools.return_value = ["calculator"]  # Example tool
     # Configure the mock returned by instantiate_process
     mock_instantiate.return_value = mock_process
 
@@ -128,15 +127,11 @@ async def test_start_with_real_program(
     # verify it was called with a dict configuration
     assert isinstance(program.tool_manager.initialize_tools.call_args[0][0], dict)
 
-    mock_setup_context.assert_called_once_with(
-        mock_process
-    )  # Called with the instantiated process
-    mock_validate.assert_called_once_with(
-        mock_process
-    )  # Called with the instantiated process
+    mock_setup_context.assert_called_once_with(mock_process)  # Called with the instantiated process
+    mock_validate.assert_called_once_with(mock_process)  # Called with the instantiated process
 
     # Verify attributes on the returned mock process
     assert process.model_name == program.model_name
     assert process.provider == program.provider
     # Verify tool manager state (using the mock we set up)
-    assert "calculator" in process.tool_manager.get_enabled_tools()
+    assert "calculator" in process.tool_manager.get_registered_tools()

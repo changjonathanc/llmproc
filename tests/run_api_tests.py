@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Script to run API tests with parallelism and optimizations.
 
-This script runs API tests using the tiered testing strategy from RFC027:
+This script runs API tests using the tiered testing strategy:
 - essential_api: Essential tests for CI/CD and daily development (fastest)
 - extended_api: Extended coverage for regular validation
 - release_api: Comprehensive coverage for pre-release testing
@@ -52,9 +52,12 @@ def run_api_tests(args):
     # Parallelism
     cmd.extend([f"-n{args.workers}", "--no-cov"])
 
-    # Verbose output if requested
+    # Show test name and error message on failure, but still keep output minimal
+    cmd.extend(["-v", "--showlocals"])
+
+    # Enhanced verbosity if requested
     if args.verbose:
-        cmd.append("-v")
+        cmd.extend(["-vv", "--tb=native"])
 
     # Coverage report if requested
     if args.coverage:
@@ -71,9 +74,7 @@ def run_api_tests(args):
 
     # Report elapsed time
     elapsed = time.time() - start_time
-    print(
-        f"Tests completed in {elapsed:.2f} seconds with exit code {result.returncode}"
-    )
+    print(f"Tests completed in {elapsed:.2f} seconds with exit code {result.returncode}")
 
     return result.returncode
 
@@ -110,18 +111,14 @@ def main():
         default="essential",
         help="Test tier to run (essential, extended, release, all)",
     )
-    parser.add_argument(
-        "--workers", type=int, default=6, help="Number of parallel workers (default: 2)"
-    )
+    parser.add_argument("--workers", type=int, default=2, help="Number of parallel workers (default: 2)")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     parser.add_argument(
         "--provider",
         choices=["anthropic", "openai", "vertex"],
         help="Only run tests for specific provider",
     )
-    parser.add_argument(
-        "--coverage", action="store_true", help="Generate coverage report"
-    )
+    parser.add_argument("--coverage", action="store_true", help="Generate coverage report")
 
     args = parser.parse_args()
 

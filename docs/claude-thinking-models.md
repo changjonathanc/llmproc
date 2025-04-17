@@ -135,11 +135,7 @@ asyncio.run(code_example())
 
 ## Examples
 
-See the full example configuration files in [examples/anthropic/](../examples/anthropic/):
-
-- [claude-3-7-thinking-high.toml](../examples/anthropic/claude-3-7-thinking-high.toml)
-- [claude-3-7-thinking-medium.toml](../examples/anthropic/claude-3-7-thinking-medium.toml)
-- [claude-3-7-thinking-low.toml](../examples/anthropic/claude-3-7-thinking-low.toml)
+See the example configuration options in [anthropic.toml](../examples/anthropic.toml), which includes commented sections for Claude 3.7 thinking model configuration with different budget options.
 
 ## Future Enhancements
 

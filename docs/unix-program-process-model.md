@@ -53,24 +53,27 @@ Program → Process → ToolManager → Process (circular dependency)
    - Decouples tools from process implementation
 
 4. **Context-Aware Tools**: Tools that explicitly declare their runtime dependencies
-   - Marked with `@context_aware` decorator
+   - Defined with `register_tool(requires_context=True)` 
    - Receive runtime context during execution
    - Extract only the dependencies they need
 
 ## Implementation Details
 
-### Context-Aware Decorator
+### Context-Aware Tool Registration
 
-The `@context_aware` decorator marks tools that require runtime access:
+The `register_tool` decorator with `requires_context=True` marks tools that require runtime access:
 
 ```python
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 
-@context_aware
-async def my_tool(args, runtime_context=None):
-    # Extract dependencies
-    process = runtime_context.get("process")
-    fd_manager = runtime_context.get("fd_manager")
+@register_tool(
+    requires_context=True,
+    required_context_keys=["process", "fd_manager"]
+)
+async def my_tool(param: str, runtime_context=None):
+    # Extract dependencies - validation happens automatically
+    process = runtime_context["process"]
+    fd_manager = runtime_context["fd_manager"]
     
     # Use dependencies
     # ...
@@ -78,7 +81,7 @@ async def my_tool(args, runtime_context=None):
     return result
 ```
 
-This explicitly marks tools that need runtime dependencies, making the requirements clear.
+This explicitly marks tools that need runtime dependencies, specifies which context keys are required, and automatically validates that they're present.
 
 ### Runtime Context Contents
 
@@ -143,33 +146,35 @@ This is simplified with the `program.start()` method, which handles steps 3-5 au
 
 When creating new tools:
 
-1. Use the `@context_aware` decorator for tools that need runtime access
-2. Extract only the dependencies you need from the runtime context
-3. Document the required context keys in the docstring
+1. Use `register_tool` with `requires_context=True` for tools that need runtime access
+2. Specify which context keys are required via `required_context_keys` parameter
+3. Validation happens automatically - directly access context keys that were declared
 4. Return a ToolResult object with proper success/error handling
 
 Example:
 
 ```python
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 from llmproc.common.results import ToolResult
 
-@context_aware
+@register_tool(
+    requires_context=True,
+    required_context_keys=["fd_manager"]
+)
 async def my_tool(param1: str, param2: int = 0, runtime_context=None) -> ToolResult:
     """A tool that requires access to the file descriptor manager.
     
     Args:
         param1: First parameter description
         param2: Second parameter description
-        runtime_context: Runtime context (requires fd_manager)
+        runtime_context: Runtime context with fd_manager (validated automatically)
         
     Returns:
         ToolResult with the operation result
     """
-    # Extract only required dependencies
-    fd_manager = runtime_context.get("fd_manager")
-    if not fd_manager:
-        return ToolResult.from_error("File descriptor manager not available")
+    # The decorator already validated fd_manager is present
+    # So we can safely access it directly
+    fd_manager = runtime_context["fd_manager"]
     
     try:
         # Tool implementation
@@ -217,10 +222,13 @@ process.tool_manager.set_runtime_context({
 Tools can then access these values:
 
 ```python
-@context_aware
+@register_tool(
+    requires_context=True,
+    required_context_keys=["custom_data", "custom_service"]
+)
 async def my_tool(args, runtime_context=None):
-    custom_data = runtime_context.get("custom_data")
-    custom_service = runtime_context.get("custom_service")
+    custom_data = runtime_context["custom_data"]
+    custom_service = runtime_context["custom_service"]
     # Use custom dependencies
 ```
 
@@ -285,8 +293,8 @@ Tools should be initialized with configuration dictionaries, not direct process 
 async def tool_handler(args, process):  # WRONG!
     # ...
     
-# CORRECT PATTERN: Use context-aware decorator
-@context_aware
+# CORRECT PATTERN: Use register_tool with requires_context
+@register_tool(requires_context=True)
 async def tool_handler(args, runtime_context=None):  # Correct!
     process = runtime_context.get("process")
     # ...
@@ -298,7 +306,7 @@ Tool handlers should use the context-aware pattern to access runtime dependencie
 
 If you're updating existing tools to use the new pattern:
 
-1. Add the `@context_aware` decorator to tool functions that need runtime access
+1. Use `@register_tool(requires_context=True)` for tool functions that need runtime access
 2. Change parameter from `llm_process` to `runtime_context=None`
 3. Update implementation to extract dependencies from the context
 4. Update any tool registration to use the configuration-based approach
@@ -314,7 +322,9 @@ async def tool_handler(args, llm_process):
 
 After:
 ```python
-@context_aware
+from llmproc.tools.function_tools import register_tool
+
+@register_tool(requires_context=True)
 async def tool_handler(args, runtime_context=None):
     # Get process from context
     process = runtime_context.get("process")

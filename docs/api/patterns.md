@@ -95,15 +95,19 @@ process = await program.start()
 The runtime context pattern enables clean dependency injection for tools:
 
 ```python
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 
-# Use the context_aware decorator to mark tools that need runtime access
-@context_aware
+# Use the register_tool decorator with requires_context=True
+@register_tool(
+    requires_context=True,
+    required_context_keys=["process", "fd_manager"]
+)
 async def my_tool(arg1: str, runtime_context=None) -> dict:
     """A tool that requires runtime context access."""
-    # Extract dependencies from runtime context
-    process = runtime_context.get("process")
-    fd_manager = runtime_context.get("fd_manager")
+    # The decorator automatically validates the context
+    # So you can safely access the required keys
+    process = runtime_context["process"]
+    fd_manager = runtime_context["fd_manager"]
     
     # Use dependencies to implement the tool
     # ...
@@ -133,23 +137,23 @@ my_tool_def = {
 }
 
 # 2. Create a context-aware handler function
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
+from llmproc.common.results import ToolResult
 
-@context_aware
-async def my_tool_handler(args: dict, runtime_context=None) -> Any:
-    # Extract required dependencies from runtime context
-    process = runtime_context.get("process")
-    fd_manager = runtime_context.get("fd_manager")
-    
-    # Extract arguments
-    param1 = args.get("param1", "")
-    param2 = args.get("param2", 0)
+@register_tool(
+    requires_context=True,
+    required_context_keys=["process", "fd_manager"]
+)
+async def my_tool_handler(param1: str, param2: int = 0, runtime_context=None) -> Any:
+    # The decorator automatically validates context requirements
+    # So you can safely access required context keys
+    process = runtime_context["process"]
+    fd_manager = runtime_context["fd_manager"]
     
     # Tool implementation using dependencies
     result = f"Processed {param1} with value {param2}"
     
     # Return a proper ToolResult
-    from llmproc.common.results import ToolResult
     return ToolResult.from_success(result)
 
 # 3. Register with the tool registry
@@ -296,14 +300,19 @@ async def my_tool(args, llm_process):
     return result
 ```
 
-Instead, use the context-aware pattern:
+Instead, use the register_tool decorator with requires_context parameter:
 
 ```python
 # DO this - uses runtime context
-@context_aware
-async def my_tool(args, runtime_context=None):
+from llmproc.tools.function_tools import register_tool
+
+@register_tool(
+    requires_context=True,
+    required_context_keys=["process"]
+)
+async def my_tool(input_param: str, runtime_context=None):
     # Extract dependencies from context
-    process = runtime_context.get("process")
+    process = runtime_context["process"]
     # Use process methods
     return result
 ```

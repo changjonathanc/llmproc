@@ -172,11 +172,8 @@ else:
 Using a TOML configuration file:
 
 ```bash
-# Use the smaller, faster model
-llmproc-demo ./examples/gemini/gemini-2.0-flash-vertex.toml
-
-# Or use the larger, smarter model
-llmproc-demo ./examples/gemini/gemini-2.5-pro-direct.toml
+# Use the Gemini configuration
+llmproc-demo ./examples/gemini.toml
 ```
 
 ## Troubleshooting

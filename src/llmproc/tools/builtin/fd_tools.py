@@ -10,13 +10,27 @@ from typing import Any, Optional
 
 from llmproc.common.results import ToolResult
 from llmproc.file_descriptors.formatter import format_fd_error
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 
 # Set up logger
 logger = logging.getLogger(__name__)
 
 
-@context_aware
+@register_tool(
+    name="read_fd",
+    description="Read content from a file descriptor with paging and extraction options.",
+    param_descriptions={
+        "fd": "File descriptor ID to read from (e.g., 'fd:12345' or 'ref:example_id')",
+        "read_all": "If true, returns the entire content regardless of size",
+        "extract_to_new_fd": "If true, extracts content to a new file descriptor instead of returning directly",
+        "mode": "Positioning mode: 'page' (default), 'line', or 'char'",
+        "start": "Starting position (page number, line number, or character position)",
+        "count": "Number of units to read (pages, lines, or characters)",
+    },
+    required=["fd"],
+    requires_context=True,
+    required_context_keys=["fd_manager"],
+)
 async def read_fd_tool(
     fd: str,
     read_all: bool = False,
@@ -41,12 +55,7 @@ async def read_fd_tool(
     Returns:
         ToolResult with content or a new file descriptor reference
     """
-    # Get fd_manager from runtime context
-    if not runtime_context or "fd_manager" not in runtime_context:
-        error_msg = "File descriptor operations require runtime_context with fd_manager"
-        logger.error(f"READ_FD ERROR: {error_msg}")
-        return ToolResult.from_error(error_msg)
-
+    # Get fd_manager from runtime context - validation already done by decorator
     fd_manager = runtime_context["fd_manager"]
 
     try:
@@ -73,13 +82,26 @@ async def read_fd_tool(
     except Exception as e:
         # Handle other errors
         error_msg = f"Error reading file descriptor: {str(e)}"
-        logger.error(f"READ_FD ERROR: {error_msg}")
+        logger.error(f"Tool 'read_fd' error: {error_msg}")
         logger.debug("Detailed traceback:", exc_info=True)
         xml_error = format_fd_error("read_error", fd, error_msg)
         return ToolResult.from_error(xml_error)
 
 
-@context_aware
+@register_tool(
+    name="fd_to_file",
+    description="Write file descriptor content to a file on disk.",
+    param_descriptions={
+        "fd": "File descriptor ID to export (e.g., 'fd:12345' or 'ref:example_id')",
+        "file_path": "Absolute path to the file to write",
+        "mode": "Write mode: 'write' (default) or 'append'",
+        "create": "Create file if it doesn't exist (default: True)",
+        "exist_ok": "Allow overwriting existing file (default: True)",
+    },
+    required=["fd", "file_path"],
+    requires_context=True,
+    required_context_keys=["fd_manager"],
+)
 async def fd_to_file_tool(
     fd: str,
     file_path: str,
@@ -102,12 +124,7 @@ async def fd_to_file_tool(
     Returns:
         ToolResult with success or error information
     """
-    # Get fd_manager from runtime context
-    if not runtime_context or "fd_manager" not in runtime_context:
-        error_msg = "File descriptor operations require runtime_context with fd_manager"
-        logger.error(f"FD_TO_FILE ERROR: {error_msg}")
-        return ToolResult.from_error(error_msg)
-
+    # Get fd_manager from runtime context - validation already done by decorator
     fd_manager = runtime_context["fd_manager"]
 
     try:
@@ -129,7 +146,7 @@ async def fd_to_file_tool(
     except Exception as e:
         # Handle other errors
         error_msg = f"Error writing file descriptor to file: {str(e)}"
-        logger.error(f"FD_TO_FILE ERROR: {error_msg}")
+        logger.error(f"Tool 'fd_to_file' error: {error_msg}")
         logger.debug("Detailed traceback:", exc_info=True)
         xml_error = format_fd_error("write_error", fd, error_msg)
         return ToolResult.from_error(xml_error)

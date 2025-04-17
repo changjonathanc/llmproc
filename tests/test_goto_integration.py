@@ -12,6 +12,7 @@ import pytest
 
 from llmproc.common.results import ToolResult
 from llmproc.program import LLMProgram
+from llmproc.tools.builtin import handle_goto
 
 # Set up logging
 logging.basicConfig(
@@ -28,8 +29,8 @@ logger = logging.getLogger("test_goto_integration")
 @pytest.fixture
 async def goto_process():
     """Create an LLM process with GOTO tool enabled."""
-    program = LLMProgram.from_toml("./examples/features/goto.toml")
-    program.set_enabled_tools(["goto"])
+    program = LLMProgram.from_toml("./examples/goto.toml")
+    program.register_tools([handle_goto])
     process = await program.start()
     yield process
 
@@ -73,14 +74,10 @@ async def test_goto_basic_functionality(goto_process, goto_tracker, goto_callbac
 
     # Verify still no GOTO use and state is larger
     assert not tracker.goto_used, "GOTO should not be used for second question"
-    assert mid_state_length > initial_state_length, (
-        "State should grow after second question"
-    )
+    assert mid_state_length > initial_state_length, "State should grow after second question"
 
     # Step 3: Explicitly request GOTO
-    goto_prompt = (
-        "Please use the goto tool to return to our very first message (msg_0)."
-    )
+    goto_prompt = "Please use the goto tool to return to our very first message (msg_0)."
     await process.run(goto_prompt, callbacks=callbacks)
 
     # Debug: Print state details after GOTO
@@ -91,9 +88,7 @@ async def test_goto_basic_functionality(goto_process, goto_tracker, goto_callbac
 
     # Verify GOTO was used
     assert tracker.goto_used, "GOTO tool should be used when explicitly requested"
-    assert tracker.goto_position == "msg_0", (
-        f"GOTO should target position msg_0, got: {tracker.goto_position}"
-    )
+    assert tracker.goto_position == "msg_0", f"GOTO should target position msg_0, got: {tracker.goto_position}"
 
     # Check that state has been modified
     print(
@@ -122,15 +117,9 @@ async def test_goto_basic_functionality(goto_process, goto_tracker, goto_callbac
     print(f"\nSystem note: {system_note}")
 
     # Check the format of the GOTO message
-    assert "Conversation reset to message msg_0" in system_note, (
-        "System note should indicate reset to msg_0"
-    )
-    assert "<system_message>" in system_note, (
-        "System note should have <system_message> tag"
-    )
-    assert "<time_travel_message>" in system_note, (
-        "System note should have <time_travel_message> tag"
-    )
+    assert "Conversation reset to message msg_0" in system_note, "System note should indicate reset to msg_0"
+    assert "<system_message>" in system_note, "System note should have <system_message> tag"
+    assert "<time_travel_message>" in system_note, "System note should have <time_travel_message> tag"
 
     # Check that the second message is the assistant's response to the time travel
     assistant_response = process.state[1]
@@ -150,11 +139,7 @@ async def test_goto_basic_functionality(goto_process, goto_tracker, goto_callbac
         goto_id = msg.get("goto_id", "no-goto-id")
         print(f"\nMessage {i}: Role={role}, ID={goto_id}")
 
-        if (
-            role == "assistant"
-            and "content" in msg
-            and isinstance(msg["content"], list)
-        ):
+        if role == "assistant" and "content" in msg and isinstance(msg["content"], list):
             content_items = []
             tool_uses = []
 
@@ -178,16 +163,10 @@ async def test_goto_basic_functionality(goto_process, goto_tracker, goto_callbac
                 print(f"  Content (list with {len(msg['content'])} items):")
                 for j, content_item in enumerate(msg["content"]):
                     if isinstance(content_item, dict):
-                        print(
-                            f"    Item {j}: {content_item.get('type', 'unknown type')}"
-                        )
+                        print(f"    Item {j}: {content_item.get('type', 'unknown type')}")
                         if content_item.get("type") == "tool_result":
-                            print(
-                                f"      Tool result id: {content_item.get('tool_use_id', 'no-id')}"
-                            )
-                            print(
-                                f"      Content: {content_item.get('content', 'no-content')[:100]}..."
-                            )
+                            print(f"      Tool result id: {content_item.get('tool_use_id', 'no-id')}")
+                            print(f"      Content: {content_item.get('content', 'no-content')[:100]}...")
                     else:
                         print(f"    Item {j}: {str(content_item)[:100]}...")
             else:
@@ -214,9 +193,7 @@ async def test_goto_basic_functionality(goto_process, goto_tracker, goto_callbac
     final_state_length = len(process.state)
 
     # Verify state grows again
-    assert final_state_length > post_goto_state_length, (
-        "State should grow after post-GOTO question"
-    )
+    assert final_state_length > post_goto_state_length, "State should grow after post-GOTO question"
 
     # Output result confirmation
     logger.info(f"Initial state: {initial_state_length} messages")

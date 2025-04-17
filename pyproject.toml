@@ -1,6 +1,6 @@
 [project]
 name = "llmproc"
-version = "0.5.0"
+version = "0.6.1"
 description = "A simple framework for LLM-powered applications"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -127,5 +127,5 @@ dev = [
 ]
 
 [project.scripts]
-llmproc-demo = "llmproc.cli:main"
+llmproc-demo = "llmproc.cli.demo:main"
 llmproc-prompt = "llmproc.cli.print_system_prompt:main"

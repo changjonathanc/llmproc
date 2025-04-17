@@ -4,13 +4,12 @@ import logging
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, List, Optional, Union
 
 import llmproc
 from llmproc._program_docs import (
     ADD_LINKED_PROGRAM,
     ADD_PRELOAD_FILE,
-    ADD_TOOL,
     API_PARAMS,
     COMPILE,
     COMPILE_SELF,
@@ -19,13 +18,50 @@ from llmproc._program_docs import (
     CONFIGURE_MCP,
     CONFIGURE_THINKING,
     ENABLE_TOKEN_EFFICIENT_TOOLS,
-    FROM_TOML,
     INIT,
     LLMPROGRAM_CLASS,
-    SET_ENABLED_TOOLS,
+    REGISTER_TOOLS,
     SET_TOOL_ALIASES,
 )
 from llmproc.env_info import EnvInfoBuilder
+from llmproc.tools.builtin import BUILTIN_TOOLS
+from llmproc.tools.function_tools import get_tool_name
+from llmproc.tools.mcp import MCPTool
+
+
+def convert_to_callables(tools: list[Union[str, Callable, MCPTool]]) -> list[Callable]:
+    """Convert string tool names to callable functions.
+
+    Args:
+        tools: List of string names, callable functions, or MCPTool objects
+
+    Returns:
+        List of callable functions, filtering out MCPTool objects
+
+    Raises:
+        ValueError: If an item in the list is not a string, callable, or MCPTool,
+                   or if a string doesn't correspond to a builtin tool
+    """
+    # Ensure tools is a list
+    if not isinstance(tools, list):
+        tools = [tools]
+
+    result = []
+    for tool in tools:
+        if isinstance(tool, str):
+            if tool in BUILTIN_TOOLS:
+                result.append(BUILTIN_TOOLS[tool])
+            else:
+                raise ValueError(f"Unknown tool name: '{tool}'")
+        elif callable(tool):
+            result.append(tool)
+        elif isinstance(tool, MCPTool):
+            # MCPTool objects are handled separately in __init__
+            pass
+        else:
+            raise ValueError(f"Expected string, callable, or MCPTool, got {type(tool)}")
+    return result
+
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -74,8 +110,8 @@ class LLMProgram:
         display_name: str | None = None,
         preload_files: list[str] | None = None,
         mcp_config_path: str | None = None,
-        mcp_tools: dict[str, list[str]] | None = None,
-        tools: dict[str, Any] | list[Any] | None = None,
+        tools: list[Any] = None,
+        tool_aliases: dict[str, str] = None,
         linked_programs: dict[str, Union[str, "LLMProgram"]] | None = None,
         linked_program_descriptions: dict[str, str] | None = None,
         env_info: dict[str, Any] | None = None,
@@ -84,6 +120,8 @@ class LLMProgram:
         disable_automatic_caching: bool = False,
         project_id: str | None = None,
         region: str | None = None,
+        user_prompt: str = None,
+        max_iterations: int = 10,
     ):
         """Initialize a program."""
         # Flag to track if this program has been fully compiled
@@ -105,39 +143,25 @@ class LLMProgram:
         self.preload_files = preload_files or []
         self.mcp_config_path = mcp_config_path
         self.disable_automatic_caching = disable_automatic_caching
-        self.mcp_tools = mcp_tools or {}
+        self.user_prompt = user_prompt
+        self.max_iterations = max_iterations
 
         # Initialize the tool manager
         from llmproc.tools import ToolManager
 
         self.tool_manager = ToolManager()
 
-        # Handle tools which can be a dict or a list of function-based tools
-        self.tools = {}
+        # Process tools parameter: can include str names, callables, or MCPTool descriptors
         if tools:
-            if isinstance(tools, dict):
-                # Create a copy of the tools dict to avoid modifying the input
-                self.tools = tools.copy()
+            # Normalize to list
+            raw_tools = tools if isinstance(tools, list) else [tools]
 
-                # Process enabled tools if specified
-                if "enabled" in tools and isinstance(tools["enabled"], list):
-                    # Call our own set_enabled_tools which delegates to ToolManager
-                    self.set_enabled_tools(tools["enabled"])
+            # Register all tools with the tool manager
+            self.register_tools(raw_tools)
 
-                # Register aliases if specified
-                if "aliases" in tools and isinstance(tools["aliases"], dict):
-                    self.tool_manager.register_aliases(tools["aliases"])
-            else:
-                # Default to empty tools dictionary if invalid format provided
-                import warnings
-
-                warnings.warn(
-                    f"Invalid format for tools parameter: expected dict, got {type(tools)}. "
-                    + "Defaulting to empty tools configuration.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                self.tools = {"enabled": [], "aliases": {}}
+        # Process aliases separately if provided
+        if tool_aliases:
+            self.set_tool_aliases(tool_aliases)
 
         self.linked_programs = linked_programs or {}
         self.linked_program_descriptions = linked_program_descriptions or {}
@@ -146,6 +170,37 @@ class LLMProgram:
         }  # Default to empty list (disabled)
         self.file_descriptor = file_descriptor or {}
         self.base_dir = base_dir
+
+    def _validate_tool_dependencies(self) -> None:
+        """Validate tool dependencies are satisfied.
+
+        This method performs explicit validation of tool dependencies during compilation,
+        ensuring that necessary requirements for tools are met before attempting to use them.
+
+        Validates:
+        1. Spawn tool requires linked programs
+        2. FD tools require file descriptor system
+
+        Raises:
+            ValueError: If dependencies for enabled tools are not satisfied
+        """
+        registered_tools = self.tool_manager.get_registered_tools()
+
+        # Linked programs dependency for spawn
+        if "spawn" in registered_tools:
+            has_linked_programs = hasattr(self, "linked_programs") and bool(self.linked_programs)
+            if not has_linked_programs:
+                raise ValueError("Tool 'spawn' requires linked programs, but none are configured")
+
+        # File descriptor dependency for fd tools
+        if any(name in registered_tools for name in ["read_fd", "fd_to_file"]):
+            fd_enabled = (
+                hasattr(self, "file_descriptor")
+                and isinstance(self.file_descriptor, dict)
+                and self.file_descriptor.get("enabled", False)
+            )
+            if not fd_enabled:
+                raise ValueError("Tools 'read_fd' or 'fd_to_file' require file descriptor system, but it's not enabled")
 
     def _compile_self(self) -> "LLMProgram":
         """Internal method to validate and compile this program."""
@@ -163,15 +218,17 @@ class LLMProgram:
                     f"System prompt file not found: {self._system_prompt_file}"
                 )
 
+        # Default system_prompt to empty string if None
+        if self.system_prompt is None:
+            self.system_prompt = ""
+            
         # Validate required fields
-        if not self.model_name or not self.provider or not self.system_prompt:
+        if not self.model_name or not self.provider:
             missing = []
             if not self.model_name:
                 missing.append("model_name")
             if not self.provider:
                 missing.append("provider")
-            if not self.system_prompt:
-                missing.append("system_prompt or system_prompt_file")
             raise ValueError(f"Missing required fields: {', '.join(missing)}")
 
         # Tool management is now handled directly by the ToolManager
@@ -180,6 +237,9 @@ class LLMProgram:
 
         # Resolve File Descriptor and Tools dependencies
         self._resolve_fd_tool_dependencies()
+
+        # Validate tool dependencies explicitly during compilation
+        self._validate_tool_dependencies()
 
         # Handle linked programs recursively
         self._compile_linked_programs()
@@ -206,18 +266,17 @@ class LLMProgram:
             self.file_descriptor, dict
         )
         fd_enabled = has_fd_config and self.file_descriptor.get("enabled", False)
-        enabled_tools = self.tool_manager.get_enabled_tools()
-        has_fd_tools = any(tool in FD_RELATED_TOOLS for tool in enabled_tools)
+        registered_tools = self.tool_manager.get_registered_tools()
+        has_fd_tools = any(tool in FD_RELATED_TOOLS for tool in registered_tools)
 
         if fd_enabled and not has_fd_tools:
             # If FD system is enabled but no FD tools, add read_fd
-            if "read_fd" not in enabled_tools:
-                new_enabled_tools = enabled_tools + ["read_fd"]
-                self.tool_manager.set_enabled_tools(new_enabled_tools)
-                # No need to update self.tools["enabled"] as tool_manager is the source of truth
-                logger.info(
-                    "File descriptor system enabled, automatically adding read_fd tool"
-                )
+            if "read_fd" not in registered_tools:
+                # Convert to callable and add to enabled tools
+                read_fd_callable = BUILTIN_TOOLS["read_fd"]
+                current_tools = self.tool_manager.function_tools.copy()
+                self.register_tools(current_tools + [read_fd_callable])
+                logger.info("File descriptor system enabled, automatically adding read_fd tool")
 
         elif has_fd_tools and not fd_enabled:
             # If FD tools are enabled but FD system isn't, enable the FD system
@@ -225,9 +284,7 @@ class LLMProgram:
                 self.file_descriptor = {"enabled": True}
             else:
                 self.file_descriptor["enabled"] = True
-            logger.info(
-                "FD tools enabled, automatically enabling file descriptor system"
-            )
+            logger.info("FD tools enabled, automatically enabling file descriptor system")
 
     def _compile_linked_programs(self) -> None:
         """Compile linked programs recursively."""
@@ -329,40 +386,62 @@ class LLMProgram:
         )
         return self
 
-    def set_enabled_tools(self, tools: list[Union[str, Callable]]) -> "LLMProgram":
-        """Sets the list of enabled tools, replacing any previous list.
+    def register_tools(self, tools: list[Union[str, Callable, MCPTool]]) -> "LLMProgram":
+        """Register tools for use in the program.
 
-        Accepts tool names (str) or callable functions. Callables will be
-        added to the ToolManager's function list if not already present.
+        This method accepts string names, callable functions, and MCPTool objects,
+        providing a consistent interface with the constructor.
 
         Args:
-            tools: A list of tool names (str) or functions (Callable) to enable.
+            tools: List of string names, callable functions, or MCPTool objects
 
         Returns:
             self (for method chaining)
+
+        Raises:
+            ValueError: If a string name doesn't correspond to a builtin tool,
+                       or if an item is not a valid tool type
         """
         if not isinstance(tools, list):
-            raise ValueError(
-                f"Expected a list of tools (strings or callables), got {type(tools)}"
-            )
+            tools = [tools]
 
-        # Delegate entirely to ToolManager's unified method that handles mixed lists
-        # ToolManager is the single source of truth for enabled tools
-        self.tool_manager.set_enabled_tools(tools)
+        # Split tools into MCPTool descriptors and other tools
+        mcp_tools = []
+        other_tools = []
+
+        for tool in tools:
+            if isinstance(tool, MCPTool):
+                mcp_tools.append(tool)
+            else:
+                other_tools.append(tool)
+
+        # Convert string names to callables for consistent handling
+        if other_tools:
+            callables = convert_to_callables(other_tools)
+            # Delegate to the tool manager
+            self.tool_manager.register_tools(callables)
+
+        # Register MCPTool descriptors separately
+        if mcp_tools:
+            self.tool_manager.register_tools(mcp_tools)
 
         return self
 
-    def get_enabled_tools(self) -> list[str]:
-        """Get the list of enabled tool names.
+    def get_registered_tools(self) -> list[str]:
+        """Get the list of registered tool names.
 
         Returns:
-            A list of the currently enabled tool names
+            A list of the currently registered tool names
 
         Note:
             This method delegates to the tool_manager, which is the
-            single source of truth for enabled tools.
+            single source of truth for registered tools.
         """
-        return self.tool_manager.get_enabled_tools()
+        return self.tool_manager.get_registered_tools()
+
+    def set_enabled_tools(self, tools: list[Union[str, Callable]]) -> "LLMProgram":
+        """Alias for register_tools for backward compatibility."""
+        return self.register_tools(tools)
 
     def set_tool_aliases(self, aliases: dict[str, str]) -> "LLMProgram":
         """Set tool aliases, merging with any existing aliases."""
@@ -379,25 +458,26 @@ class LLMProgram:
                 )
             targets[target] = alias
 
-        # Initialize tools dict if needed
-        if not isinstance(self.tools, dict):
-            self.tools = {}
-
-        if "aliases" not in self.tools:
-            self.tools["aliases"] = {}
-
-        # Merge with existing aliases
-        self.tools["aliases"].update(aliases)
+        # Register aliases with the tool manager
+        self.tool_manager.register_aliases(aliases)
 
         return self
 
-    def configure_mcp(
-        self, config_path: str, tools: dict[str, list[str] | str] = None
-    ) -> "LLMProgram":
-        """Configure Model Context Protocol (MCP) tools."""
+    def set_user_prompt(self, prompt: str) -> "LLMProgram":
+        """Set a user prompt to be executed automatically when the program starts."""
+        self.user_prompt = prompt
+        return self
+
+    def set_max_iterations(self, max_iterations: int) -> "LLMProgram":
+        """Set the default maximum number of iterations for this program."""
+        if max_iterations <= 0:
+            raise ValueError("max_iterations must be a positive integer")
+        self.max_iterations = max_iterations
+        return self
+
+    def configure_mcp(self, config_path: str) -> "LLMProgram":
+        """Configure Model Context Protocol (MCP) server connection."""
         self.mcp_config_path = config_path
-        if tools:
-            self.mcp_tools = tools
         return self
 
     def compile(self) -> "LLMProgram":
@@ -427,9 +507,7 @@ class LLMProgram:
 
         return ProgramLoader.from_toml(toml_file, **kwargs)
 
-    def get_tool_configuration(
-        self, linked_programs_instances: dict[str, Any] | None = None
-    ) -> dict:
+    def get_tool_configuration(self, linked_programs_instances: dict[str, Any] | None = None) -> dict:
         """Create tool configuration dictionary for initialization.
 
         This method extracts the necessary components from the program to initialize
@@ -449,7 +527,6 @@ class LLMProgram:
         config = {
             "provider": self.provider,
             "mcp_config_path": getattr(self, "mcp_config_path", None),
-            "mcp_tools": getattr(self, "mcp_tools", {}),
             "mcp_enabled": getattr(self, "mcp_config_path", None) is not None,
         }
 
@@ -546,9 +623,8 @@ LLMProgram.configure_env_info.__doc__ = CONFIGURE_ENV_INFO
 LLMProgram.configure_file_descriptor.__doc__ = CONFIGURE_FILE_DESCRIPTOR
 LLMProgram.configure_thinking.__doc__ = CONFIGURE_THINKING
 LLMProgram.enable_token_efficient_tools.__doc__ = ENABLE_TOKEN_EFFICIENT_TOOLS
-LLMProgram.set_enabled_tools.__doc__ = SET_ENABLED_TOOLS
+LLMProgram.register_tools.__doc__ = REGISTER_TOOLS
 LLMProgram.set_tool_aliases.__doc__ = SET_TOOL_ALIASES
 LLMProgram.configure_mcp.__doc__ = CONFIGURE_MCP
 LLMProgram.compile.__doc__ = COMPILE
 LLMProgram.api_params.__doc__ = API_PARAMS
-# Skip from_toml as it's a staticmethod and docs can't be assigned

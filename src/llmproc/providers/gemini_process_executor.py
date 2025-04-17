@@ -41,11 +41,7 @@ class GeminiProcessExecutor:
         Returns:
             bool: True if token counting is supported
         """
-        return (
-            client is not None
-            and hasattr(client, "models")
-            and hasattr(client.models, "count_tokens")
-        )
+        return client is not None and hasattr(client, "models") and hasattr(client.models, "count_tokens")
 
     def _get_estimated_token_count(self, model_name):
         """Return estimation when token counting is not available.
@@ -168,9 +164,7 @@ class GeminiProcessExecutor:
         # Complete the RunResult and return it
         return run_result.complete()
 
-    async def _make_api_call(
-        self, client, model, contents, system_instruction=None, config=None
-    ):
+    async def _make_api_call(self, client, model, contents, system_instruction=None, config=None):
         """Make a call to the Gemini API using the google-genai SDK.
 
         Uses the native async API provided by the SDK.
@@ -271,9 +265,7 @@ class GeminiProcessExecutor:
                     messages.append({"role": "model", "parts": parts})
                 else:
                     # Fallback for unknown content types
-                    messages.append(
-                        {"role": "model", "parts": [{"text": str(content)}]}
-                    )
+                    messages.append({"role": "model", "parts": [{"text": str(content)}]})
 
         return messages
 

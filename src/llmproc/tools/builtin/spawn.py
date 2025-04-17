@@ -4,7 +4,7 @@ import logging
 from typing import Any, Optional
 
 from llmproc.common.results import ToolResult
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 
 # Avoid circular import
 # LLMProcess is imported within the function
@@ -22,15 +22,15 @@ Unlike fork (which creates a copy of the current process), spawn creates a compl
 2. Its own separate conversation history
 3. Potentially different tools or capabilities
 
-spawn(program_name, query, additional_preload_files=None)
+spawn(program_name, prompt, additional_preload_files=None)
 - program_name: The name of the linked program to call (must be one of the available linked programs)
-- query: The query to send to the linked program
+- prompt: The prompt to send to the linked program
 - additional_preload_files: Optional list of file paths to preload into the child process's context
 
 The spawn system call will:
 1. Create a new process from the specified linked program
 2. Preload any specified files into the child process's context (if specified)
-3. Send your query to that process
+3. Send your prompt to that process
 4. Return the process's response to you
 
 When to use this tool:
@@ -44,50 +44,63 @@ Available programs:
 The list of available programs depends on your configuration and will be shown to you when the tool is registered.
 """
 
-# Schema definition for spawn tool
-SPAWN_TOOL_SCHEMA = {
-    "name": "spawn",
-    "description": SPAWN_DESCRIPTION,
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "program_name": {
-                "type": "string",
-                "description": "Name of the linked program to call",
-            },
-            "query": {
-                "type": "string",
-                "description": "The query to send to the linked program",
-            },
-            "additional_preload_files": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Optional list of file paths to preload into the child process's context",
-            },
-        },
-        "required": ["program_name", "query"],
+
+# Schema modifier for spawn tool
+def modify_spawn_schema(schema: dict, config: dict) -> dict:
+    """Modify spawn tool schema with linked program details."""
+    linked_programs = config.get("linked_programs", {})
+    linked_program_descriptions = config.get("linked_program_descriptions", {})
+
+    if linked_programs:
+        # Build a list of available programs with descriptions
+        available_programs_list = []
+
+        # Include all programs with descriptions if available
+        if linked_program_descriptions:
+            for name, description in linked_program_descriptions.items():
+                if name in linked_programs:
+                    available_programs_list.append(f"'{name}': {description}")
+
+        # Add any programs without descriptions
+        for name in linked_programs:
+            if not (linked_program_descriptions and name in linked_program_descriptions):
+                available_programs_list.append(f"'{name}'")
+
+        # Format the list with a header
+        if available_programs_list:
+            formatted_programs = "\n\n## Available Programs:\n- " + "\n- ".join(available_programs_list)
+            schema["description"] += formatted_programs
+
+    return schema
+
+
+@register_tool(
+    name="spawn",
+    description=SPAWN_DESCRIPTION,
+    param_descriptions={
+        "program_name": "Name of the linked program to call",
+        "prompt": "The prompt to send to the linked program",
+        "additional_preload_files": "Optional list of file paths to preload into the child process's context",
     },
-}
-
-# Set default definition
-spawn_tool_def = SPAWN_TOOL_SCHEMA
-
-
-@context_aware
+    required=["program_name", "prompt"],
+    requires_context=True,
+    required_context_keys=["process"],
+    schema_modifier=modify_spawn_schema,
+)
 async def spawn_tool(
     program_name: str,
-    query: str,
+    prompt: str,
     additional_preload_files: Optional[list[str]] = None,
     runtime_context: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Create a new process from a linked program to handle a specific query.
+    """Create a new process from a linked program to handle a specific prompt.
 
     This system call allows one LLM process to create a new process from a linked program
     to handle specialized tasks, with optional file preloading for context.
 
     Args:
         program_name: The name of the linked program to call
-        query: The query to send to the linked program
+        prompt: The prompt to send to the linked program
         additional_preload_files: Optional list of file paths to preload
         runtime_context: Runtime context dictionary containing dependencies needed by the tool.
             Required keys: 'process' (LLMProcess instance with linked_programs)
@@ -100,21 +113,16 @@ async def spawn_tool(
     """
     # Log arguments for debugging
     logger.debug(
-        f"spawn_tool called with args: program_name={program_name}, query={query}, additional_preload_files={additional_preload_files}"
+        f"spawn_tool called with args: program_name={program_name}, prompt={prompt}, additional_preload_files={additional_preload_files}"
     )
 
     # Get process from runtime context
-    if not runtime_context or "process" not in runtime_context:
-        error_msg = "Spawn system call requires runtime_context with process"
-        logger.error(f"SPAWN ERROR: {error_msg}")
-        return ToolResult.from_error(error_msg)
-
-    # Get process from runtime context
+    # Note: The decorator already validates that runtime_context exists and has 'process'
     llm_process = runtime_context["process"]
 
     if not hasattr(llm_process, "linked_programs"):
         error_msg = "Spawn system call requires a parent LLMProcess with linked_programs defined"
-        logger.error(f"SPAWN ERROR: {error_msg}")
+        logger.error(f"Tool 'spawn' error: {error_msg}")
         return ToolResult.from_error(error_msg)
 
     linked_programs = llm_process.linked_programs
@@ -139,7 +147,7 @@ async def spawn_tool(
 
         available_programs = "\n- " + "\n- ".join(available_programs_list)
         error_msg = f"Program '{program_name}' not found. Available programs: {available_programs}"
-        logger.error(f"SPAWN ERROR: {error_msg}")
+        logger.error(f"Tool 'spawn' error: {error_msg}")
         return ToolResult.from_error(error_msg)
 
     try:
@@ -190,8 +198,8 @@ async def spawn_tool(
                         )
                         logger.debug(f"Copied reference {fd_id} to child process")
 
-        # Execute the query on the process
-        await linked_process.run(query)
+        # Execute the prompt on the process
+        await linked_process.run(prompt)
 
         # Get the actual text response from the process
         response_text = linked_process.get_last_message()

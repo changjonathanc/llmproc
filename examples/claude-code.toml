@@ -1,0 +1,49 @@
+# Claude Code - Specialized coding assistant
+# This example provides a complete Claude Code setup with dispatch agent capability
+
+[model]
+name = "claude-3-7-sonnet-20250219"
+provider = "anthropic"
+
+[prompt]
+system_prompt_file = "prompts/claude-code-system-prompt.md"
+# Auto-executed user prompt
+user = """Hello Claude Code! I'm working on this codebase.
+
+First, could you tell me what capabilities you have as Claude Code?
+Then, show me how I could use you to search through a large codebase efficiently.
+"""
+
+[parameters]
+max_tokens = 20000
+
+# Token-efficient tool use for better performance
+[parameters.extra_headers]
+anthropic-beta = "token-efficient-tools-2025-02-19"
+
+# Uncomment to enable thinking mode with medium budget for complex tasks
+# [parameters.thinking]
+# type = "enabled"
+# budget_tokens = 4000
+
+[preload]
+files = ["CLAUDE.md"]  # Load project preferences
+
+[mcp]
+config_path = "config/mcp_servers.json"
+
+# MCP tools are now defined in the [tools.mcp] section
+[tools.mcp]
+sequential-thinking = "all"  # Step-by-step reasoning
+everything = ["add"]  # Use the add tool for precise calculations
+
+[tools]
+enabled = ["spawn", "read_file"]
+
+# Link to the dispatch agent for efficient code search capabilities
+[linked_programs.dispatch_agent]
+path = "dispatch_agent.toml"  
+description = "Agent for exploring codebases efficiently"
+
+[demo]
+display_name = "Claude Code"

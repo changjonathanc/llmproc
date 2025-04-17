@@ -18,6 +18,7 @@ Start here if you're new to LLMProc:
    - [Function-Based Tools](function-based-tools.md) - Register Python functions as tools
    - [Preload Feature](preload-feature.md) - Include files in system prompts
    - [Environment Info](env_info.md) - Add runtime context
+   - [Program Initialization](program-initialization.md) - Configure user prompts and demo mode
 
 ### Core Features
 

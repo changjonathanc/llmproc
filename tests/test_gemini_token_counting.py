@@ -78,9 +78,7 @@ async def test_gemini_token_counting_api_parsing():
             # Mock token count response
             mock_token_response = MagicMock()
             mock_token_response.total_tokens = this_will_be_the_token_count = 42
-            mock_token_response.cached_content_token_count = (
-                this_will_be_cached_count
-            ) = 10
+            mock_token_response.cached_content_token_count = this_will_be_cached_count = 10
 
             # Set the return value for count_tokens
             self.client.models.count_tokens.return_value = mock_token_response

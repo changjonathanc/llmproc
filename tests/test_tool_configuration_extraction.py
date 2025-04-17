@@ -28,7 +28,6 @@ def test_basic_tool_configuration():
     # Verify basic properties
     assert config["provider"] == "anthropic"
     assert config["mcp_config_path"] is None
-    assert config["mcp_tools"] == {}
     assert not config["mcp_enabled"]
     assert config["has_linked_programs"] is False
     assert config["linked_programs"] == {}
@@ -45,7 +44,6 @@ def test_tool_configuration_with_mcp():
         provider="anthropic",
         system_prompt="Test system prompt",
         mcp_config_path="/path/to/config.json",
-        mcp_tools={"server1": ["tool1", "tool2"]},
     )
 
     # Extract configuration
@@ -53,7 +51,6 @@ def test_tool_configuration_with_mcp():
 
     # Verify MCP properties
     assert config["mcp_config_path"] == "/path/to/config.json"
-    assert config["mcp_tools"] == {"server1": ["tool1", "tool2"]}
     assert config["mcp_enabled"] is True
 
 
@@ -74,9 +71,7 @@ def test_tool_configuration_with_linked_programs():
     )
 
     # Extract configuration with the linked_programs_instances
-    config = program.get_tool_configuration(
-        linked_programs_instances=mock_linked_programs
-    )
+    config = program.get_tool_configuration(linked_programs_instances=mock_linked_programs)
 
     # Verify linked program properties
     assert config["has_linked_programs"] is True
@@ -124,7 +119,7 @@ def test_tool_configuration_with_implicit_fd():
         model_name="test-model",
         provider="anthropic",
         system_prompt="Test system prompt",
-        tools={"enabled": ["read_fd"]},
+        tools=["read_fd"],
     )
 
     # Extract configuration

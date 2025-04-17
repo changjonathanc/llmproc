@@ -50,8 +50,19 @@ import asyncio
 from llmproc import LLMProgram
 
 async def main():
-    # Load a configuration with token-efficient tool use enabled
-    program = LLMProgram.from_toml('examples/features/token-efficient-tools.toml')
+    # Create a program with token-efficient tool use enabled
+    program = (
+        LLMProgram(
+            model_name="claude-3-7-sonnet-20250219",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant with access to tools.",
+            parameters={"max_tokens": 4096}
+        )
+        .register_tools(["calculator"])  # Enable the calculator tool
+        .enable_token_efficient_tools()  # Enable token-efficient tool use
+    )
+    
+    # Start the process
     process = await program.start()
 
     # Use tools as you normally would
@@ -68,27 +79,35 @@ The model will automatically use less tokens for tool calls, but the functionali
 
 ## Combining with Thinking Models
 
-You can combine token-efficient tool use with Claude's thinking capabilities:
+You can combine token-efficient tool use with Claude's thinking capabilities using the Python SDK:
 
-```toml
-[model]
-name = "claude-3-7-sonnet-20250219"
-provider = "anthropic"
+```python
+import asyncio
+from llmproc import LLMProgram
 
-[parameters]
-max_tokens = 32768
+async def main():
+    # Create a program with both thinking and token-efficient tools
+    program = (
+        LLMProgram(
+            model_name="claude-3-7-sonnet-20250219",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant with access to tools.",
+            parameters={"max_tokens": 32768}
+        )
+        .register_tools(["calculator", "read_file"])  # Enable tools
+        .configure_thinking(budget_tokens=16000)  # High thinking budget
+        .enable_token_efficient_tools()  # Enable token-efficient tool use
+    )
+    
+    # Start the process
+    process = await program.start()
+    
+    # Run with both features enabled
+    await process.run("Solve this multi-step problem: If I have 3 bags with 4 apples each, and 2 bags with 7 oranges each, how many pieces of fruit do I have in total? Then explain your thought process.")
+    
+    print(process.get_last_message())
 
-# Enable high thinking capability
-[parameters.thinking]
-type = "enabled"
-budget_tokens = 16000
-
-# Enable token-efficient tool use
-[parameters.extra_headers]
-anthropic-beta = "token-efficient-tools-2025-02-19"
-
-[tools]
-enabled = ["calculator", "web_search"]
+asyncio.run(main())
 ```
 
 This configuration enables both extended thinking and token-efficient tool use for optimal performance on complex tasks.
@@ -109,4 +128,4 @@ As Anthropic continues to develop this feature, we expect:
 - Additional optimization options
 - Integration with other efficiency-focused features
 
-See the example configuration in [examples/features/token-efficient-tools.toml](../examples/features/token-efficient-tools.toml) for a complete implementation.
+For more examples and information, check the [Python SDK documentation](./python-sdk.md) which provides details on all available configuration options.

@@ -275,6 +275,22 @@ class AnthropicProcessExecutor:
                             goto_executed_this_turn = True
                             break  # Exit the loop processing tools for this API response
 
+                        # Check if GOTO was just executed and set flag
+                        if tool_name == "goto":
+                            logger.info(
+                                "GOTO tool executed. Setting flag to skip appending messages for this tool response."
+                            )
+                            goto_executed_this_turn = True
+                            break  # Exit the loop processing tools for this API response
+
+                        # Check if GOTO was just executed and set flag
+                        if tool_name == "goto":
+                            logger.info(
+                                "GOTO tool executed. Setting flag to skip appending messages for this tool response."
+                            )
+                            goto_executed_this_turn = True
+                            break  # Exit the loop processing tools for this API response
+
                         # PHASE 3: This file descriptor eligibility check is complex and could be simplified with a
                         # _should_use_file_descriptor(process, tool_name, tool_result) helper function.
 
@@ -296,10 +312,8 @@ class AnthropicProcessExecutor:
                                 and process.fd_manager
                             ):
                                 # Use helper to decide if FD is needed and create it if so
-                                processed_result, used_fd = (
-                                    process.fd_manager.create_fd_from_tool_result(
-                                        tool_result.content, tool_name
-                                    )
+                                processed_result, used_fd = process.fd_manager.create_fd_from_tool_result(
+                                    tool_result.content, tool_name
                                 )
 
                                 if used_fd:
@@ -341,13 +355,9 @@ class AnthropicProcessExecutor:
                     for tool_result in tool_results:
                         # Tool result already has the correct structure with "role": "user"
                         # and "content" is a list with tool result data
-                        append_message_with_id(
-                            process, tool_result["role"], tool_result["content"]
-                        )
+                        append_message_with_id(process, tool_result["role"], tool_result["content"])
                 else:
-                    logger.debug(
-                        "GOTO executed this turn, skipping state update for assistant/tool results."
-                    )
+                    logger.debug("GOTO executed this turn, skipping state update for assistant/tool results.")
 
         if iterations >= max_iterations:
             process.run_stop_reason = "max_iterations"
@@ -522,8 +532,7 @@ class AnthropicProcessExecutor:
                     "content": [
                         content
                         for content in last_assistant_response
-                        if content.type != "tool_use"
-                        or (content.type == "tool_use" and content.id == tool_id)
+                        if content.type != "tool_use" or (content.type == "tool_use" and content.id == tool_id)
                     ],
                 }
             )

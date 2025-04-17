@@ -4,8 +4,8 @@ This module provides functions for registering and handling MCP tools.
 """
 
 import logging
-from collections.abc import Callable
 
+# from collections.abc import Callable  # Unused, removed
 # Use TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -21,9 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def format_tool_for_anthropic(
-    tool: "MCPTool", server_name: str | None = None
-) -> dict[str, Any]:
+def format_tool_for_anthropic(tool: "MCPTool", server_name: str | None = None) -> dict[str, Any]:
     """Format a tool for Anthropic API.
 
     Creates a properly formatted tool definition that can be used with Anthropic API.

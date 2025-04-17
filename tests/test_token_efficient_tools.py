@@ -69,6 +69,5 @@ class TestTokenEfficientTools:
         assert "extra_headers" in call_args
         assert call_args["extra_headers"] == extra_headers
 
-    # Note: We no longer need to test combining with prompt caching beta header
-    # since we're now using the cache_control parameters approach which doesn't require
+    # We use the cache_control parameters approach which doesn't require
     # any beta headers to function

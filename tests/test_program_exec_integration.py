@@ -20,9 +20,7 @@ from llmproc.program import LLMProgram
 async def test_program_start_with_new_initialization_path(model, provider):
     """Test LLMProgram.start() with the new initialization path in program_exec.create_process."""
     # Create a basic program
-    program = LLMProgram(
-        model_name=model, provider=provider, system_prompt="Test system prompt"
-    )
+    program = LLMProgram(model_name=model, provider=provider, system_prompt="Test system prompt")
 
     # Patch provider client to avoid actual API calls
     with patch("llmproc.providers.get_provider_client") as mock_get_client:
@@ -38,7 +36,7 @@ async def test_program_start_with_new_initialization_path(model, provider):
         assert process.system_prompt == "Test system prompt"
         assert process.original_system_prompt == "Test system prompt"
         assert process.state == []
-        # preloaded_content has been removed, effect is merged into enriched system prompt
+        # Content is included in enriched system prompt
         assert not process.file_descriptor_enabled
 
 
@@ -58,15 +56,11 @@ async def test_process_run_with_new_initialization_path(mock_get_client):
     mock_get_client.return_value = mock_client
 
     # Create and start a program
-    program = LLMProgram(
-        model_name="gpt-4", provider="openai", system_prompt="Test system prompt"
-    )
+    program = LLMProgram(model_name="gpt-4", provider="openai", system_prompt="Test system prompt")
     process = await program.start()
 
     # Mock the OpenAI executor run method
-    with patch(
-        "llmproc.providers.openai_process_executor.OpenAIProcessExecutor.run"
-    ) as mock_run:
+    with patch("llmproc.providers.openai_process_executor.OpenAIProcessExecutor.run") as mock_run:
         # Set up mock return value
         mock_result = MagicMock()
         mock_result.message = "Test response"

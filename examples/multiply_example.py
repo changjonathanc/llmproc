@@ -1,11 +1,15 @@
-"""Simple example demonstrating LLMProc with a function-based tool"""
+"""Simple example demonstrating LLMProc with a function-based tool.
+
+This example shows how to register a Python function as a tool.
+The @register_tool decorator is optional - function type hints and
+docstrings are automatically converted to JSON schema.
+"""
 
 import asyncio
 
-from llmproc import LLMProgram, register_tool
+from llmproc import LLMProgram
 
 
-@register_tool()
 def multiply(a: float, b: float) -> dict:
     """Multiply two numbers and return the result."""
     return {"result": a * b}  # Expected: π * e = 8.539734222677128
@@ -19,7 +23,8 @@ async def main():
         parameters={"max_tokens": 1024},
     )
 
-    program.set_enabled_tools([multiply])
+    # Register the function as a tool
+    program.register_tools([multiply])
 
     process = await program.start()
     await process.run("Can you multiply 3.14159265359 by 2.71828182846?")

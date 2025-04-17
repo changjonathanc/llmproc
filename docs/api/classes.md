@@ -139,7 +139,7 @@ flowchart TB
 - **Key methods**:
   - `from_toml(path)`: Load configuration from TOML file
   - `start()`: Create fully initialized LLMProcess instance (handles validation automatically)
-  - `set_enabled_tools(tools)`: Configure available tools
+  - `register_tools(tools)`: Configure available tools
   - `set_tool_aliases(aliases)`: Set user-friendly aliases
   - `configure_file_descriptor(enabled)`: Configure FD system
   - `get_tool_configuration()`: Extract config for tools initialization
@@ -180,7 +180,7 @@ flowchart TB
   - `register_aliases(aliases)`: Register user-friendly aliases
   - `call_tool(name, args, runtime_context)`: Execute a tool
   - `get_tool_schemas()`: Get tool definitions for LLM API
-  - `set_enabled_tools(tool_names)`: Control available tools
+  - `register_tools(tools)`: Register tools for availability
   - `set_runtime_context(context)`: Set up runtime dependencies
 
 #### FileDescriptorManager
@@ -276,9 +276,10 @@ def get_enriched_system_prompt(self, process_instance=None, include_env: bool = 
 - `system_prompt`: Base system prompt
 - `api_params`: API parameters for the model
 - `linked_programs`: Dictionary of linked programs
-- `tools`: Dictionary of tool configurations
+- `tools`: List of tool functions (or dict with aliases)
 - `preload_files`: List of files to preload
 - `base_dir`: Base directory for resolving paths
+- `tool_manager`: Manager for all tool operations
 
 ## LLMProcess
 

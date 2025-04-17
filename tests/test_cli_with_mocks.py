@@ -42,7 +42,7 @@ def run_cli_with_input(program_path, input_text, timeout=10):
         input_file.flush()
         input_file.seek(0)
 
-        cmd = [sys.executable, "-m", "llmproc.cli", str(program_path)]
+        cmd = [sys.executable, "-m", "llmproc.cli.demo", str(program_path)]
         result = subprocess.run(
             cmd,
             stdin=input_file,

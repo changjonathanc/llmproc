@@ -1,0 +1,60 @@
+# Basic Features - Demonstrates preloading, environment info, and tool aliases
+[model]
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+
+[prompt]
+system_prompt = """You are an assistant with access to several basic LLMProc features:
+
+1. PRELOADED FILES: You have access to preloaded files in your context
+2. ENVIRONMENT INFO: You can see environment information in <env> tags
+3. TOOL ALIASES: You can use simplified tool names instead of technical ones
+
+Available tool aliases:
+- 'read': Reads files (alias for read_file)
+- 'calc': Performs calculations (alias for calculator)
+- 'dir': Lists directory contents (alias for list_dir)
+
+Use these features to provide more relevant and accurate responses.
+"""
+
+# Auto-executed user prompt
+user = """Demonstrate the basic features available to you:
+1. What environment information can you see?
+2. What files have been preloaded for you?
+3. Show how tool aliases make it easier to use tools.
+
+Please use the 'read' tool alias to view the first few lines of the README.md file,
+and use the 'calc' tool alias to calculate π × e.
+"""
+
+[parameters]
+max_tokens = 1000
+
+# Preload feature: Add file content to system prompt
+[preload]
+files = [
+  "../README.md",  # Project overview
+  "../pyproject.toml"  # Package configuration
+]
+
+# Environment info: Add runtime context to system prompt
+[env_info]
+variables = [
+  "working_directory",  # Current directory path
+  "platform",          # Operating system
+  "date"               # Current date
+]
+
+# Enable tools with their original names
+[tools]
+enabled = ["read_file", "calculator", "list_dir"]
+
+# Define user-friendly tool aliases
+[tools.aliases]
+read = "read_file"
+calc = "calculator"
+dir = "list_dir"
+
+[demo]
+display_name = "Basic Features Demo"

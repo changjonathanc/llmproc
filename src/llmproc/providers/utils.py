@@ -31,9 +31,7 @@ def safe_callback(
         logger.warning(f"Error in {callback_name} callback: {str(e)}")
 
 
-def get_context_window_size(
-    model_name: str, window_sizes: dict[str, int], default_size: int = 100000
-) -> int:
+def get_context_window_size(model_name: str, window_sizes: dict[str, int], default_size: int = 100000) -> int:
     """
     Get the context window size for the given model.
 

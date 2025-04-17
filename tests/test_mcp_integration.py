@@ -1,116 +1,140 @@
-"""Tests for MCP integration functions."""
+"""Integration tests for MCP (Model Context Protocol) functionality with MCPTool descriptors.
 
-import asyncio
-from unittest.mock import Mock, patch
+This file tests the core MCP functionality using the new MCPTool descriptors approach.
+"""
+
+import json
+import os
+import tempfile
+from tempfile import NamedTemporaryFile
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llmproc.common.results import ToolResult
-from llmproc.tools.mcp.integration import (
-    initialize_mcp_tools,
-    register_mcp_tool,
-    register_runtime_mcp_tools,
-)
-from llmproc.tools.tool_registry import ToolRegistry
+from llmproc.program import LLMProgram
+from llmproc.tools.mcp import MCPTool
+from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
 
 
-async def dummy_handler(args):
-    """Simple dummy handler for testing."""
-    return ToolResult.from_success("Test result")
+def test_mcptool_descriptor_validation():
+    """Test validation logic for MCPTool descriptors."""
+    # Valid cases
+    assert MCPTool("server").names == "all"
+    assert MCPTool("server", "tool1").names == ["tool1"]
+    assert MCPTool("server", "tool1", "tool2").names == ["tool1", "tool2"]
+    assert MCPTool("server", ["tool1", "tool2"]).names == ["tool1", "tool2"]
+
+    # Representation tests
+    assert str(MCPTool("server")) == "<MCPTool server=ALL>"
+    assert "tool1" in str(MCPTool("server", "tool1"))
+
+    # Invalid cases
+    with pytest.raises(ValueError, match="non-empty server name"):
+        MCPTool("")  # Empty server name
+
+    with pytest.raises(ValueError, match="invalid tool names"):
+        MCPTool("server", "")  # Empty tool name
+
+    with pytest.raises(ValueError, match="invalid tool names"):
+        MCPTool("server", 123)  # Invalid tool name type
+
+    with pytest.raises(ValueError, match="invalid tool names"):
+        MCPTool("server", "valid", "")  # Mix of valid and invalid tool names
 
 
-def test_register_mcp_tool():
-    """Test registering an MCP tool to the runtime registry."""
-    mcp_registry = ToolRegistry()
-    runtime_registry = ToolRegistry()
-
-    # Register a test tool in the MCP registry
-    test_schema = {
-        "name": "mcp_test_tool",
-        "description": "MCP test tool",
-        "input_schema": {"type": "object", "properties": {}},
-    }
-    mcp_registry.register_tool("mcp_test_tool", dummy_handler, test_schema)
-
-    # Register the MCP tool to the runtime registry
-    result = register_mcp_tool(mcp_registry, runtime_registry, "mcp_test_tool")
-
-    # Verify registration succeeded
-    assert result is True
-    assert "mcp_test_tool" in runtime_registry.tool_handlers
-    assert runtime_registry.tool_handlers["mcp_test_tool"] is dummy_handler
-
-    # Verify schema was copied
-    runtime_schemas = runtime_registry.get_definitions()
-    assert len(runtime_schemas) == 1
-    assert runtime_schemas[0]["name"] == "mcp_test_tool"
-    assert runtime_schemas[0]["description"] == "MCP test tool"
-
-    # Test with non-existent tool
-    result = register_mcp_tool(mcp_registry, runtime_registry, "nonexistent")
-    assert result is False
+# Common fixtures
+@pytest.fixture
+def mock_env():
+    """Mock environment variables."""
+    original_env = os.environ.copy()
+    os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
+    os.environ["GITHUB_TOKEN"] = "test-github-token"
+    yield
+    os.environ.clear()
+    os.environ.update(original_env)
 
 
-def test_register_runtime_mcp_tools():
-    """Test registering all MCP tools to runtime registry."""
-    mcp_registry = ToolRegistry()
-    runtime_registry = ToolRegistry()
-    enabled_tools = ["existing_tool"]
-
-    # Register multiple test tools in MCP registry
-    for i in range(3):
-        test_schema = {
-            "name": f"mcp_tool_{i}",
-            "description": f"MCP tool {i}",
-            "input_schema": {"type": "object", "properties": {}},
-        }
-        mcp_registry.register_tool(f"mcp_tool_{i}", dummy_handler, test_schema)
-
-    # Register MCP tools to runtime registry
-    count = register_runtime_mcp_tools(mcp_registry, runtime_registry, enabled_tools)
-
-    # Verify registration succeeded
-    assert count == 3
-
-    # Verify tools are in runtime registry
-    for i in range(3):
-        assert f"mcp_tool_{i}" in runtime_registry.tool_handlers
-
-    # Verify tools were added to enabled_tools
-    assert len(enabled_tools) == 4  # existing_tool + 3 new MCP tools
-    for i in range(3):
-        assert f"mcp_tool_{i}" in enabled_tools
-
-    # Test with empty MCP registry
-    empty_mcp_registry = ToolRegistry()
-    count = register_runtime_mcp_tools(
-        empty_mcp_registry, runtime_registry, enabled_tools
-    )
-    assert count == 0
+@pytest.fixture
+def time_mcp_config():
+    """Create a temporary MCP config file with time server."""
+    with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp_file:
+        json.dump(
+            {
+                "mcpServers": {
+                    "time": {
+                        "type": "stdio",
+                        "command": "echo",
+                        "args": ["mock"],
+                    }
+                }
+            },
+            temp_file,
+        )
+        config_path = temp_file.name
+    yield config_path
+    os.unlink(config_path)
 
 
 @pytest.mark.asyncio
-async def test_initialize_mcp_tools_simple_cases():
-    """Test initializing MCP tools from configuration for simple cases only."""
-    # Create configuration
-    config = {
-        "mcp_enabled": False,
-        "mcp_config_path": "/path/to/config.json",
-        "mcp_tools": {"server1": ["tool1", "tool2"]},
-        "provider": "test",
-    }
+@patch("llmproc.providers.providers.AsyncAnthropic")
+@patch("llmproc.tools.mcp.manager.MCPManager.initialize")
+async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, time_mcp_config):
+    """Test program configuration with MCPTool descriptors."""
+    # Setup mocks
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    mock_initialize.return_value = True
 
-    # Create registry
-    mcp_registry = ToolRegistry()
+    # Create a program with MCPTool descriptors
+    program = LLMProgram(
+        model_name="claude-3-5-sonnet",
+        provider="anthropic",
+        system_prompt="You are an assistant with access to tools.",
+        mcp_config_path=time_mcp_config,
+        tools=[MCPTool("time", "current")],  # Using MCPTool descriptor
+    )
 
-    # Test with mcp_enabled=False
-    success, manager = await initialize_mcp_tools(config, mcp_registry, None)
-    assert success is False
-    assert manager is None
+    # Verify that the MCPTool descriptor was stored in the tool_manager
+    assert len(program.tool_manager.mcp_tools) == 1
+    assert program.tool_manager.mcp_tools[0].server == "time"
+    assert program.tool_manager.mcp_tools[0].names == ["current"]
 
-    # Test with missing config_path
-    config["mcp_enabled"] = True
-    config["mcp_config_path"] = None
-    success, manager = await initialize_mcp_tools(config, mcp_registry, None)
-    assert success is False
-    assert manager is None
+    # Create a process
+    process = await program.start()
+
+    # Verify the MCPManager is initialized with the config path
+    assert process.tool_manager.mcp_manager.config_path == time_mcp_config
+    assert process.tool_manager.mcp_manager.config_path == time_mcp_config
+
+    # Verify initialize was called
+    mock_initialize.assert_called_once()
+
+    # Test with 'all' tools
+    program2 = LLMProgram(
+        model_name="claude-3-5-sonnet",
+        provider="anthropic",
+        system_prompt="You are an assistant with access to tools.",
+        mcp_config_path=time_mcp_config,
+        tools=[MCPTool("time")],  # Using MCPTool descriptor with "all" tools
+    )
+
+    # Verify the descriptor was stored correctly with "all"
+    assert len(program2.tool_manager.mcp_tools) == 1
+    assert program2.tool_manager.mcp_tools[0].server == "time"
+    assert program2.tool_manager.mcp_tools[0].names == "all"
+
+    # Test with multiple MCPTool descriptors
+    program3 = LLMProgram(
+        model_name="claude-3-5-sonnet",
+        provider="anthropic",
+        system_prompt="You are an assistant with access to tools.",
+        mcp_config_path=time_mcp_config,
+        tools=[
+            MCPTool("time", "current"),
+            MCPTool("calculator", "add", "subtract"),
+        ],
+    )
+
+    # Verify multiple descriptors are stored correctly
+    assert len(program3.tool_manager.mcp_tools) == 2
+    assert {d.server for d in program3.tool_manager.mcp_tools} == {"time", "calculator"}

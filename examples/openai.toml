@@ -1,0 +1,15 @@
+[model]
+name = "gpt-4o-mini"
+provider = "openai"
+
+[prompt]
+system_prompt = """
+You are a helpful assistant powered by OpenAI's GPT-4o model. Provide accurate, helpful responses that are tailored to the user's needs.
+"""
+
+[parameters]
+max_tokens = 1000
+
+# For reasoning models (o-series models only):
+# reasoning_effort = "medium"  # Options: "low" (faster), "medium" (balanced), "high" (complex problems)
+# max_completion_tokens = 10000  # For low: 5000, for high: 25000

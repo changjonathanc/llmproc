@@ -6,6 +6,7 @@ LLMProc supports registering Python functions as tools with automatic schema gen
 
 ```python
 from llmproc import LLMProgram, register_tool
+from llmproc.tools.builtin import calculator  # Import built-in tool functions
 
 # Simple function with type hints
 def get_calculator(x: int, y: int) -> int:
@@ -25,16 +26,22 @@ program = (
     LLMProgram(
         model_name="claude-3-7-sonnet",
         provider="anthropic",
-        system_prompt="You are a helpful assistant."
+        system_prompt="You are a helpful assistant.",
+        # Tools can be provided directly in the constructor
+        tools=[calculator, get_calculator]  # List of callable functions
     )
-    .add_tool(get_calculator)
 )
+
+# Or set tools after creation 
+# program.register_tools([calculator, get_calculator, "read_file"])
 
 # Start the LLM process
 process = await program.start()
 ```
 
-## Using the `register_tool` Decorator
+## Optional: Using the `register_tool` Decorator
+
+The `register_tool` decorator is entirely optional. You can register plain functions as tools without any decoration, and the system will automatically extract information from function signatures, docstrings, and type hints.
 
 For more control over tool names, descriptions, and parameter descriptions, use the `register_tool` decorator:
 
@@ -132,7 +139,7 @@ program = (
         system_prompt="You are a helpful assistant.",
         parameters={"max_tokens": 1024}  # Required parameter
     )
-    .set_enabled_tools([get_calculator, get_weather, fetch_data])  # Enable multiple tools at once
+    .register_tools([get_calculator, get_weather, fetch_data])  # Enable multiple tools at once
     .add_preload_file("context.txt")
     .add_linked_program("expert", expert_program, "A specialized expert program")
 )
@@ -143,20 +150,35 @@ process = await program.start()
 
 ## Mixed Tool Types
 
-You can mix function-based tools with dictionary-based tool configurations:
+You can mix function-based tools with string-based tool names in both the constructor and register_tools():
 
 ```python
-# Add both function and dictionary tools
+# Enable both function-based and built-in tools
 program = (
-    LLMProgram(...)
-    .add_tool(get_calculator)
-    .add_tool({"name": "read_file", "enabled": True})
+    LLMProgram(
+        model_name="claude-3-5-sonnet",
+        provider="anthropic",
+        system_prompt="You are a helpful assistant.",
+        # Mix tools in constructor
+        tools=[
+            get_calculator,         # Function-based tool
+            "read_file",            # Built-in tool by name
+            "calculator"            # Another built-in tool
+        ]
+    )
 )
+
+# Or mix tools when calling register_tools()
+program.register_tools([
+    get_calculator,         # Function-based tool
+    "read_file",            # Built-in tool by name
+    "calculator"            # Another built-in tool
+])
 ```
 
 ## Tool Error Handling
 
-Tool errors are automatically handled and returned as proper error responses:
+Tool errors are automatically handled and returned as proper error responses with standardized formatting:
 
 ```python
 def division_tool(x: int, y: int) -> float:
@@ -172,7 +194,54 @@ def division_tool(x: int, y: int) -> float:
     return x / y  # Will raise ZeroDivisionError if y is 0
 ```
 
-When the LLM tries to call this tool with `y=0`, it will receive a proper error message indicating the division by zero error, rather than crashing the application.
+When the LLM tries to call this tool with `y=0`, it will receive a proper error message with the standardized format `Tool '{name}' error: {message}`. For example: `Tool 'division_tool' error: division by zero`.
+
+All errors from function tools follow this consistent pattern, making error handling and debugging easier.
+
+## Context-Aware Tools
+
+You can create tools that require access to the LLMProcess runtime context using the `requires_context=True` parameter:
+
+```python
+from typing import Optional, Dict, Any
+from llmproc import register_tool
+
+@register_tool(
+    name="spawn_tool",
+    description="Create a new process from a linked program",
+    param_descriptions={
+        "program_name": "Name of the linked program to call",
+        "prompt": "The prompt to send to the linked program"
+    },
+    requires_context=True,
+    required_context_keys=["process"]  # Specify required context keys
+)
+async def spawn_child_process(
+    program_name: str,
+    prompt: str,
+    runtime_context: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Create a new process from a linked program.
+    
+    Args:
+        program_name: Name of the linked program to call
+        prompt: The prompt to send
+        runtime_context: Injected runtime context
+        
+    Returns:
+        Response from the child process
+    """
+    # Access the process instance from runtime context
+    parent_process = runtime_context["process"]
+    
+    # Implementation...
+    return {"response": "Child process response"}
+```
+
+Tools Requiring Runtime Context automatically receive a `runtime_context` parameter containing runtime dependencies like:
+- `process`: The LLMProcess instance
+- `fd_manager`: File descriptor manager (if enabled)
+- `linked_programs`: Dictionary of linked programs (if available)
 
 ## Initialization
 
@@ -181,5 +250,6 @@ Function tools are processed during process initialization. When you call `progr
 1. Extracts schema information from type hints and docstrings
 2. Creates async-compatible tool handlers
 3. Registers tools with the tool registry
+4. Sets up runtime context injection for context-aware tools
 
 When the process is started, the tools are ready to use by the LLM.

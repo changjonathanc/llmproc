@@ -8,6 +8,10 @@ This document serves as the canonical reference for the core API structure of th
 LLMProgram
 ├── from_toml()     # Load program from TOML
 ├── start()         # Create and initialize a process (handles validation automatically)
+├── register_tools() # Configure tools (accepts strings and/or callables)
+├── set_tool_aliases() # Set LLM-friendly aliases for tools
+├── set_user_prompt() # Set initial user prompt to execute automatically
+├── set_max_iterations() # Set maximum iterations for tool calls
 └── tool_manager    # Central manager for all tools
 
 LLMProcess
@@ -29,7 +33,7 @@ ToolManager
 ├── initialize_tools() # Set up all tools from configuration
 ├── call_tool()     # Call a tool by name
 ├── get_tool_schemas() # Get schemas for enabled tools
-└── set_enabled_tools() # Configure which tools are available
+└── register_tools() # Configure which tools are available
 
 ToolRegistry
 ├── register_tool() # Register a tool
@@ -40,7 +44,9 @@ ToolRegistry
 
 ## Key Interfaces and Patterns
 
-### Standard Usage Pattern
+### Standard Usage Patterns
+
+#### Interactive Pattern
 
 ```python
 import asyncio
@@ -57,6 +63,31 @@ async def main():
     run_result = await process.run("User input")
 
     # 4. Get the response text
+    response = process.get_last_message()
+
+asyncio.run(main())
+```
+
+#### Automatic User Prompt Pattern
+
+```python
+import asyncio
+from llmproc import LLMProgram
+
+async def main():
+    # 1. Load program configuration with user prompt
+    program = LLMProgram.from_toml("path/to/config.toml")
+    
+    # Optional: set or override user prompt programmatically
+    program.set_user_prompt("What are the key features of LLMProc?")
+    program.set_max_iterations(15)  # Override default max_iterations
+
+    # 2. Start the process (handles validation automatically)
+    # If user_prompt is set, it will be executed automatically
+    process = await program.start()
+    
+    # 3. No need to call process.run() unless you want to run additional prompts
+    # The result of the automatic execution is available in the process
     response = process.get_last_message()
 
 asyncio.run(main())
@@ -107,6 +138,9 @@ The library follows a carefully designed dependency structure to minimize circul
 - Program compilation
 - Creating the process
 - Providing tool configuration
+- Managing user prompt configuration
+- Setting maximum iterations for tool calls
+- Supporting demo mode configuration
 
 **Dependencies:**
 - Uses **ProgramLoader** for TOML configuration loading
@@ -121,6 +155,8 @@ The library follows a carefully designed dependency structure to minimize circul
 - Response handling and processing
 - Runtime context management
 - File descriptor management (when enabled)
+- Automatic execution of user prompts
+- Enforcing maximum iterations for tool calls
 
 **Dependencies:**
 - Depends on **LLMProgram** for configuration
@@ -146,7 +182,7 @@ The library follows a carefully designed dependency structure to minimize circul
 - Central management of all tools
 - Tool initialization and setup
 - Tool access control and enablement
-- Runtime context injection for context-aware tools
+- Runtime context injection for tools requiring runtime context
 - Tool alias resolution and mapping
 
 **Dependencies:**

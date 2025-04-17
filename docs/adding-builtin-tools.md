@@ -98,7 +98,7 @@ That's it! You don't need to modify `tool_manager.py` because it now automatical
 
 ## Step 4: Create an Example Program
 
-Create an example TOML file in `examples/features/builtin-tools/` to demonstrate your tool:
+Create an example TOML file in `examples/` to demonstrate your tool:
 
 ```toml
 # Example program for testing the your_tool_name tool
@@ -114,6 +114,8 @@ system_prompt = """Tool demonstration prompt that explains:
 - What parameters it accepts
 - How it should be used
 """
+# Add a user prompt for immediate testing
+user = "Please demonstrate how to use the your_tool_name tool with different parameters."
 
 [parameters]
 max_tokens = 4096
@@ -209,7 +211,7 @@ __all__ = [
 ]
 ```
 
-3. Create an example file in `examples/features/builtin-tools/list-dir-tool.toml`:
+3. Create an example file in `examples/builtin-tools.toml`:
 
 ```toml
 # Example program for testing the list_dir tool

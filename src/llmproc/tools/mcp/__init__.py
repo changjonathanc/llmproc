@@ -1,23 +1,40 @@
-"""MCP (Model Context Protocol) tools package for llmproc.
-
-This package provides functionality for managing MCP servers and tools.
+"""
+MCP tool descriptor for selecting tools from MCP servers.
 """
 
-from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
-from llmproc.tools.mcp.handlers import create_mcp_handler, format_tool_for_anthropic
-from llmproc.tools.mcp.integration import (
-    initialize_mcp_tools,
-    register_mcp_tool,
-    register_runtime_mcp_tools,
-)
-from llmproc.tools.mcp.manager import MCPManager
+from typing import List, Union
 
-__all__ = [
-    "MCPManager",
-    "MCP_TOOL_SEPARATOR",
-    "create_mcp_handler",
-    "format_tool_for_anthropic",
-    "initialize_mcp_tools",
-    "register_mcp_tool",
-    "register_runtime_mcp_tools",
-]
+
+class MCPTool:
+    """
+    Descriptor for selecting tools from an MCP server.
+
+    Usage:
+      MCPTool("calc")                 # all tools on "calc"
+      MCPTool("calc", "add")        # just "add"
+      MCPTool("calc", "add", "sub")# "add" and "sub"
+      MCPTool("calc", ["mul","div"])# list form
+    """
+
+    def __init__(self, server: str, *names: Union[str, list[str]]):
+        if not server or not isinstance(server, str):
+            raise ValueError("MCPTool requires a non-empty server name")
+        self.server = server
+
+        # Flatten single list arg
+        if len(names) == 1 and isinstance(names[0], (list, tuple)):
+            names = names[0]
+
+        # No names => wildcard (all)
+        if not names:
+            self.names: Union[str, list[str]] = "all"
+        else:
+            invalid = [n for n in names if not isinstance(n, str) or not n]
+            if invalid:
+                raise ValueError(f"MCPTool invalid tool names: {invalid}")
+            self.names = list(names)  # type: ignore[list-item]
+
+    def __repr__(self) -> str:
+        if self.names == "all":
+            return f"<MCPTool {self.server}=ALL>"
+        return f"<MCPTool {self.server}={self.names}>"

@@ -328,10 +328,7 @@ class TestMiscUtils:
         assert get_context_window_size("claude-3-7-opus", window_sizes) == 250000
 
         # Test with timestamp in name
-        assert (
-            get_context_window_size("claude-3-5-sonnet-20241022", window_sizes)
-            == 200000
-        )
+        assert get_context_window_size("claude-3-5-sonnet-20241022", window_sizes) == 200000
 
         # Test fallback
         assert get_context_window_size("unknown-model", window_sizes) == 100000

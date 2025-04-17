@@ -39,10 +39,9 @@ See [MISC.md](MISC.md) for additional installation options and provider configur
 ```python
 # Full example: examples/multiply_example.py
 import asyncio
-from llmproc import LLMProgram, register_tool
+from llmproc import LLMProgram  # Optional: import register_tool for advanced tool configuration
 
 
-@register_tool()
 def multiply(a: float, b: float) -> dict:
     """Multiply two numbers and return the result."""
     return {"result": a * b}  # Expected: π * e = 8.539734222677128
@@ -53,11 +52,9 @@ async def main():
         model_name="claude-3-7-sonnet-20250219", 
         provider="anthropic",
         system_prompt="You're a helpful assistant.",
-        parameters={"max_tokens": 1024}
+        parameters={"max_tokens": 1024},
+        tools=[multiply],
     )
-    
-    program.set_enabled_tools([multiply])
-    
     process = await program.start()
     await process.run("Can you multiply 3.14159265359 by 2.71828182846?")
     
@@ -72,16 +69,16 @@ if __name__ == "__main__":
 
 ```bash
 # Start interactive session
-llmproc-demo ./examples/anthropic/claude-3-5-haiku.toml
+llmproc-demo ./examples/anthropic.toml
 
 # Single prompt
-llmproc-demo ./examples/anthropic/claude-3-5-sonnet.toml -p "What is Python?"
+llmproc-demo ./examples/openai.toml -p "What is Python?"
 
 # Read from stdin
-cat questions.txt | llmproc-demo ./examples/anthropic/claude-3-7-sonnet.toml -n
+cat questions.txt | llmproc-demo ./examples/anthropic.toml -n
 
 # Use Gemini models
-llmproc-demo ./examples/gemini/gemini-2.0-flash-direct.toml
+llmproc-demo ./examples/gemini.toml
 ```
 
 ## Features
@@ -94,27 +91,29 @@ llmproc-demo ./examples/gemini/gemini-2.0-flash-direct.toml
 LLMProc offers a Unix-inspired toolkit for building sophisticated LLM applications:
 
 ### Process Management - Unix-like LLM Orchestration
-- **[Program Linking](./examples/features/program-linking/main.toml)** - Spawn specialized LLM processes for delegated tasks
-- **[Fork Tool](./examples/features/fork.toml)** - Create process copies with shared conversation state
-- **[GOTO (Time Travel)](./examples/features/goto.toml)** - Reset conversations to previous points with [context compaction demo](./examples/scripts/goto_context_compaction_demo.py)
+- **[Program Linking](./examples/program-linking/main.toml)** - Spawn specialized LLM processes for delegated tasks
+- **[Fork Tool](./examples/fork.toml)** - Create process copies with shared conversation state
+- **[GOTO (Time Travel)](./examples/goto.toml)** - Reset conversations to previous points with [context compaction demo](./examples/scripts/goto_context_compaction_demo.py)
 
 ### Large Content Handling - Sophisticated I/O Management
-- **[File Descriptor System](./examples/features/file-descriptor/main.toml)** - Unix-like pagination for large outputs
+- **[File Descriptor System](./examples/file-descriptor/main.toml)** - Unix-like pagination for large outputs
 - **Reference ID System** - Mark up and reference specific pieces of content
 - **Smart Content Pagination** - Optimized line-aware chunking for content too large for context windows
 
 ### Usage Examples
 - See the [Python SDK](./docs/python-sdk.md) documentation for the fluent API
 - Use [Function-Based Tools](./docs/function-based-tools.md) to register Python functions as tools
-- Start with a [simple configuration](./examples/anthropic/claude-3-5-haiku.toml) for quick experimentation
+- Create [Context-Aware Meta-Tools](./examples/scripts/temperature_sdk_demo.py) to let LLMs modify their own runtime parameters
+- Start with a [simple configuration](./examples/anthropic.toml) for quick experimentation
 
 ### Additional Features
-- **File Preloading** - Enhance context by [loading files](./examples/features/preload.toml) into system prompts
-- **Environment Info** - Add [runtime context](./examples/features/env-info.toml) like working directory
+- **File Preloading** - Enhance context by [loading files](./examples/basic-features.toml) into system prompts
+- **Environment Info** - Add [runtime context](./examples/basic-features.toml) like working directory
 - **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
-- **Reasoning/Thinking models** - [Claude 3.7 Thinking](./examples/anthropic/claude-3-7-thinking-high.toml) and [OpenAI Reasoning](./examples/openai/o3-mini-high.toml) models
-- **[MCP Protocol](./examples/features/mcp.toml)** - Standardized interface for tool usage
-- **[Tool Aliases](./examples/features/tool-aliases.toml)** - Provide simpler, intuitive names for tools
+- **Reasoning/Thinking models** - Claude 3.7 Thinking and OpenAI Reasoning models (configured in anthropic.toml and openai.toml)
+- **Token-efficient tools** - Claude 3.7 optimized tool calling (configured in anthropic.toml)
+- **[MCP Protocol](./examples/mcp.toml)** - Standardized interface for tool usage
+- **[Tool Aliases](./examples/basic-features.toml)** - Provide simpler, intuitive names for tools
 - **Cross-provider support** - Currently supports Anthropic, OpenAI, and Google Gemini
 
 ## Demo Tools
@@ -126,9 +125,9 @@ LLMProc includes demo command-line tools for quick experimentation:
 Interactive CLI for testing LLM configurations:
 
 ```bash
-llmproc-demo ./examples/anthropic/claude-3-5-haiku.toml  # Interactive session
-llmproc-demo ./config.toml -p "What is Python?"          # Single prompt
-cat questions.txt | llmproc-demo ./config.toml -n        # Pipe mode
+llmproc-demo ./examples/anthropic.toml  # Interactive session
+llmproc-demo ./config.toml -p "What is Python?"    # Single prompt
+cat questions.txt | llmproc-demo ./config.toml -n  # Pipe mode
 ```
 
 Commands: `exit` or `quit` to end the session
@@ -144,7 +143,7 @@ llmproc-prompt ./config.toml -E              # Without environment info
 ```
 
 ## Use Cases
-- **[Claude Code](./examples/claude-code/claude-code.toml)** - A minimal Claude Code implementation, with support for preloading CLAUDE.md, spawning, MCP
+- **[Claude Code](./examples/claude-code.toml)** - A minimal Claude Code implementation, with support for preloading CLAUDE.md, spawning, MCP
 
 ## Documentation
 
@@ -153,7 +152,7 @@ llmproc-prompt ./config.toml -E              # Without environment info
 - [Examples](./examples/README.md): Sample configurations and use cases
 - [API Docs](./docs/api/index.md): Detailed API documentation
 - [Python SDK](./docs/python-sdk.md): Fluent API and program creation
-- [Function-Based Tools](./docs/function-based-tools.md): Python function tools with type hints
+- [Function-Based Tools](./docs/function-based-tools.md): Register Python functions as tools with automatic schema generation
 - [File Descriptor System](./docs/file-descriptor-system.md): Handling large outputs
 - [Program Linking](./docs/program-linking.md): LLM-to-LLM communication
 - [GOTO (Time Travel)](./docs/goto-feature.md): Conversation time travel

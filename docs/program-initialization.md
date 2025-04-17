@@ -68,17 +68,71 @@ Programs are defined in TOML files with standard sections:
 [model]
 name = "model-name"
 provider = "model-provider"
+max_iterations = 10  # Maximum iterations for tool calls, defaults to 10 if not specified
 
 [prompt]
 system_prompt = "System instructions for the model"
+user = "Optional user prompt to execute automatically"  # Auto-executes when program starts
 
 [linked_programs]
 helper = "path/to/helper.toml"
 math = "path/to/math.toml"
 
+[demo]
+prompts = [  # Optional list of prompts to execute sequentially
+  "First prompt in demo mode",
+  "Second prompt in demo mode"
+]
+pause_between_prompts = true  # Whether to pause between demo prompts, defaults to true
+
 [tools]
 enabled = ["spawn"]
 ```
+
+### User Prompt Section
+
+The `[prompt]` section now includes an optional `user` field to specify an initial user prompt that will be executed automatically when the program starts:
+
+```toml
+[prompt]
+system_prompt = "System instructions for the model"
+user = "What are the key features of LLMProc?"  # Executed automatically when the program starts
+```
+
+When a user prompt is specified in the TOML file, it follows a priority order for execution:
+1. Command-line prompt argument (via `-p "prompt"` or `--prompt "prompt"`)
+2. Standard input (via `cat file.txt | llmproc-demo config.toml`)
+3. TOML user prompt (via `user = "prompt"` in TOML)
+4. Interactive mode (if none of the above is provided)
+
+### Max Iterations Configuration
+
+The `[model]` section includes an optional `max_iterations` field to control the maximum number of tool calls:
+
+```toml
+[model]
+name = "claude-3-7-sonnet"
+provider = "anthropic"
+max_iterations = 15  # Allow up to 15 iterations of tool calls
+```
+
+If not specified, the default is 10 iterations. This value can be overridden at runtime by passing the `max_iterations` parameter to the `run()` method.
+
+### Demo Mode
+
+The optional `[demo]` section enables running multiple prompts sequentially:
+
+```toml
+[demo]
+prompts = [
+  "What are the key features of LLMProc?",
+  "How does program linking work?",
+  "Explain the file descriptor system"
+]
+pause_between_prompts = true  # Pause between prompts for user review
+```
+
+When demo mode is enabled, the prompts are executed in sequence, with optional pauses between each prompt. This is useful for demonstrations, tutorials, and testing.
 
 ### Linked Programs Section
 
@@ -190,7 +244,9 @@ Ensure that all referenced program files exist and the paths are correct, especi
 
 Your program graph may have too many levels of nesting or an unintended circular dependency. Try to flatten your program structure.
 
-## Example
+## Examples
+
+### Program Graph Example
 
 Here's a complete example of a program graph:
 
@@ -199,9 +255,11 @@ Here's a complete example of a program graph:
 [model]
 name = "main-model"
 provider = "anthropic"
+max_iterations = 15
 
 [prompt]
 system_prompt = "Main program"
+user = "Tell me about the LLMProc architecture"
 
 [tools]
 enabled = ["spawn"]
@@ -227,8 +285,71 @@ utility = "utility.toml"
 Compile and link the program graph:
 
 ```python
-from llmproc import LLMProcess
-process = LLMProcess.from_toml("main.toml")
+# Using the recommended pattern with program.start()
+from llmproc import LLMProgram
+program = LLMProgram.from_toml("main.toml")
+process = await program.start()  # Creates process with all linked programs
+
+# The process will automatically execute the user prompt specified in the TOML
+# No need to call process.run() unless you want to run additional prompts
 ```
 
-Now you can use the process to run queries, and it will automatically handle spawning to linked programs as needed.
+### Demo Mode Example
+
+**demo.toml**:
+```toml
+[model]
+name = "claude-3-7-sonnet"
+provider = "anthropic"
+
+[prompt]
+system_prompt = "You are an expert on LLMProc architecture."
+
+[demo]
+prompts = [
+  "What is LLMProc?",
+  "How does the program linking feature work?",
+  "Explain the file descriptor system",
+  "What tools are available in LLMProc?"
+]
+pause_between_prompts = true
+
+[tools]
+enabled = ["calculator", "read_file"]
+```
+
+Running the demo:
+
+```bash
+# Run the demo with prompts executing sequentially
+llmproc-demo demo.toml
+```
+
+### Programmatic API Example
+
+You can also set these features programmatically:
+
+```python
+from llmproc import LLMProgram
+
+# Create a program with user prompt and max_iterations
+program = LLMProgram(
+    model_name="claude-3-7-sonnet",
+    provider="anthropic",
+    user_prompt="What is the LLMProc architecture?",
+    max_iterations=15
+)
+
+# Or use setter methods
+program.set_user_prompt("Explain program linking")
+program.set_max_iterations(20)
+
+# Start the process
+process = await program.start()
+
+# The program's user prompt will be executed automatically
+# If you want to run additional prompts:
+result = await process.run("How does the file descriptor system work?")
+```
+
+Using these features, you can build sophisticated LLM applications with automatic execution and complex interaction patterns.

@@ -281,13 +281,13 @@ def test_program_with_function_tools():
     """Test adding and using function-based tools in a program."""
     # Create a program
     program = LLMProgram(
-        model_name="claude-3-7-sonnet",
+        model_name="claude-3-5-haiku-latest",
         provider="anthropic",
         system_prompt="You are a helpful assistant with tools.",
     )
 
     # Set enabled tools with function tools
-    program.set_enabled_tools([get_calculator, search_documents])
+    program.register_tools([get_calculator, search_documents])
 
     # Check that tools were added to the function_tools list in the tool_manager
     assert len(program.tool_manager.function_tools) == 2
@@ -304,6 +304,12 @@ def test_program_with_function_tools():
 
     # Process function tools to register handlers and schemas
     program.tool_manager.process_function_tools()
+
+    # Process function tools to register handlers and schemas
+    program.tool_manager.process_function_tools()
+
+    # Process function tools to register handlers and schemas
+    program.tool_manager.process_function_tools()
     
     # Verify tools appear in the API-ready schema
     tool_schemas = program.tool_manager.get_tool_schemas()
@@ -311,10 +317,10 @@ def test_program_with_function_tools():
     assert "get_calculator" in tool_names
     assert "search_documents" in tool_names
 
-    # Verify tools are enabled (using the proper method for single source of truth)
-    enabled_tools = program.get_enabled_tools()
-    assert "get_calculator" in enabled_tools
-    assert "search_documents" in enabled_tools
+    # Verify tools are registered (using the proper method for single source of truth)
+    registered_tools = program.get_registered_tools()
+    assert "get_calculator" in registered_tools
+    assert "search_documents" in registered_tools
 
     # At this point, the tools are properly registered and can be called
     # This is tested in test_function_tool_execution
@@ -322,21 +328,26 @@ def test_program_with_function_tools():
 
 @pytest.mark.asyncio
 async def test_tool_enabling_methods(basic_program):
-    """Test enabling tools using set_enabled_tools and verifying they work correctly."""
+    """Test registering tools and verifying they work correctly."""
     # Use the basic program fixture
     program = basic_program
 
-    # Enable tools using set_enabled_tools
-    program.set_enabled_tools([get_weather])
-    program.set_enabled_tools(
-        program.get_enabled_tools() + [get_calculator, search_documents]
-    )
+    # Register tools
+    program.register_tools([get_weather])
+    # Use only function references for tools - directly use the functions
+    # This ensures we never pass string literals to register_tools
+    from llmproc.tools.builtin import BUILTIN_TOOLS
 
-    # Verify expected tools are in the enabled list
-    expected_tools = ["weather_info", "get_calculator", "search_documents"]
-    enabled_tools = program.get_enabled_tools()
-    for tool_name in expected_tools:
-        assert tool_name in enabled_tools
+    # Set directly with function references
+    program.register_tools([get_weather, get_calculator, search_documents])
+
+    # Verify expected tools are in the function_tools list (converted from callables)
+    function_names = [func.__name__ for func in program.tool_manager.function_tools]
+
+    # The decorated function get_weather is renamed to "weather_info" but its __name__ is still "get_weather"
+    assert "get_weather" in function_names
+    assert "get_calculator" in function_names
+    assert "search_documents" in function_names
 
     # Process function tools to register handlers and schemas
     program.tool_manager.process_function_tools()
@@ -373,9 +384,7 @@ async def test_tool_enabling_methods(basic_program):
     process = await program.start()
 
     # Check if the tool is registered as expected
-    assert "weather_info" in process.tool_handlers, (
-        "weather_info tool is not registered in handlers"
-    )
+    assert "weather_info" in process.tool_handlers, "weather_info tool is not registered in handlers"
 
     # Test weather tool with explicit parameters
     weather_result = await process.call_tool("weather_info", location="New York")
@@ -400,20 +409,33 @@ async def test_tool_enabling_methods(basic_program):
 
 
 @pytest.mark.asyncio
-async def test_set_enabled_tools_with_function_tools(basic_program, create_program):
-    """Test interaction between set_enabled_tools and function tools by verifying behavior."""
+async def test_register_tools_with_function_tools(basic_program, create_program):
+    """Test interaction between register_tools and function tools by verifying behavior."""
     # Use the basic program fixture
     program = basic_program
 
-    # Enable function tools using set_enabled_tools
-    program.set_enabled_tools([get_weather, get_calculator])
+    # Register function tools
+    program.register_tools([get_weather, get_calculator])
 
-    # Function tools are processed when the process is started
+    # Process function tools to register them in the registry
+    program.tool_manager.process_function_tools()
 
-    # Verify function tools are enabled in program configuration
-    enabled_tools = program.get_enabled_tools()
-    assert "weather_info" in enabled_tools
-    assert "get_calculator" in enabled_tools
+    # Verify function tools are registered in function_tools list
+    # Function tools are processed during program.compile(), so we need to
+    # match the weather_info tool name against the function __name__ or
+    # the _tool_name attribute if it exists (which it should for decorated functions)
+    tool_names = []
+    for func in program.tool_manager.function_tools:
+        if hasattr(func, "_tool_name"):
+            tool_names.append(func._tool_name)
+        else:
+            tool_names.append(func.__name__)
+
+    # Make sure 'weather_info' is present in the list of tool names
+    assert "weather_info" in tool_names
+    # Check the actual function name is also present as a fallback
+    function_names = [func.__name__ for func in program.tool_manager.function_tools]
+    assert "get_calculator" in function_names
 
     # Start the process to test actual tool execution
     process = await program.start()
@@ -426,13 +448,18 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     # Create a new program without adding function tools first
     program2 = create_program()
 
-    # Set only specific tools as enabled
-    program2.set_enabled_tools(["calculator", "read_file"])
+    # Register specific tools using function references
+    from llmproc.tools.builtin import calculator, read_file
 
-    # Verify that built-in tools are enabled in configuration
-    enabled_tools = program2.get_enabled_tools()
-    assert "calculator" in enabled_tools
-    assert "read_file" in enabled_tools
+    program2.register_tools([calculator, read_file])
+
+    # Process the tools to register them
+    program2.tool_manager.process_function_tools()
+
+    # Verify that built-in tools are registered in configuration
+    registered_tools = program2.get_registered_tools()
+    assert "calculator" in registered_tools
+    assert "read_file" in registered_tools
 
     # Note: Function tools remain in the enabled_tools list due to how function tools are processed
     # But their behavior should be correctly updated based on the API's schema list
@@ -452,10 +479,7 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     weather_result = await process2.call_tool("weather_info", location="Paris")
     assert weather_result.is_error
     # With our patched version, the error message is different
-    assert (
-        "not found" in weather_result.content.lower()
-        or "not enabled" in weather_result.content.lower()
-    )
+    assert "not found" in weather_result.content.lower() or "not enabled" in weather_result.content.lower()
 
     # Verify that enabled built-in calculator tool works
     calc_result = await process2.call_tool("calculator", expression="7+3")
@@ -464,7 +488,7 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
 
     # Test a completely different approach - start with weather tool only
     weather_program = create_program()
-    weather_program.set_enabled_tools([get_weather])
+    weather_program.register_tools([get_weather])
 
     # Create a process with just the weather tool
     weather_process = await weather_program.start()
@@ -478,10 +502,7 @@ async def test_set_enabled_tools_with_function_tools(basic_program, create_progr
     calc_result = await weather_process.call_tool("get_calculator", x=1, y=2)
     assert calc_result.is_error
     # With our patched version, the error message is different
-    assert (
-        "not found" in calc_result.content.lower()
-        or "not enabled" in calc_result.content.lower()
-    )
+    assert "not found" in calc_result.content.lower() or "not enabled" in calc_result.content.lower()
 
     # Verify the tool schemas that are actually available to the LLM API
     process_tools = weather_process.tools
@@ -499,7 +520,7 @@ async def test_function_tool_execution(create_program):
     )
 
     # Set enabled tools
-    program.set_enabled_tools([get_calculator])
+    program.register_tools([get_calculator])
 
     # Start the process
     process = await program.start()

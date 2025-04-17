@@ -24,8 +24,8 @@ def tool_manager():
         {"name": "test_tool", "description": "A test tool"},
     )
 
-    # Enable the tool
-    manager.enabled_tools.append("test_tool")
+    # Register the tool by handler callable (not by name)
+    manager.register_tools([test_tool_handler])
 
     return manager
 
@@ -45,9 +45,7 @@ async def test_call_nonexistent_tool(tool_manager):
     result = await tool_manager.call_tool("nonexistent_tool", {})
     assert isinstance(result, ToolResult)
     assert result.is_error
-    assert (
-        "not enabled" in result.content.lower()
-    )  # Now returns "not enabled" instead of "not found"
+    assert result.content == "This tool is not available"
 
 
 @pytest.mark.asyncio
@@ -64,11 +62,11 @@ async def test_tool_execution_error(tool_manager):
         {"name": "error_tool", "description": "A tool that errors"},
     )
 
-    # Enable the error tool
-    tool_manager.enabled_tools.append("error_tool")
+    # Register the error tool by handler callable
+    tool_manager.register_tools([error_tool_handler])
 
     result = await tool_manager.call_tool("error_tool", {})
     assert isinstance(result, ToolResult)
     assert result.is_error
-    assert "Error executing tool" in result.content
+    assert result.content.startswith("Error:")
     assert "Test error" in result.content

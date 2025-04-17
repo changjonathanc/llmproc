@@ -16,15 +16,17 @@ provider = "anthropic"  # Options: "anthropic", "anthropic_vertex", "openai"
 # provider = "anthropic_vertex"  # For Claude models via Google Vertex AI (uses ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION env vars)
 # provider = "openai"  # For OpenAI models
 
-# Optional: User-facing display name for the model
-# This is used in CLI interfaces and doesn't affect API calls
-# If not provided, defaults to "{provider} {model_name}"
-display_name = "Claude 3.7 Sonnet"
+# display_name has been moved to the [demo] section
 
 # Optional: For Vertex AI models (Anthropic and Gemini on Vertex)
 # project_id = "your-project-id"   # GCP project ID for Vertex AI (if not using env var)
 # region = "us-central1"           # GCP region for Vertex AI (if not using env var)
 # IMPORTANT: These Vertex AI parameters must be placed in the [model] section, not in [parameters]
+
+# Optional: Maximum number of tool call iterations 
+# Controls how many rounds of tool calls are allowed in a single run
+# Default is 10 if not specified
+max_iterations = 10
 
 # Optional: Disable automatic prompt caching (Anthropic models only)
 # Prompt caching is automatically enabled for all Anthropic models
@@ -79,11 +81,36 @@ Always maintain a neutral and professional tone."""
 # OR use a file (relative path, takes precedence over system_prompt)
 # system_prompt_file = "../prompts/my_system_prompt.md"
 
+# Optional user prompt to execute automatically when the program starts
+# This allows for non-interactive execution with a predefined prompt
+user = "Explain the key features of LLMProc in 3-5 bullet points."
+
 # Notes on system prompts:
 # - The system_prompt here is the base instruction set
 # - The actual prompt sent to the API is an "enriched system prompt"
 #   that includes environment info and preloaded file content
 # - The enriched prompt is generated on first run and preserved for the session
+
+#----------------------------------------
+# Demo Mode Configuration
+#----------------------------------------
+[demo]
+# Optional: User-facing display name for the model
+# This is used in CLI interfaces and doesn't affect API calls
+# If not provided, defaults to "{provider} {model_name}"
+display_name = "Claude 3.7 Sonnet"
+
+# List of prompts to execute sequentially
+# This enables automated multi-turn demonstrations
+prompts = [
+  "What is LLMProc?",
+  "How does the program linking feature work?",
+  "Explain the file descriptor system in a few sentences"
+]
+
+# Whether to pause between sequential prompts (default: true)
+# When true, requires user to press Enter between each prompt
+pause_between_prompts = true
 
 #----------------------------------------
 # Preload Configuration
@@ -92,8 +119,8 @@ Always maintain a neutral and professional tone."""
 # Files to preload as context (relative paths)
 # Content will be added to the enriched system prompt with XML tags
 # files = [
-#   "../prompts/example_prompt.md",
-#   "../README.md"
+#   "prompts/example_prompt.md",
+#   "README.md"
 # ]
 #
 # When files are preloaded:
@@ -181,9 +208,10 @@ code_assistant = "./basic/claude-3-haiku.toml"      # Program for coding help
 # Path to the MCP servers configuration file
 # config_path = "config/mcp_servers.json"
 
-# Tool Configuration
+# MCP Tool Configuration
 # Users must explicitly specify which tools to import from each server
-[mcp.tools]
+# Tools are defined under tools.mcp for better organization
+[tools.mcp]
 # Server name = List of specific tools to import OR "all" to import all tools
 sequential-thinking = "all"  # Sequential thinking for step-by-step reasoning
 everything = ["add"]  # Use the add tool for precise calculations

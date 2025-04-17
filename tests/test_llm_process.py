@@ -77,12 +77,8 @@ async def test_initialization(mock_env, mock_get_provider_client, create_test_pr
     assert process.model_name == "test-model"
     assert process.provider == "openai"
     assert process.system_prompt == "You are a test assistant."
-    assert (
-        process.enriched_system_prompt is not None
-    )  # Generated at initialization time now
-    assert (
-        "You are a test assistant." in process.enriched_system_prompt
-    )  # Contains the original prompt
+    assert process.enriched_system_prompt is not None  # Generated at initialization time now
+    assert "You are a test assistant." in process.enriched_system_prompt  # Contains the original prompt
     assert process.state == []  # Empty until first run
     assert process.parameters == {}
 
@@ -162,18 +158,13 @@ async def test_preload_at_initialization(mock_env, mock_get_provider_client):
             ),
         ):
             # Create process with preloaded files
-            process = await create_process(
-                program, additional_preload_files=[temp_path]
-            )
+            process = await create_process(program, additional_preload_files=[temp_path])
 
-        # preloaded_content has been removed, now we only check the enriched_system_prompt
+        # Check the enriched_system_prompt contains our content
 
         # Verify enriched system prompt was generated and contains preloaded content
         assert process.enriched_system_prompt is not None
-        assert (
-            "This is test content for initialization preloading"
-            in process.enriched_system_prompt
-        )
+        assert "This is test content for initialization preloading" in process.enriched_system_prompt
 
         # Verify the original_system_prompt was preserved
         assert hasattr(process, "original_system_prompt")
@@ -287,7 +278,7 @@ async def test_programexec_initializes_tools(mock_env, mock_get_provider_client)
         model_name="claude-3-haiku-20240307",
         provider="anthropic",
         system_prompt="You are a test assistant.",
-        tools={"enabled": ["calculator", "read_file"]},
+        tools=["calculator", "read_file"],
     )
 
     # Mock the configuration generation and tool initialization
@@ -325,7 +316,7 @@ async def test_tool_calling_works(mock_env, mock_get_provider_client):
         model_name="claude-3-haiku-20240307",
         provider="anthropic",
         system_prompt="You are a test assistant.",
-        tools={"enabled": ["calculator"]},
+        tools=["calculator"],
     )
 
     # Create a process using mocked initialization
@@ -401,9 +392,7 @@ async def test_mcp_tools_initialization(mock_env, mock_get_provider_client):
 
 
 @pytest.mark.asyncio
-async def test_mcp_tool_initialization_in_create_process(
-    mock_env, mock_get_provider_client
-):
+async def test_mcp_tool_initialization_in_create_process(mock_env, mock_get_provider_client):
     """Test that MCP tool initialization happens during create_process."""
     # Create a program with MCP configuration
     from llmproc.program import LLMProgram

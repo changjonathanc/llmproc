@@ -13,18 +13,68 @@ import pytest
 from llmproc import LLMProcess, LLMProgram
 
 
-async def load_reasoning_model(config_path: str) -> LLMProcess:
+async def load_reasoning_model(config_path) -> LLMProcess:
     """Load a reasoning model from a TOML configuration file."""
     program = LLMProgram.from_toml(config_path)
     return await program.start()
 
 
-def test_reasoning_models_configuration():
+def test_reasoning_models_configuration(tmp_path):
     """Test that reasoning model configurations load correctly with proper parameters."""
-    # Load all three reasoning model configurations
-    high_program = LLMProgram.from_toml("examples/openai/o3-mini-high.toml")
-    medium_program = LLMProgram.from_toml("examples/openai/o3-mini-medium.toml")
-    low_program = LLMProgram.from_toml("examples/openai/o3-mini-low.toml")
+    # Create temporary config files for each reasoning level
+    high_config = tmp_path / "o3-mini-high.toml"
+    medium_config = tmp_path / "o3-mini-medium.toml"
+    low_config = tmp_path / "o3-mini-low.toml"
+
+    # Write high reasoning config content
+    high_config.write_text("""
+    [model]
+    name = "o3-mini"
+    provider = "openai"
+    display_name = "O3-Mini High Reasoning"
+    
+    [prompt]
+    system_prompt = "You are a helpful AI assistant using high reasoning effort."
+    
+    [parameters]
+    reasoning_effort = "high"
+    max_completion_tokens = 25000
+    """)
+
+    # Write medium reasoning config content
+    medium_config.write_text("""
+    [model]
+    name = "o3-mini"
+    provider = "openai"
+    display_name = "O3-Mini Medium Reasoning"
+    
+    [prompt]
+    system_prompt = "You are a helpful AI assistant using medium reasoning effort."
+    
+    [parameters]
+    reasoning_effort = "medium"
+    max_completion_tokens = 10000
+    """)
+
+    # Write low reasoning config content
+    low_config.write_text("""
+    [model]
+    name = "o3-mini"
+    provider = "openai"
+    display_name = "O3-Mini Low Reasoning"
+    
+    [prompt]
+    system_prompt = "You are a helpful AI assistant using low reasoning effort."
+    
+    [parameters]
+    reasoning_effort = "low"
+    max_completion_tokens = 5000
+    """)
+
+    # Load all three reasoning model configurations from temporary files
+    high_program = LLMProgram.from_toml(high_config)
+    medium_program = LLMProgram.from_toml(medium_config)
+    low_program = LLMProgram.from_toml(low_config)
 
     # Verify high reasoning configuration
     assert high_program.model_name == "o3-mini"
@@ -65,12 +115,62 @@ def validate_reasoning_parameters(program):
 
 
 # Test parameter validation without requiring API access
-def test_reasoning_models_parameter_validation():
+def test_reasoning_models_parameter_validation(tmp_path):
     """Test reasoning model parameter validation without API access."""
-    # Load all three reasoning model configurations
-    high_program = LLMProgram.from_toml("examples/openai/o3-mini-high.toml")
-    medium_program = LLMProgram.from_toml("examples/openai/o3-mini-medium.toml")
-    low_program = LLMProgram.from_toml("examples/openai/o3-mini-low.toml")
+    # Create temporary config files for each reasoning level
+    high_config = tmp_path / "o3-mini-high.toml"
+    medium_config = tmp_path / "o3-mini-medium.toml"
+    low_config = tmp_path / "o3-mini-low.toml"
+
+    # Write high reasoning config content
+    high_config.write_text("""
+    [model]
+    name = "o3-mini"
+    provider = "openai"
+    display_name = "O3-Mini High Reasoning"
+    
+    [prompt]
+    system_prompt = "You are a helpful AI assistant using high reasoning effort."
+    
+    [parameters]
+    reasoning_effort = "high"
+    max_completion_tokens = 25000
+    """)
+
+    # Write medium reasoning config content
+    medium_config.write_text("""
+    [model]
+    name = "o3-mini"
+    provider = "openai"
+    display_name = "O3-Mini Medium Reasoning"
+    
+    [prompt]
+    system_prompt = "You are a helpful AI assistant using medium reasoning effort."
+    
+    [parameters]
+    reasoning_effort = "medium"
+    max_completion_tokens = 10000
+    """)
+
+    # Write low reasoning config content
+    low_config.write_text("""
+    [model]
+    name = "o3-mini"
+    provider = "openai"
+    display_name = "O3-Mini Low Reasoning"
+    
+    [prompt]
+    system_prompt = "You are a helpful AI assistant using low reasoning effort."
+    
+    [parameters]
+    reasoning_effort = "low"
+    max_completion_tokens = 5000
+    """)
+
+    # Load all three reasoning model configurations from temporary files
+    high_program = LLMProgram.from_toml(high_config)
+    medium_program = LLMProgram.from_toml(medium_config)
+    low_program = LLMProgram.from_toml(low_config)
 
     # Validate parameters for each model and check specific values
     high_effort, high_tokens = validate_reasoning_parameters(high_program)
@@ -90,18 +190,36 @@ def test_reasoning_models_parameter_validation():
 
 
 @pytest.mark.llm_api
-@pytest.mark.release_api
-async def test_reasoning_models_basic_functionality():
+@pytest.mark.extended_api
+async def test_reasoning_models_basic_functionality(tmp_path):
     """Test that reasoning models run successfully with a simple query."""
     # Skip if no OpenAI API key
     if not os.environ.get("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY environment variable not set")
 
+    # Create a temporary config file for low reasoning
+    low_config = tmp_path / "o3-mini-low.toml"
+
+    # Write low reasoning config content
+    low_config.write_text("""
+    [model]
+    name = "o3-mini"
+    provider = "openai"
+    display_name = "O3-Mini Low Reasoning"
+    
+    [prompt]
+    system_prompt = "You are a helpful AI assistant using low reasoning effort."
+    
+    [parameters]
+    reasoning_effort = "low"
+    max_completion_tokens = 5000
+    """)
+
     # Simple problem for testing
     simple_problem = "What is 24 * 7?"
 
-    # Load medium reasoning model
-    medium_process = await load_reasoning_model("examples/openai/o3-mini-low.toml")
+    # Load medium reasoning model from temporary file
+    medium_process = await load_reasoning_model(low_config)
 
     # Run the model
     result = await medium_process.run(simple_problem)

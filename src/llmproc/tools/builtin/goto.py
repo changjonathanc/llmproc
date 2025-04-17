@@ -9,16 +9,14 @@ import logging
 from typing import Any, Optional
 
 from llmproc.common.results import ToolResult
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 from llmproc.utils.message_utils import append_message_with_id
 
 # Set up logger
 logger = logging.getLogger(__name__)
 
-# Tool definition that will be registered with the tool registry
-GOTO_TOOL_DEFINITION = {
-    "name": "goto",
-    "description": """Reset the conversation to a previous point using a message ID. This tool enables "time travel" capabilities, allowing you to discard the most recent messages and start over from a previous point in time.
+# Tool description
+GOTO_DESCRIPTION = """Reset the conversation to a previous point using a message ID. This tool enables "time travel" capabilities, allowing you to discard the most recent messages and start over from a previous point in time.
 
 WHEN TO USE THIS TOOL:
 - You finished a task that consumed a lot of context window but you don't need to keep the intermediate steps.
@@ -70,22 +68,7 @@ you can either
 NOTE: This tool performs a COMPLETE RESET of the conversation context to the specified point.
 It is like starting a new conversation from that point. All context from messages after the reset point
 is completely removed and should be considered forgotten.
-""",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "position": {
-                "type": "string",
-                "description": "Message ID to go back to (e.g., msg_3)",
-            },
-            "message": {
-                "type": "string",
-                "description": "Detailed message explaining why you're going back and what new approach you'll take (or summarizing what was accomplished).",
-            },
-        },
-        "required": ["position", "message"],
-    },
-}
+"""
 
 
 def find_position_by_id(state, message_id):
@@ -127,13 +110,18 @@ def find_position_by_id(state, message_id):
     return None
 
 
-# Using append_message_with_id from llmproc.utils.message_utils
-
-
-@context_aware
-async def handle_goto(
-    position: str, message: str, runtime_context: Optional[Any] = None
-):
+@register_tool(
+    name="goto",
+    description=GOTO_DESCRIPTION,
+    param_descriptions={
+        "position": "Message ID to go back to (e.g., msg_3)",
+        "message": "Detailed message explaining why you're going back and what new approach you'll take (or summarizing what was accomplished).",
+    },
+    required=["position", "message"],
+    requires_context=True,
+    required_context_keys=["process"],
+)
+async def handle_goto(position: str, message: str, runtime_context: Optional[dict[str, Any]] = None):
     """Reset conversation to a previous point identified by message ID.
 
     Args:
@@ -145,12 +133,7 @@ async def handle_goto(
     Returns:
         ToolResult with success or error information
     """
-    # Get process from runtime context
-    if not runtime_context or "process" not in runtime_context:
-        return ToolResult.from_error(
-            "Missing process in runtime_context - cannot perform time travel"
-        )
-
+    # Get process from runtime context - validation already done by decorator
     process = runtime_context["process"]
 
     # Define error message templates
@@ -181,9 +164,7 @@ async def handle_goto(
         )
 
     # Log the operation
-    logger.info(
-        f"GOTO: Resetting conversation from {len(process.state)} messages to {target_index + 1} messages"
-    )
+    logger.info(f"GOTO: Resetting conversation from {len(process.state)} messages to {target_index + 1} messages")
 
     # Store time travel metadata in process
     if not hasattr(process, "time_travel_history"):
@@ -227,8 +208,6 @@ async def handle_goto(
         # Use append_message_with_id to ensure it gets a proper ID
         append_message_with_id(process, "user", final_message)
 
-        return ToolResult.from_success(
-            f"Conversation reset to message {position}. Added time travel message."
-        )
+        return ToolResult.from_success(f"Conversation reset to message {position}. Added time travel message.")
     else:
         return ToolResult.from_success(f"Conversation reset to message {position}.")

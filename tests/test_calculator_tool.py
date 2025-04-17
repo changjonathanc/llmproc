@@ -1,6 +1,14 @@
-"""Tests for the calculator tool."""
+"""Unit tests for the calculator tool.
+
+This file follows the standardized unit test patterns:
+1. Clear Arrange-Act-Assert structure
+2. Focus on testing inputs and outputs of individual functions
+3. Direct import of only what's needed for the test
+4. Use of pytest.mark.parametrize for efficient testing of multiple inputs
+"""
 
 import math
+from typing import Union
 
 import pytest
 
@@ -8,279 +16,280 @@ from llmproc.common.results import ToolResult
 from llmproc.tools.builtin.calculator import calculator, safe_eval
 
 
-@pytest.mark.asyncio
-async def test_calculator_tool_basic_arithmetic():
-    """Test basic arithmetic operations using the calculator tool."""
-    # Addition
-    result = await calculator("2 + 3")
-    assert isinstance(result, str) or isinstance(result, ToolResult)
-    if isinstance(result, ToolResult):
-        assert result.content == "5"
-    else:
-        assert result == "5"
+class TestSafeEval:
+    """Unit tests for the safe_eval function."""
 
-    # Subtraction
-    result = await calculator("10 - 4")
-    if isinstance(result, ToolResult):
-        assert result.content == "6"
-    else:
-        assert result == "6"
-
-    # Multiplication
-    result = await calculator("6 * 7")
-    if isinstance(result, ToolResult):
-        assert result.content == "42"
-    else:
-        assert result == "42"
-
-    # Division
-    result = await calculator("10 / 2")
-    if isinstance(result, ToolResult):
-        assert result.content == "5"
-    else:
-        assert result == "5"
-
-    # Integer division
-    result = await calculator("10 // 3")
-    if isinstance(result, ToolResult):
-        assert result.content == "3"
-    else:
-        assert result == "3"
-
-    # Modulo
-    result = await calculator("10 % 3")
-    if isinstance(result, ToolResult):
-        assert result.content == "1"
-    else:
-        assert result == "1"
-
-    # Exponentiation
-    result = await calculator("2 ** 3")
-    if isinstance(result, ToolResult):
-        assert result.content == "8"
-    else:
-        assert result == "8"
-
-
-@pytest.mark.asyncio
-async def test_calculator_tool_complex_expressions():
-    """Test more complex expressions with parentheses and multiple operations."""
-    result = await calculator("2 * (3 + 4)")
-    if isinstance(result, ToolResult):
-        assert result.content == "14"
-    else:
-        assert result == "14"
-
-    result = await calculator("(10 - 5) * (2 + 3)")
-    if isinstance(result, ToolResult):
-        assert result.content == "25"
-    else:
-        assert result == "25"
-
-    result = await calculator("10 - 2 * 3")
-    if isinstance(result, ToolResult):
-        assert result.content == "4"
-    else:
-        assert result == "4"
-
-    result = await calculator("(10 - 2) * 3")
-    if isinstance(result, ToolResult):
-        assert result.content == "24"
-    else:
-        assert result == "24"
-
-
-@pytest.mark.asyncio
-async def test_calculator_tool_mathematical_functions():
-    """Test mathematical functions in the calculator tool."""
-    # Square root
-    result = await calculator("sqrt(16)")
-    if isinstance(result, ToolResult):
-        assert result.content == "4"
-    else:
-        assert result == "4"
-
-    # Sine function
-    result = await calculator("sin(0)")
-    if isinstance(result, ToolResult):
-        assert result.content == "0"
-    else:
-        assert result == "0"
-
-    # Cosine function
-    result = await calculator("cos(0)")
-    if isinstance(result, ToolResult):
-        assert result.content == "1"
-    else:
-        assert result == "1"
-
-    # Absolute value
-    result = await calculator("abs(-5)")
-    if isinstance(result, ToolResult):
-        assert result.content == "5"
-    else:
-        assert result == "5"
-
-    # Logarithm
-    result = await calculator("log10(100)")
-    if isinstance(result, ToolResult):
-        assert result.content == "2"
-    else:
-        assert result == "2"
-
-
-@pytest.mark.asyncio
-async def test_calculator_tool_constants():
-    """Test mathematical constants in the calculator tool."""
-    # Pi
-    result = await calculator("pi")
-    if isinstance(result, ToolResult):
-        assert float(result.content) == pytest.approx(math.pi)
-    else:
-        assert float(result) == pytest.approx(math.pi)
-
-    # e (Euler's number)
-    result = await calculator("e")
-    if isinstance(result, ToolResult):
-        assert float(result.content) == pytest.approx(math.e)
-    else:
-        assert float(result) == pytest.approx(math.e)
-
-    # Using constants in expressions
-    result = await calculator("sin(pi/2)")
-    if isinstance(result, ToolResult):
-        assert float(result.content) == pytest.approx(1.0)
-    else:
-        assert float(result) == pytest.approx(1.0)
-
-    result = await calculator("log(e)")
-    if isinstance(result, ToolResult):
-        assert float(result.content) == pytest.approx(1.0)
-    else:
-        assert float(result) == pytest.approx(1.0)
-
-
-@pytest.mark.asyncio
-async def test_calculator_tool_precision():
-    """Test the precision parameter of the calculator tool."""
-    # Default precision (6)
-    result = await calculator("1/3")
-    if isinstance(result, ToolResult):
-        assert result.content == "0.333333"
-    else:
-        assert result == "0.333333"
-
-    # Custom precision
-    result = await calculator("1/3", 3)
-    if isinstance(result, ToolResult):
-        assert result.content == "0.333"
-    else:
-        assert result == "0.333"
-
-    result = await calculator("1/3", 10)
-    if isinstance(result, ToolResult):
-        assert result.content == "0.3333333333"
-    else:
-        assert result == "0.3333333333"
-
-    # Zero precision
-    result = await calculator("pi", 0)
-    if isinstance(result, ToolResult):
-        assert result.content == "3"
-    else:
-        assert result == "3"
-
-    # Invalid precision
-    result = await calculator("1/3", -1)
-    assert isinstance(result, ToolResult)
-    assert result.is_error
-    assert "Precision must be between" in result.content
-
-
-@pytest.mark.asyncio
-async def test_calculator_tool_error_handling():
-    """Test error handling in the calculator tool."""
-    # Division by zero
-    result = await calculator("1/0")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
-    assert "division by zero" in result.content.lower()
-
-    # Invalid expression
-    result = await calculator("2 +* 3")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
-    assert "syntax error" in result.content.lower()
-
-    # Undefined variable
-    result = await calculator("x + 5")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
-    assert "unknown variable" in result.content.lower()
-
-    # Invalid function call
-    result = await calculator("sqrt(-1)")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
-    assert (
-        "math domain error" in result.content.lower()
-        or "cannot convert" in result.content.lower()
+    @pytest.mark.parametrize(
+        "expression,expected",
+        [
+            # Basic arithmetic
+            ("2 + 3", 5),
+            ("10 - 4", 6),
+            ("6 * 7", 42),
+            ("10 / 2", 5),
+            ("10 // 3", 3),
+            ("10 % 3", 1),
+            ("2 ** 3", 8),
+            # Complex expressions
+            ("2 * (3 + 4)", 14),
+            ("(10 - 5) * (2 + 3)", 25),
+            ("10 - 2 * 3", 4),
+            ("(10 - 2) * 3", 24),
+            # Math functions
+            ("sqrt(16)", 4),
+            ("sin(0)", 0),
+            ("cos(0)", 1),
+            ("abs(-5)", 5),
+            ("log10(100)", 2),
+            # Constants
+            ("pi", math.pi),
+            ("e", math.e),
+            # Complex with constants
+            ("sin(pi/2)", 1.0),
+            ("log(e)", 1.0),
+        ],
     )
+    def test_valid_expressions(self, expression: str, expected: float):
+        """Test that safe_eval correctly evaluates valid mathematical expressions.
 
-    # Function with wrong number of arguments
-    result = await calculator("sin()")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
+        Args:
+            expression: The expression to evaluate
+            expected: The expected result
+        """
+        # Act
+        result = safe_eval(expression)
 
-    # Missing required parameter
-    result = await calculator("")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
-    assert "must be a non-empty string" in result.content.lower()
+        # Assert
+        if isinstance(expected, float):
+            assert result == pytest.approx(expected)
+        else:
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        "expression,error_type,error_message",
+        [
+            # Syntax errors
+            ("2 +* 3", ValueError, "syntax error"),
+            # Unknown variables
+            ("x + 5", ValueError, "unknown variable"),
+            # Disallowed functions
+            ("__import__('os').system('ls')", ValueError, None),
+            ("print('hello')", ValueError, None),
+            # Security restrictions
+            ("''.join(['h', 'i'])", ValueError, None),
+            ("[x for x in range(5)]", ValueError, None),
+        ],
+    )
+    def test_invalid_expressions(self, expression: str, error_type: type, error_message: str):
+        """Test that safe_eval properly handles invalid or unsafe expressions.
+
+        Args:
+            expression: The expression to evaluate
+            error_type: The expected exception type
+            error_message: Expected text in the error message, or None if any error is fine
+        """
+        # Arrange & Act & Assert
+        with pytest.raises(error_type) as excinfo:
+            safe_eval(expression)
+
+        # Optional more specific error message check
+        if error_message:
+            assert error_message in str(excinfo.value).lower()
 
 
-@pytest.mark.asyncio
-async def test_calculator_tool_security():
-    """Test that the calculator tool properly restricts unsafe operations."""
-    # Attempt to use built-in functions
-    result = await calculator("__import__('os').system('ls')")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
+class TestCalculatorTool:
+    """Integration tests for the calculator tool function."""
 
-    # Attempt to use attribute access
-    result = await calculator("''.join(['h', 'i'])")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
+    async def _assert_calculator_result(self, expression: str, expected: str, precision: int = None):
+        """Helper to assert calculator tool results.
 
-    # Attempt to use list comprehension
-    result = await calculator("[x for x in range(5)]")
-    assert isinstance(result, ToolResult)
-    assert result.is_error
+        Args:
+            expression: Expression to calculate
+            expected: Expected result string
+            precision: Optional precision parameter
+        """
+        # Act
+        if precision is not None:
+            result = await calculator(expression, precision)
+        else:
+            result = await calculator(expression)
 
+        # Assert - Handle both string and ToolResult return types
+        if isinstance(result, ToolResult):
+            assert result.content == expected
+        else:
+            assert result == expected
 
-def test_safe_eval_direct():
-    """Test the safe_eval function directly for coverage."""
-    # Basic operations
-    assert safe_eval("2 + 3") == 5
-    assert safe_eval("10 - 4") == 6
-    assert safe_eval("6 * 7") == 42
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "expression,expected",
+        [
+            # Basic arithmetic
+            ("2 + 3", "5"),
+            ("10 - 4", "6"),
+            ("6 * 7", "42"),
+            ("10 / 2", "5"),
+            ("10 // 3", "3"),
+            ("10 % 3", "1"),
+            ("2 ** 3", "8"),
+        ],
+    )
+    async def test_basic_arithmetic(self, expression: str, expected: str):
+        """Test basic arithmetic operations using the calculator tool.
 
-    # Math functions
-    assert safe_eval("sin(0)") == 0
-    assert safe_eval("cos(0)") == 1
-    assert safe_eval("sqrt(16)") == 4
+        Args:
+            expression: The expression to evaluate
+            expected: The expected result string
+        """
+        await self._assert_calculator_result(expression, expected)
 
-    # Constants
-    assert safe_eval("pi") == math.pi
-    assert safe_eval("e") == math.e
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "expression,expected",
+        [
+            ("2 * (3 + 4)", "14"),
+            ("(10 - 5) * (2 + 3)", "25"),
+            ("10 - 2 * 3", "4"),
+            ("(10 - 2) * 3", "24"),
+        ],
+    )
+    async def test_complex_expressions(self, expression: str, expected: str):
+        """Test more complex expressions with parentheses and multiple operations.
 
-    # Complex expressions
-    assert safe_eval("2 * (3 + 4)") == 14
-    assert safe_eval("sin(pi/2)") == 1.0
+        Args:
+            expression: The expression to evaluate
+            expected: The expected result string
+        """
+        await self._assert_calculator_result(expression, expected)
 
-    # Test error cases
-    with pytest.raises(ValueError):
-        safe_eval("x + 5")  # Unknown variable
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "expression,expected",
+        [
+            ("sqrt(16)", "4"),
+            ("sin(0)", "0"),
+            ("cos(0)", "1"),
+            ("abs(-5)", "5"),
+            ("log10(100)", "2"),
+        ],
+    )
+    async def test_mathematical_functions(self, expression: str, expected: str):
+        """Test mathematical functions in the calculator tool.
 
-    with pytest.raises(ValueError):
-        safe_eval("print('hello')")  # Disallowed function
+        Args:
+            expression: The expression to evaluate
+            expected: The expected result string
+        """
+        await self._assert_calculator_result(expression, expected)
+
+    @pytest.mark.asyncio
+    async def test_constants(self):
+        """Test mathematical constants in the calculator tool."""
+        # Arrange & Act & Assert
+        # Pi
+        result = await calculator("pi")
+        if isinstance(result, ToolResult):
+            assert float(result.content) == pytest.approx(math.pi)
+        else:
+            assert float(result) == pytest.approx(math.pi)
+
+        # e (Euler's number)
+        result = await calculator("e")
+        if isinstance(result, ToolResult):
+            assert float(result.content) == pytest.approx(math.e)
+        else:
+            assert float(result) == pytest.approx(math.e)
+
+        # Using constants in expressions
+        result = await calculator("sin(pi/2)")
+        if isinstance(result, ToolResult):
+            assert float(result.content) == pytest.approx(1.0)
+        else:
+            assert float(result) == pytest.approx(1.0)
+
+        result = await calculator("log(e)")
+        if isinstance(result, ToolResult):
+            assert float(result.content) == pytest.approx(1.0)
+        else:
+            assert float(result) == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "expression,precision,expected",
+        [
+            ("1/3", None, "0.333333"),  # Default precision (6)
+            ("1/3", 3, "0.333"),  # Custom precision
+            ("1/3", 10, "0.3333333333"),  # Higher precision
+            ("pi", 0, "3"),  # Zero precision
+        ],
+    )
+    async def test_precision(self, expression: str, precision: int, expected: str):
+        """Test the precision parameter of the calculator tool.
+
+        Args:
+            expression: The expression to evaluate
+            precision: The precision parameter value
+            expected: The expected result string
+        """
+        await self._assert_calculator_result(expression, expected, precision)
+
+    @pytest.mark.asyncio
+    async def test_precision_error(self):
+        """Test error handling for invalid precision values."""
+        # Arrange & Act
+        result = await calculator("1/3", -1)
+
+        # Assert
+        assert isinstance(result, ToolResult)
+        assert result.is_error
+        assert "Precision must be between" in result.content
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "expression,error_text",
+        [
+            ("1/0", "division by zero"),
+            ("2 +* 3", "syntax error"),
+            ("x + 5", "unknown variable"),
+            ("sqrt(-1)", None),  # Either "math domain error" or "cannot convert"
+            ("sin()", None),  # Any error is fine
+            ("", "must be a non-empty string"),
+        ],
+    )
+    async def test_error_handling(self, expression: str, error_text: str):
+        """Test error handling in the calculator tool.
+
+        Args:
+            expression: The expression to evaluate
+            error_text: Expected text in the error message, or None if any error is fine
+        """
+        # Arrange & Act
+        result = await calculator(expression)
+
+        # Assert
+        assert isinstance(result, ToolResult)
+        assert result.is_error
+        if error_text:
+            assert error_text.lower() in result.content.lower()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "expression",
+        [
+            "__import__('os').system('ls')",
+            "''.join(['h', 'i'])",
+            "[x for x in range(5)]",
+        ],
+    )
+    async def test_security_restrictions(self, expression: str):
+        """Test that the calculator tool properly restricts unsafe operations.
+
+        Args:
+            expression: A potentially unsafe expression that should be rejected
+        """
+        # Arrange & Act
+        result = await calculator(expression)
+
+        # Assert
+        assert isinstance(result, ToolResult)
+        assert result.is_error

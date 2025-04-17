@@ -364,7 +364,8 @@ async def test_reference_inheritance_during_spawn():
     # SIMULATE SPAWN TOOL FUNCTIONALITY
     # This is what the real spawn_tool does internally
 
-    # Create a child process directly
+    # TODO: Refactor to use standard process fixtures
+    # Create a child process directly using the helper function
     child_process = create_test_llmprocess_directly(program=child_program)
 
     # Set up file descriptor support in child

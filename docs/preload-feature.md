@@ -35,8 +35,17 @@ import asyncio
 from llmproc import LLMProgram
 
 async def main():
-    # Load and compile program with preloaded files
-    program = LLMProgram.from_toml("examples/features/preload.toml")
+    # Create a program with preloaded files
+    program = (
+        LLMProgram(
+            model_name="claude-3-7-sonnet-20250219",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant with knowledge about this project.",
+            parameters={"max_tokens": 4096}
+        )
+        .add_preload_file("README.md")
+        .add_preload_file("CONTRIBUTING.md")
+    )
     
     # Start the process (handles async initialization)
     process = await program.start()
@@ -92,7 +101,7 @@ The above example will be processed by the LLM, which would use the spawn tool w
 ```
 spawn(
   program_name="repo_expert",
-  query="Please analyze this repository",
+  prompt="Please analyze this repository",
   additional_preload_files=["README.md", "pyproject.toml", "docs/preload-feature.md"]
 )
 ```

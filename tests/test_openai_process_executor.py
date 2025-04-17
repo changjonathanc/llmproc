@@ -12,25 +12,22 @@ from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 class TestOpenAIProcessExecutor:
     """Tests for the OpenAI process executor."""
 
-    def test_openai_with_tools_raises_error(self):
-        """Test that using OpenAI with tools raises an error."""
+    def test_openai_with_tools_supported(self):
+        """Test that OpenAI process creation works even with tools configured."""
         # Create a program with tools
         program = LLMProgram(
-            model_name="gpt-4",
+            model_name="gpt-4o-mini",
             provider="openai",
             system_prompt="Test system prompt",
-            tools={"enabled": ["spawn"]},  # Enable a tool
+            tools=["spawn"],  # Enable a tool
         )
 
         # Import the test helper
         from tests.conftest import create_test_llmprocess_directly
 
-        # Creating a process should raise an error
-        with pytest.raises(ValueError) as excinfo:
-            process = create_test_llmprocess_directly(program=program)
-
-        # Check error message
-        assert "Tool usage is not yet supported for OpenAI" in str(excinfo.value)
+        # Creating a process should succeed without error
+        process = create_test_llmprocess_directly(program=program)
+        assert isinstance(process, LLMProcess)
 
     @pytest.mark.asyncio
     async def test_run_method(self):

@@ -138,9 +138,7 @@ class TestInstantiateProcess:
 
         # Verify all required parameters are in our minimal state
         for param in required_params:
-            assert param in minimal_state, (
-                f"Required parameter {param} missing from test state"
-            )
+            assert param in minimal_state, f"Required parameter {param} missing from test state"
 
         # Call instantiate_process with minimal state
         result = instantiate_process(minimal_state)
@@ -218,5 +216,5 @@ class TestLLMProcessInitialization:
 
         # Verify defaults for optional attributes
         assert process.state == []
-        # preloaded_content has been removed
+        # Content is included in enriched system prompt
         assert process.linked_programs == {}

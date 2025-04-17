@@ -15,39 +15,36 @@ from tests.conftest import create_test_llmprocess_directly
 
 
 @pytest.mark.asyncio
-async def test_fd_to_file_tool():
-    """Test the fd_to_file tool."""
-    # Create a process with file descriptor support
-    from tests.conftest import create_mock_llm_program
+async def test_fd_to_file_tool(mocked_llm_process):
+    """Test the fd_to_file tool.
 
-    program = create_mock_llm_program(enabled_tools=["read_fd", "fd_to_file"])
+    Args:
+        mocked_llm_process: Fixture providing a mocked process instance
+    """
+    # Use the mocked process provided by the fixture
+    process = mocked_llm_process
 
-    # Create a process with mocked provider client
-    with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
-        mock_get_provider.return_value = Mock()
-        process = create_test_llmprocess_directly(program=program)
+    # Enable file descriptors for this test
+    process.file_descriptor_enabled = True
+    process.fd_manager = FileDescriptorManager()
 
-        # Manually enable file descriptors
-        process.file_descriptor_enabled = True
-        process.fd_manager = FileDescriptorManager()
+    # Create a file descriptor with content
+    test_content = "This is test content for fd_to_file tool"
+    fd_xml = process.fd_manager.create_fd_content(test_content)
+    # For testing compatibility, wrap in ToolResult
+    fd_result = ToolResult(content=fd_xml, is_error=False)
+    fd_id = fd_result.content.split('fd="')[1].split('"')[0]
 
-        # Create a file descriptor with content
-        test_content = "This is test content for fd_to_file tool"
-        fd_xml = process.fd_manager.create_fd_content(test_content)
-        # For testing compatibility, wrap in ToolResult
-        fd_result = ToolResult(content=fd_xml, is_error=False)
-        fd_id = fd_result.content.split('fd="')[1].split('"')[0]
+    # Create temporary file path
+    with tempfile.NamedTemporaryFile(delete=True) as tmp:
+        tmp_path = tmp.name
 
-        # Create temporary file path
-        with tempfile.NamedTemporaryFile(delete=True) as tmp:
-            tmp_path = tmp.name
-
-        # Call the tool with runtime_context
-        result = await fd_to_file_tool(
-            fd=fd_id,
-            file_path=tmp_path,
-            runtime_context={"fd_manager": process.fd_manager},
-        )
+    # Call the tool with runtime_context
+    result = await fd_to_file_tool(
+        fd=fd_id,
+        file_path=tmp_path,
+        runtime_context={"fd_manager": process.fd_manager},
+    )
 
     try:
         # Check result
@@ -67,32 +64,29 @@ async def test_fd_to_file_tool():
 
 
 @pytest.mark.asyncio
-async def test_fd_to_file_invalid_fd():
-    """Test fd_to_file with an invalid file descriptor."""
-    # Create a process with file descriptor support
-    from tests.conftest import create_mock_llm_program
+async def test_fd_to_file_invalid_fd(mocked_llm_process):
+    """Test fd_to_file with an invalid file descriptor.
 
-    program = create_mock_llm_program(enabled_tools=["read_fd", "fd_to_file"])
+    Args:
+        mocked_llm_process: Fixture providing a mocked process instance
+    """
+    # Use the mocked process provided by the fixture
+    process = mocked_llm_process
 
-    # Create a process with mocked provider client
-    with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
-        mock_get_provider.return_value = Mock()
-        process = create_test_llmprocess_directly(program=program)
+    # Enable file descriptors for this test
+    process.file_descriptor_enabled = True
+    process.fd_manager = FileDescriptorManager()
 
-        # Manually enable file descriptors
-        process.file_descriptor_enabled = True
-        process.fd_manager = FileDescriptorManager()
+    # Create temporary file path
+    with tempfile.NamedTemporaryFile(delete=True) as tmp:
+        tmp_path = tmp.name
 
-        # Create temporary file path
-        with tempfile.NamedTemporaryFile(delete=True) as tmp:
-            tmp_path = tmp.name
-
-        # Call the tool with invalid FD and runtime_context
-        result = await fd_to_file_tool(
-            fd="fd:999",
-            file_path=tmp_path,
-            runtime_context={"fd_manager": process.fd_manager},
-        )
+    # Call the tool with invalid FD and runtime_context
+    result = await fd_to_file_tool(
+        fd="fd:999",
+        file_path=tmp_path,
+        runtime_context={"fd_manager": process.fd_manager},
+    )
 
     # Check result
     assert result.is_error
@@ -100,38 +94,35 @@ async def test_fd_to_file_invalid_fd():
 
 
 @pytest.mark.asyncio
-async def test_fd_to_file_invalid_path():
-    """Test fd_to_file with an invalid file path."""
-    # Create a process with file descriptor support
-    from tests.conftest import create_mock_llm_program
+async def test_fd_to_file_invalid_path(mocked_llm_process):
+    """Test fd_to_file with an invalid file path.
 
-    program = create_mock_llm_program(enabled_tools=["read_fd", "fd_to_file"])
+    Args:
+        mocked_llm_process: Fixture providing a mocked process instance
+    """
+    # Use the mocked process provided by the fixture
+    process = mocked_llm_process
 
-    # Create a process with mocked provider client
-    with patch("llmproc.providers.providers.get_provider_client") as mock_get_provider:
-        mock_get_provider.return_value = Mock()
-        process = create_test_llmprocess_directly(program=program)
+    # Enable file descriptors for this test
+    process.file_descriptor_enabled = True
+    process.fd_manager = FileDescriptorManager()
 
-        # Manually enable file descriptors
-        process.file_descriptor_enabled = True
-        process.fd_manager = FileDescriptorManager()
+    # Create a file descriptor with content
+    test_content = "This is test content for fd_to_file tool"
+    fd_xml = process.fd_manager.create_fd_content(test_content)
+    # For testing compatibility, wrap in ToolResult
+    fd_result = ToolResult(content=fd_xml, is_error=False)
+    fd_id = fd_result.content.split('fd="')[1].split('"')[0]
 
-        # Create a file descriptor with content
-        test_content = "This is test content for fd_to_file tool"
-        fd_xml = process.fd_manager.create_fd_content(test_content)
-        # For testing compatibility, wrap in ToolResult
-        fd_result = ToolResult(content=fd_xml, is_error=False)
-        fd_id = fd_result.content.split('fd="')[1].split('"')[0]
+    # Use an invalid path that should fail
+    invalid_path = "/nonexistent/directory/file.txt"
 
-        # Use an invalid path that should fail
-        invalid_path = "/nonexistent/directory/file.txt"
-
-        # Call the tool with runtime_context
-        result = await fd_to_file_tool(
-            fd=fd_id,
-            file_path=invalid_path,
-            runtime_context={"fd_manager": process.fd_manager},
-        )
+    # Call the tool with runtime_context
+    result = await fd_to_file_tool(
+        fd=fd_id,
+        file_path=invalid_path,
+        runtime_context={"fd_manager": process.fd_manager},
+    )
 
     # Check result
     assert result.is_error
@@ -148,4 +139,4 @@ async def test_fd_to_file_no_process():
 
     # Check result
     assert result.is_error
-    assert "require" in result.content.lower()
+    assert "runtime context" in result.content.lower()

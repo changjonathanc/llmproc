@@ -1,6 +1,6 @@
 # Python SDK
 
-LLMProc provides a fluent, Pythonic SDK interface for creating and configuring LLM programs. This guide describes how to use the Python SDK features implemented in [RFC018](../RFC/RFC018_python_sdk.md).
+LLMProc provides a fluent, Pythonic SDK interface for creating and configuring LLM programs. This guide describes how to use the Python SDK features.
 
 The SDK follows the Unix-inspired operating system model where programs (configuration) are distinct from processes (runtime instances). For the rationale behind this design, see the [API Design FAQ](../FAQ.md).
 
@@ -18,7 +18,7 @@ program = (
         system_prompt="You are a helpful assistant.",
         parameters={"max_tokens": 1024}  # Required parameter
     )
-    .set_enabled_tools(["calculator", my_tool_function])  # Enable both built-in tools and functions
+    .register_tools([calculator, my_tool_function])  # Enable tools using function references
     .add_preload_file("context.txt")
     .add_linked_program("expert", expert_program, "An expert program")
 )
@@ -52,7 +52,7 @@ program = (
     LLMProgram(...)
     .add_preload_file("file1.md")
     .add_preload_file("file2.md")
-    .set_enabled_tools(["calculator", my_tool_function, another_function])  # Accepts both names and functions
+    .register_tools([calculator, "read_file", another_function])  # Accepts both strings and callables
     .configure_env_info(["working_directory", "platform", "date"])
     .configure_file_descriptor(max_direct_output_chars=10000)
     .configure_thinking(budget_tokens=8192)
@@ -169,23 +169,103 @@ program.enable_token_efficient_tools()
 
 ### MCP Tools
 
-Configure Model Context Protocol (MCP) tools:
+The Model Context Protocol (MCP) allows integration with external tool servers. Using MCP requires two steps:
+
+1. Configure the MCP server connection path
+2. Register specific MCP tools for use
+
+#### Configuring MCP Server
+
+First, configure the MCP server connection:
 
 ```python
-# Enable specific tools from servers
-program.configure_mcp(
-    config_path="config/mcp_servers.json",
-    tools={
-        "sequential-thinking": "all",
-        "github": ["search_repositories", "get_file_contents"]
-    }
-)
-
-# Enable only MCP configuration without tools
+# Set up MCP server configuration
 program.configure_mcp(config_path="config/mcp_servers.json")
 ```
 
+In your TOML configuration files, MCP server configuration is defined in the `[mcp]` section, and MCP tools are defined in the `[tools.mcp]` section:
+
+```toml
+[mcp]
+config_path = "config/mcp_servers.json"
+
+# MCP tools configuration
+[tools.mcp]
+sequential-thinking = "all"  # Use all tools from this server
+github = ["search_repositories", "get_file_contents"]  # Specific tools
+```
+
+#### Registering MCP Tools
+
+After setting up the server configuration, register MCP tools using the `MCPTool` class:
+
+```python
+from llmproc.tools.mcp import MCPTool
+
+# Register MCP tools using the MCPTool class
+program.register_tools([
+    # Include all tools from the "calc" server
+    MCPTool("calc"),
+    # Include specific tools from the "github" server
+    MCPTool("github", "search_repositories", "get_file_contents"),
+    # Include a list of tools from the "weather" server
+    MCPTool("weather", ["current", "forecast"]),
+    # Include a single tool from the "code" server
+    MCPTool("code", "explain")
+])
+```
+
+#### All-in-One Initialization
+
+You can also set up everything at once in the constructor:
+
+```python
+from llmproc.tools.mcp import MCPTool
+from llmproc.tools.builtin import calculator, read_file
+
+# Create program with MCP configuration and tools
+program = LLMProgram(
+    model_name="claude-3-7-sonnet",
+    provider="anthropic",
+    system_prompt="You are a helpful assistant.",
+    # Configure MCP server
+    mcp_config_path="config/mcp_servers.json",
+    # Mix MCP tools with other tool types
+    tools=[
+        # MCP tools
+        MCPTool("calc"),
+        MCPTool("github", "search_repositories"),
+        # Built-in tools
+        calculator,
+        read_file
+    ]
+)
+```
+
+This approach provides a clean separation between server configuration and tool registration, while maintaining consistency with how other tools are registered.
+
 ## Tool Management
+
+### Initialization in Constructor
+
+You can pass tools directly in the LLMProgram constructor:
+
+```python
+# Using the direct constructor approach 
+from llmproc.tools.builtin import calculator, read_file
+
+program = LLMProgram(
+    model_name="claude-3-5-sonnet",
+    provider="anthropic",
+    system_prompt="You are a helpful assistant.",
+    tools=[calculator, read_file, my_custom_tool]  # List of functions or string names
+)
+```
+
+The tools parameter accepts:
+- Callable functions (built-in tools or your own custom functions)
+- String names of built-in tools (e.g., "calculator")
+- A mixed list of both callable functions and string names
 
 ### Function-Based Tools
 
@@ -200,16 +280,22 @@ For detailed documentation on function-based tools, including:
 
 See the dedicated [Function-Based Tools](function-based-tools.md) documentation.
 
-A complete working example is also available in [examples/features/function_tools.py](../examples/features/function_tools.py).
+A complete working example is available in [examples/scripts/python-sdk.py](../examples/scripts/python-sdk.py) that demonstrates all SDK features including function tools, tool aliases, and advanced configuration.
 
-### Getting Enabled Tools
+### Setting and Getting Registered Tools
 
-You can retrieve the list of currently enabled tools using the `get_enabled_tools()` method:
+You can configure which tools are registered after program creation:
 
 ```python
-# Get a list of all enabled tool names
-enabled_tools = program.get_enabled_tools()
-print(f"Currently enabled tools: {enabled_tools}")
+# Setting registered tools
+from llmproc.tools.builtin import calculator, read_file
+
+# register_tools accepts both string names and callable functions
+program.register_tools([calculator, "read_file", my_custom_tool])
+
+# Get a list of all registered tool names
+registered_tools = program.get_registered_tools()
+print(f"Currently registered tools: {registered_tools}")
 ```
 
-This method returns the string names of all enabled tools (including both built-in tools and function-based tools).
+The `get_registered_tools()` method returns the string names of all registered tools.

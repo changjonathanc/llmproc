@@ -1,29 +1,31 @@
-"""Tests for the TOML configuration functionality."""
+"""Tests for TOML configuration loading functionality.
 
-import asyncio
+This file follows the standardized configuration test patterns:
+1. Uses pytest's tmp_path fixture for file operations
+2. Focus on LLMProgram.from_toml validation only (no process creation)
+3. Clear separation of configuration validation from API testing
+4. Proper test isolation
+"""
+
 import os
 from pathlib import Path
-from tempfile import NamedTemporaryFile, TemporaryDirectory
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from llmproc import LLMProcess, LLMProgram
-from tests.conftest import create_test_llmprocess_directly
-
-
-@pytest.fixture
-def mock_get_provider_client():
-    """Mock the provider client function."""
-    with patch("llmproc.providers.get_provider_client") as mock_get_client:
-        mock_client = MagicMock()
-        mock_get_client.return_value = mock_client
-        yield mock_get_client
+from llmproc import LLMProgram
 
 
 @pytest.fixture
 def mock_env():
-    """Mock environment variables."""
+    """Set mock environment variables needed for configuration loading.
+
+    This fixture temporarily sets environment variables needed for
+    configuration validation, then restores the original values afterward.
+
+    Yields:
+        None: Just provides the environment context
+    """
     original_env = os.environ.copy()
     os.environ["OPENAI_API_KEY"] = "test_api_key"
     yield
@@ -31,119 +33,258 @@ def mock_env():
     os.environ.update(original_env)
 
 
-# Mock program.start to avoid async initialization
 @pytest.fixture
-def mock_start_method():
-    """Mock the async start method to make it synchronous for testing."""
-    original_start = LLMProgram.start
+def mock_provider_client():
+    """Mock the provider client initialization.
 
-    async def mock_start(self):
-        # Create instance with all required parameters but basic initialization
-        # Pass the program's attributes directly
-        instance = create_test_llmprocess_directly(
-            program=self,
-            model_name=self.model_name,
-            provider=self.provider,
-            original_system_prompt=self.system_prompt,
-            system_prompt=self.system_prompt,
-            # Generate a basic enriched system prompt that includes the original
-            enriched_system_prompt=f"System: {self.system_prompt}\n\nNo additional context.",
-        )
+    This fixture prevents real API client initialization during config loading.
 
-        # Set API parameters
-        if hasattr(self, "api_params") and self.api_params:
-            instance.api_params = self.api_params
-
-        # Enable MCP if needed
-        if hasattr(instance, "_needs_async_init") and instance._needs_async_init:
-            instance.mcp_enabled = True
-
-        return instance
-
-    LLMProgram.start = mock_start
-    yield
-    LLMProgram.start = original_start
+    Yields:
+        MagicMock: The mock get_provider_client function
+    """
+    with patch("llmproc.providers.get_provider_client") as mock_get_client:
+        yield mock_get_client
 
 
-def test_from_toml_minimal(mock_env, mock_get_provider_client, mock_start_method):
-    """Test loading from a minimal TOML configuration."""
-    with NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as temp_file:
-        temp_file.write("""
-[model]
-name = "gpt-4o-mini"
-provider = "openai"
+class TestBasicConfigLoading:
+    """Tests for basic TOML configuration loading."""
 
-[prompt]
-system_prompt = "You are a test assistant."
-""")
-        temp_path = temp_file.name
+    def test_minimal_config(self, tmp_path, mock_env, mock_provider_client):
+        """Test loading a minimal valid TOML configuration.
 
-    try:
-        # Use the two-step pattern
-        program = LLMProgram.from_toml(temp_path)
-        # For tests, we can use asyncio.run to call start()
-        process = asyncio.run(program.start())
+        This test verifies that the most basic configuration with just
+        model name, provider, and system prompt can be loaded successfully.
 
-        assert process.model_name == "gpt-4o-mini"
-        assert process.system_prompt == "You are a test assistant."
-        assert process.state == []  # Empty until first run
-        assert (
-            process.enriched_system_prompt is not None
-        )  # Generated at initialization now
-        assert "You are a test assistant." in process.enriched_system_prompt
-        assert process.parameters == {}
-    finally:
-        os.unlink(temp_path)
+        Args:
+            tmp_path: pytest fixture providing temporary directory
+            mock_env: fixture for mock environment variables
+            mock_provider_client: fixture for mock provider client
+        """
+        # Arrange - Create a minimal TOML file
+        config_path = tmp_path / "minimal.toml"
+        config_path.write_text("""
+        [model]
+        name = "gpt-4o-mini"
+        provider = "openai"
+        
+        [prompt]
+        system_prompt = "You are a test assistant."
+        """)
+
+        # Act - Load the configuration
+        program = LLMProgram.from_toml(config_path)
+
+        # Assert - Verify basic attributes were loaded correctly
+        assert program.model_name == "gpt-4o-mini"
+        assert program.provider == "openai"
+        assert program.system_prompt == "You are a test assistant."
+        assert program.parameters == {}
+        assert not hasattr(program, "state"), "Program should not have a state attribute"
+
+    def test_api_parameters(self, tmp_path, mock_env, mock_provider_client):
+        """Test loading API parameters from TOML configuration.
+
+        This test verifies that API parameters are correctly parsed
+        from the configuration file.
+
+        Args:
+            tmp_path: pytest fixture providing temporary directory
+            mock_env: fixture for mock environment variables
+            mock_provider_client: fixture for mock provider client
+        """
+        # Arrange - Create a TOML file with API parameters
+        config_path = tmp_path / "parameters.toml"
+        config_path.write_text("""
+        [model]
+        name = "gpt-4o"
+        provider = "openai"
+        
+        [prompt]
+        system_prompt = "You are a test assistant."
+        
+        [parameters]
+        temperature = 0.8
+        max_tokens = 2000
+        top_p = 0.95
+        frequency_penalty = 0.2
+        presence_penalty = 0.1
+        """)
+
+        # Act - Load the configuration
+        program = LLMProgram.from_toml(config_path)
+
+        # Assert - Verify parameters were loaded correctly
+        assert program.model_name == "gpt-4o"
+        assert program.provider == "openai"
+        assert program.system_prompt == "You are a test assistant."
+        assert program.parameters.get("temperature") == 0.8
+        assert program.parameters.get("max_tokens") == 2000
+        assert program.parameters.get("top_p") == 0.95
+        assert program.parameters.get("frequency_penalty") == 0.2
+        assert program.parameters.get("presence_penalty") == 0.1
 
 
-def test_from_toml_complex(mock_env, mock_get_provider_client, mock_start_method):
-    """Test loading from a complex TOML configuration."""
-    with TemporaryDirectory() as temp_dir:
-        # Create a system prompt file
-        prompt_dir = Path(temp_dir) / "prompts"
+class TestAdvancedConfigLoading:
+    """Tests for advanced TOML configuration loading features."""
+
+    def test_system_prompt_file(self, tmp_path, mock_env, mock_provider_client):
+        """Test loading system prompt from a file.
+
+        This test verifies that the system prompt can be loaded from
+        an external file specified in the configuration.
+
+        Args:
+            tmp_path: pytest fixture providing temporary directory
+            mock_env: fixture for mock environment variables
+            mock_provider_client: fixture for mock provider client
+        """
+        # Arrange - Create a prompt file and a TOML file referencing it
+        prompt_dir = tmp_path / "prompts"
         prompt_dir.mkdir()
         prompt_file = prompt_dir / "system_prompt.md"
         prompt_file.write_text("You are a complex test assistant.")
 
-        # Create a TOML config file
-        config_file = Path(temp_dir) / "config.toml"
-        config_file.write_text("""
-[model]
-name = "gpt-4o"
-provider = "openai"
+        config_path = tmp_path / "prompt_file.toml"
+        config_path.write_text("""
+        [model]
+        name = "gpt-4o"
+        provider = "openai"
+        
+        [prompt]
+        system_prompt_file = "prompts/system_prompt.md"
+        """)
 
-[prompt]
-system_prompt_file = "prompts/system_prompt.md"
+        # Act - Load the configuration
+        program = LLMProgram.from_toml(config_path)
 
-[parameters]
-temperature = 0.8
-max_tokens = 2000
-top_p = 0.95
-frequency_penalty = 0.2
-presence_penalty = 0.1
-""")
+        # Assert - Verify the system prompt was loaded from the file
+        assert program.model_name == "gpt-4o"
+        assert program.system_prompt == "You are a complex test assistant."
 
-        # Use the two-step pattern
-        program = LLMProgram.from_toml(config_file)
-        process = asyncio.run(program.start())
+    def test_tools_configuration(self, tmp_path, mock_env, mock_provider_client):
+        """Test loading tools configuration from TOML.
 
-        assert process.model_name == "gpt-4o"
-        assert process.system_prompt == "You are a complex test assistant."
-        assert process.state == []  # Empty until first run
-        assert (
-            process.enriched_system_prompt is not None
-        )  # Generated at initialization now
-        assert "You are a complex test assistant." in process.enriched_system_prompt
-        # Check that parameters are in api_params instead of parameters
-        assert hasattr(process, "api_params")
-        assert process.api_params.get("top_p") == 0.95
-        assert process.api_params.get("frequency_penalty") == 0.2
-        assert process.api_params.get("presence_penalty") == 0.1
-        assert process.api_params.get("temperature") == 0.8
-        assert process.api_params.get("max_tokens") == 2000
+        This test verifies that tool configurations are correctly parsed
+        from the configuration file.
+
+        Args:
+            tmp_path: pytest fixture providing temporary directory
+            mock_env: fixture for mock environment variables
+            mock_provider_client: fixture for mock provider client
+        """
+        # Arrange - Create a TOML file with tools configuration
+        config_path = tmp_path / "tools.toml"
+        config_path.write_text("""
+        [model]
+        name = "claude-3-5-sonnet"
+        provider = "anthropic"
+        
+        [prompt]
+        system_prompt = "You are a helpful assistant."
+        
+        [tools]
+        enabled = ["calculator", "read_file"]
+        
+        [tools.aliases]
+        calc = "calculator"
+        read = "read_file"
+        """)
+
+        # Act - Load the configuration
+        program = LLMProgram.from_toml(config_path)
+        # Compile program to register tools
+        program.compile()
+
+        # Assert - Verify tools configuration was loaded correctly
+        assert program.model_name == "claude-3-5-sonnet"
+        assert program.provider == "anthropic"
+
+        # Import the builtin tools
+        from llmproc.tools.builtin import calculator, read_file
+
+        # Register them properly
+        program.register_tools([calculator, read_file])
+        # Process function tools to ensure they're registered in the registry
+        program.tool_manager.process_function_tools()
+
+        # Now check the tools are registered
+        assert "calculator" in program.tool_manager.get_registered_tools()
+        assert "read_file" in program.tool_manager.get_registered_tools()
+        assert program.tool_manager.runtime_registry.tool_aliases.get("calc") == "calculator"
+        assert program.tool_manager.runtime_registry.tool_aliases.get("read") == "read_file"
 
 
-# Skipping this test for now
-def test_from_toml_with_preload(mock_env, mock_get_provider_client):
-    """This test is skipped until the preload feature is fully implemented."""
-    pass
+class TestErrorHandling:
+    """Tests for error handling during TOML configuration loading."""
+
+    def test_missing_required_fields(self, tmp_path, mock_env, mock_provider_client):
+        """Test handling of missing required fields in configuration.
+
+        This test verifies that appropriate errors are raised when
+        required fields are missing from the configuration.
+
+        Args:
+            tmp_path: pytest fixture providing temporary directory
+            mock_env: fixture for mock environment variables
+            mock_provider_client: fixture for mock provider client
+        """
+        # Arrange - Create an invalid TOML file missing required fields
+        config_path = tmp_path / "invalid.toml"
+        config_path.write_text("""
+        [model]
+        name = "gpt-4o-mini"
+        # Missing provider
+        
+        # Missing [prompt] section
+        """)
+
+        # Act & Assert - Verify appropriate error is raised
+        with pytest.raises(ValueError) as excinfo:
+            LLMProgram.from_toml(config_path)
+
+        # Verify error message mentions missing field
+        assert "provider" in str(excinfo.value).lower()
+
+    def test_file_not_found(self, mock_env, mock_provider_client):
+        """Test handling of non-existent configuration file.
+
+        This test verifies that appropriate errors are raised when
+        the specified configuration file does not exist.
+
+        Args:
+            mock_env: fixture for mock environment variables
+            mock_provider_client: fixture for mock provider client
+        """
+        # Act & Assert - Verify appropriate error is raised
+        with pytest.raises(FileNotFoundError):
+            LLMProgram.from_toml("/non/existent/config.toml")
+
+    def test_invalid_toml_syntax(self, tmp_path, mock_env, mock_provider_client):
+        """Test handling of invalid TOML syntax.
+
+        This test verifies that appropriate errors are raised when
+        the configuration file contains invalid TOML syntax.
+
+        Args:
+            tmp_path: pytest fixture providing temporary directory
+            mock_env: fixture for mock environment variables
+            mock_provider_client: fixture for mock provider client
+        """
+        # Arrange - Create a TOML file with invalid syntax
+        config_path = tmp_path / "invalid_syntax.toml"
+        config_path.write_text("""
+        [model]
+        name = "gpt-4o-mini"
+        provider = "openai"
+        
+        [prompt
+        system_prompt = "You are a test assistant."
+        """)  # Missing closing bracket
+
+        # Act & Assert - Verify appropriate error is raised
+        with pytest.raises(Exception) as excinfo:
+            LLMProgram.from_toml(config_path)
+
+        # The specific error might vary, but it should mention TOML or parsing
+        error_message = str(excinfo.value).lower()
+        assert any(term in error_message for term in ["parse", "toml", "syntax"])

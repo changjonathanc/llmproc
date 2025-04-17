@@ -1,6 +1,6 @@
 # Tool Aliases
 
-Tool aliases allow you to provide shorter, more intuitive names for tools, making it easier for LLMs to understand and use them correctly. Aliases are especially helpful for MCP tools, which often have lengthy namespaced identifiers.
+Tool aliases allow you to provide more LLM-friendly names for tools. This is particularly important for improving the likelihood that the LLM will use the tools effectively. Aliases are especially helpful for MCP tools, which often have lengthy namespaced identifiers that are hard for the model to understand and use.
 
 ## Configuration
 
@@ -21,7 +21,7 @@ For MCP tools, you can alias the namespaced tool name:
 ```toml
 [mcp]
 config_path = "config/mcp_servers.json"
-[mcp.tools]
+[tools.mcp]
 everything = ["add"]
 
 [tools.aliases]

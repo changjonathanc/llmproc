@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import pytest
 from click.testing import CliRunner
 
-from llmproc.cli import main
+from llmproc.cli.demo import main
 
 # No fixtures needed - all mocks are created in the test functions
 
@@ -29,13 +29,13 @@ def test_cli_interactive_mode():
 
     # Patch various functions and classes to avoid actual API calls
     with (
-        patch("llmproc.cli.LLMProgram") as mock_llm_program,
-        patch("llmproc.cli.Path.exists") as mock_exists,
-        patch("llmproc.cli.Path.suffix", new_callable=PropertyMock) as mock_suffix,
-        patch("llmproc.cli.Path.absolute") as mock_absolute,
-        patch("llmproc.cli.asyncio.run") as mock_run,
+        patch("llmproc.cli.demo.LLMProgram") as mock_llm_program,
+        patch("llmproc.cli.demo.Path.exists") as mock_exists,
+        patch("llmproc.cli.demo.Path.suffix", new_callable=PropertyMock) as mock_suffix,
+        patch("llmproc.cli.demo.Path.absolute") as mock_absolute,
+        patch("llmproc.cli.demo.asyncio.run") as mock_run,
         patch("click.prompt") as mock_prompt,
-        patch("llmproc.cli.sys.exit") as mock_exit,
+        patch("llmproc.cli.demo.sys.exit") as mock_exit,
     ):
         # Set up the mocks
         mock_llm_program.from_toml.return_value = mock_program
@@ -46,6 +46,14 @@ def test_cli_interactive_mode():
         mock_absolute.return_value = Path(
             "/fake/path/test.toml"
         )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Set a simple side effect that always returns the mock_process for start() calls
         # and a MagicMock for other calls
@@ -77,13 +85,13 @@ def test_cli_non_interactive_mode():
 
     # Patch various functions and classes to avoid actual API calls
     with (
-        patch("llmproc.cli.LLMProgram") as mock_llm_program,
-        patch("llmproc.cli.Path.exists") as mock_exists,
-        patch("llmproc.cli.Path.suffix", new_callable=PropertyMock) as mock_suffix,
-        patch("llmproc.cli.Path.absolute") as mock_absolute,
-        patch("llmproc.cli.asyncio.run") as mock_run,
-        patch("llmproc.cli.click.echo") as mock_echo,
-        patch("llmproc.cli.sys.exit") as mock_exit,
+        patch("llmproc.cli.demo.LLMProgram") as mock_llm_program,
+        patch("llmproc.cli.demo.Path.exists") as mock_exists,
+        patch("llmproc.cli.demo.Path.suffix", new_callable=PropertyMock) as mock_suffix,
+        patch("llmproc.cli.demo.Path.absolute") as mock_absolute,
+        patch("llmproc.cli.demo.asyncio.run") as mock_run,
+        patch("llmproc.cli.demo.click.echo") as mock_echo,
+        patch("llmproc.cli.demo.sys.exit") as mock_exit,
     ):
         # Set up the mocks
         mock_llm_program.from_toml.return_value = mock_program
@@ -92,6 +100,14 @@ def test_cli_non_interactive_mode():
         mock_absolute.return_value = Path(
             "/fake/path/test.toml"
         )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Set a simple side effect that always returns the mock_process for start() calls
         # and a MagicMock for other calls
@@ -123,14 +139,14 @@ def test_cli_stdin_non_interactive_mode():
 
     # Patch various functions and classes to avoid actual API calls
     with (
-        patch("llmproc.cli.LLMProgram") as mock_llm_program,
-        patch("llmproc.cli.Path.exists") as mock_exists,
-        patch("llmproc.cli.Path.suffix", new_callable=PropertyMock) as mock_suffix,
-        patch("llmproc.cli.Path.absolute") as mock_absolute,
-        patch("llmproc.cli.asyncio.run") as mock_run,
-        patch("llmproc.cli.sys.stdin.isatty") as mock_isatty,
-        patch("llmproc.cli.click.echo") as mock_echo,
-        patch("llmproc.cli.sys.exit") as mock_exit,
+        patch("llmproc.cli.demo.LLMProgram") as mock_llm_program,
+        patch("llmproc.cli.demo.Path.exists") as mock_exists,
+        patch("llmproc.cli.demo.Path.suffix", new_callable=PropertyMock) as mock_suffix,
+        patch("llmproc.cli.demo.Path.absolute") as mock_absolute,
+        patch("llmproc.cli.demo.asyncio.run") as mock_run,
+        patch("llmproc.cli.demo.sys.stdin.isatty") as mock_isatty,
+        patch("llmproc.cli.demo.click.echo") as mock_echo,
+        patch("llmproc.cli.demo.sys.exit") as mock_exit,
     ):
         # Set up the mocks
         mock_llm_program.from_toml.return_value = mock_program
@@ -140,6 +156,14 @@ def test_cli_stdin_non_interactive_mode():
         mock_absolute.return_value = Path(
             "/fake/path/test.toml"
         )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Set a simple side effect that always returns the mock_process for start() calls
         # and a MagicMock for other calls

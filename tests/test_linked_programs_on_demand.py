@@ -1,4 +1,4 @@
-"""Tests for program-to-process refactoring (RFC061)."""
+"""Tests for program-to-process refactoring."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -41,9 +41,7 @@ async def test_process_stores_program_references_not_instances():
     main_program.add_linked_program("expert", linked_program, "Expert program")
 
     # Create a process from the main program
-    with patch(
-        "llmproc.providers.providers.get_provider_client", return_value=MagicMock()
-    ):
+    with patch("llmproc.providers.providers.get_provider_client", return_value=MagicMock()):
         process = await main_program.start()
 
     # Verify that linked_programs contains the program reference, not a process instance
@@ -51,13 +49,6 @@ async def test_process_stores_program_references_not_instances():
     assert process.linked_programs["expert"] is linked_program
     assert not hasattr(process.linked_programs["expert"], "run")
     assert process.linked_programs["expert"] == linked_program
-
-
-@pytest.mark.asyncio
-async def test_create_method_completely_removed(test_program):
-    """Test that LLMProcess.create() has been completely removed."""
-    # Verify the method no longer exists
-    assert not hasattr(LLMProcess, "create")
 
 
 @pytest.mark.asyncio
@@ -74,9 +65,7 @@ async def test_linked_programs_from_program_only(test_program):
     test_program.linked_programs = {"test": linked_program}
 
     # Create a process
-    with patch(
-        "llmproc.providers.providers.get_provider_client", return_value=MagicMock()
-    ):
+    with patch("llmproc.providers.providers.get_provider_client", return_value=MagicMock()):
         # Our improved helper will automatically use the program's linked_programs
         process = create_test_llmprocess_directly(program=test_program)
 

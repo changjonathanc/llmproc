@@ -40,7 +40,9 @@ def mock_process():
     """Provides a MagicMock instance of LLMProcess."""
     process = MagicMock(spec=LLMProcess)
     process.tool_manager = MagicMock()
-    process.tool_manager.get_enabled_tools = MagicMock(return_value=["tool1", "tool2"])
+    process.tool_manager.get_registered_tools = MagicMock(return_value=["tool1", "tool2"])
+    # Define registered_tools for validate_process
+    process.tool_manager.get_registered_tools = MagicMock(return_value=["tool1", "tool2"])
     process.model_name = "test-model"
     process.provider = "test-provider"
     # Mock attributes accessed by setup_runtime_context's default path
@@ -92,9 +94,7 @@ def test_instantiate_process():
             # Optional parameters
             Parameter("state", Parameter.POSITIONAL_OR_KEYWORD, default=[]),
             Parameter("tool_manager", Parameter.POSITIONAL_OR_KEYWORD, default=None),
-            Parameter(
-                "enriched_system_prompt", Parameter.POSITIONAL_OR_KEYWORD, default=None
-            ),
+            Parameter("enriched_system_prompt", Parameter.POSITIONAL_OR_KEYWORD, default=None),
         ]
     )
 
@@ -132,9 +132,7 @@ def test_setup_runtime_context_default(mock_process):
     assert context == expected_context
 
     # Assert the context was set on the tool manager
-    mock_process.tool_manager.set_runtime_context.assert_called_once_with(
-        expected_context
-    )
+    mock_process.tool_manager.set_runtime_context.assert_called_once_with(expected_context)
     assert isinstance(context, dict)
 
 
@@ -180,14 +178,8 @@ def test_validate_process(mock_process, caplog):
     program_exec.validate_process(mock_process)
 
     # Check log messages
-    assert (
-        f"Created process with model {mock_process.model_name} ({mock_process.provider})"
-        in caplog.text
-    )
-    assert (
-        f"Tools enabled: {len(mock_process.tool_manager.get_enabled_tools())}"
-        in caplog.text
-    )
+    assert f"Created process with model {mock_process.model_name} ({mock_process.provider})" in caplog.text
+    assert f"Tools enabled: {len(mock_process.tool_manager.get_registered_tools())}" in caplog.text
     assert len(caplog.records) == 2  # Expecting two INFO logs
 
 
@@ -245,14 +237,10 @@ async def test_create_process_flow_not_compiled(
     mock_instantiate.assert_called_once_with({"process_state": "data"})
 
     # 6. Set up runtime context
-    mock_setup_context.assert_called_once_with(
-        mock_process
-    )  # Called with the result of instantiate
+    mock_setup_context.assert_called_once_with(mock_process)  # Called with the result of instantiate
 
     # 7. Perform final validation
-    mock_validate.assert_called_once_with(
-        mock_process
-    )  # Called with the result of instantiate
+    mock_validate.assert_called_once_with(mock_process)  # Called with the result of instantiate
 
     # Check the final returned process
     assert result_process == mock_process
@@ -298,3 +286,36 @@ async def test_create_process_flow_already_compiled(
     mock_setup_context.assert_called_once_with(mock_process)
     mock_validate.assert_called_once_with(mock_process)
     assert result_process == mock_process
+
+
+def test_file_descriptor_tool_registration():
+    """Test that FD tools are registered during file descriptor initialization."""
+    from llmproc.program_exec import initialize_file_descriptor_system
+
+    # Create a mock program
+    program = MagicMock()
+
+    # Set up file descriptor config
+    program.file_descriptor = {
+        "enabled": True,
+        "default_page_size": 5000,
+        "enable_references": True,
+    }
+
+    # Set up enabled tools
+    program.tools = {"enabled": ["read_fd", "fd_to_file", "calculator"]}
+
+    # Initialize the fd system
+    fd_config = initialize_file_descriptor_system(program)
+
+    # Check fd_manager.fd_related_tools contains the FD-related tools
+    assert "read_fd" in fd_config.fd_manager.fd_related_tools
+    assert "fd_to_file" in fd_config.fd_manager.fd_related_tools
+
+    # Other tools should not be registered to fd_manager
+    assert "calculator" not in fd_config.fd_manager.fd_related_tools
+
+    # Verify other properties
+    assert fd_config.file_descriptor_enabled is True
+    assert fd_config.references_enabled is True
+    assert fd_config.fd_manager is not None

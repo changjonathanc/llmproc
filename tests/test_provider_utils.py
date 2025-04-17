@@ -44,12 +44,12 @@ class TestContextWindowSize:
     def test_get_context_window_size_exact_match(self):
         """Test getting window size with exact model match."""
         window_sizes = {
-            "gpt-4": 8192,
+            "gpt-4o-mini": 8192,
             "gpt-4-turbo": 128000,
             "gpt-3.5-turbo": 16385,
         }
 
-        assert get_context_window_size("gpt-4", window_sizes) == 8192
+        assert get_context_window_size("gpt-4o-mini", window_sizes) == 8192
         assert get_context_window_size("gpt-3.5-turbo", window_sizes) == 16385
 
     def test_get_context_window_size_prefix_match(self):
@@ -84,7 +84,4 @@ class TestContextWindowSize:
             "gpt-4": 8192,
         }
 
-        assert (
-            get_context_window_size("unknown-model", window_sizes, default_size=50000)
-            == 50000
-        )
+        assert get_context_window_size("unknown-model", window_sizes, default_size=50000) == 50000

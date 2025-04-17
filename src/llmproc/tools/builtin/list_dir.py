@@ -21,9 +21,7 @@ logger = logging.getLogger(__name__)
         "detailed": "Whether to show detailed information (size, permissions, modification time) for each item. Defaults to False.",
     },
 )
-async def list_dir(
-    directory_path: str = ".", show_hidden: bool = False, detailed: bool = False
-) -> str:
+async def list_dir(directory_path: str = ".", show_hidden: bool = False, detailed: bool = False) -> str:
     """List directory contents with options for showing hidden files and detailed information.
 
     Args:

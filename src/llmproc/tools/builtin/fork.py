@@ -1,9 +1,9 @@
 """Fork system call for LLMProcess to create a copy of the current process."""
 
-from typing import Any
+from typing import Any, Optional
 
 from llmproc.common.results import ToolResult
-from llmproc.tools.context_aware import context_aware
+from llmproc.tools.function_tools import register_tool
 
 # Avoid circular import
 # LLMProcess is imported within the function
@@ -39,31 +39,20 @@ You can fork multiple instances to perform tasks in parallel without performing 
 Each forked process has a complete copy of the conversation history up to the fork point, ensuring continuity and context preservation.
 """
 
-# Definition of the fork tool for Anthropic API
-fork_tool_def = {
-    "name": "fork",
-    "description": fork_tool_description,
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "prompts": {
-                "type": "array",
-                "description": "List of prompts/instructions for each forked process",
-                "items": {
-                    "type": "string",
-                    "description": "A specific task or query to be handled by a forked process",
-                },
-            }
-        },
-        "required": ["prompts"],
+
+@register_tool(
+    name="fork",
+    description=fork_tool_description,
+    param_descriptions={
+        "prompts": "List of prompts/instructions for each forked process. Each item is a specific task or query to be handled by a forked process."
     },
-}
-
-
-@context_aware
+    required=["prompts"],
+    requires_context=True,
+    required_context_keys=["process"],
+)
 async def fork_tool(
     prompts: list[str],
-    runtime_context=None,
+    runtime_context: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Placeholder function for the fork system call.
 
@@ -77,6 +66,10 @@ async def fork_tool(
     Returns:
         A dictionary with placeholder response
     """
+    # Check if runtime_context is provided
+    if runtime_context is None:
+        return ToolResult.from_error("Tool 'fork_tool' requires runtime context but it was not provided")
+
     # This is just a placeholder - the real implementation is in the process executor
     return ToolResult.from_error(
         "Direct calls to fork_tool are not supported. This should be handled by the process executor."

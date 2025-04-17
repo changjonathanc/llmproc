@@ -97,7 +97,6 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
     mock_forked_process.fd_manager = None  # Will be set by fork_process
 
     # Add necessary attributes that will be set by fork_process
-    # preloaded_content has been removed
 
     # Create a patched version of fork_process that doesn't call create_process
     # This allows us to test the file descriptor copying logic in isolation

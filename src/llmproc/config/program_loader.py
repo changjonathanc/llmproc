@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from llmproc.config.schema import LLMProgramConfig
 from llmproc.config.utils import resolve_path
+from llmproc.tools.builtin import BUILTIN_TOOLS
 
 
 class ProgramLoader:
@@ -85,19 +86,41 @@ class ProgramLoader:
             cls._process_config_linked_programs(config)
         )
 
-        # Create and return the program instance
-        return LLMProgram(
+        # Get display name with priority: demo > model > default
+        # For backwards compatibility, we check both locations
+        display_name = None
+        if config.demo and config.demo.display_name:
+            display_name = config.demo.display_name
+        elif hasattr(config.model, "display_name") and config.model.display_name:
+            # For backward compatibility with older TOML files
+            display_name = config.model.display_name
+
+        # Extract tools and aliases from config
+        tools_list = config.tools.enabled if config.tools else []
+        tool_aliases = config.tools.aliases if config.tools else {}
+        # Incorporate MCP tool descriptors from [tools.mcp]
+        from llmproc.tools.mcp import MCPTool
+
+        if config.tools and config.tools.mcp:
+            for server, names in config.tools.mcp.root.items():
+                # names is 'all' or list[str]
+                if names == "all":
+                    tools_list.append(MCPTool(server))
+                else:
+                    # list of tool names
+                    tools_list.append(MCPTool(server, *names))
+
+        # Create the program instance
+        program = LLMProgram(
             model_name=config.model.name,
             provider=config.model.provider,
             system_prompt=system_prompt,
             parameters=config.parameters,
-            display_name=config.model.display_name,
+            display_name=display_name,
             preload_files=cls._resolve_preload_files(config, base_dir),
             mcp_config_path=cls._resolve_mcp_config(config, base_dir),
-            mcp_tools=config.mcp.tools.root
-            if config.mcp and config.mcp.tools
-            else None,
-            tools=config.tools.model_dump() if config.tools else None,
+            tools=tools_list,
+            tool_aliases=tool_aliases,
             linked_programs=linked_programs,
             linked_program_descriptions=linked_program_descriptions,
             env_info=config.env_info.model_dump()
@@ -110,7 +133,13 @@ class ProgramLoader:
             disable_automatic_caching=config.model.disable_automatic_caching,
             project_id=config.model.project_id,
             region=config.model.region,
+            user_prompt=config.prompt.user if hasattr(config.prompt, "user") else None,
+            max_iterations=config.model.max_iterations,
         )
+
+        # No post-processing needed: MCPTool descriptors have been passed to constructor
+
+        return program
 
     @classmethod
     def _resolve_preload_files(
@@ -190,8 +219,6 @@ class ProgramLoader:
                     must_exist=True,
                     error_prefix=f"Linked program file (from '{path}')",
                 )
-                program.linked_programs[name] = LLMProgram.from_toml(
-                    linked_path, include_linked=True
-                )
+                program.linked_programs[name] = LLMProgram.from_toml(linked_path, include_linked=True)
             except FileNotFoundError as e:
                 raise FileNotFoundError(str(e))

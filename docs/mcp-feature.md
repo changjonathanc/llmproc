@@ -28,21 +28,22 @@ The MCP implementation uses a two-registry design for performance and isolation:
 
 ## Configuration
 
-MCP is configured through the TOML configuration file with a dedicated `[mcp]` section:
+MCP is configured through the TOML configuration file with dedicated sections for server configuration and tools:
 
 ```toml
 [mcp]
 config_path = "config/mcp_servers.json"
 
-[mcp.tools]
+[tools.mcp]
 github = ["search_repositories", "get_file_contents"]
 codemcp = ["ReadFile"]
 ```
 
 ### Configuration Options
 
-- `config_path`: Path to the MCP servers configuration JSON file
-- `[mcp.tools]`: Dictionary of server names mapped to tools to enable
+- `[mcp]` section:
+  - `config_path`: Path to the MCP servers configuration JSON file
+- `[tools.mcp]` section: Dictionary of server names mapped to tools to enable
   - Server name = List of specific tools to import OR "all" to import all tools from that server
 
 ### MCP Servers Configuration
@@ -108,7 +109,7 @@ system_prompt = "You are a helpful assistant with access to tools. Use tools whe
 [mcp]
 config_path = "config/mcp_servers.json"
 
-[mcp.tools]
+[tools.mcp]
 github = ["search_repositories", "get_file_contents"]
 codemcp = ["ReadFile"]
 ```

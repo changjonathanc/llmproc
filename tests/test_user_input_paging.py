@@ -276,9 +276,7 @@ async def test_read_paged_user_input(mock_get_provider_client):
     # Use read_fd tool to read the entire content
     from llmproc.tools.builtin.fd_tools import read_fd_tool
 
-    full_result = await read_fd_tool(
-        fd=fd_id, read_all=True, runtime_context={"fd_manager": process.fd_manager}
-    )
+    full_result = await read_fd_tool(fd=fd_id, read_all=True, runtime_context={"fd_manager": process.fd_manager})
 
     # Verify full content was returned
     assert not full_result.is_error
@@ -339,9 +337,7 @@ async def test_read_paged_user_input(mock_get_provider_client):
     new_fd_id = new_fd_match.group(1)
 
     # Read from the new FD to verify content
-    new_fd_result = await read_fd_tool(
-        fd=new_fd_id, read_all=True, runtime_context={"fd_manager": process.fd_manager}
-    )
+    new_fd_result = await read_fd_tool(fd=new_fd_id, read_all=True, runtime_context={"fd_manager": process.fd_manager})
 
     # Verify new FD content
     assert not new_fd_result.is_error

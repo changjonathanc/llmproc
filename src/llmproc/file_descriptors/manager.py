@@ -361,7 +361,9 @@ class FileDescriptorManager:
             f.write(content)
 
         # Create success message
-        success_msg = f"File descriptor {fd_id} content ({len(content)} chars) successfully {operation_type} to {file_path}"
+        success_msg = (
+            f"File descriptor {fd_id} content ({len(content)} chars) successfully {operation_type} to {file_path}"
+        )
         logger.info(success_msg)
 
         # Format successful result

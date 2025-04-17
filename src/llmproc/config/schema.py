@@ -15,10 +15,10 @@ class ModelConfig(BaseModel):
 
     name: str
     provider: str
-    display_name: str | None = None
     disable_automatic_caching: bool = False
     project_id: str | None = None
     region: str | None = None
+    max_iterations: int = 10
 
     @classmethod
     @field_validator("provider")
@@ -49,6 +49,7 @@ class PromptConfig(BaseModel):
 
     system_prompt: str | None = ""
     system_prompt_file: str | None = None
+    user: str | None = None
 
     @model_validator(mode="after")
     def check_prompt_sources(self):
@@ -118,7 +119,7 @@ class MCPConfig(BaseModel):
     """MCP configuration section."""
 
     config_path: str | None = None
-    tools: MCPToolsConfig | None = None
+    # tools field has been moved to ToolsConfig.mcp
 
 
 class ToolsConfig(BaseModel):
@@ -126,6 +127,7 @@ class ToolsConfig(BaseModel):
 
     enabled: list[str] = []
     aliases: dict[str, str] = {}  # Maps alias names to actual tool names
+    mcp: MCPToolsConfig | None = None  # MCP tools configuration moved from [mcp.tools]
 
 
 class EnvInfoConfig(BaseModel):
@@ -155,6 +157,14 @@ class FileDescriptorConfig(BaseModel):
         return v
 
 
+class DemoConfig(BaseModel):
+    """Demo configuration for multi-turn demonstrations."""
+
+    prompts: list[str] = []
+    pause_between_prompts: bool = True
+    display_name: str | None = None
+
+
 class LinkedProgramItem(BaseModel):
     """Configuration for a single linked program."""
 
@@ -180,6 +190,7 @@ class LLMProgramConfig(BaseModel):
     env_info: EnvInfoConfig | None = EnvInfoConfig()
     linked_programs: LinkedProgramsConfig | None = LinkedProgramsConfig()
     file_descriptor: FileDescriptorConfig | None = None
+    demo: DemoConfig | None = None
 
     model_config = {
         "extra": "forbid"  # Forbid extra fields
@@ -340,11 +351,7 @@ class LLMProgramConfig(BaseModel):
                 pass
 
             # Check if reasoning_effort used with non-OpenAI provider
-            if (
-                "reasoning_effort" in self.parameters
-                and hasattr(self, "model")
-                and self.model.provider != "openai"
-            ):
+            if "reasoning_effort" in self.parameters and hasattr(self, "model") and self.model.provider != "openai":
                 warnings.warn(
                     "The 'reasoning_effort' parameter is only supported with OpenAI reasoning models. It will be ignored for other providers.",
                     stacklevel=2,
@@ -354,10 +361,7 @@ class LLMProgramConfig(BaseModel):
             if (
                 "thinking" in self.parameters
                 and hasattr(self, "model")
-                and (
-                    self.model.provider != "anthropic"
-                    or not self.model.name.startswith("claude-3-7")
-                )
+                and (self.model.provider != "anthropic" or not self.model.name.startswith("claude-3-7"))
             ):
                 warnings.warn(
                     "The 'thinking' parameter is only supported with Claude 3.7+ models. It will be ignored for other providers.",
@@ -371,10 +375,7 @@ class LLMProgramConfig(BaseModel):
                         "OpenAI reasoning models (o1, o3) should use 'max_completion_tokens' instead of 'max_tokens'. Your configuration may fail at runtime.",
                         stacklevel=2,
                     )
-                elif (
-                    not is_reasoning_model
-                    and "max_completion_tokens" in self.parameters
-                ):
+                elif not is_reasoning_model and "max_completion_tokens" in self.parameters:
                     warnings.warn(
                         "'max_completion_tokens' is only for OpenAI reasoning models (o1, o3). Standard models should use 'max_tokens' instead.",
                         stacklevel=2,

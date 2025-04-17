@@ -100,17 +100,13 @@ class EnvInfoBuilder:
             resolved_path: The resolved path
             error: Optional exception that occurred
         """
-        full_message = (
-            f"{message} - Specified: '{specified_path}', Resolved: '{resolved_path}'"
-        )
+        full_message = f"{message} - Specified: '{specified_path}', Resolved: '{resolved_path}'"
         if error:
             full_message += f", Error: {error}"
         warnings.warn(full_message, stacklevel=3)
 
     @staticmethod
-    def load_files(
-        file_paths: list[str], base_dir: Optional[Path] = None
-    ) -> dict[str, str]:
+    def load_files(file_paths: list[str], base_dir: Optional[Path] = None) -> dict[str, str]:
         """Load content from multiple files.
 
         Args:
@@ -136,15 +132,11 @@ class EnvInfoBuilder:
 
             try:
                 if not path.exists():
-                    EnvInfoBuilder._warn_preload(
-                        "Preload file not found", file_path_str, path
-                    )
+                    EnvInfoBuilder._warn_preload("Preload file not found", file_path_str, path)
                     continue  # Skip missing files
 
                 if not path.is_file():
-                    EnvInfoBuilder._warn_preload(
-                        "Preload path is not a file", file_path_str, path
-                    )
+                    EnvInfoBuilder._warn_preload("Preload path is not a file", file_path_str, path)
                     continue  # Skip non-files
 
                 content = path.read_text()
@@ -152,13 +144,9 @@ class EnvInfoBuilder:
                 logger.debug(f"Successfully preloaded content from: {path}")
 
             except OSError as e:
-                EnvInfoBuilder._warn_preload(
-                    "Error reading preload file", file_path_str, path, e
-                )
+                EnvInfoBuilder._warn_preload("Error reading preload file", file_path_str, path, e)
             except Exception as e:  # Catch other potential errors
-                EnvInfoBuilder._warn_preload(
-                    "Unexpected error preloading file", file_path_str, path, e
-                )
+                EnvInfoBuilder._warn_preload("Unexpected error preloading file", file_path_str, path, e)
 
         return content_dict
 

@@ -44,7 +44,7 @@ def test_openai_provider_run(mock_openai, mock_env):
 
     # Create program and process
     program = LLMProgram(
-        model_name="gpt-4o",
+        model_name="gpt-4o-mini",
         provider="openai",
         system_prompt="You are a test assistant.",
     )

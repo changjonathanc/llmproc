@@ -28,6 +28,10 @@ Args:
     file_descriptor: File descriptor configuration
     base_dir: Base directory for resolving relative paths in files
     disable_automatic_caching: Whether to disable automatic prompt caching for Anthropic models
+    project_id: Project ID for Vertex AI
+    region: Region for Vertex AI
+    user_prompt: User prompt to execute automatically
+    max_iterations: Maximum number of iterations for tool calls
 """
 
 COMPILE_SELF = """Internal method to validate and compile this program.
@@ -173,7 +177,7 @@ Examples:
     ```
 """
 
-SET_ENABLED_TOOLS = """Set the list of enabled built-in tools.
+REGISTER_TOOLS = """Register tools for use in the program.
 
 This method allows you to enable specific built-in tools by name.
 It replaces any previously enabled tools.
@@ -194,13 +198,13 @@ Note:
 Examples:
     ```python
     # Enable calculator and read_file tools
-    program.set_enabled_tools(["calculator", "read_file"])
+    program.register_tools(["calculator", "read_file"])
 
     # Later, replace with different tools
-    program.set_enabled_tools(["calculator", "spawn"])
+    program.register_tools(["calculator", "spawn"])
     
     # Enabling fd tools will automatically enable the file descriptor system
-    program.set_enabled_tools(["calculator", "read_fd", "fd_to_file"])
+    program.register_tools(["calculator", "read_fd", "fd_to_file"])
     ```
 
 Available built-in tools:
@@ -242,73 +246,32 @@ Raises:
                point to the same target tool (must be one-to-one mapping)
 """
 
-CONFIGURE_MCP = """Configure Model Context Protocol (MCP) tools.
+CONFIGURE_MCP = """Configure Model Context Protocol (MCP) server connection.
 
-This method configures MCP tool access for the program.
+This method sets up the MCP server configuration for the program.
+After configuring the server connection, use register_tools() with
+MCPTool instances to select specific tools from MCP servers.
 
 Args:
     config_path: Path to the MCP servers configuration file
-    tools: Dictionary mapping server names to lists of tools to enable,
-          or "all" to enable all tools from a server
 
 Returns:
     self (for method chaining)
 
 Examples:
     ```python
-    # Enable specific tools from servers
-    program.configure_mcp(
-        config_path="config/mcp_servers.json",
-        tools={
-            "sequential-thinking": "all",
-            "github": ["search_repositories", "get_file_contents"]
-        }
-    )
-
-    # Enable only MCP configuration without tools
+    # Configure MCP server connection
     program.configure_mcp(config_path="config/mcp_servers.json")
+    
+    # Then register specific MCP tools
+    from llmproc.tools.mcp import MCPTool
+    program.register_tools([
+        MCPTool("calc"),                             # All tools from "calc" server
+        MCPTool("github", "search_repositories")    # Specific tool from "github" server
+    ])
     ```
 """
 
-ADD_TOOL = """Add a function-based tool to this program.
-
-This method allows adding function-based tools to the program:
-1. Adding a function decorated with @register_tool
-2. Adding a regular function (will be converted to a tool using its name and docstring)
-
-Args:
-    tool: A function to register as a tool
-
-Returns:
-    self (for method chaining)
-
-Examples:
-    ```python
-    # Register a function as a tool
-    @register_tool(description="Searches for weather")
-    def get_weather(location: str):
-        # Implementation...
-        return {"temperature": 22}
-
-    program.add_tool(get_weather)
-
-    # Register a regular function (auto-converts to tool)
-    def search_docs(query: str, limit: int = 5) -> list:
-        '''Search documentation for a query.
-
-Args:
-            query: The search query
-            limit: Maximum results to return
-
-Returns:
-            List of matching documents
-        '''
-        # Implementation...
-        return [{"title": "Doc1"}]
-
-    program.add_tool(search_docs)
-    ```
-"""
 
 COMPILE = """Validate and compile this program.
 
@@ -330,16 +293,4 @@ relying on the schema's validation to issue warnings for unknown parameters.
 
 Returns:
     Dictionary of API parameters for LLM API calls
-"""
-
-FROM_TOML = """Create a program from a TOML file.
-
-This method delegates to ProgramLoader.from_toml for backward compatibility.
-
-Args:
-    toml_file: Path to the TOML file
-    **kwargs: Additional parameters to override TOML values
-
-Returns:
-    An initialized LLMProgram instance
 """

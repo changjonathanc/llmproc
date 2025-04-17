@@ -14,13 +14,14 @@ This system is inspired by Unix file descriptors and is designed to be intuitive
 
 ## Design
 
-For detailed design documentation, see the RFC files:
-- [RFC001: File Descriptor System for LLMProc](/RFC/RFC001_file_descriptor_system.md): Primary design document
-- [RFC003: File Descriptor Implementation Details](/RFC/RFC003_file_descriptor_implementation.md): Technical implementation details
-- [RFC004: File Descriptor Implementation Phases](/RFC/RFC004_fd_implementation_phases.md): Implementation phases
-- [RFC005: File Descriptor Integration with Spawn Tool](/RFC/RFC005_fd_spawn_integration.md): Integration with spawn system call
-- [RFC006: Response Reference ID System](/RFC/RFC006_response_reference_id.md): Reference ID system for response content
-- [RFC007: Enhanced File Descriptor API Design](/RFC/RFC007_fd_enhanced_api_design.md): Enhanced API features
+The file descriptor system is designed with several key components:
+
+- **Core File Descriptor System**: The basic system for storing and retrieving large content
+- **Implementation Details**: Technical details of the storage and pagination
+- **Implementation Phases**: The system was implemented in multiple phases
+- **Spawn Tool Integration**: Special integration with the spawn tool for cross-process sharing
+- **Response Reference ID System**: System for marking up content with reference IDs
+- **Enhanced API Design**: Advanced features for precise content access and manipulation
 
 ## Configuration
 
@@ -109,7 +110,7 @@ explicitly passing file descriptors.
 <ref id="important_data">Data the child will need</ref>
 
 # Child process can access the reference automatically
-spawn(program_name="analyzer", query="Analyze the content in ref:important_data")
+spawn(program_name="analyzer", prompt="Analyze the content in ref:important_data")
 
 # Inside the child process
 read_fd(fd="ref:important_data")  # Works automatically
@@ -181,7 +182,7 @@ The file descriptor system includes several performance optimizations:
 
 ## Implementation Status
 
-The current implementation status is tracked in [RFC004: File Descriptor Implementation Phases](/RFC/RFC004_fd_implementation_phases.md). Below is a summary as of 2025-03-25:
+Below is a summary of the implementation status as of 2025-03-25:
 
 ### ✅ Phase 1: Core Functionality (Completed)
 
@@ -198,18 +199,18 @@ The file descriptor system has completed Phase 1 implementation, which includes:
 
 - ✅ **Fork Integration**: Automatic FD copying during fork
 - ✅ **Cross-Process FD Access**: Implemented via reference inheritance
-- ✅ **Spawn Tool Integration**: Implemented (See [RFC005](/RFC/RFC005_fd_spawn_integration.md))
+- ✅ **Spawn Tool Integration**: Implemented with complete support for FD sharing
 
 ### ✅ Phase 2.5: API Enhancements (Completed)
 
-- ✅ **Enhanced read_fd**: Implemented with extract_to_new_fd and positioning modes (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
-- ✅ **Enhanced fd_to_file**: Implemented with mode, create, and exist_ok parameters (See [RFC007](/RFC/RFC007_fd_enhanced_api_design.md))
+- ✅ **Enhanced read_fd**: Implemented with extract_to_new_fd and positioning modes
+- ✅ **Enhanced fd_to_file**: Implemented with mode, create, and exist_ok parameters
 
 ### 🔄 Phase 3: Optional Features (Partially Completed)
 
 - ✅ **fd_to_file Tool**: Export FD content to filesystem files
 - 🔄 **User Input Handling**: Partially implemented (basic user input paging)
-- ✅ **Reference ID System**: Implemented (See [RFC006](/RFC/RFC006_response_reference_id.md))
+- ✅ **Reference ID System**: Complete reference ID system implemented
 
 ### Implementation Location
 

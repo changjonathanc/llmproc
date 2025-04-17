@@ -113,4 +113,4 @@ asyncio.run(code_example())
 
 ## Examples
 
-See the full example configuration in [examples/openai_reasoning.toml](../examples/openai_reasoning.toml).
+See the example configuration options in [openai.toml](../examples/openai.toml), which includes commented sections for reasoning model configuration.

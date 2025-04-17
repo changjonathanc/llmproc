@@ -141,9 +141,7 @@ def test_get_gemini_vertex_provider_with_params(mock_genai, mock_env):
         region="europe-west4",
     )
 
-    mock_genai.Client.assert_called_once_with(
-        vertexai=True, project="custom-project", location="europe-west4"
-    )
+    mock_genai.Client.assert_called_once_with(vertexai=True, project="custom-project", location="europe-west4")
     assert client == mock_client
 
 

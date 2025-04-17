@@ -11,6 +11,7 @@ import os
 import warnings
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Union
+
 from llmproc.env_info.builder import EnvInfoBuilder
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
@@ -22,6 +23,7 @@ class ProcessInitializationError(ValueError):
     """Custom exception for errors during LLMProcess initialization."""
 
     pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +61,7 @@ def instantiate_process(process_state: dict[str, Any]) -> LLMProcess:
         ProcessInitializationError: If required parameters are missing or None
         TypeError: If unexpected parameters are passed and __init__ doesn't accept **kwargs
     """
-    logger.debug(
-        f"Instantiating LLMProcess with state dictionary containing {len(process_state)} entries"
-    )
+    logger.debug(f"Instantiating LLMProcess with state dictionary containing {len(process_state)} entries")
 
     # Use introspection to determine valid parameters for LLMProcess.__init__
     # This approach is used deliberately to make instantiate_process automatically
@@ -75,9 +75,7 @@ def instantiate_process(process_state: dict[str, Any]) -> LLMProcess:
 
     # Identify required parameters (excluding 'self')
     required_params = {
-        name
-        for name, param in init_params.items()
-        if param.default is inspect.Parameter.empty and name != "self"
+        name for name, param in init_params.items() if param.default is inspect.Parameter.empty and name != "self"
     }
 
     # --- Validation ---
@@ -89,9 +87,7 @@ def instantiate_process(process_state: dict[str, Any]) -> LLMProcess:
         )
 
     # Check if any required parameters have None values
-    none_required_values = {
-        k for k in required_params if k in process_state and process_state[k] is None
-    }
+    none_required_values = {k for k in required_params if k in process_state and process_state[k] is None}
     if none_required_values:
         raise ProcessInitializationError(
             f"Required parameters cannot be None: {', '.join(sorted(none_required_values))}"
@@ -102,51 +98,62 @@ def instantiate_process(process_state: dict[str, Any]) -> LLMProcess:
     valid_param_names = {name for name in init_params if name != "self"}
     init_kwargs = {k: v for k, v in process_state.items() if k in valid_param_names}
 
-    logger.debug(
-        f"Filtered state for LLMProcess instantiation includes keys: {', '.join(sorted(init_kwargs.keys()))}"
-    )
+    logger.debug(f"Filtered state for LLMProcess instantiation includes keys: {', '.join(sorted(init_kwargs.keys()))}")
 
     # Instantiate the process
     try:
         return LLMProcess(**init_kwargs)
     except TypeError as e:
         logger.error(f"TypeError during LLMProcess instantiation: {e}")
-        raise ProcessInitializationError(
-            f"Failed to instantiate LLMProcess: {e}"
-        ) from e
+        raise ProcessInitializationError(f"Failed to instantiate LLMProcess: {e}") from e
 
 
 def setup_runtime_context(
     process: LLMProcess, runtime_dependencies: Optional[dict[str, Any]] = None
-) -> dict[str, Any]:
+) -> "RuntimeContext":
     """Set up runtime context for dependency injection.
+
+    This is the canonical implementation for creating and configuring
+    runtime context from an LLMProcess instance.
 
     Args:
         process: The LLMProcess to set up runtime context for
         runtime_dependencies: Optional pre-configured dependencies (useful for testing)
 
     Returns:
-        The configured runtime context dictionary
+        The configured RuntimeContext dictionary
     """
+    # Import directly to avoid circular imports
+    from llmproc.common.context import RuntimeContext
+
+    logger.debug("Setting up runtime context for process")
+
     # Use provided dependencies or extract from process
-    # We use direct attribute access for required properties and
-    # fallback defaults for optional ones for better explicitness
     if runtime_dependencies is not None:
         context = runtime_dependencies
     else:
-        context = {
-            "process": process,
-            "fd_manager": process.fd_manager
-            if hasattr(process, "fd_manager")
-            else None,
-            "linked_programs": process.linked_programs,
-            "linked_program_descriptions": process.linked_program_descriptions,
-        }
+        # Start with a clean context containing just the process
+        context: RuntimeContext = {"process": process}
+
+        # Add file descriptor manager if available
+        if hasattr(process, "fd_manager"):
+            context["fd_manager"] = process.fd_manager
+
+        # Add linked programs if available
+        if hasattr(process, "linked_programs") and process.linked_programs:
+            context["linked_programs"] = process.linked_programs
+
+        # Add linked program descriptions if available
+        if hasattr(process, "linked_program_descriptions") and process.linked_program_descriptions:
+            context["linked_program_descriptions"] = process.linked_program_descriptions
 
     # Apply context to the process's tool manager
     if process.tool_manager:
         process.tool_manager.set_runtime_context(context)
+    else:
+        logger.warning("Cannot set runtime context - process.tool_manager is None!")
 
+    logger.debug(f"Runtime context set up with keys: {', '.join(context.keys())}")
     return context
 
 
@@ -157,12 +164,10 @@ def validate_process(process: LLMProcess) -> None:
         process: The LLMProcess to validate
     """
     logger.info(f"Created process with model {process.model_name} ({process.provider})")
-    logger.info(f"Tools enabled: {len(process.tool_manager.get_enabled_tools())}")
+    logger.info(f"Tools enabled: {len(process.tool_manager.get_registered_tools())}")
 
 
-async def create_process(
-    program: LLMProgram, additional_preload_files: Optional[list[str]] = None
-) -> LLMProcess:
+async def create_process(program: LLMProgram, additional_preload_files: Optional[list[str]] = None) -> LLMProcess:
     """Create fully initialized process from program.
 
     This function handles the complete program-to-process transition by
@@ -183,9 +188,7 @@ async def create_process(
     Returns:
         A fully initialized LLMProcess
     """
-    logger.info(
-        f"Starting process creation for program: {getattr(program, 'display_name', program.model_name)}"
-    )
+    logger.info(f"Starting process creation for program: {getattr(program, 'display_name', program.model_name)}")
 
     # 1. Ensure program is compiled (only done once here)
     if not program.compiled:
@@ -224,9 +227,7 @@ async def create_process(
     validate_process(process)
     logger.debug("Process validated successfully")
 
-    logger.info(
-        f"Process created successfully for {process.model_name} ({process.provider})"
-    )
+    logger.info(f"Process created successfully for {process.model_name} ({process.provider})")
 
     return process
 
@@ -280,6 +281,20 @@ def initialize_file_descriptor_system(
                 f"File descriptor enabled: page_size={fd_manager.default_page_size}, references={references_enabled}"
             )
 
+            # Register FD tools to the manager
+            # We do this here instead of in integration.py to avoid side effects during tool registration
+            if hasattr(program, "tools") and program.tools:
+                # Handle both list and dict format for tools
+                if isinstance(program.tools, dict):
+                    enabled_tools = program.tools.get("enabled", [])
+                else:  # List format
+                    enabled_tools = program.tools
+
+                for tool_name in enabled_tools:
+                    if isinstance(tool_name, str) and tool_name in ("read_fd", "fd_to_file"):
+                        logger.debug(f"Pre-registering FD tool '{tool_name}' with fd_manager")
+                        fd_manager.register_fd_tool(tool_name)
+
     return FileDescriptorSystemConfig(
         fd_manager=fd_manager,
         file_descriptor_enabled=file_descriptor_enabled,
@@ -328,9 +343,7 @@ def initialize_client(program: LLMProgram) -> Any:
     project_id = getattr(program, "project_id", None)
     region = getattr(program, "region", None)
 
-    client = get_provider_client(
-        program.provider, program.model_name, project_id, region
-    )
+    client = get_provider_client(program.provider, program.model_name, project_id, region)
     logger.debug(f"Initialized client for provider {program.provider}")
 
     return client
@@ -358,6 +371,8 @@ def get_core_attributes(program: LLMProgram) -> dict[str, Any]:
         "tool_manager": program.tool_manager,
         "project_id": getattr(program, "project_id", None),
         "region": getattr(program, "region", None),
+        "user_prompt": getattr(program, "user_prompt", None),
+        "max_iterations": getattr(program, "max_iterations", 10),
     }
 
 
@@ -395,9 +410,7 @@ def _initialize_mcp_config(program: LLMProgram) -> dict[str, Any]:
     }
 
 
-def prepare_process_state(
-    program: LLMProgram, additional_preload_files: Optional[list[str]] = None
-) -> dict[str, Any]:
+def prepare_process_state(program: LLMProgram, additional_preload_files: Optional[list[str]] = None) -> dict[str, Any]:
     """Prepare the complete initial state for LLMProcess.
 
     This function aggregates the results of all initialization functions
@@ -458,11 +471,7 @@ def prepare_process_state(
     # This includes environment info, preloaded file content, and FD instructions
     # Generate it once at initialization time, making it immutable during process execution
     env_config = getattr(program, "env_info", {"variables": []})
-    page_user_input = (
-        getattr(fd_info.fd_manager, "page_user_input", False)
-        if fd_info.fd_manager
-        else False
-    )
+    page_user_input = getattr(fd_info.fd_manager, "page_user_input", False) if fd_info.fd_manager else False
 
     # Generate the enriched system prompt directly
     # EnvInfoBuilder now handles all file loading

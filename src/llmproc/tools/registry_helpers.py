@@ -63,9 +63,7 @@ def extract_tool_components(
     handler = registry.get_handler(tool_name)
 
     # Find the matching definition
-    definition = next(
-        (d for d in registry.get_definitions() if d.get("name") == tool_name), None
-    )
+    definition = next((d for d in registry.get_definitions() if d.get("name") == tool_name), None)
     if not definition:
         logger.error(f"Definition for {tool_name} not found in registry")
         return False, handler, None
@@ -103,9 +101,7 @@ def check_for_duplicate_schema_names(
     return unique_schemas
 
 
-def apply_aliases_to_schemas(
-    schemas: list[dict[str, Any]], reverse_aliases: dict[str, str]
-) -> list[dict[str, Any]]:
+def apply_aliases_to_schemas(schemas: list[dict[str, Any]], reverse_aliases: dict[str, str]) -> list[dict[str, Any]]:
     """Apply aliases to schemas where applicable.
 
     Args:

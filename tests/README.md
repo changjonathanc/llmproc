@@ -7,10 +7,20 @@ This directory contains tests for the LLMProc framework. The tests are organized
 Tests are organized into several categories:
 
 1. **Unit Tests**: Test individual components in isolation (no API calls)
+   - **Directory-based:** Located in `tests/unit/` directory for true unit tests with full isolation
+   - **Suffix-based:** Files named `test_*_unit.py` for component-level unit tests
+
 2. **Integration Tests**: Test interactions between components (no API calls)
+   - Located in main `tests/` directory with `*_integration.py` suffix
+
 3. **API Tests**: Tests that require actual API calls to LLM providers
+   - Marked with `@pytest.mark.llm_api` and organized by tier
+
 4. **CLI Tests**: Tests for the command-line interface
-5. **Example Tests**: Tests that verify example configurations
+   - Located in main `tests/` directory with `test_cli_*.py` naming
+
+5. **Example Tests**: Tests that verify example configurations and demo scripts
+   - Located in `tests/examples/` directory
 
 ## Running Tests
 
@@ -67,8 +77,13 @@ pytest --run-api-tests tests/test_file.py
 pytest --run-api-tests -xvs tests/test_file.py::test_function
 ```
 
+## Test Documentation
 
-See `API_TESTING_GUIDE.md` for more details.
+The testing strategy is documented in several files:
+
+- [**API_TESTING.md**](./API_TESTING.md): Comprehensive API testing guide with patterns and best practices
+- [**TEST_STRATEGY.md**](./TEST_STRATEGY.md): Strategic approach to testing and test reorganization progress
+- [**LLM_API_TESTS_SUMMARY.md**](./LLM_API_TESTS_SUMMARY.md): Detailed inventory of all API-dependent tests
 
 ## Test Naming Conventions
 
@@ -76,6 +91,7 @@ See `API_TESTING_GUIDE.md` for more details.
 - `test_*_integration.py`: Integration tests
 - `test_*_api.py`: Tests requiring real API calls
 - `test_example_*.py`: Tests for example configurations
+- `examples/test_*.py`: Tests for example scripts and demo features
 
 ## Test Categories
 
@@ -84,11 +100,12 @@ See `API_TESTING_GUIDE.md` for more details.
 | Core | `test_llm_process*.py` | Tests of the core LLMProcess functionality | `test_llm_process.py` |
 | Providers | `test_*_process_executor.py` | Tests for specific providers | `test_anthropic_process_executor.py` |
 | Tools | `test_*_tool.py` | Tests for specific tools | `test_calculator_tool.py` |
-| Program Linking | `test_program_linking*.py` | Tests for program linking | `test_program_linking.py` |
+| Program Linking | `test_program_linking*.py` | Tests for program linking | `test_program_linking_core.py` |
 | File Descriptor | `test_file_descriptor*.py` | Tests for file descriptor system | `test_file_descriptor.py` |
 | CLI | `test_cli*.py` | Tests for command-line interface | `test_cli.py` |
-| Reasoning Models | `test_*_reasoning_models*.py` | Tests for reasoning models | `test_openai_reasoning_models.py` |
+| Reasoning Models | `test_reasoning_models*.py` | Tests for reasoning models | `test_reasoning_models.py` |
 | Configuration | `test_from_toml.py` | Tests for TOML configuration loading | `test_from_toml.py` |
+| Examples | `examples/test_*.py` | Tests for example scripts and demos | `examples/test_goto_context_compaction.py` |
 
 ## Test Markers
 
@@ -122,7 +139,22 @@ When adding new tests, follow these guidelines:
 7. Add explicit timeout assertions for API tests
 8. Use smaller models and minimal token settings when possible
 9. Aim for high test coverage of core functionality
+10. For demo/example tests, place them in the `tests/examples/` directory
 
-## Future Test Improvements
+## Test Reorganization Progress
 
-See [test-plan.md](../docs/test-plan.md) for the comprehensive test plan and future improvements.
+We are currently in the process of reorganizing and consolidating tests:
+
+- **Standardized Test Suite Structure**: ✅ Completed
+- **Test Suite Structure Followup**: 
+  - **Stage 1**: ✅ Completed
+  - **Stage 2**: 🔄 In Progress
+  - **Stage 3**: 🔜 Planned
+
+Recent progress includes:
+- Created `tests/examples/` directory for demo-specific tests
+- Moved `test_goto_context_compaction.py` to examples directory
+- Consolidated many redundant test files (3,400+ lines removed)
+- Updated documentation to reflect new organization
+
+See [TEST_STRATEGY.md](./TEST_STRATEGY.md) for detailed information on test reorganization status and plans.

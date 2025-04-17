@@ -116,9 +116,7 @@ def get_provider_client(
         gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
         if not gemini_api_key:
-            raise ValueError(
-                "API key must be provided via GEMINI_API_KEY or GOOGLE_API_KEY environment variable"
-            )
+            raise ValueError("API key must be provided via GEMINI_API_KEY or GOOGLE_API_KEY environment variable")
 
         # Create the client for Google AI Studio (direct API)
         return genai.Client(api_key=gemini_api_key)

@@ -80,11 +80,9 @@ async def test_documentation_example():
             program = LLMProgram.from_toml(main_toml)
 
             # Mock program_exec.create_process to return our mock process
-            with unittest.mock.patch(
-                "llmproc.program_exec.create_process"
-            ) as mock_create_process:
+            with unittest.mock.patch("llmproc.program_exec.create_process") as mock_create_process:
                 # Create a properly configured process using program configuration
-                # This follows the Unix-inspired pattern from RFC053
+                # This follows the Unix-inspired pattern
 
                 # Set up tool configuration from program
                 from llmproc.tools.tool_manager import ToolManager
@@ -97,9 +95,7 @@ async def test_documentation_example():
                     "enabled_tools": ["spawn"],
                     "has_linked_programs": True,
                     "linked_programs": program.linked_programs,
-                    "linked_program_descriptions": getattr(
-                        program, "linked_program_descriptions", {}
-                    ),
+                    "linked_program_descriptions": getattr(program, "linked_program_descriptions", {}),
                 }
 
                 # Import the test helper
@@ -116,40 +112,43 @@ async def test_documentation_example():
                 # Get references to the necessary registries
                 from unittest.mock import AsyncMock
 
-                from llmproc.tools.builtin.spawn import SPAWN_TOOL_SCHEMA, spawn_tool
+                from llmproc.tools.builtin.spawn import spawn_tool
+                from llmproc.tools.function_tools import function_to_tool_schema
                 from llmproc.tools.tool_registry import ToolRegistry
 
                 # Create a properly configured tool_manager and attach it to the process
                 tool_manager = process.tool_manager
 
-                # Ensure the tool_manager has all required registries
+                # Ensure the tool_manager has runtime registry
                 if not hasattr(tool_manager, "runtime_registry"):
                     tool_manager.runtime_registry = ToolRegistry()
-                if not hasattr(tool_manager, "builtin_registry"):
-                    tool_manager.builtin_registry = ToolRegistry()
 
-                # Add spawn to the enabled tools list
-                tool_manager.enabled_tools = ["spawn"]
+                # Import spawn_tool directly
+                from llmproc.tools.builtin import spawn_tool
+
+                # Register the spawn tool using callable
+                tool_manager.register_tools([spawn_tool])
 
                 # Create an async mock version of spawn_tool for testing
                 async def mock_spawn_tool(**kwargs):
                     return "Response from linked program"
 
-                # Create a modified spawn tool schema with available programs
-                spawn_tool_def = SPAWN_TOOL_SCHEMA.copy()
-                spawn_tool_def["description"] += (
-                    "\n\nAvailable programs: \n- 'helper'\n- 'math'"
-                )
+                # Create a basic spawn tool schema manually
+                spawn_tool_def = {
+                    "name": "spawn",
+                    "description": "Call another linked program.\n\nAvailable programs: \n- 'helper'\n- 'math'",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "program_name": {"type": "string", "description": "Name of the linked program to call"},
+                            "prompt": {"type": "string", "description": "The prompt to send to the linked program"},
+                        },
+                        "required": ["program_name", "prompt"],
+                    },
+                }
 
                 # Register the spawn tool directly into the runtime registry
-                tool_manager.runtime_registry.register_tool(
-                    "spawn", mock_spawn_tool, spawn_tool_def
-                )
-
-                # Also add it to the builtin registry
-                tool_manager.builtin_registry.register_tool(
-                    "spawn", mock_spawn_tool, spawn_tool_def
-                )
+                tool_manager.runtime_registry.register_tool("spawn", mock_spawn_tool, spawn_tool_def)
 
                 # Set up our mock to return the process
                 mock_create_process.return_value = process
@@ -160,7 +159,8 @@ async def test_documentation_example():
             # Verify the process and its linked programs
             assert process.model_name == "main-model"
             assert process.provider == "anthropic"
-            assert "spawn" in process.enabled_tools
+            # Process now uses registered_tools property instead of enabled_tools
+            assert "spawn" in process.tool_manager.get_registered_tools()
 
             # Check linked programs exist (as Program objects, not LLMProcess instances)
             assert len(process.linked_programs) == 2
@@ -201,4 +201,5 @@ async def test_documentation_example():
             assert "input_schema" in spawn_def
             assert "properties" in spawn_def["input_schema"]
             assert "program_name" in spawn_def["input_schema"]["properties"]
-            assert "query" in spawn_def["input_schema"]["properties"]
+            # SC001 renamed "query" to "prompt" for consistency with fork tool
+            assert "prompt" in spawn_def["input_schema"]["properties"]

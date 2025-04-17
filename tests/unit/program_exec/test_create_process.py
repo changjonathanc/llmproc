@@ -73,22 +73,14 @@ async def test_create_process_new_path():
 
         # Verify all steps were called in the correct order
         program.compile.assert_called_once()  # Ensure compilation happened
-        mock_prepare.assert_called_once_with(
-            program, None
-        )  # Verify prepare_process_state was called with correct args
+        mock_prepare.assert_called_once_with(program, None)  # Verify prepare_process_state was called with correct args
         mock_get_config.assert_called_once()  # Verify program.get_tool_configuration was called
         mock_initialize.assert_called_once_with(
             {"tool_config": "test", "provider": "anthropic"}
         )  # Verify tool_manager.initialize_tools was called
-        mock_instantiate.assert_called_once_with(
-            state_dict
-        )  # Verify instantiate_process was called with state
-        mock_setup.assert_called_once_with(
-            mock_process
-        )  # Verify setup_runtime_context was called
-        mock_validate.assert_called_once_with(
-            mock_process
-        )  # Verify validate_process was called
+        mock_instantiate.assert_called_once_with(state_dict)  # Verify instantiate_process was called with state
+        mock_setup.assert_called_once_with(mock_process)  # Verify setup_runtime_context was called
+        mock_validate.assert_called_once_with(mock_process)  # Verify validate_process was called
 
         # Verify the result is the mock process
         assert result == mock_process
@@ -107,9 +99,9 @@ async def test_create_process_integration():
     program.base_dir = MagicMock()
     program.api_params = {}
     program.tool_manager = MagicMock()
-    program.get_tool_configuration = MagicMock(return_value={"enabled": []})
+    program.get_tool_configuration = MagicMock(return_value={})
     program.tool_manager.initialize_tools = AsyncMock()
-    program.tool_manager.get_enabled_tools = MagicMock(return_value=[])
+    program.tool_manager.get_registered_tools = MagicMock(return_value=[])
 
     # Optional attributes
     program.file_descriptor = {"enabled": False}
@@ -119,7 +111,6 @@ async def test_create_process_integration():
     program.project_id = None
     program.region = None
     program.mcp_config_path = None
-    program.mcp_tools = {}
 
     # Patch client initialization to avoid actual API calls
     with patch("llmproc.program_exec.get_provider_client") as mock_client:

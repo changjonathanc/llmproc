@@ -70,9 +70,7 @@ async def test_spawn_with_fd_sharing(mock_create_process, mock_get_provider_clie
     mock_child_process = AsyncMock(spec=LLMProcess)
     mock_child_process.preload_files = Mock()
     mock_child_process.run = AsyncMock(return_value=RunResult())
-    mock_child_process.get_last_message = Mock(
-        return_value="Successfully processed FD content"
-    )
+    mock_child_process.get_last_message = Mock(return_value="Successfully processed FD content")
 
     # Pre-configure the file_descriptor_enabled to match what it should be at the end
     # This way we avoid the test checking this after spawn_tool modified it
@@ -105,7 +103,7 @@ async def test_spawn_with_fd_sharing(mock_create_process, mock_get_provider_clie
     # Call the implementation function directly
     result = await spawn_tool(
         program_name="child",
-        query="Process the shared FD content",
+        prompt="Process the shared FD content",
         additional_preload_files=[fd_id],
         runtime_context=runtime_context,
     )
@@ -114,9 +112,7 @@ async def test_spawn_with_fd_sharing(mock_create_process, mock_get_provider_clie
     # The current implementation calls it with positional args
     mock_create_process.assert_called_once_with(child_program, ["fd:1"])
 
-    # NOTE: The preload_files method has been completely removed from LLMProcess
-    # Instead, additional_preload_files is passed directly to create_process
-    # which we've already verified above
+    # Verify additional_preload_files is passed directly to create_process
 
     # Verify run was called with the query
     mock_child_process.run.assert_called_once_with("Process the shared FD content")
@@ -179,11 +175,10 @@ async def test_fd_enabled_registration():
     registry_with_fd = MagicMock()
     registry_without_fd = MagicMock()
 
-    # Import register_spawn_tool from the new integration module
-    from llmproc.tools.builtin.integration import register_spawn_tool
+    # Import directly from tool_registry (instead of deprecated register_spawn_tool)
     from llmproc.tools.tool_registry import ToolRegistry
 
-    # Instead of relying on extract_tool_components, we'll directly mock the tool registration
+    # Instead of using deprecated register_spawn_tool function, we'll directly modify registry
 
     # Register tools with and without FD support by directly calling register_tool
     # This simulates what register_spawn_tool would do, but with more control
@@ -191,7 +186,7 @@ async def test_fd_enabled_registration():
     # For the registry with FD, create a schema with program descriptions
     with_fd_schema = {
         "name": "spawn",
-        "description": "Spawn a linked program and execute a query\n\n## Available Programs:\n- 'test_child'",
+        "description": "Spawn a linked program and execute a prompt\n\n## Available Programs:\n- 'test_child'",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -199,9 +194,9 @@ async def test_fd_enabled_registration():
                     "type": "string",
                     "description": "Name of the linked program to spawn",
                 },
-                "query": {
+                "prompt": {
                     "type": "string",
-                    "description": "The query to send to the linked program",
+                    "description": "The prompt to send to the linked program",
                 },
                 "additional_preload_files": {
                     "type": "array",
@@ -209,14 +204,14 @@ async def test_fd_enabled_registration():
                     "description": "Optional file descriptors to share",
                 },
             },
-            "required": ["program_name", "query"],
+            "required": ["program_name", "prompt"],
         },
     }
 
     # For the registry without FD, create a similar schema but without FD-specific fields
     without_fd_schema = {
         "name": "spawn",
-        "description": "Spawn a linked program and execute a query\n\n## Available Programs:\n- 'test_child'",
+        "description": "Spawn a linked program and execute a prompt\n\n## Available Programs:\n- 'test_child'",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -224,12 +219,12 @@ async def test_fd_enabled_registration():
                     "type": "string",
                     "description": "Name of the linked program to spawn",
                 },
-                "query": {
+                "prompt": {
                     "type": "string",
-                    "description": "The query to send to the linked program",
+                    "description": "The prompt to send to the linked program",
                 },
             },
-            "required": ["program_name", "query"],
+            "required": ["program_name", "prompt"],
         },
     }
 

@@ -92,9 +92,7 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
 
     # Mock the _spawn_child_process method to capture processes
     async def mock_spawn(process, program_name, *args, **kwargs):
-        child_process = create_test_llmprocess_directly(
-            program=process.linked_programs[program_name]
-        )
+        child_process = create_test_llmprocess_directly(program=process.linked_programs[program_name])
 
         # Enable file descriptors on the child
         child_process.file_descriptor_enabled = True
@@ -127,9 +125,9 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
         if additional_preload_fds:
             for fd_id in additional_preload_fds:
                 if fd_id in llm_process.fd_manager.file_descriptors:
-                    child_process.fd_manager.file_descriptors[fd_id] = (
-                        llm_process.fd_manager.file_descriptors[fd_id].copy()
-                    )
+                    child_process.fd_manager.file_descriptors[fd_id] = llm_process.fd_manager.file_descriptors[
+                        fd_id
+                    ].copy()
 
         return ToolResult(content=f"Spawned {program_name}")
 
@@ -256,9 +254,9 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
 
     # Additionally copy the explicit FD we would pass
     if "ref:child_ref" in child1.fd_manager.file_descriptors:
-        grandchild.fd_manager.file_descriptors["ref:child_ref"] = (
-            child1.fd_manager.file_descriptors["ref:child_ref"].copy()
-        )
+        grandchild.fd_manager.file_descriptors["ref:child_ref"] = child1.fd_manager.file_descriptors[
+            "ref:child_ref"
+        ].copy()
 
     # Store the grandchild process
     processes["grandchildren"].append(grandchild)
@@ -291,9 +289,7 @@ async def test_combined_features_spawn_fork_references(mock_get_provider_client)
         # Create a forked process with file descriptor sharing using proper initialization pattern
         with patch.object(parent_process.program, "start") as mock_start:
             # Create a process that would be returned by start()
-            forked_process = create_test_llmprocess_directly(
-                program=parent_process.program
-            )
+            forked_process = create_test_llmprocess_directly(program=parent_process.program)
             forked_process.file_descriptor_enabled = True
             forked_process.references_enabled = True
             forked_process.fd_manager = FileDescriptorManager(enable_references=True)
@@ -508,9 +504,9 @@ async def test_multi_level_reference_inheritance(mock_get_provider_client):
         if additional_preload_fds:
             for fd_id in additional_preload_fds:
                 if fd_id in llm_process.fd_manager.file_descriptors:
-                    child_process.fd_manager.file_descriptors[fd_id] = (
-                        llm_process.fd_manager.file_descriptors[fd_id].copy()
-                    )
+                    child_process.fd_manager.file_descriptors[fd_id] = llm_process.fd_manager.file_descriptors[
+                        fd_id
+                    ].copy()
 
         # Store the process
         processes[next_level] = child_process
@@ -757,9 +753,9 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
         if additional_preload_fds:
             for fd_id in additional_preload_fds:
                 if fd_id in llm_process.fd_manager.file_descriptors:
-                    child_process.fd_manager.file_descriptors[fd_id] = (
-                        llm_process.fd_manager.file_descriptors[fd_id].copy()
-                    )
+                    child_process.fd_manager.file_descriptors[fd_id] = llm_process.fd_manager.file_descriptors[
+                        fd_id
+                    ].copy()
 
         # Mock the run method
         child_process.run = Mock(return_value=mock_run_response)
@@ -790,9 +786,9 @@ async def test_user_input_paging_with_spawn(mock_get_provider_client):
 
     # Copy file descriptors from parent to child
     if fixed_fd_id in parent_process.fd_manager.file_descriptors:
-        child_process.fd_manager.file_descriptors[fixed_fd_id] = (
-            parent_process.fd_manager.file_descriptors[fixed_fd_id].copy()
-        )
+        child_process.fd_manager.file_descriptors[fixed_fd_id] = parent_process.fd_manager.file_descriptors[
+            fixed_fd_id
+        ].copy()
 
     # Mock the run method
     child_process.run = Mock(return_value=mock_run_response)

@@ -69,9 +69,7 @@ class TestGotoToolUnit:
     async def test_handle_goto_success(self, mock_datetime):
         """Test handling a successful GOTO operation without a new message."""
         # Mock datetime for consistent timestamps
-        mock_datetime.datetime.now.return_value.isoformat.return_value = (
-            "2025-01-01T00:00:00"
-        )
+        mock_datetime.datetime.now.return_value.isoformat.return_value = "2025-01-01T00:00:00"
 
         # Create a realistic process state with goto_ids
         process = MagicMock()
@@ -100,14 +98,10 @@ class TestGotoToolUnit:
             mock_append.side_effect = append_side_effect
 
             # Call the handler with valid position
-            result = await handle_goto(
-                position="msg_0", message="", runtime_context=runtime_context
-            )
+            result = await handle_goto(position="msg_0", message="", runtime_context=runtime_context)
 
             # Verify the state was properly truncated
-            assert mock_append.call_count == 0, (
-                "append_message_with_id should not be called when message is empty"
-            )
+            assert mock_append.call_count == 0, "append_message_with_id should not be called when message is empty"
 
             # Check result content
             assert not result.is_error
@@ -189,7 +183,9 @@ class TestGotoToolUnit:
         original_message = process.state[0]["content"]
 
         # Create a message that already has time_travel tags
-        preformatted_message = "<time_travel>\nChanging direction because the previous approach wasn't working\n</time_travel>"
+        preformatted_message = (
+            "<time_travel>\nChanging direction because the previous approach wasn't working\n</time_travel>"
+        )
 
         # Use a proper mock object for append_message_with_id
         mock_append = MagicMock(return_value="msg_0")

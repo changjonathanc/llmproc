@@ -62,6 +62,9 @@ class LLMProcess:
         mcp_config_path: Optional[str] = None,
         mcp_tools: dict[str, Any] = None,
         mcp_enabled: Optional[bool] = None,
+        # User prompt configuration
+        user_prompt: Optional[str] = None,
+        max_iterations: int = 10,
     ) -> None:
         """Initialize LLMProcess with pre-computed state.
 
@@ -149,7 +152,11 @@ class LLMProcess:
         self.mcp_tools = mcp_tools or {}
         self.mcp_enabled = mcp_enabled if mcp_enabled is not None else (mcp_config_path is not None)
 
-    async def run(self, user_input: str, max_iterations: int = 10, callbacks: dict = None) -> "RunResult":
+        # User prompt configuration
+        self.user_prompt = user_prompt
+        self.max_iterations = max_iterations
+
+    async def run(self, user_input: str, max_iterations: int = None, callbacks: dict = None) -> "RunResult":
         """Run the LLM process with user input asynchronously.
 
         This method supports full tool execution with proper async handling.
@@ -157,7 +164,7 @@ class LLMProcess:
 
         Args:
             user_input: The user message to process
-            max_iterations: Maximum number of tool-calling iterations
+            max_iterations: Maximum number of tool-calling iterations (defaults to self.max_iterations)
             callbacks: Optional dictionary of callback functions:
                 - 'on_tool_start': Called when a tool execution starts
                 - 'on_tool_end': Called when a tool execution completes
@@ -173,13 +180,17 @@ class LLMProcess:
         except RuntimeError:
             in_event_loop = False
 
+        # Use instance default if max_iterations is None
+        if max_iterations is None:
+            max_iterations = self.max_iterations
+
         # If not in an event loop, run in a new one
         if not in_event_loop:
             return asyncio.run(self._async_run(user_input, max_iterations, callbacks))
         else:
             return await self._async_run(user_input, max_iterations, callbacks)
 
-    async def _async_run(self, user_input: str, max_iterations: int = 10, callbacks: dict = None) -> "RunResult":
+    async def _async_run(self, user_input: str, max_iterations: int, callbacks: dict = None) -> "RunResult":
         """Internal async implementation of run.
 
         Args:
@@ -345,9 +356,17 @@ class LLMProcess:
         try:
             # Pass all keyword arguments directly to the tool manager
             args_dict = dict(kwargs)
-            return await self.tool_manager.call_tool(tool_name, args_dict)
+            result = await self.tool_manager.call_tool(tool_name, args_dict)
+
+            # Log any errors that were returned (but not exceptions that were caught)
+            if hasattr(result, "is_error") and result.is_error:
+                logger.error(f"Tool '{tool_name}' returned error: {result.content}")
+
+            return result
         except Exception as e:
-            return ToolResult.from_error(f"Error calling tool '{tool_name}': {str(e)}")
+            error_msg = f"Error calling tool '{tool_name}': {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return ToolResult.from_error(error_msg)
 
     async def count_tokens(self):
         """Count tokens in the current conversation state.

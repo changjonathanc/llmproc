@@ -41,11 +41,7 @@ class SimpleTracker:
         """Simple token usage recording."""
         try:
             token_count = await process.count_tokens()
-            if (
-                token_count
-                and isinstance(token_count, dict)
-                and "error" not in token_count
-            ):
+            if token_count and isinstance(token_count, dict) and "error" not in token_count:
                 tokens = token_count.get("input_tokens", "N/A")
                 window = token_count.get("context_window", "N/A")
                 percent = token_count.get("percentage", "N/A")
@@ -108,10 +104,8 @@ KEY POINTS ABOUT TIME TRAVEL:
 - After observing goto is used, acknowledge it and return for next user message.
 
 The goto tool's detailed instructions will guide you on proper usage. Use this capability wisely to improve the conversation when needed.""",
+            tools=["goto", "read_file"],
         )
-
-        # Ensure required tools are enabled
-        program.set_enabled_tools(["goto", "read_file"])
 
         # Start process
         process = await program.start()
@@ -149,9 +143,7 @@ The goto tool's detailed instructions will guide you on proper usage. Use this c
             after_goto = tracker.token_counts[2]["count"]  # After GOTO
             if before_goto and after_goto:
                 reduction = before_goto - after_goto
-                reduction_pct = (
-                    (reduction / before_goto * 100) if before_goto > 0 else 0
-                )
+                reduction_pct = (reduction / before_goto * 100) if before_goto > 0 else 0
                 print(f"• Token reduction: {reduction} tokens ({reduction_pct:.1f}%)")
 
         return 0

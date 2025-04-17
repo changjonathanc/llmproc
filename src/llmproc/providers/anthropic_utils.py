@@ -103,9 +103,7 @@ def add_message_ids(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return messages
 
 
-def state_to_api_messages(
-    state: list[dict[str, Any]], add_cache: bool = True
-) -> list[dict[str, Any]]:
+def state_to_api_messages(state: list[dict[str, Any]], add_cache: bool = True) -> list[dict[str, Any]]:
     """
     Transform conversation state to API-ready messages, adding message IDs and cache control points.
 
@@ -222,9 +220,7 @@ def tools_to_api_format(
     return tools_copy
 
 
-def safe_callback(
-    callback_fn: Optional[callable], *args, callback_name: str = "callback"
-) -> None:
+def safe_callback(callback_fn: Optional[callable], *args, callback_name: str = "callback") -> None:
     """
     Safely execute a callback, catching and logging exceptions.
 
@@ -257,9 +253,7 @@ def contains_tool_calls(response_content: list[Any]) -> bool:
     )
 
 
-def add_token_efficient_header_if_needed(
-    process, extra_headers: dict[str, str] = None
-) -> dict[str, str]:
+def add_token_efficient_header_if_needed(process, extra_headers: dict[str, str] = None) -> dict[str, str]:
     """
     Add token-efficient tools header if appropriate for the model.
 
@@ -289,8 +283,7 @@ def add_token_efficient_header_if_needed(
     if is_test_mock:
         if (
             "anthropic-beta" in extra_headers
-            and "token-efficient-tools-2025-02-19"
-            not in extra_headers["anthropic-beta"]
+            and "token-efficient-tools-2025-02-19" not in extra_headers["anthropic-beta"]
         ):
             # Append to existing header value
             extra_headers["anthropic-beta"] = (
@@ -309,8 +302,7 @@ def add_token_efficient_header_if_needed(
         param_headers = process.parameters.get("extra_headers", {})
         if (
             isinstance(param_headers, dict)
-            and param_headers.get("anthropic-beta")
-            == "token-efficient-tools-2025-02-19"
+            and param_headers.get("anthropic-beta") == "token-efficient-tools-2025-02-19"
         ):
             token_efficient_enabled = True
 
@@ -334,8 +326,7 @@ def add_token_efficient_header_if_needed(
         # Add or append to the header
         if (
             "anthropic-beta" in extra_headers
-            and "token-efficient-tools-2025-02-19"
-            not in extra_headers["anthropic-beta"]
+            and "token-efficient-tools-2025-02-19" not in extra_headers["anthropic-beta"]
         ):
             # Append to existing header value
             extra_headers["anthropic-beta"] = (
