@@ -1,0 +1,48 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        # Install uv
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        # Add uv to PATH
+        export PATH="${PATH}:${HOME}/.cargo/bin"
+        echo "${HOME}/.cargo/bin" >> $GITHUB_PATH
+        # Create virtual environment
+        uv venv
+        # Activate virtual environment
+        source .venv/bin/activate
+        # Install dependencies with uv (including all provider dependencies)
+        uv pip install -e ".[dev,all]"
+
+    - name: Run tests (excluding API tests)
+      env:
+        OPENAI_API_KEY: sk-mock-key-for-testing
+        ANTHROPIC_API_KEY: sk-ant-mock-key-for-testing
+        ANTHROPIC_VERTEX_PROJECT_ID: mock-project-id
+        GOOGLE_APPLICATION_CREDENTIALS: mock-credentials.json
+      run: |
+        # Activate virtual environment
+        source .venv/bin/activate
+        # Run tests
+        python -m pytest --no-header -v

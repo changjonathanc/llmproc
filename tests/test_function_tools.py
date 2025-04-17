@@ -310,6 +310,9 @@ def test_program_with_function_tools():
 
     # Process function tools to register handlers and schemas
     program.tool_manager.process_function_tools()
+
+    # Process function tools to register handlers and schemas
+    program.tool_manager.process_function_tools()
     
     # Verify tools appear in the API-ready schema
     tool_schemas = program.tool_manager.get_tool_schemas()

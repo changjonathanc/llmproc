@@ -291,6 +291,14 @@ class AnthropicProcessExecutor:
                             goto_executed_this_turn = True
                             break  # Exit the loop processing tools for this API response
 
+                        # Check if GOTO was just executed and set flag
+                        if tool_name == "goto":
+                            logger.info(
+                                "GOTO tool executed. Setting flag to skip appending messages for this tool response."
+                            )
+                            goto_executed_this_turn = True
+                            break  # Exit the loop processing tools for this API response
+
                         # PHASE 3: This file descriptor eligibility check is complex and could be simplified with a
                         # _should_use_file_descriptor(process, tool_name, tool_result) helper function.
 

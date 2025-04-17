@@ -1,0 +1,33 @@
+name: Release to PyPI (trusted publishing)
+
+on:
+  push:
+    tags: ["v*"]        # push v0.6.2, v0.7.0rc1, etc.
+
+permissions:            # OIDC magic
+  contents: read
+  id-token: write       # <-- mandatory
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --upgrade build
+      - run: python -m build          # dist/*.whl + *.tar.gz
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist/}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi          # optional manual approval gate
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist, path: dist/}
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attest: true         # ship PEP 740 provenance
+
