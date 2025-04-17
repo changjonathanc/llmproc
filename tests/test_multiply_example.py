@@ -37,7 +37,7 @@ async def multiply_process():
 async def test_multiply_pi_e(multiply_process):
     """Test multiplying π and e using the example from README."""
     # Run with the same prompt as in the README example
-    result = await multiply_process.run("Can you multiply 3.14159265359 by 2.71828182846?")
+    result = await multiply_process.run("Can you multiply 3.14159265359 by 2.71828182846? return the full digits from the tool")
 
     # Get the response
     response = multiply_process.get_last_message()

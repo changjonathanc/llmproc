@@ -63,6 +63,14 @@ def test_cli_interactive_mode():
         # and a MagicMock for other calls
         mock_run.side_effect = lambda coro: mock_process
 
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
+
         # Create a temporary example file
         with runner.isolated_filesystem():
             # Run the CLI with the test file
@@ -104,6 +112,14 @@ def test_cli_non_interactive_mode():
         mock_absolute.return_value = Path(
             "/fake/path/test.toml"
         )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Set a simple side effect that always returns the mock_process for start() calls
         # and a MagicMock for other calls
@@ -164,6 +180,14 @@ def test_cli_stdin_non_interactive_mode():
         mock_absolute.return_value = Path(
             "/fake/path/test.toml"
         )  # Mock Path.absolute()
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
+
+        # Set a simple side effect that always returns the mock_process for start() calls
+        # and a MagicMock for other calls
+        mock_run.side_effect = lambda coro: mock_process
 
         # Set a simple side effect that always returns the mock_process for start() calls
         # and a MagicMock for other calls
