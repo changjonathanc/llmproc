@@ -202,30 +202,26 @@ async def spawn_example(
 
 # --- SECTION 2: CALLBACK FUNCTIONS ---
 
+from llmproc.callbacks import CallbackEvent
 
-def on_tool_start(tool_name, tool_args):
-    """Callback triggered when a tool starts execution."""
-    print(f"\n🛠️ Starting tool: {tool_name}")
-    print(f"   Arguments: {tool_args}")
+# Class-based callbacks following the new pattern
+class SDKCallbacks:
+    def tool_start(self, tool_name, tool_args):
+        """Callback triggered when a tool starts execution."""
+        print(f"\n🛠️ Starting tool: {tool_name}")
+        print(f"   Arguments: {tool_args}")
 
+    def tool_end(self, tool_name, result):
+        """Callback triggered when a tool completes execution."""
+        print(f"✅ Tool completed: {tool_name}")
+        print(f"   Result: {result.content}")
 
-def on_tool_end(tool_name, result):
-    """Callback triggered when a tool completes execution."""
-    print(f"✅ Tool completed: {tool_name}")
-    print(f"   Result: {result.content}")
-
-
-def on_response(message):
-    """Callback triggered when a model response is received."""
-    print(f"\n🤖 Model response received (length: {len(message['content'])})")
-
-
-# Callback dictionary for process.run
-callbacks = {
-    "on_tool_start": on_tool_start,
-    "on_tool_end": on_tool_end,
-    "on_response": on_response,
-}
+    def response(self, message):
+        """Callback triggered when a model response is received."""
+        if isinstance(message, dict) and "content" in message:
+            print(f"\n🤖 Model response received (length: {len(message['content'])})")
+        else:
+            print(f"\n🤖 Model response received")
 
 
 # --- SECTION 3: MAIN EXAMPLE ---
@@ -321,8 +317,8 @@ async def main():
         # Optional: Configure MCP if you have it set up
         # .configure_mcp("config/mcp_servers.json")
         # .register_tools([
-        #     MCPTool("sequential-thinking"),  # all tools
-        #     MCPTool("everything", "add")     # specific tool
+        #     MCPTool(server="sequential-thinking"),  # all tools
+        #     MCPTool(server="everything", names="add")  # specific tool
         # ])
     )
     print("   ✓ Main program created with all features")
@@ -376,7 +372,12 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor i
 
         print("\n8. Running with test prompt...")
         print(f"   Prompt (truncated): '{user_prompt[:100]}...'")
-        result = await process.run(user_prompt, callbacks=callbacks)
+        
+        # Register callbacks using the new pattern
+        process.add_callback(SDKCallbacks())
+        
+        # Run without callbacks parameter
+        result = await process.run(user_prompt)
 
         # Print the final response
         print("\n===== FINAL RESPONSE =====")

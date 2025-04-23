@@ -13,11 +13,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llmproc.providers.anthropic_process_executor import (
-    AnthropicProcessExecutor,
+from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+from llmproc.providers.anthropic_utils import (
     add_cache_to_message,
-    system_to_api_format,
-    tools_to_api_format,
+    apply_cache_control,
+    format_system_prompt,
+    prepare_api_request,
 )
 
 # Define constants for model versions to make updates easier
@@ -184,62 +185,68 @@ class TestProviderSpecificUnitTests:
         # Assert - Check that cache was added to tool result
         assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
 
-    def test_system_prompt_cache_control(self):
-        """Test adding cache control to system prompt."""
+    def test_system_prompt_format_and_cache(self):
+        """Test formatting system prompt and applying cache."""
         # Arrange
         system_prompt = "You are a helpful assistant."
 
-        # Act - With caching
-        result = system_to_api_format(system_prompt, add_cache=True)
+        # Format the system prompt
+        formatted = format_system_prompt(system_prompt)
+        
+        # Apply cache
+        _, cached_system, _ = apply_cache_control([], formatted)
 
-        # Assert - Check that system prompt was transformed with cache
-        assert isinstance(result, list)
-        assert result[0]["type"] == "text"
-        assert result[0]["text"] == system_prompt
-        assert result[0]["cache_control"] == {"type": "ephemeral"}
+        # Assert - Check system prompt with cache
+        assert isinstance(cached_system, list)
+        assert cached_system[0]["type"] == "text"
+        assert cached_system[0]["text"] == system_prompt
+        assert cached_system[0]["cache_control"] == {"type": "ephemeral"}
 
-        # Act - Without caching
-        result = system_to_api_format(system_prompt, add_cache=False)
-
-        # Assert
-        assert result == system_prompt
+        # Format without applying cache
+        formatted = format_system_prompt(system_prompt)
+        
+        # Assert - Check formatting without cache
+        assert isinstance(formatted, list)
+        assert len(formatted) == 1
+        assert formatted[0]["type"] == "text"
+        assert formatted[0]["text"] == system_prompt
+        assert "cache_control" not in formatted[0]
 
         # Arrange - Already structured prompt
         structured_prompt = [{"type": "text", "text": "You are a helpful assistant."}]
 
-        # Act
-        result = system_to_api_format(structured_prompt, add_cache=True)
+        # Format structured prompt
+        formatted = format_system_prompt(structured_prompt)
+        
+        # Assert - Check structure is preserved
+        assert isinstance(formatted, list)
+        assert len(formatted) == 1
+        assert formatted[0]["type"] == "text"
+        assert formatted[0]["text"] == "You are a helpful assistant."
 
-        # Assert
-        assert result == structured_prompt
-
-    def test_tools_cache_control(self):
-        """Test adding cache control to tools."""
+    def test_tools_in_api_request(self):
+        """Test tools handling in API request preparation."""
         # Arrange
-        tools = [
+        process = MagicMock()
+        process.state = []
+        process.enriched_system_prompt = "You are an assistant"
+        process.tools = [
             {"name": "calculator", "description": "Use this to perform calculations"},
             {"name": "web_search", "description": "Search the web for information"},
         ]
-
-        # Act - With caching
-        result = tools_to_api_format(tools, add_cache=True)
-
-        # Assert - Check that cache was added to last tool only
-        assert "cache_control" not in result[0]
-        assert result[1]["cache_control"] == {"type": "ephemeral"}
-
-        # Act - Without caching
-        result = tools_to_api_format(tools, add_cache=False)
-
-        # Assert
-        assert "cache_control" not in result[0]
-        assert "cache_control" not in result[1]
-
-        # Act - With empty tools
-        result = tools_to_api_format([], add_cache=True)
-
-        # Assert
-        assert result == []
+        process.model_name = "claude-3-sonnet"
+        process.api_params = {}
+        process.disable_automatic_caching = False
+        
+        # Act - Prepare API request
+        request = prepare_api_request(process)
+        
+        # Assert - Tools should be included in request
+        assert request["tools"] is process.tools
+        
+        # Verify tools are not modified by cache application
+        assert "cache_control" not in request["tools"][0]
+        assert "cache_control" not in request["tools"][1]
 
     def test_token_efficient_tools_header(self):
         """Test token-efficient tools header application."""

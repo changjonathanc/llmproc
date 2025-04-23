@@ -319,6 +319,9 @@ def test_program_with_function_tools():
 
     # Process function tools to register handlers and schemas
     program.tool_manager.process_function_tools()
+
+    # Process function tools to register handlers and schemas
+    program.tool_manager.process_function_tools()
     
     # Verify tools appear in the API-ready schema
     tool_schemas = program.tool_manager.get_tool_schemas()
@@ -396,7 +399,7 @@ async def test_tool_enabling_methods(basic_program):
     assert "weather_info" in process.tool_handlers, "weather_info tool is not registered in handlers"
 
     # Test weather tool with explicit parameters
-    weather_result = await process.call_tool("weather_info", location="New York")
+    weather_result = await process.call_tool("weather_info", {"location": "New York"})
     assert isinstance(weather_result, ToolResult)
     assert not weather_result.is_error, (
         f"Error in weather tool: {weather_result.content}"
@@ -405,14 +408,12 @@ async def test_tool_enabling_methods(basic_program):
     assert "New York" in str(weather_result.content)
 
     # Test calculator tool
-    calc_result = await process.call_tool("get_calculator", x=5, y=9)
+    calc_result = await process.call_tool("get_calculator", {"x": 5, "y": 9})
     assert not calc_result.is_error
     assert calc_result.content == 14  # Note: this is x + y, not expression
 
     # Test search tool
-    search_result = await process.call_tool(
-        "search_documents", query="example", limit=2
-    )
+    search_result = await process.call_tool("search_documents", {"query": "example", "limit": 2})
     assert not search_result.is_error
     assert len(search_result.content) == 2  # Should return 2 results based on limit
 
@@ -431,12 +432,13 @@ async def test_register_tools_with_function_tools(basic_program, create_program)
 
     # Verify function tools are registered in function_tools list
     # Function tools are processed during program.compile(), so we need to
-    # match the weather_info tool name against the function __name__ or
-    # the _tool_name attribute if it exists (which it should for decorated functions)
+    # match the weather_info tool name against the metadata
     tool_names = []
     for func in program.tool_manager.function_tools:
-        if hasattr(func, "_tool_name"):
-            tool_names.append(func._tool_name)
+        from llmproc.common.metadata import get_tool_meta
+        meta = get_tool_meta(func)
+        if meta.name:
+            tool_names.append(meta.name)
         else:
             tool_names.append(func.__name__)
 
@@ -450,7 +452,7 @@ async def test_register_tools_with_function_tools(basic_program, create_program)
     process = await program.start()
 
     # Verify function tools work by calling them
-    weather_result = await process.call_tool("weather_info", location="London")
+    weather_result = await process.call_tool("weather_info", {"location": "London"})
     assert not weather_result.is_error
     assert "London" in str(weather_result.content)
 
@@ -503,12 +505,12 @@ async def test_register_tools_with_function_tools(basic_program, create_program)
     weather_process = await weather_program.start()
 
     # Verify weather tool works
-    weather_result = await weather_process.call_tool("weather_info", location="Tokyo")
+    weather_result = await weather_process.call_tool("weather_info", {"location": "Tokyo"})
     assert not weather_result.is_error
     assert "Tokyo" in str(weather_result.content)
 
     # Verify calculator tool doesn't work because it was never added
-    calc_result = await weather_process.call_tool("get_calculator", x=1, y=2)
+    calc_result = await weather_process.call_tool("get_calculator", {"x": 1, "y": 2})
     assert calc_result.is_error
     # With our patched version, the error message is different
     assert "not found" in calc_result.content.lower() or "not enabled" in calc_result.content.lower()
@@ -539,7 +541,7 @@ async def test_function_tool_execution(create_program):
     assert any(tool["name"] == "get_calculator" for tool in tool_defs)
 
     # Call the tool directly through the process
-    result = await process.call_tool("get_calculator", x=10, y=15)
+    result = await process.call_tool("get_calculator", {"x": 10, "y": 15})
 
     # Check result
     assert isinstance(result, ToolResult)

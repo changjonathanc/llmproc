@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import click
 
 from llmproc import LLMProgram
+from llmproc.callbacks import CallbackEvent
 from llmproc.common.results import RunResult
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 
@@ -46,7 +47,7 @@ def get_logger(quiet=False):
 
 
 def run_with_prompt(
-    process: Any, user_prompt: str, source: str, logger: logging.Logger, callbacks: dict[str, callable], quiet: bool
+    process: Any, user_prompt: str, source: str, logger: logging.Logger, callback_handler: Any, quiet: bool
 ) -> RunResult:
     """Run a single prompt with the given process.
 
@@ -55,7 +56,7 @@ def run_with_prompt(
         user_prompt: The prompt text to run
         source: Description of where the prompt came from
         logger: Logger for diagnostic messages
-        callbacks: Callbacks for the process run
+        callback_handler: Callback instance to register with the process
         quiet: Whether to run in quiet mode
 
     Returns:
@@ -68,7 +69,7 @@ def run_with_prompt(
     start_time = time.time()
 
     # Run the process with the prompt, using the process's max_iterations
-    run_result = asyncio.run(process.run(user_prompt, max_iterations=process.max_iterations, callbacks=callbacks))
+    run_result = asyncio.run(process.run(user_prompt, max_iterations=process.max_iterations))
 
     # Get the elapsed time
     elapsed = time.time() - start_time
@@ -240,20 +241,27 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
         init_time = time.time() - start_time
         cli_logger.info(f"Process initialized in {init_time:.2f} seconds")
 
-        # Set up callbacks for real-time updates - minimal in quiet mode
-        if quiet:
-            # Minimal callbacks in quiet mode
-            callbacks = {}
-        else:
-            callbacks = {
-                "on_tool_start": lambda tool_name, args: cli_logger.info(f"Using tool: {tool_name}"),
-                "on_tool_end": lambda tool_name, result: cli_logger.info(f"Tool {tool_name} completed"),
-                "on_response": lambda content: cli_logger.info(f"Received response: {content[:50]}..."),
-            }
+        # Create callback class for real-time updates
+        class CliCallbackHandler:
+            def tool_start(self, tool_name, args):
+                if not quiet:
+                    cli_logger.info(f"Using tool: {tool_name}")
+                
+            def tool_end(self, tool_name, result):
+                if not quiet:
+                    cli_logger.info(f"Tool {tool_name} completed")
+                
+            def response(self, content):
+                if not quiet:
+                    cli_logger.info(f"Received response: {content[:50]}...")
+        
+        # Create callback handler and register it with the process
+        callback_handler = CliCallbackHandler()
+        process.add_callback(callback_handler)
 
         # Use the helper function to run prompts
         run_prompt_func = lambda user_prompt, source="command line": run_with_prompt(
-            process, user_prompt, source, cli_logger, callbacks, quiet
+            process, user_prompt, source, cli_logger, callback_handler, quiet
         )
 
         # Priority order for prompts/modes:
@@ -342,8 +350,8 @@ def main(program_path, prompt=None, non_interactive=False, quiet=False) -> None:
                 if not quiet:
                     click.echo("Thinking...", nl=False)
 
-                # Run the process with the new API
-                run_result = asyncio.run(process.run(user_input, callbacks=callbacks))
+                # Run the process without passing callbacks (already registered above)
+                run_result = asyncio.run(process.run(user_input))
 
                 # Get the elapsed time
                 elapsed = time.time() - start_time

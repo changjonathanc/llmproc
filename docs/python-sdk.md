@@ -205,13 +205,13 @@ from llmproc.tools.mcp import MCPTool
 # Register MCP tools using the MCPTool class
 program.register_tools([
     # Include all tools from the "calc" server
-    MCPTool("calc"),
+    MCPTool(server="calc"),
     # Include specific tools from the "github" server
-    MCPTool("github", "search_repositories", "get_file_contents"),
+    MCPTool(server="github", names=["search_repositories", "get_file_contents"]),
     # Include a list of tools from the "weather" server
-    MCPTool("weather", ["current", "forecast"]),
-    # Include a single tool from the "code" server
-    MCPTool("code", "explain")
+    MCPTool(server="weather", names=["current", "forecast"]),
+    # Include a single tool from the "code" server with READ access
+    MCPTool(server="code", names="explain", access="read")
 ])
 ```
 
@@ -233,8 +233,8 @@ program = LLMProgram(
     # Mix MCP tools with other tool types
     tools=[
         # MCP tools
-        MCPTool("calc"),
-        MCPTool("github", "search_repositories"),
+        MCPTool(server="calc"),
+        MCPTool(server="github", names="search_repositories"),
         # Built-in tools
         calculator,
         read_file

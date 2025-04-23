@@ -6,11 +6,13 @@ for runtime context consolidation.
 
 import pytest
 
-from llmproc.common.context import (
-    RuntimeContext,
-    check_requires_context,
-    validate_context_has,
-)
+from llmproc.common.context import RuntimeContext, validate_context_has
+from llmproc.common.metadata import get_tool_meta
+
+# Local helper replicating former API for concise tests
+def check_requires_context(handler):  # noqa: D401
+    """Return True if the handler requires runtime context."""
+    return get_tool_meta(handler).requires_context
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
 from llmproc.tools.tool_manager import ToolManager
@@ -93,9 +95,10 @@ def test_register_tool_with_requires_context_simple():
             return f"Got context with process: {runtime_context['process']}"
         return "No context or missing process"
 
-    # Verify it's marked as context-aware
-    assert hasattr(test_function, "_requires_context")
-    assert test_function._requires_context is True
+    # Verify it's marked as context-aware using metadata system
+    from llmproc.common.metadata import get_tool_meta
+    meta = get_tool_meta(test_function)
+    assert meta.requires_context is True
     assert check_requires_context(test_function)
 
     # Test detecting non-context-aware function
@@ -137,10 +140,12 @@ async def test_register_tool_with_required_context_keys():
             return "Missing context"
         return f"Got process: {runtime_context['process']} and fd: {runtime_context['fd_manager']}"
 
-    # Verify required keys are stored
-    assert hasattr(test_function, "_required_context_keys")
-    assert "process" in test_function._required_context_keys
-    assert "fd_manager" in test_function._required_context_keys
+    # Verify required keys are stored in metadata
+    from llmproc.common.metadata import get_tool_meta
+    meta = get_tool_meta(test_function)
+    assert meta.required_context_keys
+    assert "process" in meta.required_context_keys
+    assert "fd_manager" in meta.required_context_keys
 
     # Test with complete context
     complete_context = {"process": "mock_process", "fd_manager": "mock_fd_manager"}
@@ -201,9 +206,10 @@ async def test_register_tool_with_required_context():
             return f"Got context with process: {runtime_context['process']}"
         return "No context or missing process"
 
-    # Verify it's marked as context-aware
-    assert hasattr(test_function, "_requires_context")
-    assert test_function._requires_context is True
+    # Verify it's marked as context-aware using metadata
+    from llmproc.common.metadata import get_tool_meta
+    meta = get_tool_meta(test_function)
+    assert meta.requires_context is True
     assert check_requires_context(test_function)
 
     # Test with context
@@ -226,10 +232,12 @@ async def test_register_tool_with_required_keys():
             return "Missing context"
         return f"Got process: {runtime_context['process']} and fd: {runtime_context['fd_manager']}"
 
-    # Verify required keys are stored
-    assert hasattr(test_function, "_required_context_keys")
-    assert "process" in test_function._required_context_keys
-    assert "fd_manager" in test_function._required_context_keys
+    # Verify required keys are stored in metadata
+    from llmproc.common.metadata import get_tool_meta
+    meta = get_tool_meta(test_function)
+    assert meta.required_context_keys
+    assert "process" in meta.required_context_keys
+    assert "fd_manager" in meta.required_context_keys
 
     # Test with complete context
     complete_context = {"process": "mock_process", "fd_manager": "mock_fd_manager"}

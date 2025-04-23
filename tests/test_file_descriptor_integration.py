@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, Mock, call, patch
 
+from llmproc.common.access_control import AccessLevel
+
 import pytest
 
 from llmproc.common.results import RunResult, ToolResult
@@ -108,7 +110,9 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
         mock_forked_process.file_descriptor_enabled = True
         mock_forked_process.fd_manager = mock_fd_manager
         mock_forked_process.state = []
-        mock_forked_process.allow_fork = False
+        # Child processes are created with WRITE access level (which prevents further forking)
+        mock_forked_process.access_level = AccessLevel.WRITE
+        mock_forked_process.tool_manager = MagicMock()
         return mock_forked_process
 
     # Patch the fork_process method on our specific process instance
@@ -123,7 +127,7 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
     # Since we're using a mock, we can't check actual file descriptors
     # Instead, check that the fd_manager attribute was set
     assert hasattr(forked_process, "fd_manager")
-    assert forked_process.allow_fork is False
+    assert forked_process.access_level == AccessLevel.WRITE
 
     # Create our own fd_manager with copied content to use in the remaining tests
     forked_fd_manager = FileDescriptorManager(max_direct_output_chars=100)
@@ -262,10 +266,10 @@ def test_fd_api_call_tracking():
     run_result.add_api_call({"model": "claude-3", "id": "msg_1"})
     run_result.add_api_call({"model": "claude-3", "id": "msg_2"})
 
-    # Add tool calls (name, args, result)
-    run_result.tool_calls.append(("calculator", {"type": "tool_call"}, None))
-    run_result.tool_calls.append(("read_fd", {"type": "tool_call"}, None))
-    run_result.tool_calls.append(("example_tool", {"type": "tool_call"}, None))
+    # Add tool calls
+    run_result.add_tool_call("calculator", {"type": "tool_call"})
+    run_result.add_tool_call("read_fd", {"type": "tool_call"})
+    run_result.add_tool_call("example_tool", {"type": "tool_call"})
 
     # Verify counts
     assert len(run_result.api_call_infos) == 2

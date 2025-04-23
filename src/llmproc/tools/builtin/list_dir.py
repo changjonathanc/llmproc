@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
         "show_hidden": "Whether to include hidden files and directories in the listing. Defaults to False.",
         "detailed": "Whether to show detailed information (size, permissions, modification time) for each item. Defaults to False.",
     },
+    access=AccessLevel.READ,
 )
 async def list_dir(directory_path: str = ".", show_hidden: bool = False, detailed: bool = False) -> str:
     """List directory contents with options for showing hidden files and detailed information.

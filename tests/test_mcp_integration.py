@@ -19,27 +19,39 @@ from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
 def test_mcptool_descriptor_validation():
     """Test validation logic for MCPTool descriptors."""
     # Valid cases
-    assert MCPTool("server").names == "all"
-    assert MCPTool("server", "tool1").names == ["tool1"]
-    assert MCPTool("server", "tool1", "tool2").names == ["tool1", "tool2"]
-    assert MCPTool("server", ["tool1", "tool2"]).names == ["tool1", "tool2"]
+    assert MCPTool(server="server").names == "all"
+    assert MCPTool(server="server", names="tool1").names == ["tool1"]
+    assert MCPTool(server="server", names=["tool1", "tool2"]).names == ["tool1", "tool2"]
+    
+    # Access level tests
+    assert MCPTool(server="server", access="read").default_access.value == "read"
+    assert MCPTool(server="server", names=["tool1"], access="admin").default_access.value == "admin"
+    
+    # Dictionary form
+    tool_dict = MCPTool(server="server", names={"tool1": "read", "tool2": "write"})
+    assert tool_dict.names == ["tool1", "tool2"]
+    assert tool_dict.names_to_access["tool1"].value == "read"
+    assert tool_dict.names_to_access["tool2"].value == "write"
 
     # Representation tests
-    assert str(MCPTool("server")) == "<MCPTool server=ALL>"
-    assert "tool1" in str(MCPTool("server", "tool1"))
+    assert str(MCPTool(server="server")) == "<MCPTool server=ALL>"
+    assert "tool1" in str(MCPTool(server="server", names="tool1"))
 
     # Invalid cases
     with pytest.raises(ValueError, match="non-empty server name"):
-        MCPTool("")  # Empty server name
+        MCPTool(server="")  # Empty server name
 
     with pytest.raises(ValueError, match="invalid tool names"):
-        MCPTool("server", "")  # Empty tool name
+        MCPTool(server="server", names=[""])  # Empty tool name
+
+    with pytest.raises(ValueError, match="Invalid names type"):
+        MCPTool(server="server", names=123)  # Invalid tool name type
+        
+    with pytest.raises(ValueError, match="Cannot specify both names dictionary and access parameter"):
+        MCPTool(server="server", names={"tool1": "read"}, access="write")  # Conflicting access specifications
 
     with pytest.raises(ValueError, match="invalid tool names"):
-        MCPTool("server", 123)  # Invalid tool name type
-
-    with pytest.raises(ValueError, match="invalid tool names"):
-        MCPTool("server", "valid", "")  # Mix of valid and invalid tool names
+        MCPTool(server="server", names=["valid", ""])  # Mix of valid and invalid tool names
 
 
 # Common fixtures
@@ -91,7 +103,7 @@ async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, ti
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
         mcp_config_path=time_mcp_config,
-        tools=[MCPTool("time", "current")],  # Using MCPTool descriptor
+        tools=[MCPTool(server="time", names=["current"])],  # Using MCPTool descriptor
     )
 
     # Verify that the MCPTool descriptor was stored in the tool_manager
@@ -115,7 +127,7 @@ async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, ti
         provider="anthropic",
         system_prompt="You are an assistant with access to tools.",
         mcp_config_path=time_mcp_config,
-        tools=[MCPTool("time")],  # Using MCPTool descriptor with "all" tools
+        tools=[MCPTool(server="time")],  # Using MCPTool descriptor with "all" tools
     )
 
     # Verify the descriptor was stored correctly with "all"
@@ -130,8 +142,8 @@ async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, ti
         system_prompt="You are an assistant with access to tools.",
         mcp_config_path=time_mcp_config,
         tools=[
-            MCPTool("time", "current"),
-            MCPTool("calculator", "add", "subtract"),
+            MCPTool(server="time", names=["current"]),
+            MCPTool(server="calculator", names=["add", "subtract"]),
         ],
     )
 

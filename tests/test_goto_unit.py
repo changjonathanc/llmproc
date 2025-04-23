@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin.goto import find_position_by_id, handle_goto
 from llmproc.utils.message_utils import append_message_with_id
@@ -18,36 +19,53 @@ class TestGotoToolUnit:
 
     def test_find_position_by_id(self):
         """Test finding positions by message ID."""
-        # Create a mock state with message IDs
+        # Create a mock state with integer message IDs
         state = [
-            {"role": "user", "content": "Hello", "goto_id": "msg_0"},
-            {"role": "assistant", "content": "Hi there", "goto_id": "msg_1"},
-            {"role": "user", "content": "How are you?", "goto_id": "msg_2"},
-            {"role": "assistant", "content": "I'm doing well", "goto_id": "msg_3"},
+            {"role": "user", "content": "Hello", LLMPROC_MSG_ID: 0},
+            {"role": "assistant", "content": "Hi there", LLMPROC_MSG_ID: 1},
+            {"role": "user", "content": "How are you?", LLMPROC_MSG_ID: 2},
+            {"role": "assistant", "content": "I'm doing well", LLMPROC_MSG_ID: 3},
         ]
 
-        # Test direct ID lookup
+        # Test integer ID lookup (internal use)
+        assert find_position_by_id(state, 0) == 0
+        assert find_position_by_id(state, 1) == 1
+        assert find_position_by_id(state, 2) == 2
+        assert find_position_by_id(state, 3) == 3
+        
+        # Test formatted IDs (how LLMs will use it, based on what they see)
         assert find_position_by_id(state, "msg_0") == 0
         assert find_position_by_id(state, "msg_1") == 1
         assert find_position_by_id(state, "msg_2") == 2
         assert find_position_by_id(state, "msg_3") == 3
+        
+        # Also support direct string numeric IDs
+        assert find_position_by_id(state, "0") == 0
+        assert find_position_by_id(state, "1") == 1
 
         # Test non-existent ID
-        assert find_position_by_id(state, "msg_99") is None
+        assert find_position_by_id(state, 99) is None
+        assert find_position_by_id(state, "msg_99") is None  # Non-existent formatted ID
+        assert find_position_by_id(state, "99") is None      # Non-existent numeric ID
 
         # Test invalid IDs
         assert find_position_by_id(state, "invalid") is None
-        assert find_position_by_id(state, 123) is None
         assert find_position_by_id(state, None) is None
 
-        # Test fallback to numeric lookup
+        # Test with state that has no message IDs at all
         state_without_ids = [
             {"role": "user", "content": "Message 1"},
             {"role": "assistant", "content": "Response 1"},
             {"role": "user", "content": "Message 2"},
         ]
+        # Support position lookup by index even without IDs
+        assert find_position_by_id(state_without_ids, 0) == 0
+        assert find_position_by_id(state_without_ids, 1) == 1
+        # Also support formatted and string IDs by position
         assert find_position_by_id(state_without_ids, "msg_0") == 0
         assert find_position_by_id(state_without_ids, "msg_1") == 1
+        assert find_position_by_id(state_without_ids, "0") == 0
+        assert find_position_by_id(state_without_ids, "1") == 1
 
     def test_append_message(self):
         """Test appending messages with IDs."""
@@ -57,12 +75,12 @@ class TestGotoToolUnit:
 
         # Append messages and verify IDs
         id1 = append_message_with_id(process, "user", "Message 1")
-        assert id1 == "msg_0"
-        assert process.state[0]["goto_id"] == "msg_0"
+        assert id1 == 0  # Should be the integer index
+        assert process.state[0][LLMPROC_MSG_ID] == 0
 
         id2 = append_message_with_id(process, "assistant", "Message 2")
-        assert id2 == "msg_1"
-        assert process.state[1]["goto_id"] == "msg_1"
+        assert id2 == 1  # Should be the integer index
+        assert process.state[1][LLMPROC_MSG_ID] == 1
 
     @pytest.mark.asyncio
     @patch("llmproc.tools.builtin.goto.datetime")
@@ -71,13 +89,13 @@ class TestGotoToolUnit:
         # Mock datetime for consistent timestamps
         mock_datetime.datetime.now.return_value.isoformat.return_value = "2025-01-01T00:00:00"
 
-        # Create a realistic process state with goto_ids
+        # Create a realistic process state with integer message IDs
         process = MagicMock()
         process.state = [
-            {"role": "user", "content": "Message 1", "goto_id": "msg_0"},
-            {"role": "assistant", "content": "Response 1", "goto_id": "msg_1"},
-            {"role": "user", "content": "Message 2", "goto_id": "msg_2"},
-            {"role": "assistant", "content": "Response 2", "goto_id": "msg_3"},
+            {"role": "user", "content": "Message 1", LLMPROC_MSG_ID: 0},
+            {"role": "assistant", "content": "Response 1", LLMPROC_MSG_ID: 1},
+            {"role": "user", "content": "Message 2", LLMPROC_MSG_ID: 2},
+            {"role": "assistant", "content": "Response 2", LLMPROC_MSG_ID: 3},
         ]
         process.time_travel_history = []
 
@@ -92,8 +110,8 @@ class TestGotoToolUnit:
             # Define a more accurate side effect to simulate real behavior
             def append_side_effect(proc, role, content):
                 # Directly modify the process state like the real implementation would
-                proc.state = [{"role": "user", "content": content, "goto_id": "msg_0"}]
-                return "msg_0"
+                proc.state = [{"role": "user", "content": content, LLMPROC_MSG_ID: 0}]
+                return 0
 
             mock_append.side_effect = append_side_effect
 
@@ -106,6 +124,8 @@ class TestGotoToolUnit:
             # Check result content
             assert not result.is_error
             assert "Conversation reset to message msg_0" in result.content
+            # Check that abort_execution is set
+            assert result.abort_execution
 
             # Check time travel history was properly updated
             assert len(process.time_travel_history) == 1
@@ -120,10 +140,10 @@ class TestGotoToolUnit:
         # Create a mock process with some messages
         process = MagicMock()
         process.state = [
-            {"role": "user", "content": "Message 1", "goto_id": "msg_0"},
-            {"role": "assistant", "content": "Response 1", "goto_id": "msg_1"},
-            {"role": "user", "content": "Message 2", "goto_id": "msg_2"},
-            {"role": "assistant", "content": "Response 2", "goto_id": "msg_3"},
+            {"role": "user", "content": "Message 1", LLMPROC_MSG_ID: 0},
+            {"role": "assistant", "content": "Response 1", LLMPROC_MSG_ID: 1},
+            {"role": "user", "content": "Message 2", LLMPROC_MSG_ID: 2},
+            {"role": "assistant", "content": "Response 2", LLMPROC_MSG_ID: 3},
         ]
         process.time_travel_history = []
 
@@ -164,6 +184,8 @@ class TestGotoToolUnit:
             assert not result.is_error
             assert "Added time travel message" in result.content
             assert "Conversation reset to message msg_0" in result.content
+            # Check that abort_execution is set
+            assert result.abort_execution
 
     @pytest.mark.asyncio
     async def test_handle_goto_with_preformatted_message(self):
@@ -171,8 +193,8 @@ class TestGotoToolUnit:
         # Create a mock process with some messages
         process = MagicMock()
         process.state = [
-            {"role": "user", "content": "Message 1", "goto_id": "msg_0"},
-            {"role": "assistant", "content": "Response 1", "goto_id": "msg_1"},
+            {"role": "user", "content": "Message 1", LLMPROC_MSG_ID: 0},
+            {"role": "assistant", "content": "Response 1", LLMPROC_MSG_ID: 1},
         ]
         process.time_travel_history = []
 
@@ -220,6 +242,8 @@ class TestGotoToolUnit:
             # Check the result
             assert not result.is_error
             assert "Added time travel message" in result.content
+            # Check that abort_execution is set
+            assert result.abort_execution
 
     @pytest.mark.asyncio
     async def test_handle_goto_errors(self):
@@ -227,8 +251,8 @@ class TestGotoToolUnit:
         # Create a mock process with some messages
         process = MagicMock()
         process.state = [
-            {"role": "user", "content": "Message 1", "goto_id": "msg_0"},
-            {"role": "assistant", "content": "Response 1", "goto_id": "msg_1"},
+            {"role": "user", "content": "Message 1", LLMPROC_MSG_ID: 0},
+            {"role": "assistant", "content": "Response 1", LLMPROC_MSG_ID: 1},
         ]
 
         # Create runtime context with the process
@@ -260,8 +284,8 @@ class TestGotoToolUnit:
         """Test GOTO tool with missing required parameters."""
         process = MagicMock()
         process.state = [
-            {"role": "user", "content": "Message 1", "goto_id": "msg_0"},
-            {"role": "assistant", "content": "Response 1", "goto_id": "msg_1"},
+            {"role": "user", "content": "Message 1", LLMPROC_MSG_ID: 0},
+            {"role": "assistant", "content": "Response 1", LLMPROC_MSG_ID: 1},
         ]
 
         # Create runtime context with the process

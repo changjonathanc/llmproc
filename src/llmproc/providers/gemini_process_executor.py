@@ -1,4 +1,9 @@
-"""Gemini provider implementation for LLMProc using google-genai SDK."""
+"""Gemini provider implementation for LLMProc using google-genai SDK.
+
+NOTE: This implementation is minimally maintained as we plan to integrate with LiteLLM
+in a future release for more comprehensive provider support once Anthropic and core
+functionality are mature enough.
+"""
 
 import asyncio
 import logging
@@ -10,6 +15,7 @@ try:
 except ImportError:
     genai = None
 
+from llmproc.callbacks import CallbackEvent
 from llmproc.common.results import RunResult
 from llmproc.providers.constants import GEMINI_PROVIDERS
 
@@ -21,6 +27,9 @@ class GeminiProcessExecutor:
 
     This class manages interactions with the Gemini API via the google-genai SDK,
     including handling basic conversation flow. Works with both direct API and Vertex AI access paths.
+    
+    Note: This executor is minimally maintained as we plan to replace provider-specific
+    executors with LiteLLM in a future release for unified provider support.
     """
 
     # Map of model names to context window sizes
@@ -88,7 +97,6 @@ class GeminiProcessExecutor:
         process: "Process",  # noqa: F821
         user_prompt: str,
         max_iterations: int = 10,
-        callbacks: dict = None,
         run_result=None,
         is_tool_continuation: bool = False,
     ) -> "RunResult":
@@ -101,27 +109,26 @@ class GeminiProcessExecutor:
             process: The LLMProcess instance
             user_prompt: The user's input message
             max_iterations: Maximum number of API calls (not used in this basic implementation)
-            callbacks: Optional dictionary of callback functions
             run_result: Optional RunResult object to track execution metrics
             is_tool_continuation: Whether this is continuing a previous tool call
 
         Returns:
             RunResult object containing execution metrics and API call information
         """
-        # Initialize callbacks
-        callbacks = callbacks or {}
-        on_response = callbacks.get("on_response")
+        # Prepare for API call
 
         # Add user message to conversation state if not continuing from a tool call
         if not is_tool_continuation:
             process.state.append({"role": "user", "content": user_prompt})
 
         # Prepare messages for the API - convert internal state format to Gemini format
-        contents = self._state_to_api_messages(process.state)
+        contents = self.format_state_to_api_messages(process.state)
 
         # Prepare API parameters
         api_params = self._prepare_api_params(process.api_params)
 
+        # Prepare API call
+        
         # Make the API call
         response = await self._make_api_call(
             client=process.client,
@@ -130,6 +137,8 @@ class GeminiProcessExecutor:
             system_instruction=process.enriched_system_prompt,
             config=api_params,
         )
+        
+        # Process API response
 
         # Track API call in the run result if available
         if run_result:
@@ -142,13 +151,10 @@ class GeminiProcessExecutor:
 
         # Extract the text response
         text_response = getattr(response, "text", "")
-
-        # Fire callback for model response if provided
-        if on_response and text_response:
-            try:
-                on_response(text_response)
-            except Exception as e:
-                logger.warning(f"Error in on_response callback: {str(e)}")
+        
+        # Trigger response event
+        if text_response:
+            process.trigger_event(CallbackEvent.RESPONSE, text_response)
 
         # Add assistant response to state - maintain consistent state format
         process.state.append({"role": "assistant", "content": text_response})
@@ -159,7 +165,6 @@ class GeminiProcessExecutor:
         # Create a new RunResult if one wasn't provided
         if run_result is None:
             run_result = RunResult()
-            run_result.api_calls = 1
 
         # Complete the RunResult and return it
         return run_result.complete()
@@ -216,8 +221,19 @@ class GeminiProcessExecutor:
                 # General API error
                 raise ValueError(f"Gemini API error: {error_message}")
 
-    def _state_to_api_messages(self, state):
-        """Convert internal state to Gemini API format."""
+    def format_state_to_api_messages(self, state):
+        """
+        Convert internal state to Gemini API format.
+        
+        Following our unified API payload preparation pattern, this function
+        formats conversation state into the structure expected by the Gemini API.
+        
+        Args:
+            state: The conversation state to convert
+            
+        Returns:
+            List of messages in Gemini API format
+        """
         if not state:
             return []
 
@@ -339,7 +355,7 @@ class GeminiProcessExecutor:
 
             try:
                 # Convert conversation to Gemini's expected format
-                contents = self._state_to_api_messages(process.state)
+                contents = self.format_state_to_api_messages(process.state)
 
                 # Add system prompt if present (needs to be formatted for the API)
                 if process.enriched_system_prompt:

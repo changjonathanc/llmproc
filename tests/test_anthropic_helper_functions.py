@@ -7,7 +7,6 @@ import pytest
 
 from llmproc.providers.anthropic_utils import (
     add_token_efficient_header_if_needed,
-    contains_tool_calls,
     safe_callback,
 )
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
@@ -91,32 +90,3 @@ class TestAnthropicHelperFunctions:
         # Should not raise an exception
         safe_callback(None, "arg1", callback_name="test_callback")
 
-    def test_contains_tool_calls_with_tool_use(self):
-        """Test detecting tool calls in response content."""
-        # Create mock content with a tool_use item
-        content = [
-            MagicMock(type="text", text="Some text"),
-            MagicMock(type="tool_use", name="test_tool", input={"arg": "value"}),
-        ]
-
-        assert contains_tool_calls(content) is True
-
-    def test_contains_tool_calls_without_tool_use(self):
-        """Test detecting no tool calls in response content."""
-        # Create mock content with only text items
-        content = [
-            MagicMock(type="text", text="Some text"),
-            MagicMock(type="text", text="More text"),
-        ]
-
-        assert contains_tool_calls(content) is False
-
-    def test_contains_tool_calls_with_malformed_content(self):
-        """Test handling content items without type attribute."""
-        # Create mock content with items missing type attribute
-        content = [
-            MagicMock(spec=["text"]),  # No type attribute
-            MagicMock(),  # Empty mock
-        ]
-
-        assert contains_tool_calls(content) is False

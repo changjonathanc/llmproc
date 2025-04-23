@@ -10,6 +10,8 @@ The fork feature enables an LLM process to:
 2. Process independent tasks in parallel without filling up the context window
 3. Combine results from multiple forked processes into a single response
 
+> ⚠️ **Access Control**: The fork tool is only available to processes with ADMIN access level. Child processes created by fork are given WRITE access level by default, which prevents them from calling fork again.
+
 ## Key Benefits
 
 - **Shared Context**: Each forked process inherits the full conversation history, ensuring continuity and context preservation.
@@ -80,19 +82,26 @@ The fork system call is ideal for:
 
 The fork feature is implemented through:
 
-1. A `fork_tool` function in `tools/fork.py` that handles forking requests
+1. A `fork_tool` function in `tools/builtin/fork.py` that handles forking requests
 2. A `fork_process` method in `LLMProcess` that creates deep copies of a process
-3. Support in the LLMProcess initialization to register the fork tool when enabled
+3. The standard `ToolManager` system for registering and calling the fork tool
+4. Access level controls to manage which processes can use the fork tool
+
+The fork tool is a first-class provider-agnostic tool executed via ToolManager just like any other tool, following the Unix-inspired model where tools are accessed through a consistent interface.
 
 ### Process Forking
 
 When a process is forked:
 
 1. A new LLMProcess instance is created with the same program configuration
-2. The entire conversation state is deep-copied to the new process
+2. The entire conversation state is deep-copied to the new process using the `ProcessSnapshot` mechanism
 3. All preloaded content and system prompts are preserved
-4. The forked process runs independently with its own query
-5. Results from all forked processes are collected and returned to the parent process
+4. File descriptors are properly cloned to maintain independence between processes
+5. The access level is set to WRITE for child processes, enforcing security boundaries
+6. The forked process runs independently with its own query using the provider's appropriate executor
+7. Results from all forked processes are collected and returned to the parent process
+
+The implementation uses separate message buffers (`msg_prefix` and `tool_results_prefix`) to maintain proper causal ordering of messages and tool results, ensuring that tools executed later in a turn can see results from earlier tools.
 
 ## Differences from Unix Fork
 
@@ -106,8 +115,13 @@ While inspired by the Unix fork() system call, the LLMProc fork implementation h
 
 See `examples/fork.toml` for a complete example program configuration that demonstrates the fork system call.
 
-## Limitations and Future Work
+## Current Capabilities and Future Work
 
-- Current implementation executes all forked processes sequentially, though the API supports parallel execution.
-- Future versions may add a more sophisticated process management system.
-- The Unix Fork-Exec pattern could be implemented by combining fork with the ability to change the system prompt or tools.
+- The implementation executes all forked processes in parallel with asyncio.gather(), with the parent waiting for all children to complete.
+- The access level system (AccessLevel.ADMIN for parents, AccessLevel.WRITE for children) enforces security boundaries, preventing unauthorized fork operations.
+- Each process has complete state isolation through deep copying and proper file descriptor cloning.
+- The streaming implementation ensures proper causal ordering of messages and tool results.
+- Future enhancements may include:
+  - More sophisticated process management and job control features
+  - Implementation of the Unix Fork-Exec pattern by combining fork with system prompt or tool modifications
+  - Performance optimizations for large state handling

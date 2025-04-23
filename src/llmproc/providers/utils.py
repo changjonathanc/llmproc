@@ -55,3 +55,43 @@ def get_context_window_size(model_name: str, window_sizes: dict[str, int], defau
 
     # Default fallback
     return default_size
+
+
+def choose_provider_executor(process: "Any") -> "Any":
+    """
+    Choose the appropriate process executor based on provider.
+
+    This function selects and returns the appropriate executor based on the process provider.
+    It's used by tools like fork to work with any provider.
+
+    Args:
+        process: The LLMProcess instance
+
+    Returns:
+        A provider-specific process executor instance
+    """
+    provider = getattr(process, "provider", "")
+
+    # Anthropic (direct API)
+    if provider == "anthropic":
+        from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+
+        return AnthropicProcessExecutor()
+
+    # Anthropic through Vertex AI
+    elif provider == "anthropic_vertex":
+        from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+
+        return AnthropicProcessExecutor()
+
+    # OpenAI / Azure
+    elif provider in ("openai", "azure_openai"):
+        from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
+
+        return OpenAIProcessExecutor()
+
+    # Default to Anthropic executor as fallback
+    logger.warning(f"Unknown provider: {provider}. Using AnthropicProcessExecutor as fallback.")
+    from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
+
+    return AnthropicProcessExecutor()

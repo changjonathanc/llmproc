@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from llmproc.common.context import check_requires_context
+from llmproc.common.metadata import get_tool_meta
 from llmproc.common.results import ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
@@ -148,10 +148,11 @@ def test_fd_tools_implementation():
     async def test_handler(args, runtime_context=None):
         return "test"
 
-    # Verify the context-aware marker was set
-    assert hasattr(test_handler, "_requires_context")
-    assert test_handler._requires_context
-    assert check_requires_context(test_handler)
+    # Verify the context-aware marker was set in metadata
+    from llmproc.common.metadata import get_tool_meta
+    meta = get_tool_meta(test_handler)
+    assert meta.requires_context
+    assert get_tool_meta(test_handler).requires_context
 
     # Create a non-context-aware handler
     async def standard_handler(args):
@@ -159,7 +160,7 @@ def test_fd_tools_implementation():
 
     # Verify the context-aware marker is not set
     assert not hasattr(standard_handler, "_requires_context")
-    assert not check_requires_context(standard_handler)
+    assert not get_tool_meta(standard_handler).requires_context
 
 
 def test_runtime_context_handler_execution():
@@ -240,7 +241,7 @@ def test_tool_manager_setup_runtime_context():
     tool_manager.runtime_registry.register_tool("mock_tool", mock_handler, tool_def)
 
     # Verify requires_context correctly identifies the handler
-    assert check_requires_context(mock_handler)
+    assert get_tool_meta(mock_handler).requires_context
 
     # Verify the tool was registered
     assert "mock_tool" in tool_manager.runtime_registry.tool_handlers
@@ -454,7 +455,7 @@ async def test_program_to_process_handoff():
 
 
 # Helper function for the side effect
-async def create_process_side_effect(program, additional_preload_files=None):
+async def create_process_side_effect(program, additional_preload_files=None, access_level=None):
     """Side effect for mocking create_process."""
     from tests.conftest import create_test_llmprocess_directly
 

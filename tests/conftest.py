@@ -152,7 +152,7 @@ class GotoTracker:
         self.goto_count = 0
         self.single_run_count = 0  # Count per user message
 
-    def on_tool_start(self, tool_name, tool_args):
+    def tool_start(self, tool_name, tool_args):
         """Record when the GOTO tool is called."""
         self.tool_calls.append({"tool": tool_name, "args": tool_args, "status": "started"})
 
@@ -163,7 +163,7 @@ class GotoTracker:
             self.goto_count += 1
             self.single_run_count += 1
 
-    def on_tool_end(self, tool_name, result):
+    def tool_end(self, tool_name, result):
         """Record when the GOTO tool completes."""
         self.tool_calls.append({"tool": tool_name, "result": result, "status": "completed"})
 
@@ -178,13 +178,7 @@ def goto_tracker():
     return GotoTracker()
 
 
-@pytest.fixture
-def goto_callbacks(goto_tracker):
-    """Create callbacks for GOTO tool tracking."""
-    return {
-        "on_tool_start": goto_tracker.on_tool_start,
-        "on_tool_end": goto_tracker.on_tool_end,
-    }
+# Removed legacy goto_callbacks fixture - use process.add_callback() instead
 
 
 @pytest.fixture

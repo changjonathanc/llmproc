@@ -6,6 +6,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
+from llmproc.common.access_control import AccessLevel
+
 import llmproc
 from llmproc._program_docs import (
     ADD_LINKED_PROGRAM,
@@ -585,20 +587,31 @@ class LLMProgram:
         logger.info("Created tool configuration for initialization")
         return config
 
-    async def start(self) -> "LLMProcess":  # noqa: F821
+    async def start(self, access_level: Optional[AccessLevel] = None) -> "LLMProcess":  # noqa: F821
         """Create and fully initialize an LLMProcess from this program.
 
         ✅ THIS IS THE CORRECT WAY TO CREATE AN LLMPROCESS ✅
 
         ```python
         program = LLMProgram.from_toml("config.toml")
-        process = await program.start()  # Correct initialization pattern
+        process = await program.start()  # Default ADMIN access
+        
+        # Or with specific access level:
+        process = await program.start(access_level=AccessLevel.READ)  # Read-only process
+        
+        # Register callbacks after creation:
+        timer = TimingCallback()
+        process = await program.start().add_callback(timer)
         ```
 
         This method delegates the entire program-to-process creation logic
         to the `llmproc.program_exec.create_process` function, which handles
         compilation, tool initialization, process instantiation, and runtime
         context setup in a modular way.
+
+        Args:
+            access_level: Optional access level for the process (READ, WRITE, or ADMIN).
+                          Defaults to ADMIN for root processes.
 
         ⚠️ IMPORTANT: Never use direct constructor `LLMProcess(program=...)` ⚠️
         Direct instantiation will result in broken context-aware tools (spawn, goto, fd_tools, etc.)
@@ -610,7 +623,7 @@ class LLMProgram:
         # Delegate to the modular implementation in program_exec.py
         from llmproc.program_exec import create_process
 
-        return await create_process(self)
+        return await create_process(self, access_level=access_level)
 
 
 # Apply full docstrings to class and methods

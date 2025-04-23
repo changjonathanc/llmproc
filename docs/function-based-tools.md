@@ -198,6 +198,33 @@ When the LLM tries to call this tool with `y=0`, it will receive a proper error 
 
 All errors from function tools follow this consistent pattern, making error handling and debugging easier.
 
+## Tool Metadata
+
+Function tools use a central metadata system that stores all tool-related information:
+
+```python
+from llmproc.common.access_control import AccessLevel
+from llmproc.common.metadata import ToolMeta, get_tool_meta
+
+# Decorated tools automatically get their metadata configured
+@register_tool(
+    name="weather_info",
+    description="Get weather information",
+    access=AccessLevel.READ
+)
+def get_weather(location: str):
+    # implementation...
+    pass
+
+# You can access the metadata after decoration
+meta = get_tool_meta(get_weather)
+print(f"Tool name: {meta.name}")
+print(f"Tool access level: {meta.access.value}")
+print(f"Requires context: {meta.requires_context}")
+```
+
+The metadata system stores all tool properties in a single location, maintaining a clean interface and avoiding attribute pollution.
+
 ## Context-Aware Tools
 
 You can create tools that require access to the LLMProcess runtime context using the `requires_context=True` parameter:
@@ -213,7 +240,7 @@ from llmproc import register_tool
         "program_name": "Name of the linked program to call",
         "prompt": "The prompt to send to the linked program"
     },
-    requires_context=True,
+    requires_context=True,  # Mark tool as requiring runtime context
     required_context_keys=["process"]  # Specify required context keys
 )
 async def spawn_child_process(
@@ -238,7 +265,12 @@ async def spawn_child_process(
     return {"response": "Child process response"}
 ```
 
-Tools Requiring Runtime Context automatically receive a `runtime_context` parameter containing runtime dependencies like:
+When a tool is registered with `requires_context=True`, the system:
+1. Stores this information in the tool's metadata
+2. Automatically validates context requirements at runtime
+3. Injects the runtime_context parameter when the tool is called
+
+The runtime context typically contains:
 - `process`: The LLMProcess instance
 - `fd_manager`: File descriptor manager (if enabled)
 - `linked_programs`: Dictionary of linked programs (if available)

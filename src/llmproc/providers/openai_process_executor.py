@@ -1,7 +1,13 @@
-"""OpenAI provider implementation for LLMProc."""
+"""OpenAI provider implementation for LLMProc.
+
+NOTE: This implementation is minimally maintained as we plan to integrate with LiteLLM
+in a future release for more comprehensive provider support once Anthropic and core
+functionality are mature enough.
+"""
 
 import logging
 
+from llmproc.callbacks import CallbackEvent
 from llmproc.common.results import RunResult
 
 logger = logging.getLogger(__name__)
@@ -12,6 +18,9 @@ class OpenAIProcessExecutor:
 
     This is a simplified version that doesn't support tools yet.
     Tool support will be added in future versions.
+
+    Note: This executor is minimally maintained as we plan to replace provider-specific
+    executors with LiteLLM in a future release for unified provider support.
     """
 
     async def run(
@@ -19,7 +28,6 @@ class OpenAIProcessExecutor:
         process: "Process",  # noqa: F821
         user_prompt: str,
         max_iterations: int = 1,
-        callbacks: dict = None,
         run_result=None,
         is_tool_continuation: bool = False,
     ) -> "RunResult":
@@ -29,7 +37,6 @@ class OpenAIProcessExecutor:
             process: The LLMProcess instance
             user_prompt: The user's input message
             max_iterations: Not used in OpenAI executor as tools aren't supported yet
-            callbacks: Optional dictionary of callback functions
             run_result: Optional RunResult object to track execution metrics
             is_tool_continuation: Not used in OpenAI executor as tools aren't supported yet
 
@@ -39,9 +46,7 @@ class OpenAIProcessExecutor:
         Raises:
             ValueError: If tools are configured but not yet supported
         """
-        # Initialize callbacks
-        callbacks = callbacks or {}
-        on_response = callbacks.get("on_response")
+        # Prepare for response handling
 
         # Check if tools are configured but not yet supported
         if process.tools and len(process.tools) > 0:
@@ -93,11 +98,15 @@ class OpenAIProcessExecutor:
                 if "reasoning_effort" in api_params:
                     del api_params["reasoning_effort"]
 
+            # Make API call
+                
             response = await process.client.chat.completions.create(
                 model=process.model_name,
                 messages=formatted_messages,
                 **api_params,
             )
+            
+            # Process API response
 
             # Track API call in the run result
             api_info = {
@@ -117,12 +126,9 @@ class OpenAIProcessExecutor:
             # Add assistant response to conversation history
             process.state.append({"role": "assistant", "content": message_content})
 
-            # Fire callback for model response if provided
-            if on_response:
-                try:
-                    on_response(message_content)
-                except Exception as e:
-                    logger.warning(f"Error in on_response callback: {str(e)}")
+            # Trigger response event
+            if message_content:
+                process.trigger_event(CallbackEvent.RESPONSE, message_content)
 
         except Exception as e:
             logger.error(f"Error in OpenAI API call: {str(e)}")
@@ -135,5 +141,3 @@ class OpenAIProcessExecutor:
         return run_result.complete()
 
     # TODO: Implement tool support
-    # TODO: Implement run_till_text_response method for forked processes
-    # TODO: Implement _fork method for conversation forking

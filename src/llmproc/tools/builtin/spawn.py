@@ -3,6 +3,7 @@
 import logging
 from typing import Any, Optional
 
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
 
@@ -86,6 +87,7 @@ def modify_spawn_schema(schema: dict, config: dict) -> dict:
     requires_context=True,
     required_context_keys=["process"],
     schema_modifier=modify_spawn_schema,
+    access=AccessLevel.ADMIN,
 )
 async def spawn_tool(
     program_name: str,
@@ -160,6 +162,28 @@ async def spawn_tool(
         # In the new architecture, linked_program should always be an LLMProgram instance
         # We create a process on-demand each time spawn is called
         linked_process = await create_process(linked_program, additional_preload_files)
+        
+        #------------------------------------------------------------------
+        # Access‑level policy for spawned children
+        #
+        # – The *spawn* tool itself is marked as ADMIN, therefore the parent
+        #   process must already have ADMIN privileges in order to reach
+        #   this point.  Giving the child full ADMIN would allow an
+        #   unlimited cascade of spawns; instead we intentionally lower the
+        #   child privilege to WRITE (least‑privilege principle).
+        #
+        # – Today the linear lattice is READ < WRITE < ADMIN.  A parent that
+        #   only had READ would never be able to call spawn (requires ADMIN)
+        #   so the unconditional downgrade to WRITE is always a reduction
+        #   of privileges.
+        #
+        # – If the model later gains an "ADMIN_READ" capability (ADMIN
+        #   without WRITE), we must revisit this logic and compute
+        #   `min(parent_level, WRITE)` instead of hard‑coding WRITE.
+        #------------------------------------------------------------------
+        linked_process.access_level = AccessLevel.WRITE
+        if hasattr(linked_process, "tool_manager") and linked_process.tool_manager:
+            linked_process.tool_manager.set_process_access_level(AccessLevel.WRITE)
 
         # Process file descriptor system if it's available in the parent process
         if hasattr(llm_process, "fd_manager") and llm_process.file_descriptor_enabled:

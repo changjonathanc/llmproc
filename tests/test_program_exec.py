@@ -225,7 +225,7 @@ async def test_create_process_flow_not_compiled(
     mock_program.compile.assert_called_once()
 
     # 2. Prepare process state
-    mock_prepare_state.assert_called_once_with(mock_program, None)
+    mock_prepare_state.assert_called_once_with(mock_program, None, None)
 
     # 3. Extract tool configuration
     mock_program.get_tool_configuration.assert_called_once()
@@ -279,7 +279,7 @@ async def test_create_process_flow_already_compiled(
     mock_program.compile.assert_not_called()
 
     # Assert the rest of the flow is the same
-    mock_prepare_state.assert_called_once_with(mock_program, None)
+    mock_prepare_state.assert_called_once_with(mock_program, None, None)
     mock_program.get_tool_configuration.assert_called_once()
     mock_program.tool_manager.initialize_tools.assert_awaited_once()
     mock_instantiate.assert_called_once_with({"process_state": "data"})

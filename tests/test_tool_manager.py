@@ -329,8 +329,11 @@ async def test_initialize_tools_directly():
         "fork", {"prompts": ["Test"], "runtime_context": {"process": "mock_process"}}
     )
     assert isinstance(fork_result, ToolResult)
-    # Check the error message (since our mock runtime_context doesn't have proper process)
-    assert "Direct calls to fork_tool are not supported" in str(fork_result.content)
+    # Check that an appropriate error is surfaced (exact wording may evolve)
+    assert (
+        "Runtime context" in str(fork_result.content)
+        or "Direct calls to fork_tool" in str(fork_result.content)
+    )
 
 
 def test_register_tools_with_mixed_input():

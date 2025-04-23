@@ -5,19 +5,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.providers.anthropic_utils import (
     add_cache_to_message,
     add_message_ids,
     add_token_efficient_header_if_needed,
-    contains_tool_calls,
+    apply_cache_control,
+    format_state_to_api_messages,
+    format_system_prompt,
     get_context_window_size,
     is_cacheable_content,
+    prepare_api_request,
     safe_callback,
-    state_to_api_messages,
-    system_to_api_format,
-    tools_to_api_format,
 )
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
+from llmproc.utils.id_utils import render_id
 
 
 class TestCacheControl:
@@ -90,8 +92,8 @@ class TestMessageFormatting:
             {"role": "assistant", "content": "Hi"},
         ]
         result = add_message_ids(messages)
-        assert result[0]["content"].startswith("[msg_0]")
-        assert result[1]["content"].startswith("[msg_1]")
+        assert result[0]["content"].startswith(render_id("msg_0"))
+        assert result[1]["content"].startswith(render_id("msg_1"))
 
     def test_add_message_ids_list_content(self):
         """Test adding message IDs to messages with list content."""
@@ -100,102 +102,109 @@ class TestMessageFormatting:
             {"role": "assistant", "content": [{"type": "text", "text": "Hi"}]},
         ]
         result = add_message_ids(messages)
-        assert result[0]["content"][0]["text"].startswith("[msg_0]")
-        assert result[1]["content"][0]["text"].startswith("[msg_1]")
+        assert result[0]["content"][0]["text"].startswith(render_id("msg_0"))
+        assert result[1]["content"][0]["text"].startswith(render_id("msg_1"))
 
-    def test_add_message_ids_custom_goto_id(self):
-        """Test that custom goto_ids are used and then removed."""
+    def test_add_message_ids_custom_msg_id(self):
+        """Test that custom message IDs are used and then removed."""
         messages = [
-            {"role": "user", "content": "Hello", "goto_id": "custom_id"},
+            {"role": "user", "content": "Hello", LLMPROC_MSG_ID: "custom_id"},  # Still allow custom string IDs
             {"role": "assistant", "content": "Hi"},
         ]
         result = add_message_ids(messages)
-        assert result[0]["content"].startswith("[custom_id]")
-        assert "goto_id" not in result[0]
-        assert result[1]["content"].startswith("[msg_1]")
+        assert result[0]["content"].startswith(render_id("custom_id"))
+        assert LLMPROC_MSG_ID not in result[0]
+        assert result[1]["content"].startswith(render_id("msg_1"))
 
-    def test_state_to_api_messages_with_caching(self):
-        """Test transforming state to API messages with caching."""
-        # Start with the simplest case to verify caching behavior
+    def test_format_and_cache_messages(self):
+        """Test formatting messages and applying caching."""
+        # First format the state
         state = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi"},
         ]
-        result = state_to_api_messages(state, add_cache=True)
-
-        # Just verify that the last message has cache
-        assert len(result) == 2
-        last_message = result[-1]
+        
+        # Format the messages
+        formatted = format_state_to_api_messages(state)
+        
+        # Apply cache
+        cached_messages, _, _ = apply_cache_control(formatted, [])
+        
+        # Verify caching
+        assert len(cached_messages) == 2
+        last_message = cached_messages[-1]
         assert last_message["role"] == "assistant"
         assert isinstance(last_message["content"], list)
         assert last_message["content"][0].get("cache_control") == {"type": "ephemeral"}
-
-        # Also verify that the message IDs are added
-        assert "[msg_0]" in result[0]["content"]
-        assert "[msg_1]" in last_message["content"][0]["text"]
-
-    def test_state_to_api_messages_without_caching(self):
-        """Test transforming state to API messages without caching."""
-        state = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi"},
-        ]
-        result = state_to_api_messages(state, add_cache=False)
-
-        # No message should have cache
-        for msg in result:
-            if isinstance(msg.get("content"), list):
-                for content in msg["content"]:
-                    assert content.get("cache_control") is None
+        
+        # Check first message has cache too (as per our 3 message caching policy)
+        assert cached_messages[0]["content"][0].get("cache_control") == {"type": "ephemeral"}
+        
+        # Verify message IDs are added
+        assert isinstance(formatted[0]["content"], list)
+        assert render_id("msg_0") in formatted[0]["content"][0]["text"]
+        assert render_id("msg_1") in formatted[1]["content"][0]["text"]
 
 
 class TestAPIFormatting:
     """Tests for API formatting functions."""
 
-    def test_system_to_api_format_string(self):
+    def test_format_system_prompt_string(self):
         """Test converting string system prompt to API format."""
         system = "Hello, I am Claude"
-        result = system_to_api_format(system, add_cache=True)
+        result = format_system_prompt(system)
 
         assert isinstance(result, list)
         assert result[0]["type"] == "text"
         assert result[0]["text"] == system
-        assert result[0]["cache_control"] == {"type": "ephemeral"}
 
-    def test_system_to_api_format_empty(self):
+    def test_format_system_prompt_empty(self):
         """Test that empty system prompts are not modified."""
         system = ""
-        result = system_to_api_format(system, add_cache=True)
+        result = format_system_prompt(system)
         assert result == system
 
-    def test_system_to_api_format_no_cache(self):
-        """Test system prompt formatting without caching."""
+    def test_format_and_cache_system_prompt(self):
+        """Test formatting system prompt and applying cache."""
         system = "Hello, I am Claude"
-        result = system_to_api_format(system, add_cache=False)
-        assert result == system
+        formatted = format_system_prompt(system)
+        
+        # Apply cache
+        _, cached_system, _ = apply_cache_control([], formatted)
+        
+        assert isinstance(cached_system, list)
+        assert len(cached_system) == 1
+        assert cached_system[0]["type"] == "text"
+        assert cached_system[0]["text"] == system
+        assert cached_system[0]["cache_control"] == {"type": "ephemeral"}
 
-    def test_tools_to_api_format_with_cache(self):
-        """Test tools formatting with caching."""
-        tools = [
-            {"name": "calculator", "description": "A calculator tool"},
-            {"name": "weather", "description": "A weather tool"},
+    def test_prepare_api_request_with_tools(self):
+        """Test prepare_api_request with tools."""
+        # Create a mock process
+        process = MagicMock()
+        process.state = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
         ]
-        result = tools_to_api_format(tools, add_cache=True)
-
-        # Last tool should have cache
-        assert result[-1]["cache_control"] == {"type": "ephemeral"}
-        assert "cache_control" not in result[0]
-
-    def test_tools_to_api_format_empty(self):
-        """Test tools formatting with empty tools."""
-        tools = []
-        result = tools_to_api_format(tools, add_cache=True)
-        assert result == tools
-
-    def test_tools_to_api_format_none(self):
-        """Test tools formatting with None."""
-        result = tools_to_api_format(None, add_cache=True)
-        assert result is None
+        process.enriched_system_prompt = "You are Claude"
+        process.tools = [
+            {"name": "calculator", "description": "A calculator tool"},
+        ]
+        process.model_name = "claude-3-sonnet"
+        process.api_params = {}
+        process.disable_automatic_caching = False
+        
+        # Call prepare_api_request
+        request = prepare_api_request(process)
+        
+        # Verify request structure
+        assert "model" in request
+        assert "system" in request
+        assert "messages" in request
+        assert "tools" in request
+        
+        # Check tools are included 
+        assert request["tools"] == process.tools
 
 
 class TestTokenEfficientHeaders:
@@ -284,35 +293,6 @@ class TestSafeCallback:
 class TestMiscUtils:
     """Tests for miscellaneous utility functions."""
 
-    def test_contains_tool_calls_with_tool_use(self):
-        """Test detecting tool calls in response content."""
-        # Create mock content with a tool_use item
-        content = [
-            MagicMock(type="text", text="Some text"),
-            MagicMock(type="tool_use", name="test_tool", input={"arg": "value"}),
-        ]
-
-        assert contains_tool_calls(content) is True
-
-    def test_contains_tool_calls_without_tool_use(self):
-        """Test detecting no tool calls in response content."""
-        # Create mock content with only text items
-        content = [
-            MagicMock(type="text", text="Some text"),
-            MagicMock(type="text", text="More text"),
-        ]
-
-        assert contains_tool_calls(content) is False
-
-    def test_contains_tool_calls_with_malformed_content(self):
-        """Test handling content items without type attribute."""
-        # Create mock content with items missing type attribute
-        content = [
-            MagicMock(spec=["text"]),  # No type attribute
-            MagicMock(),  # Empty mock
-        ]
-
-        assert contains_tool_calls(content) is False
 
     def test_get_context_window_size(self):
         """Test getting context window size for various models."""

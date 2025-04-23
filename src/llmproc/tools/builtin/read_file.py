@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
 
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
     param_descriptions={
         "file_path": "Absolute or relative path to the file to read. For security reasons, certain directories may be inaccessible."
     },
+    access=AccessLevel.READ,
 )
 async def read_file(file_path: str) -> str:
     """Read a file and return its contents.

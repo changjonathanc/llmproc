@@ -6,6 +6,8 @@ import gc
 import re
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+from llmproc.common.access_control import AccessLevel
+
 import pytest
 
 from llmproc.file_descriptors import FileDescriptorManager
@@ -501,7 +503,9 @@ async def test_reference_inheritance_during_fork():
 
     # Configure other necessary attributes for the fork_process method
     mock_forked_process.references_enabled = process.references_enabled
-    mock_forked_process.allow_fork = False  # Forked processes have fork disabled
+    # Access level is set to WRITE for child processes (which prevents further forking)
+    mock_forked_process.access_level = AccessLevel.WRITE
+    mock_forked_process.tool_manager = MagicMock()
 
     # Use a proper awaitable future for the mock
     with patch("llmproc.program_exec.create_process") as mock_create_process:

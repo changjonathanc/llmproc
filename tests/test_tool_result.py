@@ -32,6 +32,7 @@ def test_tool_result_from_success():
     result = ToolResult.from_success("Success content")
     assert result.content == "Success content"
     assert result.is_error is False
+    assert result.abort_execution is False
 
 
 def test_tool_result_from_error():
@@ -39,6 +40,15 @@ def test_tool_result_from_error():
     result = ToolResult.from_error("Error message")
     assert result.content == "Error message"
     assert result.is_error is True
+    assert result.abort_execution is False
+
+
+def test_tool_result_from_abort():
+    """Test the from_abort factory method."""
+    result = ToolResult.from_abort("Abort operation")
+    assert result.content == "Abort operation"
+    assert result.is_error is False
+    assert result.abort_execution is True
 
 
 def test_tool_result_to_dict():
@@ -85,7 +95,10 @@ def test_tool_result_with_non_serializable_content():
 def test_tool_result_str():
     """Test string representation."""
     result = ToolResult("Test content")
-    assert str(result) == "ToolResult(content=Test content, is_error=False)"
+    assert str(result) == "ToolResult(content=Test content, is_error=False, abort_execution=False)"
 
     error_result = ToolResult.from_error("Error message")
-    assert str(error_result) == "ToolResult(content=Error message, is_error=True)"
+    assert str(error_result) == "ToolResult(content=Error message, is_error=True, abort_execution=False)"
+    
+    abort_result = ToolResult.from_abort("Abort operation")
+    assert str(abort_result) == "ToolResult(content=Abort operation, is_error=False, abort_execution=True)"

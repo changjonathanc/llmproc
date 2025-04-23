@@ -32,6 +32,7 @@ These features form the foundation of LLMProc's Unix-inspired approach:
    - [Program Linking](program-linking.md) - Delegate tasks to specialized processes
    - [Fork Feature](fork-feature.md) - Create process copies with shared state
    - [GOTO Feature](goto-feature.md) - Reset conversations to previous points
+   - [Tool Access Control](tool-access-control.md) - Secure multi-process environments with permissions
 
 3. **Tool System**
    - [Tool Aliases](tool-aliases.md) - Provide simpler names for tools
@@ -83,7 +84,7 @@ If you're implementing complex agent architectures:
 1. [Program Linking](program-linking.md)
 2. [Program Linking Advantages](program-linking-advantages.md)
 3. [Token-Efficient Tool Use](token-efficient-tool-use.md)
-4. [Fork Feature](fork-feature.md) and [GOTO Feature](goto-feature.md)
+4. [Fork Feature](fork-feature.md), [GOTO Feature](goto-feature.md), and [Tool Access Control](tool-access-control.md)
 
 ## API Reference
 

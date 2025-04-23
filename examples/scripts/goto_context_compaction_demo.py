@@ -12,6 +12,7 @@ import sys
 from typing import Any
 
 from llmproc import LLMProgram
+from llmproc.callbacks import CallbackEvent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -26,13 +27,13 @@ class SimpleTracker:
         self.goto_used = False
         self.token_counts = []
 
-    def on_tool_start(self, tool_name: str, tool_args: dict[str, Any]) -> None:
+    def tool_start(self, tool_name: str, tool_args: dict[str, Any]) -> None:
         """Track when GOTO is used."""
         if tool_name == "goto":
             self.goto_used = True
             print(f"\n🔄 GOTO: returning to {tool_args.get('position', 'unknown')}")
 
-    def on_tool_end(self, tool_name: str, result: Any) -> None:
+    def tool_end(self, tool_name: str, result: Any) -> None:
         """Track when GOTO completes."""
         if tool_name == "goto":
             print("✅ GOTO completed")
@@ -110,10 +111,9 @@ The goto tool's detailed instructions will guide you on proper usage. Use this c
         # Start process
         process = await program.start()
         tracker = SimpleTracker()
-        callbacks = {
-            "on_tool_start": tracker.on_tool_start,
-            "on_tool_end": tracker.on_tool_end,
-        }
+        
+        # Register callbacks with the new pattern
+        process.add_callback(tracker)
 
         # Run conversation
         for i, message in enumerate(conversation):
@@ -126,7 +126,7 @@ The goto tool's detailed instructions will guide you on proper usage. Use this c
 
             # Process message
             print_msg("User", message, simplified=(i == 0))
-            await process.run(message, callbacks=callbacks)
+            await process.run(message)
             response = process.get_last_message()
             print_msg("Assistant", response, simplified=(i == 0))
 

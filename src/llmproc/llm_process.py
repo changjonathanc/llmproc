@@ -6,10 +6,12 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from dotenv import load_dotenv
 
+from llmproc.callbacks import CallbackEvent
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.program import LLMProgram
@@ -38,13 +40,13 @@ class LLMProcess:
         provider: str,
         original_system_prompt: str,
         system_prompt: str,
+        access_level: AccessLevel = AccessLevel.ADMIN,
         display_name: Optional[str] = None,
         base_dir: Optional[Path] = None,
         api_params: dict[str, Any] = None,
         # Runtime state
         state: list[dict[str, Any]] = None,
         enriched_system_prompt: Optional[str] = None,
-        allow_fork: bool = True,
         # Client
         client: Any = None,
         # File descriptor system
@@ -92,7 +94,6 @@ class LLMProcess:
             api_params: API parameters
             state: Conversation state
             enriched_system_prompt: Enriched system prompt
-            allow_fork: Whether forking is allowed
             client: Provider client
             fd_manager: File descriptor manager
             file_descriptor_enabled: Whether file descriptor system is enabled
@@ -105,7 +106,6 @@ class LLMProcess:
             mcp_config_path: MCP config path
             mcp_tools: MCP tools
             mcp_enabled: Whether MCP is enabled
-            _tools_need_initialization: Whether tools need initialization
 
         Raises:
             ValueError: If required parameters are missing
@@ -128,7 +128,6 @@ class LLMProcess:
         # Runtime state
         self.state = state or []
         self.enriched_system_prompt = enriched_system_prompt
-        self.allow_fork = allow_fork
 
         # Client
         self.client = client
@@ -143,9 +142,12 @@ class LLMProcess:
         self.linked_program_descriptions = linked_program_descriptions or {}
         self.has_linked_programs = has_linked_programs if has_linked_programs is not None else bool(linked_programs)
 
-        # Tool management
+        # Tool management and access control
         self.tool_manager = tool_manager
         self.enabled_tools = enabled_tools or []
+        self.access_level = access_level
+        if tool_manager:
+            self.tool_manager.set_process_access_level(access_level)
 
         # MCP configuration
         self.mcp_config_path = mcp_config_path
@@ -155,8 +157,52 @@ class LLMProcess:
         # User prompt configuration
         self.user_prompt = user_prompt
         self.max_iterations = max_iterations
+        
+        # Callback system - initialize empty list
+        self.callbacks = []
 
-    async def run(self, user_input: str, max_iterations: int = None, callbacks: dict = None) -> "RunResult":
+    def add_callback(self, callback: Callable) -> "LLMProcess":
+        """Register a callback function or object.
+        
+        You can pass either:
+        1. A function that accepts (event, *args, **kwargs)
+        2. An object with methods matching event names (tool_start, tool_end, response)
+        
+        Args:
+            callback: The callback function or object
+            
+        Returns:
+            Self for method chaining
+        """
+        self.callbacks.append(callback)
+        return self
+    
+    def trigger_event(self, event: CallbackEvent, *args, **kwargs) -> None:
+        """Trigger an event to all registered callbacks.
+        
+        Args:
+            event: The CallbackEvent enum value
+            *args: Positional arguments to pass to the callback
+            **kwargs: Keyword arguments to pass to the callback
+        """
+        if not self.callbacks:
+            return
+            
+        event_name = event.value  # Get string value from enum
+            
+        for callback in self.callbacks:
+            try:
+                # Class-based callback with method matching event name
+                if hasattr(callback, event_name):
+                    method = getattr(callback, event_name)
+                    method(*args, **kwargs)
+                # Function-based callback
+                elif callable(callback):
+                    callback(event, *args, **kwargs)
+            except Exception as e:
+                logger.warning(f"Error in {event.name} callback: {e}")
+    
+    async def run(self, user_input: str, max_iterations: int = None) -> "RunResult":
         """Run the LLM process with user input asynchronously.
 
         This method supports full tool execution with proper async handling.
@@ -165,10 +211,6 @@ class LLMProcess:
         Args:
             user_input: The user message to process
             max_iterations: Maximum number of tool-calling iterations (defaults to self.max_iterations)
-            callbacks: Optional dictionary of callback functions:
-                - 'on_tool_start': Called when a tool execution starts
-                - 'on_tool_end': Called when a tool execution completes
-                - 'on_response': Called when a model response is received
 
         Returns:
             RunResult object with execution metrics
@@ -186,17 +228,16 @@ class LLMProcess:
 
         # If not in an event loop, run in a new one
         if not in_event_loop:
-            return asyncio.run(self._async_run(user_input, max_iterations, callbacks))
+            return asyncio.run(self._async_run(user_input, max_iterations))
         else:
-            return await self._async_run(user_input, max_iterations, callbacks)
+            return await self._async_run(user_input, max_iterations)
 
-    async def _async_run(self, user_input: str, max_iterations: int, callbacks: dict = None) -> "RunResult":
+    async def _async_run(self, user_input: str, max_iterations: int) -> "RunResult":
         """Internal async implementation of run.
 
         Args:
             user_input: The user message to process
             max_iterations: Maximum number of tool-calling iterations
-            callbacks: Optional dictionary of callback functions
 
         Returns:
             RunResult object with execution metrics
@@ -207,15 +248,9 @@ class LLMProcess:
         # Create a RunResult object to track this run
         run_result = RunResult()
 
-        # Normalize callbacks
-        callbacks = callbacks or {}
-
         # Verify user input isn't empty
         if not user_input or user_input.strip() == "":
             raise ValueError("User input cannot be empty")
-
-        # MCP tools should already be initialized during program.start()
-        # No need for lazy initialization here
 
         # Process user input through file descriptor manager if enabled
         processed_user_input = user_input
@@ -235,17 +270,17 @@ class LLMProcess:
         if self.provider == "openai":
             # Use the OpenAI process executor (simplified version)
             executor = OpenAIProcessExecutor()
-            run_result = await executor.run(self, processed_user_input, max_iterations, callbacks, run_result)
+            run_result = await executor.run(self, processed_user_input, max_iterations, run_result)
 
         elif self.provider in ANTHROPIC_PROVIDERS:
             # Use the stateless AnthropicProcessExecutor for both direct Anthropic API and Vertex AI
             executor = AnthropicProcessExecutor()
-            run_result = await executor.run(self, processed_user_input, max_iterations, callbacks, run_result)
+            run_result = await executor.run(self, processed_user_input, max_iterations, run_result)
 
         elif self.provider in GEMINI_PROVIDERS:
             # Use the GeminiProcessExecutor for both direct API and Vertex AI
             executor = GeminiProcessExecutor()
-            run_result = await executor.run(self, processed_user_input, max_iterations, callbacks, run_result)
+            run_result = await executor.run(self, processed_user_input, max_iterations, run_result)
         else:
             raise NotImplementedError(f"Provider {self.provider} not implemented")
 
@@ -269,7 +304,7 @@ class LLMProcess:
 
         # Mark the run as complete and calculate duration
         run_result.complete()
-
+        
         return run_result
 
     def get_state(self) -> list[dict[str, str]]:
@@ -339,29 +374,46 @@ class LLMProcess:
         """
         return self.tool_manager.runtime_registry.tool_handlers
 
-    async def call_tool(self, tool_name: str, **kwargs) -> Any:
-        """Call a tool by name with the given arguments.
+    async def call_tool(self, tool_name: str, args_dict: dict) -> Any:
+        """Call a tool by name with the given arguments dictionary.
 
         This method provides a unified interface for calling any registered tool,
         whether it's an MCP tool, a system tool, or a function-based tool.
-        It delegates to the ToolManager which handles all tool calling details.
+        It delegates to the ToolManager which handles all tool calling details
+        and performs file descriptor processing if needed.
 
         Args:
             tool_name: The name of the tool to call
-            **kwargs: The keyword arguments to pass to the tool
+            args_dict: Dictionary of arguments to pass to the tool
 
         Returns:
             The result of the tool execution or an error ToolResult
         """
         try:
-            # Pass all keyword arguments directly to the tool manager
-            args_dict = dict(kwargs)
+            # Call the tool through tool manager
             result = await self.tool_manager.call_tool(tool_name, args_dict)
-
-            # Log any errors that were returned (but not exceptions that were caught)
+            
+            # Log any errors that were returned
             if hasattr(result, "is_error") and result.is_error:
                 logger.error(f"Tool '{tool_name}' returned error: {result.content}")
-
+                return result
+            
+            # Process result for file descriptors if needed
+            if (self.file_descriptor_enabled and 
+                self.fd_manager and
+                hasattr(result, "content")):
+                
+                processed_result, used_fd = self.fd_manager.create_fd_from_tool_result(
+                    result.content, tool_name
+                )
+                
+                if used_fd:
+                    logger.info(
+                        f"Tool result from '{tool_name}' exceeds {self.fd_manager.max_direct_output_chars} chars, creating file descriptor"
+                    )
+                    result = processed_result
+                    logger.debug(f"Created file descriptor for tool result from '{tool_name}'")
+            
             return result
         except Exception as e:
             error_msg = f"Error calling tool '{tool_name}': {str(e)}"
@@ -434,7 +486,7 @@ class LLMProcess:
 
         return ""
 
-    async def fork_process(self) -> "LLMProcess":
+    async def fork_process(self, access_level: AccessLevel = AccessLevel.WRITE) -> "LLMProcess":
         """Create a deep copy of this process with preserved state.
 
         This implements the fork system call semantics where a copy of the
@@ -445,16 +497,21 @@ class LLMProcess:
         1. A new base process is created through the standard program_exec.create_process path
         2. Runtime state is copied from parent to child
         3. State-specific configurations are preserved
+        4. Access level is set on the child process
+
+        Args:
+            access_level: Access level to set for the child process (defaults to WRITE)
 
         Returns:
             A new LLMProcess instance that is a deep copy of this one
 
         Raises:
-            RuntimeError: If forking is not allowed for this process
+            RuntimeError: If the current process doesn't have ADMIN access
         """
-        # Check if forking is allowed for this process
-        if not self.allow_fork:
-            raise RuntimeError("Forking is not allowed for this process")
+        # Check if the current process has permission to fork
+        # Only processes with ADMIN access can create new child processes
+        if not hasattr(self, "access_level") or self.access_level != AccessLevel.ADMIN:
+            raise RuntimeError("Forking requires ADMIN access level and is not allowed for this process")
 
         # Get a display name for logging, using fallbacks for test environments
         display_name = "unknown"
@@ -476,46 +533,48 @@ class LLMProcess:
 
         forked_process = await create_process(self.program)
 
-        # 2. Copy runtime state from parent to child
-        # Deep copy to ensure complete independence between parent and child processes
-        forked_process.state = copy.deepcopy(self.state)
+        # Copy runtime state using snapshot helper
+        from llmproc.process_snapshot import ProcessSnapshot
 
-        # Copy the enriched system prompt if it exists
-        if hasattr(self, "enriched_system_prompt") and self.enriched_system_prompt:
-            forked_process.enriched_system_prompt = self.enriched_system_prompt
+        snapshot = ProcessSnapshot(
+            state=copy.deepcopy(self.state),
+            enriched_system_prompt=getattr(self, "enriched_system_prompt", None),
+        )
 
-        # 3. Deep copy FD manager state if FD is enabled
+        if hasattr(forked_process, "_apply_snapshot"):
+            forked_process._apply_snapshot(snapshot)
+        else:
+            # degraded mode for heavily mocked objects in unit tests
+            forked_process.state = snapshot.state
+            forked_process.enriched_system_prompt = snapshot.enriched_system_prompt
+
+        # Copy file descriptor manager state if FD is enabled
         # File descriptor system state needs special handling to ensure
         # complete independence between parent and child
-        if (
-            hasattr(self, "file_descriptor_enabled")
-            and self.file_descriptor_enabled
-            and hasattr(self, "fd_manager")
-            and self.fd_manager
-        ):
+        if getattr(self, "file_descriptor_enabled", False) and getattr(self, "fd_manager", None):
             forked_process.file_descriptor_enabled = True
-            forked_process.fd_manager = copy.deepcopy(self.fd_manager)
+            # Use subsystem‑provided clone helper
+            try:
+                forked_process.fd_manager = self.fd_manager.clone()
+            except AttributeError:
+                # Fallback to deepcopy if clone not yet implemented
+                forked_process.fd_manager = copy.deepcopy(self.fd_manager)
 
-            # Copy references_enabled setting
             forked_process.references_enabled = getattr(self, "references_enabled", False)
 
-            # Ensure user input handling settings are copied correctly
-            if hasattr(self.fd_manager, "file_descriptors") and hasattr(forked_process, "fd_manager"):
-                if not hasattr(forked_process.fd_manager, "page_user_input"):
-                    forked_process.fd_manager.page_user_input = getattr(self.fd_manager, "page_user_input", False)
-                if not hasattr(forked_process.fd_manager, "max_input_chars"):
-                    forked_process.fd_manager.max_input_chars = getattr(self.fd_manager, "max_input_chars", 8000)
+        # Copy callbacks from parent to child
+        if hasattr(self, "callbacks") and self.callbacks:
+            forked_process.callbacks = self.callbacks.copy()
 
-                try:
-                    fd_count = len(getattr(forked_process.fd_manager, "file_descriptors", {}))
-                    logger.debug(f"Deep copied FD manager state during fork. Copied {fd_count} FDs.")
-                except (AttributeError, TypeError):
-                    # Handle mock objects in tests
-                    pass
+        # Set access level for the child process using process_access_level on tool_manager
+        # This prevents the child from calling ADMIN tools like fork
+        if hasattr(forked_process, "tool_manager"):
+            forked_process.tool_manager.set_process_access_level(access_level)
+            logger.debug(f"Set access level for forked process to {access_level.value}")
 
-        # 4. Prevent the forked process from forking again
-        # This prevents potential issues with deep fork chains
-        forked_process.allow_fork = False
+        # The child process will have its access level set according to the parameter,
+        # which defaults to AccessLevel.WRITE, preventing it from calling fork again
+        # (Only processes with ADMIN access level can use fork)
 
         # Get forked display name for logging, using fallbacks for test environments
         forked_display = "unknown"
@@ -528,5 +587,26 @@ class LLMProcess:
             # Handle mock objects or missing attributes in tests
             pass
 
-        logger.info(f"Fork successful. New process created for {forked_display}")
+        logger.info(f"Fork successful. New process created for {forked_display} with {access_level.value} access")
         return forked_process
+
+    # ------------------------------------------------------------------
+    # Snapshot helpers (internal)
+    # ------------------------------------------------------------------
+
+    def _apply_snapshot(self, snapshot: "ProcessSnapshot") -> None:
+        """Replace this process's conversation state with *snapshot*.
+
+        Intended for use by fork_process; not part of the public API.
+        
+        This is part of the fork tool implementation and helps maintain proper
+        state isolation between parent and child processes by applying a
+        snapshot of the parent's state to the child process.
+        
+        Args:
+            snapshot: An immutable snapshot containing the conversation state to apply
+        """
+        # Shallow assignment is safe – snapshot already deep‑copied lists.
+        self.state = snapshot.state
+        if snapshot.enriched_system_prompt is not None:
+            self.enriched_system_prompt = snapshot.enriched_system_prompt

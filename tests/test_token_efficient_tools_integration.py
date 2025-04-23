@@ -176,6 +176,38 @@ async def token_efficient_tools_from_sdk():
     yield process
 
 
+@pytest.fixture
+async def token_efficient_tools_from_sdk():
+    """Creates a process with token-efficient tools using the Python SDK.
+
+    This fixture provides an isolated process instance with token-efficient tools
+    enabled, created programmatically using the Python SDK instead of TOML.
+
+    Uses function scope for test isolation and the program.start() pattern.
+
+    Yields:
+        LLMProcess: A started process instance with token-efficient tools enabled
+    """
+    # Create a program using the Python SDK with token-efficient tools enabled
+    program = (
+        LLMProgram(
+            model_name="claude-3-7-sonnet-20250219",  # Required for token-efficient tools
+            provider="anthropic",
+            system_prompt="You are a helpful assistant with access to tools.",
+            parameters={
+                "max_tokens": 4096,
+                "temperature": 0.7,
+            },
+        )
+        .register_tools(["calculator"])  # Enable calculator tool for testing
+        .enable_token_efficient_tools()  # Enable token-efficient tools feature
+    )
+
+    # Start the process using the standard pattern
+    process = await program.start()
+    yield process
+
+
 @pytest.mark.llm_api
 @pytest.mark.extended_api
 class TestTokenEfficientToolsIntegration:

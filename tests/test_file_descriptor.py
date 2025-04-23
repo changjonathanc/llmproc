@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, Mock, patch
 
+from llmproc.common.access_control import AccessLevel
+
 import pytest
 
 from llmproc.common.results import ToolResult
@@ -203,7 +205,8 @@ async def test_fd_integration_with_fork(mock_get_provider_client):
         mock_forked_process.file_descriptor_enabled = True
         mock_forked_process.state = []
         mock_forked_process.fd_manager = FileDescriptorManager(enable_references=True)
-        mock_forked_process.allow_fork = False
+        # Child processes get WRITE access level (preventing further forking)
+        mock_forked_process.access_level = AccessLevel.WRITE
         return mock_forked_process
 
     # Patch the fork_process method on our specific process instance
@@ -214,7 +217,7 @@ async def test_fd_integration_with_fork(mock_get_provider_client):
     assert forked_process.file_descriptor_enabled is True
     assert hasattr(forked_process, "fd_manager")
     assert hasattr(forked_process, "state")
-    assert forked_process.allow_fork is False
+    assert forked_process.access_level == AccessLevel.WRITE
 
 
 @pytest.mark.asyncio

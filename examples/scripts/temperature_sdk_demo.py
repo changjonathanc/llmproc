@@ -74,19 +74,22 @@ async def set_sampling_temperature(temperature: float, runtime_context: dict):
     return f"Sampling temperature set to {temperature}."
 
 
-# Simple callback functions
-def on_tool_start(tool_name: str, tool_args: Dict[str, Any]) -> None:
-    """Print when a tool starts"""
-    if tool_name == "set_sampling_temperature":
-        print(f"\n🔄 Changing temperature to: {tool_args.get('temperature')}")
+from llmproc.callbacks import CallbackEvent
 
-def on_tool_end(tool_name: str, result: Any) -> None:
-    """Print when a tool completes"""
-    print(f"✅ Tool result: {result}")
+# Simple callback class implementing the new callback system
+class TemperatureCallbacks:
+    def tool_start(self, tool_name: str, tool_args: Dict[str, Any]) -> None:
+        """Print when a tool starts"""
+        if tool_name == "set_sampling_temperature":
+            print(f"\n🔄 Changing temperature to: {tool_args.get('temperature')}")
 
-def on_response(content: str) -> None:
-    """Print each response from the model during the run loop"""
-    print(f"\n🤖 Model says: {content}")
+    def tool_end(self, tool_name: str, result: Any) -> None:
+        """Print when a tool completes"""
+        print(f"✅ Tool result: {result}")
+
+    def response(self, content: str) -> None:
+        """Print each response from the model during the run loop"""
+        print(f"\n🤖 Model says: {content}")
 
 
 async def main():
@@ -115,16 +118,12 @@ async def main():
         print("Registering temperature tool...")
         program.register_tools([set_sampling_temperature])
 
-        # Step 3: Set up simple callbacks
-        callbacks = {
-            "on_tool_start": on_tool_start,
-            "on_tool_end": on_tool_end,
-            "on_response": on_response,
-        }
-
-        # Step 4: Start the process
+        # Step 3: Start the process
         print("Starting LLM process...")
         process = await program.start()
+        
+        # Step 4: Register callbacks using the new system
+        process.add_callback(TemperatureCallbacks())
 
         # Get initial temperature
         initial_temp = process.api_params.get("temperature")
@@ -135,7 +134,7 @@ async def main():
         print(f"\n\033[1m=== USING DEFAULT TEMPERATURE ({initial_temp}) ===\033[0m")
         print(f"Prompt: {prompt}")
 
-        result = await process.run(prompt, callbacks=callbacks)
+        result = await process.run(prompt)
         response = process.get_last_message()
         print(f"{response}")
     except Exception as e:

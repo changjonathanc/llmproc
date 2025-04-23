@@ -347,7 +347,6 @@ class TestPrepareProcessState:
         assert isinstance(result["enriched_system_prompt"], str)
 
         # Assert - Verify other attributes
-        assert result["allow_fork"] is True
         assert result["client"] == mock_init_client.return_value
         assert result["fd_manager"] == mock_fd_manager
         assert result["file_descriptor_enabled"] is True

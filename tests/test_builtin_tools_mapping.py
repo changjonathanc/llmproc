@@ -40,9 +40,10 @@ def test_schema_modifier_in_register_tool():
         """Test function docstring."""
         return f"Result: {arg1}, {arg2}"
 
-    # Verify schema_modifier is stored
-    assert hasattr(test_function, "_schema_modifier")
-    assert test_function._schema_modifier == test_modifier
+    # Verify schema_modifier is stored in metadata
+    from llmproc.common.metadata import get_tool_meta
+    meta = get_tool_meta(test_function)
+    assert meta.schema_modifier == test_modifier
 
     # Test that create_tool_from_function applies the modifier
     from llmproc.tools.function_tools import create_tool_from_function
@@ -82,9 +83,10 @@ def test_spawn_tool_schema_modifier():
     """Test that spawn tool's schema modifier is applied."""
     from llmproc.tools.builtin.spawn import modify_spawn_schema, spawn_tool
 
-    # Verify spawn tool has schema_modifier
-    assert hasattr(spawn_tool, "_schema_modifier")
-    assert spawn_tool._schema_modifier == modify_spawn_schema
+    # Verify spawn tool has schema_modifier in metadata
+    from llmproc.common.metadata import get_tool_meta
+    meta = get_tool_meta(spawn_tool)
+    assert meta.schema_modifier == modify_spawn_schema
 
     # Test schema modifier function
     test_schema = {"description": "Original description"}

@@ -19,6 +19,7 @@ The MCP implementation uses a two-registry design for performance and isolation:
    - Handles selective initialization of MCP servers and tools
    - Only launches servers needed for requested tools
    - Maintains separation between MCP tools and runtime tools
+   - Enforces access control for MCP tools
 
 2. **Dual-Registry Approach**:
    - **MCP Registry**: Manages tool definitions from MCP servers
@@ -84,6 +85,31 @@ You can specify tools in two ways:
 
 1. List specific tools: `github = ["search_repositories", "get_file_contents"]`
 2. Import all tools from a server: `github = "all"`
+
+### Using MCPTool API
+
+You can also programmatically register MCP tools with access control using the `MCPTool` class:
+
+```python
+from llmproc.common.access_control import AccessLevel
+from llmproc.tools.mcp import MCPTool
+
+# Register MCP tools with different access levels
+program.register_tools([
+    # All tools from server with default WRITE access
+    MCPTool(server="calculator"),
+    
+    # Specific tools with READ access
+    MCPTool(server="github", names=["search_repos"], access=AccessLevel.READ),
+    
+    # Different access levels for different tools
+    MCPTool(server="file_server", names={
+        "read_file": AccessLevel.READ,
+        "write_file": AccessLevel.WRITE,
+        "delete_file": AccessLevel.ADMIN
+    })
+])
+```
 
 ## Provider Support
 

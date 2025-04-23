@@ -332,12 +332,12 @@ async def test_tool_calling_works(mock_env, mock_get_provider_client):
         mock_call.return_value = mock_future
 
         # Call the tool with explicit parameters
-        await process.call_tool("calculator", expression="1+1")
+        await process.call_tool("calculator", {"expression": "1+1"})
 
         # Verify the tool was called with correct arguments
         mock_call.assert_called_once()
         assert mock_call.call_args[0][0] == "calculator"
-        # Now call_tool passes a dictionary from the keyword args
+        assert mock_call.call_args[0][1] == {"expression": "1+1"}
         assert "expression" in mock_call.call_args[0][1]
         assert mock_call.call_args[0][1]["expression"] == "1+1"
 
@@ -419,8 +419,8 @@ async def test_mcp_tool_initialization_in_create_process(mock_env, mock_get_prov
         # Create process using program.start()
         process = await program.start()
 
-        # Verify create_process was called
-        mock_create_process.assert_called_once_with(program)
+        # Verify create_process was called with program and access_level=None
+        mock_create_process.assert_called_once_with(program, access_level=None)
 
         # Verify the process has expected values
         assert process.mcp_enabled is True

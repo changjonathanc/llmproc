@@ -467,6 +467,35 @@ class FileDescriptorManager:
         # It just stores the references in the FD system
         return message
 
+    # ------------------------------------------------------------------
+    # Cloning helper
+    # ------------------------------------------------------------------
+
+    def clone(self) -> "FileDescriptorManager":
+        """Return a deep‑cloned copy of this manager for forked processes.
+        
+        This method creates a complete, independent copy of the file descriptor manager,
+        including all file descriptors and settings. It's used specifically by the
+        fork tool to ensure proper isolation between parent and child processes.
+        
+        Returns:
+            A deep copy of this FileDescriptorManager with independent state
+        """
+        import copy
+
+        cloned = FileDescriptorManager(
+            default_page_size=self.default_page_size,
+            max_direct_output_chars=self.max_direct_output_chars,
+            max_input_chars=self.max_input_chars,
+            page_user_input=self.page_user_input,
+            enable_references=self.enable_references,
+        )
+
+        cloned.file_descriptors = copy.deepcopy(self.file_descriptors)
+        cloned.fd_related_tools = self.fd_related_tools.copy()
+        cloned.next_fd_id = self.next_fd_id
+        return cloned
+
 
 # Apply full docstrings
 FileDescriptorManager.__doc__ = FILEDESCRIPTORMANAGER_CLASS

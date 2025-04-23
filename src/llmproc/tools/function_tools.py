@@ -18,8 +18,15 @@ import re
 from collections.abc import Callable
 from typing import Any, Optional, Union, get_args, get_origin, get_type_hints
 
-from llmproc.common.context import check_requires_context, validate_context_has
+from llmproc.common.access_control import AccessLevel
+from llmproc.common.constants import TOOL_METADATA_ATTR
+from llmproc.common.context import validate_context_has
 from llmproc.common.results import ToolResult
+from llmproc.common.metadata import (
+    ToolMeta,
+    attach_meta,
+    get_tool_meta,
+)
 
 
 def get_tool_name(tool: Callable) -> str:
@@ -38,6 +45,21 @@ def get_tool_name(tool: Callable) -> str:
 logger = logging.getLogger(__name__)
 
 
+def get_tool_name(tool: Callable) -> str:
+    """Extract tool name from a callable function.
+
+    Args:
+        tool: The callable tool function
+
+    Returns:
+        The name of the tool from metadata or function name
+    """
+    meta = get_tool_meta(tool)
+    if meta.name:
+        return meta.name
+    return tool.__name__
+
+
 def register_tool(
     name: str = None,
     description: str = None,
@@ -47,8 +69,12 @@ def register_tool(
     requires_context: bool = False,
     required_context_keys: list[str] = None,
     schema_modifier: Callable[[dict, dict], dict] = None,
+    access: Union[AccessLevel, str] = AccessLevel.WRITE,
 ):
     """Decorator to register a function as a tool with enhanced schema support.
+
+    This decorator stores all tool metadata in a centralized ToolMeta object
+    rather than as separate attributes on the function.
 
     Args:
         name: Optional custom name for the tool (defaults to function name)
@@ -59,54 +85,49 @@ def register_tool(
         requires_context: Whether this tool requires runtime context
         required_context_keys: List of context keys that must be present in runtime_context
         schema_modifier: Optional function to modify schema with runtime config
+        access: Access level for this tool (READ, WRITE, or ADMIN). Defaults to WRITE.
 
     Returns:
         Decorator function that registers the tool metadata
     """
-    # Handle case where decorator is used without arguments: @register_tool
+    # Handle case where decorator is used without parentheses: @register_tool
     if callable(name):
-        func = name
-        func._is_tool = True
-        return func
+        func = name  # type: ignore[assignment]
+        # Reuse the code path by calling the decorator with defaults
+        return register_tool()(func)
 
     def decorator(func):
-        # Store tool metadata as attributes on the function
-        if name is not None:
-            func._tool_name = name
-        if description is not None:
-            func._tool_description = description
-        if param_descriptions is not None:
-            func._param_descriptions = param_descriptions
-        if schema is not None:
-            func._custom_schema = schema
-        if required is not None:
-            func._required_params = required
-        if schema_modifier is not None:
-            func._schema_modifier = schema_modifier
-
-        # Mark the function as a tool
-        func._is_tool = True
-
-        # Handle context awareness
+        # Convert access level string to enum if needed
+        access_level = access
+        if isinstance(access, str):
+            access_level = AccessLevel.from_string(access)
+            
+        # Determine tool name (from parameter or function name)
+        tool_name = name if name is not None else func.__name__
+        
+        # Create the common metadata object
+        meta_obj = ToolMeta(
+            name=tool_name,
+            description=description,
+            param_descriptions=param_descriptions,
+            required_params=tuple(required or ()),
+            custom_schema=schema,
+            access=access_level,
+            requires_context=requires_context,
+            required_context_keys=tuple(required_context_keys or ()) if requires_context else (),
+            schema_modifier=schema_modifier,
+        )
+        
+        # If requires context, create a wrapper with context validation
         if requires_context:
-            # Mark the function as requiring context
-            func._requires_context = True
-
-            # Store required context keys if specified
-            if required_context_keys:
-                func._required_context_keys = required_context_keys
-
-            # Create wrapper to validate context requirements
+            # Create the context wrapper
             @functools.wraps(func)
             async def context_wrapper(*args, **kwargs):
-                # Extract function name once to avoid duplication
-                func_name = getattr(func, "_tool_name", func.__name__)
-
                 # Validate context if requirements specified
                 if required_context_keys and "runtime_context" in kwargs:
                     valid, error = validate_context_has(kwargs["runtime_context"], *required_context_keys)
                     if not valid:
-                        error_msg = f"Tool '{func_name}' error: {error}"
+                        error_msg = f"Tool '{tool_name}' error: {error}"
                         logger.error(error_msg)
                         return ToolResult.from_error(error_msg)
 
@@ -114,28 +135,17 @@ def register_tool(
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
-                    error_msg = f"Tool '{func_name}' error: {str(e)}"
+                    error_msg = f"Tool '{tool_name}' error: {str(e)}"
                     logger.error(error_msg, exc_info=True)
                     return ToolResult.from_error(error_msg)
 
-            # Copy all metadata to wrapper
-            for attr in [
-                "_is_tool",
-                "_requires_context",
-                "_tool_name",
-                "_tool_description",
-                "_param_descriptions",
-                "_custom_schema",
-                "_required_params",
-                "_required_context_keys",
-                "_schema_modifier",  # Add schema_modifier to copied attributes
-            ]:
-                if hasattr(func, attr):
-                    setattr(context_wrapper, attr, getattr(func, attr))
-
+            # Attach metadata to the wrapper
+            attach_meta(context_wrapper, meta_obj)
             return context_wrapper
-
-        return func
+        else:
+            # For non-context functions, just attach metadata to the original function
+            attach_meta(func, meta_obj)
+            return func
 
     return decorator
 
@@ -223,14 +233,30 @@ def type_to_json_schema(
     return schema
 
 
+def get_tool_access_level(func: Callable) -> AccessLevel:
+    """Get the access level for a tool function.
+    
+    Args:
+        func: The tool function to check
+        
+    Returns:
+        The AccessLevel enum value (defaults to WRITE if not specified)
+    """
+    meta = get_tool_meta(func)
+    return meta.access
+
+
 def function_to_tool_schema(func: Callable) -> dict[str, Any]:
     """Convert a function to a tool schema."""
+    # Get function metadata from the centralized metadata object
+    meta = get_tool_meta(func)
+    
     # If there's a custom schema defined, just use that
-    if hasattr(func, "_custom_schema"):
-        return func._custom_schema
+    if meta.custom_schema:
+        return meta.custom_schema
 
     # Get function metadata
-    func_name = getattr(func, "_tool_name", func.__name__)
+    func_name = meta.name or func.__name__
 
     # Start with the basic schema
     schema = {
@@ -242,8 +268,8 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
     docstring = inspect.getdoc(func)
 
     # Set description from tool metadata or function docstring
-    if hasattr(func, "_tool_description"):
-        schema["description"] = func._tool_description
+    if meta.description:
+        schema["description"] = meta.description
     elif docstring:
         # Extract the first line of the docstring as the description
         first_line = docstring.split("\n", 1)[0].strip()
@@ -254,8 +280,8 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
     # Extract parameter documentation from docstring
     docstring_params = extract_docstring_params(func)
 
-    # Get explicit parameter descriptions if provided
-    explicit_descriptions = getattr(func, "_param_descriptions", None)
+    # Get explicit parameter descriptions from metadata
+    explicit_descriptions = meta.param_descriptions
 
     # Get type hints and signature
     type_hints = get_type_hints(func)
@@ -279,13 +305,13 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
         schema["input_schema"]["properties"][param_name] = param_schema
 
         # Add to required list if no default value and no custom required list
-        if not hasattr(func, "_required_params") and param.default is param.empty:
+        if not meta.required_params and param.default is param.empty:
             schema["input_schema"]["required"].append(param_name)
 
-    # Override with explicitly provided required parameters if specified
-    if hasattr(func, "_required_params"):
-        schema["input_schema"]["required"] = func._required_params
-
+    # Override with explicitly provided required parameters from metadata
+    if meta.required_params:
+        schema["input_schema"]["required"] = list(meta.required_params)
+    
     return schema
 
 
@@ -297,8 +323,9 @@ def prepare_tool_handler(func: Callable) -> Callable:
     # Get the function signature
     sig = inspect.signature(func)
 
-    # Get the tool name for error reporting
-    func_name = getattr(func, "_tool_name", func.__name__)
+    # Get metadata from the centralized metadata object
+    meta = get_tool_meta(func)
+    func_name = meta.name or func.__name__
 
     # Create handler function with error handling
     async def handler(**kwargs) -> ToolResult:
@@ -330,11 +357,9 @@ def prepare_tool_handler(func: Callable) -> Callable:
             logger.error(error_msg, exc_info=True)
             return ToolResult.from_error(error_msg)
 
-    # Copy metadata attributes
-    for attr in ["_requires_context", "_required_context_keys"]:
-        if hasattr(func, attr):
-            setattr(handler, attr, getattr(func, attr))
-
+    # Transfer the metadata to the handler
+    attach_meta(handler, meta)
+    
     return handler
 
 
@@ -342,6 +367,9 @@ def create_process_aware_handler(func: Callable, process: Any) -> Callable:
     """Create a process-aware tool handler that injects the process instance."""
     # Get the function signature
     sig = inspect.signature(func)
+
+    # Get the metadata
+    meta = get_tool_meta(func)
 
     # Use a set for faster lookups
     param_names = {name for name in sig.parameters if name != "llm_process"}
@@ -360,6 +388,9 @@ def create_process_aware_handler(func: Callable, process: Any) -> Callable:
         else:
             return func(**function_kwargs)
 
+    # Transfer metadata to handler directly
+    attach_meta(handler, meta)
+    
     return handler
 
 
@@ -377,7 +408,8 @@ def create_tool_from_function(func: Callable, config: dict = None) -> tuple[Call
     schema = function_to_tool_schema(func)
 
     # Apply schema modifier if present and config is provided
-    if config and hasattr(func, "_schema_modifier"):
-        schema = func._schema_modifier(schema, config)
+    meta = get_tool_meta(func)
+    if config and meta.schema_modifier:
+        schema = meta.schema_modifier(schema, config)
 
     return handler, schema

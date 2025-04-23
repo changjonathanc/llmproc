@@ -23,12 +23,14 @@ With the GOTO tool, LLMs can autonomously reset the conversation to a more produ
 
 ## How It Works
 
-Each message in the conversation is assigned a unique ID (msg_0, msg_1, etc.). The LLM can use the GOTO tool to:
+Each message in the conversation is assigned a unique ID that is displayed at the beginning of the message (e.g., `[msg_0]`, `[msg_1]`). Internally, these IDs are stored as simple integers for efficiency, but are formatted consistently for display.
 
-1. Specify a target message ID to reset to (e.g., "msg_0" for the very beginning)
+The LLM can use the GOTO tool to:
+
+1. Specify a target message ID to reset to (e.g., `"msg_0"` for the very beginning)
 2. Provide a new message to add at that point (explaining the reason for the reset)
 3. The system then truncates the conversation history at the target point
-4. The new message is added with special `<time_travel>` XML tags
+4. The new message is added with special `<time_travel_message>` XML tags
 5. The LLM then continues the conversation from this new state
 
 ## Usage Example
@@ -57,27 +59,42 @@ Here's a conversation example showing the GOTO tool in action:
 
 The conversation resets to:
 [msg_0] User: Hello, what can you help me with?
-[msg_1] User: [SYSTEM NOTE: Conversation reset to message msg_0. 3 messages were removed.]
+[msg_1] User: 
+<system_message>
+GOTO tool used. Conversation reset to message msg_0. 3 messages were removed.
+</system_message>
 
-<time_travel>
+<original_message_to_be_ignored>
+Hello, what can you help me with?
+</original_message_to_be_ignored>
+
+<time_travel_message>
 Let's start over and talk about AI instead.
-</time_travel>
+</time_travel_message>
 
 [msg_2] Assistant: I'd be happy to talk about AI. Artificial Intelligence refers to...
 ```
 
 ## Implementation
 
-The GOTO tool consists of two main components:
+The GOTO tool consists of several key components:
 
-1. **Tool Definition**: Contains detailed instructions for the LLM on when and how to use the time travel capability
-2. **Handler Function**: Implements the actual state manipulation to reset the conversation
+1. **Message ID System**:
+   - Messages are assigned integer IDs internally (0, 1, 2...)
+   - IDs are formatted consistently for display (e.g., "[msg_0]")
+   - The formatting is centralized and configurable
+   
+2. **Tool Definition**: 
+   - Contains detailed instructions for the LLM on when and how to use the time travel capability
+   - Explains how to reference message IDs using the format visible in messages
+   
+3. **Handler Function**: 
+   - Parses message IDs in the format that LLMs naturally use
+   - Implements the state manipulation to reset the conversation
+   - Formats system notes with appropriate XML tags
 
-The tool definition includes guidance for the LLM on:
-- When to use time travel (explicit requests, off-track conversations)
-- How to use the position parameter (specifying message IDs)
-- XML formatting for time travel messages
-- What happens after using the tool (state reset)
+The tool is designed to be intuitive for LLMs by accepting the same message ID format
+that they see in the conversation history.
 
 ## Demo Scripts
 

@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from llmproc import LLMProgram
+from llmproc.callbacks import CallbackEvent
 
 # Set up logging
 logging.basicConfig(
@@ -63,14 +64,15 @@ class ToolProgressTracker:
         sys.stdout.write("\r" + " " * 50 + "\r")
         sys.stdout.flush()
 
-    def on_tool_start(self, tool_name, tool_args):
+    # Updated callback method names to match new pattern
+    def tool_start(self, tool_name, tool_args):
         """Callback for when a tool starts execution"""
         logger.info(f"Starting tool: {tool_name}")
         self.active_tools.add(tool_name)
         if not self.task or self.task.done():
             self.start()
 
-    def on_tool_end(self, tool_name, result):
+    def tool_end(self, tool_name, result):
         """Callback for when a tool completes execution"""
         logger.info(f"Completed tool: {tool_name}")
         if tool_name in self.active_tools:
@@ -78,6 +80,10 @@ class ToolProgressTracker:
 
         if not self.active_tools:
             self.stop()
+            
+    def response(self, content):
+        """Callback for when a response is received"""
+        logger.debug(f"Response: {content[:30]}...")
 
 
 async def main():
@@ -101,12 +107,8 @@ async def main():
         init_time = time.time() - start_time
         print(f"Process initialized in {init_time:.2f} seconds")
 
-        # Step 3: Prepare callbacks
-        callbacks = {
-            "on_tool_start": tracker.on_tool_start,
-            "on_tool_end": tracker.on_tool_end,
-            "on_response": lambda content: logger.debug(f"Response: {content[:30]}..."),
-        }
+        # Step 3: Register the callback using the new pattern
+        process.add_callback(tracker)
 
         # Step 4: Run with user input
         while True:
@@ -116,9 +118,9 @@ async def main():
             if user_input.lower() in ["exit", "quit"]:
                 break
 
-            # Run the process
+            # Run the process (without passing callbacks parameter)
             start_time = time.time()
-            run_result = await process.run(user_input, callbacks=callbacks)
+            run_result = await process.run(user_input)
             elapsed = time.time() - start_time
 
             # Get the response

@@ -9,10 +9,13 @@ from collections.abc import Callable
 from typing import Any, Optional
 
 # Import runtime context type definition from common package
-from llmproc.common.context import RuntimeContext, check_requires_context, validate_context_has
+from llmproc.common.access_control import AccessLevel
+from llmproc.common.constants import TOOL_METADATA_ATTR
+from llmproc.common.context import RuntimeContext, validate_context_has
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin import BUILTIN_TOOLS
-from llmproc.tools.function_tools import create_tool_from_function
+from llmproc.tools.function_tools import create_tool_from_function, get_tool_access_level
+from llmproc.common.metadata import get_tool_meta
 from llmproc.tools.registry_helpers import check_for_duplicate_schema_names
 from llmproc.tools.tool_registry import ToolRegistry
 
@@ -49,6 +52,9 @@ class ToolManager:
 
         # Runtime context for tool execution
         self.runtime_context = {}
+        
+        # Process access ceiling (default to ADMIN for root process)
+        self.process_access_level = AccessLevel.ADMIN
 
         # MCP manager for external tool servers
         self.mcp_manager = None
@@ -99,9 +105,10 @@ class ToolManager:
                 # Add the function for later processing
                 self.add_function_tool(tool_item)
 
-                # Extract the name for the enabled list
-                name = getattr(tool_item, "_tool_name", tool_item.__name__)
-                processed_tool_names.append(name)
+                # Extract the name from metadata (fallback to __name__)
+                from llmproc.common.metadata import get_tool_meta
+                meta = get_tool_meta(tool_item)
+                processed_tool_names.append(meta.name or tool_item.__name__)
             else:
                 raise ValueError(f"Tools must be callables or MCPTool objects, got {type(tool_item)}")
 
@@ -145,6 +152,21 @@ class ToolManager:
         self.runtime_context = context
         logger.debug(f"Set runtime context with keys: {', '.join(context.keys())}")
         return self
+        
+    def set_process_access_level(self, access_level: AccessLevel):
+        """Set the process access level ceiling.
+        
+        This limits which tools the process can call based on their access level.
+        
+        Args:
+            access_level: The maximum access level allowed for this process
+            
+        Returns:
+            self (for method chaining)
+        """
+        self.process_access_level = access_level
+        logger.debug(f"Set process access level ceiling to: {access_level.value}")
+        return self
 
     def _validate_context_for_tool(self, tool_name: str, handler: Callable) -> tuple[bool, Optional[str]]:
         """Validate that required runtime context is available for a context-aware tool.
@@ -161,10 +183,10 @@ class ToolManager:
         if not valid:
             return False, f"Tool '{tool_name}' requires runtime context"
 
-        # Check for required context keys if specified
-        required_keys = getattr(handler, "_required_context_keys", None)
-        if required_keys:
-            valid, error = validate_context_has(self.runtime_context, *required_keys)
+        # Get required context keys from the tool metadata
+        meta = get_tool_meta(handler)
+        if meta.required_context_keys:
+            valid, error = validate_context_has(self.runtime_context, *meta.required_context_keys)
             if not valid:
                 return False, f"Tool '{tool_name}' {error}"
 
@@ -203,9 +225,21 @@ class ToolManager:
         try:
             # Get the handler (handles alias resolution internally)
             handler = self.runtime_registry.get_handler(name)
+            
+            # Get tool metadata
+            meta = get_tool_meta(handler)
 
-            # Inject runtime context for context-aware tools
-            if check_requires_context(handler):
+            # Access control -------------------------------------------------
+            tool_access = meta.access
+            # Reject if tool access level exceeds process access level
+            if tool_access.compare_to(self.process_access_level) > 0:
+                logger.warning(f"Access denied for tool '{name}': {tool_access.value} > {self.process_access_level.value}")
+                return ToolResult.from_error(
+                    f"Access denied: this tool requires {tool_access.value} access but process has {self.process_access_level.value}"
+                )
+
+            # Context injection ---------------------------------------------
+            if meta.requires_context:
                 args = {**args, "runtime_context": self.runtime_context}
 
             # Delegate execution to registry (will resolve alias, call handler, stamp alias_info)
@@ -245,6 +279,9 @@ class ToolManager:
         # Process each function tool
         for func_tool in self.function_tools:
             try:
+                # Get metadata to see if we need to log more details
+                meta = get_tool_meta(func_tool)
+                
                 # Create handler and schema
                 handler, schema = create_tool_from_function(func_tool)
                 tool_name = schema["name"]
@@ -253,12 +290,15 @@ class ToolManager:
                 if tool_name not in self.runtime_registry.tool_handlers:
                     self.runtime_registry.register_tool(tool_name, handler, schema)
                     registered_count += 1
-                    logger.debug(f"Registered function tool: {tool_name}")
+                    # Enhanced logging with access level
+                    logger.debug(f"Registered function tool: {tool_name} (access={meta.access.value})")
                 else:
                     logger.debug(f"Function tool '{tool_name}' already registered, skipping")
 
             except Exception as e:
-                logger.error(f"Error processing function tool {func_tool.__name__}: {str(e)}")
+                # Get function name safely for error logging
+                func_name = getattr(func_tool, "__name__", str(func_tool))
+                logger.error(f"Error processing function tool {func_name}: {str(e)}")
 
         logger.info(
             f"REGISTRATION COMPLETE: Processed {len(self.function_tools)} function tools. Registered {registered_count} tools."
@@ -312,6 +352,8 @@ class ToolManager:
         aliased = self.runtime_registry.alias_schemas(schemas)
         # Remove any duplicate schema names and return
         return check_for_duplicate_schema_names(aliased)
+        
+    # Method removed in favor of AccessLevel.compare_to method
 
     # These methods have been replaced with direct registration in initialize_tools
 

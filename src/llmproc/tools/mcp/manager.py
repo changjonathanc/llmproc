@@ -7,9 +7,11 @@ import logging
 
 # Type checking imports to avoid circular imports
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Dict, Union
 
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
+from llmproc.common.metadata import ToolMeta, attach_meta
 from llmproc.tools.mcp.constants import (
     MCP_ERROR_INIT_FAILED,
     MCP_ERROR_NO_TOOLS_REGISTERED,
@@ -140,10 +142,71 @@ class MCPManager:
 
         regs: list[tuple[str, Callable, dict]] = []
         tools_map = await self.aggregator.list_tools(return_server_mapping=True)
+        
+        # Dictionary to store per-tool access levels extracted from tools_config
+        tool_access_levels: Dict[str, AccessLevel] = {}
+        
+        # Process tools_config to extract access levels
+        for server_name, config in self.tools_config.items():
+            if isinstance(config, dict):
+                # Format: {"tool1": "read", "tool2": "write"}
+                for tool_name, access_str in config.items():
+                    full_name = f"{server_name}{MCP_TOOL_SEPARATOR}{tool_name}"
+                    if isinstance(access_str, str):
+                        tool_access_levels[full_name] = AccessLevel.from_string(access_str)
+                    else:
+                        tool_access_levels[full_name] = access_str
+            else:
+                # Format: ["tool1", "tool2"] with default access
+                # or "all" with default access
+                default_access = AccessLevel.WRITE
+                # Check if we have a tuple with access level specified
+                if isinstance(config, tuple) and len(config) == 2:
+                    tools_list, access = config
+                    if isinstance(access, str):
+                        default_access = AccessLevel.from_string(access)
+                    else:
+                        default_access = access
+                else:
+                    tools_list = config
+                
+                # Apply default access to all tools from this server
+                if tools_list == "all":
+                    # Will be applied to all tools for this server below
+                    pass
+                elif isinstance(tools_list, list):
+                    for tool_name in tools_list:
+                        full_name = f"{server_name}{MCP_TOOL_SEPARATOR}{tool_name}"
+                        tool_access_levels[full_name] = default_access
+        
+        # Create and register tool handlers with access levels
         for server, tools in tools_map.items():
             for tool in tools:
                 full_name = f"{server}{MCP_TOOL_SEPARATOR}{tool.name}"
+                
+                # Get the access level for this tool
+                if full_name in tool_access_levels:
+                    # Explicitly specified access level
+                    access_level = tool_access_levels[full_name]
+                else:
+                    # Default to WRITE if not specified
+                    access_level = AccessLevel.WRITE
+                    
+                # Create handler and set access level
                 handler = create_mcp_tool_handler(self.aggregator, server, tool.name, full_name)
+                
+                # Use the metadata system for setting access level
+                meta = ToolMeta(
+                    name=full_name,
+                    access=access_level,
+                    description=tool.description
+                )
+                attach_meta(handler, meta)
+                
+                # Create schema and add to registry
                 schema = format_tool_for_anthropic(tool, server)
+                # Access level is an internal implementation detail, not exposed in schemas
+                
                 regs.append((full_name, handler, schema))
+                
         return regs

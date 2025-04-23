@@ -8,8 +8,11 @@ import datetime
 import logging
 from typing import Any, Optional
 
+from llmproc.common.access_control import AccessLevel
+from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
+from llmproc.common.constants import MESSAGE_ID_PREFIX
 from llmproc.utils.message_utils import append_message_with_id
 
 # Set up logger
@@ -74,9 +77,17 @@ is completely removed and should be considered forgotten.
 def find_position_by_id(state, message_id):
     """Find a message position in conversation history by its ID.
 
+    LLMs see messages with formatted IDs like "[msg_0]" at the beginning.
+    When using the goto tool, LLMs naturally refer to these IDs using the 
+    format they see, e.g., "msg_0" rather than just "0". We need to parse
+    these formatted IDs to find the actual integer position in the state.
+
     Args:
         state: Conversation state
-        message_id: The message ID to find (e.g., "msg_3")
+        message_id: The message ID to find - can be:
+            - Integer index (0, 1, 2)
+            - String index ("0", "1", "2")
+            - Formatted ID ("msg_0", "msg_1") as seen by the LLM
 
     Returns:
         Index of the found message or None
@@ -85,26 +96,30 @@ def find_position_by_id(state, message_id):
     if not state:
         return None
 
-    # Validate message_id format
-    if not isinstance(message_id, str) or not message_id.startswith("msg_"):
+    # Handle integer ID directly
+    if isinstance(message_id, int):
+        if 0 <= message_id < len(state):
+            return message_id
         return None
 
-    # Special case for "msg_0" - always return first message if it exists
-    if message_id == "msg_0" and state:
-        return 0
-
-    # First try direct lookup using the goto_id field in message metadata
-    for i, msg in enumerate(state):
-        if msg.get("goto_id") == message_id:
-            return i
-
-    # If not found, try numeric extraction as a fallback
-    try:
-        msg_num = int(message_id.split("_")[1])
-        if 0 <= msg_num < len(state):
-            return msg_num
-    except (IndexError, ValueError):
-        pass
+    # Handle string IDs (most common case for LLM input)
+    if isinstance(message_id, str):
+        # Case 1: LLM uses "msg_X" format as seen in messages
+        if message_id.startswith(MESSAGE_ID_PREFIX):
+            try:
+                idx = int(message_id[len(MESSAGE_ID_PREFIX):])
+                if 0 <= idx < len(state):
+                    return idx
+            except ValueError:
+                pass
+            
+        # Case 2: Direct string integer ("0", "1", etc.)
+        try:
+            idx = int(message_id)
+            if 0 <= idx < len(state):
+                return idx
+        except ValueError:
+            pass
 
     # Message ID not found
     return None
@@ -120,6 +135,11 @@ def find_position_by_id(state, message_id):
     required=["position", "message"],
     requires_context=True,
     required_context_keys=["process"],
+    # GOTO is marked as READ level because it only affects the process's own conversation
+    # history and doesn't acquire new resources or spawn processes. While it does modify
+    # state by truncating history, this is strictly internal to the process and doesn't
+    # pose race condition risks in multi-process environments.
+    access=AccessLevel.READ,
 )
 async def handle_goto(position: str, message: str, runtime_context: Optional[dict[str, Any]] = None):
     """Reset conversation to a previous point identified by message ID.
@@ -208,6 +228,6 @@ async def handle_goto(position: str, message: str, runtime_context: Optional[dic
         # Use append_message_with_id to ensure it gets a proper ID
         append_message_with_id(process, "user", final_message)
 
-        return ToolResult.from_success(f"Conversation reset to message {position}. Added time travel message.")
+        return ToolResult.from_abort(f"Conversation reset to message {position}. Added time travel message.")
     else:
-        return ToolResult.from_success(f"Conversation reset to message {position}.")
+        return ToolResult.from_abort(f"Conversation reset to message {position}.")

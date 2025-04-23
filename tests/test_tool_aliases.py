@@ -338,7 +338,7 @@ async def test_calling_tools_with_aliases(mock_anthropic, mock_env):
     )
 
     # Call the tool using the alias with explicit parameters
-    result = await process.call_tool("calc", expression="2 + 40")
+    result = await process.call_tool("calc", {"expression": "2 + 40"})
 
     # Check that the result is returned - the actual content might vary
     # depending on which registry handles the call and how the tool is configured
@@ -421,7 +421,7 @@ async def test_alias_error_messages(mock_anthropic, mock_env):
     # Only need to register the actual tool - the alias is resolved automatically
 
     # Call the tool using the alias with explicit parameters - should return error with alias info
-    result = await process.call_tool("calc", expression="2 + 40")
+    result = await process.call_tool("calc", {"expression": "2 + 40"})
 
     # We should still get an error, but may be a different error message
     # since the tool is executed through a different path now
@@ -429,7 +429,7 @@ async def test_alias_error_messages(mock_anthropic, mock_env):
     # The error could be either about the tool execution or not found/enabled
 
     # Call the non-existent tool alias - should return tool not enabled error
-    result = await process.call_tool("invalid")
+    result = await process.call_tool("invalid", {})
 
     # Check that the error indicates the tool is not available
     assert result.is_error

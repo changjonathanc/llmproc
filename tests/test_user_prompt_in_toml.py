@@ -136,7 +136,7 @@ def test_max_iterations_used_in_process_run():
     mock_process.max_iterations = 15
 
     # Setup a mock LLMProcess.run method that simulates our implementation
-    def mock_run_implementation(user_input, max_iterations=None, callbacks=None):
+    def mock_run_implementation(user_input, max_iterations=None):
         # This simulates the behavior in our implementation
         if max_iterations is None:
             max_iterations = mock_process.max_iterations

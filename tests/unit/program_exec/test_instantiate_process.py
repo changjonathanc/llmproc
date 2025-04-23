@@ -35,7 +35,6 @@ def sample_process_state():
         "api_params": {"param1": "value1"},
         "state": [],
         "enriched_system_prompt": None,
-        "allow_fork": True,
         "client": MagicMock(),
         "fd_manager": fd_manager,
         "file_descriptor_enabled": True,

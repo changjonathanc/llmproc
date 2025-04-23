@@ -7,7 +7,12 @@ and decorators for working with runtime context for dependency injection in tool
 import functools
 import logging
 from collections.abc import Callable
+# Runtime context utilities live in common; avoid importing higher‑level
+# packages to keep layering clean.
+
 from typing import Any, Optional, TypedDict, TypeVar, cast
+
+from llmproc.common.constants import TOOL_METADATA_ATTR
 
 from llmproc.common.results import ToolResult
 
@@ -61,17 +66,3 @@ def validate_context_has(context: Optional[dict[str, Any]], *keys: str) -> tuple
     return True, None
 
 
-def check_requires_context(handler: Callable) -> bool:
-    """Check if a handler requires runtime context.
-
-    This function looks for the _requires_context attribute, which is set by
-    register_tool(requires_context=True). It provides a clean API for checking
-    context requirements without exposing implementation details.
-
-    Args:
-        handler: The handler function to check
-
-    Returns:
-        True if the handler requires runtime context, False otherwise
-    """
-    return getattr(handler, "_requires_context", False)

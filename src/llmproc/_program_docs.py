@@ -266,8 +266,8 @@ Examples:
     # Then register specific MCP tools
     from llmproc.tools.mcp import MCPTool
     program.register_tools([
-        MCPTool("calc"),                             # All tools from "calc" server
-        MCPTool("github", "search_repositories")    # Specific tool from "github" server
+        MCPTool(server="calc"),                               # All tools from "calc" server
+        MCPTool(server="github", names="search_repositories") # Specific tool from "github" server
     ])
     ```
 """

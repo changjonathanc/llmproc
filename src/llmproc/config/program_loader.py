@@ -105,10 +105,10 @@ class ProgramLoader:
             for server, names in config.tools.mcp.root.items():
                 # names is 'all' or list[str]
                 if names == "all":
-                    tools_list.append(MCPTool(server))
+                    tools_list.append(MCPTool(server=server))
                 else:
                     # list of tool names
-                    tools_list.append(MCPTool(server, *names))
+                    tools_list.append(MCPTool(server=server, names=names))
 
         # Create the program instance
         program = LLMProgram(

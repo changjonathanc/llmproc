@@ -94,6 +94,7 @@ LLMProc offers a Unix-inspired toolkit for building sophisticated LLM applicatio
 - **[Program Linking](./examples/program-linking/main.toml)** - Spawn specialized LLM processes for delegated tasks
 - **[Fork Tool](./examples/fork.toml)** - Create process copies with shared conversation state
 - **[GOTO (Time Travel)](./examples/goto.toml)** - Reset conversations to previous points with [context compaction demo](./examples/scripts/goto_context_compaction_demo.py)
+- **[Tool Access Control](./docs/tool-access-control.md)** - Secure multi-process environments with READ/WRITE/ADMIN permissions
 
 ### Large Content Handling - Sophisticated I/O Management
 - **[File Descriptor System](./examples/file-descriptor/main.toml)** - Unix-like pagination for large outputs

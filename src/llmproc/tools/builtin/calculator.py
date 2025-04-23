@@ -4,6 +4,7 @@ import ast
 import math
 import operator
 
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
 
@@ -155,6 +156,11 @@ It supports basic arithmetic, mathematical functions, and constants.""",
         "expression": "The mathematical expression to evaluate. Supports operations like +, -, *, /, //, %, **, functions like sin, cos, sqrt, and constants like pi, e.",
         "precision": "Number of decimal places in the result (between 0 and 15, default: 6).",
     },
+    # Calculator is marked as READ level because it's a pure function with no side effects:
+    # - Does not modify any state
+    # - Always returns the same output for the same input
+    # - Does not access external resources
+    access=AccessLevel.READ,
 )
 async def calculator(expression: str, precision: int = 6) -> str:
     """Calculate the result of a mathematical expression.

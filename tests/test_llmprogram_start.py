@@ -37,8 +37,8 @@ async def test_start_delegates_to_create_process(mock_create_process, test_progr
     # Call start()
     result = await test_program.start()
 
-    # Verify create_process was called with the program
-    mock_create_process.assert_called_once_with(test_program)
+    # Verify create_process was called with the program and access_level=None
+    mock_create_process.assert_called_once_with(test_program, access_level=None)
 
     # Verify the result is what was returned by the mock
     assert result == mock_process
@@ -116,8 +116,8 @@ async def test_start_with_real_program(
     assert process is mock_process
 
     # Verify internal functions of create_process were called
-    # prepare_process_state is called with the program
-    mock_prepare_state.assert_called_once_with(program, None)
+    # prepare_process_state is called with the program, additional_preload_files=None, access_level=None
+    mock_prepare_state.assert_called_once_with(program, None, None)
 
     # instantiate_process is called with the state dictionary
     mock_instantiate.assert_called_once_with(mock_state)

@@ -12,6 +12,7 @@ import warnings
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Union
 
+from llmproc.common.access_control import AccessLevel
 from llmproc.env_info.builder import EnvInfoBuilder
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
@@ -150,6 +151,11 @@ def setup_runtime_context(
     # Apply context to the process's tool manager
     if process.tool_manager:
         process.tool_manager.set_runtime_context(context)
+        
+        # Set access level in tool manager to match process access level
+        if hasattr(process, "access_level"):
+            process.tool_manager.set_process_access_level(process.access_level)
+            logger.debug(f"Set tool manager access level to: {process.access_level}")
     else:
         logger.warning("Cannot set runtime context - process.tool_manager is None!")
 
@@ -167,7 +173,11 @@ def validate_process(process: LLMProcess) -> None:
     logger.info(f"Tools enabled: {len(process.tool_manager.get_registered_tools())}")
 
 
-async def create_process(program: LLMProgram, additional_preload_files: Optional[list[str]] = None) -> LLMProcess:
+async def create_process(
+    program: LLMProgram, 
+    additional_preload_files: Optional[list[str]] = None,
+    access_level: Optional[Any] = None
+) -> LLMProcess:
     """Create fully initialized process from program.
 
     This function handles the complete program-to-process transition by
@@ -184,6 +194,8 @@ async def create_process(program: LLMProgram, additional_preload_files: Optional
     Args:
         program: The LLMProgram to create a process from
         additional_preload_files: Optional list of additional files to preload
+        access_level: Optional access level for the process (READ, WRITE, or ADMIN)
+                     If not specified, defaults to ADMIN for root processes
 
     Returns:
         A fully initialized LLMProcess
@@ -199,7 +211,7 @@ async def create_process(program: LLMProgram, additional_preload_files: Optional
     # 2. Prepare all initial state using pure initialization functions
     # Pass additional_preload_files to be included in enriched system prompt
     logger.debug("Preparing process state...")
-    process_state = prepare_process_state(program, additional_preload_files)
+    process_state = prepare_process_state(program, additional_preload_files, access_level)
     logger.debug(f"Process state prepared with {len(process_state)} entries")
 
     # 3. Extract configuration from program (program is already compiled)
@@ -388,7 +400,6 @@ def _initialize_runtime_defaults(original_prompt: str) -> dict[str, Any]:
     return {
         "state": [],  # Empty conversation history
         "enriched_system_prompt": None,  # Generated on first run
-        "allow_fork": True,  # Allow forking by default
         "system_prompt": original_prompt,  # For backward compatibility
     }
 
@@ -410,7 +421,11 @@ def _initialize_mcp_config(program: LLMProgram) -> dict[str, Any]:
     }
 
 
-def prepare_process_state(program: LLMProgram, additional_preload_files: Optional[list[str]] = None) -> dict[str, Any]:
+def prepare_process_state(
+    program: LLMProgram, 
+    additional_preload_files: Optional[list[str]] = None,
+    access_level: Optional[AccessLevel] = None
+) -> dict[str, Any]:
     """Prepare the complete initial state for LLMProcess.
 
     This function aggregates the results of all initialization functions
@@ -421,6 +436,7 @@ def prepare_process_state(program: LLMProgram, additional_preload_files: Optiona
     Args:
         program: The LLMProgram to prepare state for
         additional_preload_files: Optional list of additional file paths to preload
+        access_level: Optional access level for the process (READ, WRITE, or ADMIN)
 
     Returns:
         Dictionary containing all state needed to initialize an LLMProcess
@@ -465,6 +481,10 @@ def prepare_process_state(program: LLMProgram, additional_preload_files: Optiona
     # --- MCP Configuration ---
     # Set up Model Context Protocol configuration for external tools
     state.update(_initialize_mcp_config(program))
+    
+    # --- Access Level ---
+    # Set the process access level (defaults to ADMIN for root processes)
+    state["access_level"] = access_level or AccessLevel.ADMIN
 
     # --- Generate Enriched System Prompt ---
     # Now that all necessary components are available, generate the enriched system prompt
