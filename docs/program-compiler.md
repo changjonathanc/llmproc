@@ -132,7 +132,7 @@ from llmproc import LLMProgram
 
 # Create a program and start the process in one session
 program = LLMProgram.from_toml("path/to/program.toml")
-process = program.start()  # Creates event loop internally for sync calls
+process = program.start_sync()  # Runs start() inside asyncio.run
 ```
 
 ## Validation Features

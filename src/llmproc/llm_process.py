@@ -232,6 +232,26 @@ class LLMProcess:
         else:
             return await self._async_run(user_input, max_iterations)
 
+    def run_sync(self, user_input: str, max_iterations: int = None) -> "RunResult":
+        """Synchronous wrapper around :meth:`run`.
+
+        This helper is intended for code that does not already run inside an
+        event loop. It simply executes the private async implementation with
+        :func:`asyncio.run`.
+
+        Args:
+            user_input: The user message to process.
+            max_iterations: Optional maximum iteration count.
+
+        Returns:
+            RunResult object with execution metrics.
+        """
+
+        if max_iterations is None:
+            max_iterations = self.max_iterations
+
+        return asyncio.run(self._async_run(user_input, max_iterations))
+
     async def _async_run(self, user_input: str, max_iterations: int) -> "RunResult":
         """Internal async implementation of run.
 

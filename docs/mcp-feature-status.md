@@ -70,12 +70,11 @@ from llmproc import LLMProgram
 # Step 1: Load and compile the program
 program = LLMProgram.from_toml("examples/mcp.toml")
 
-# Step 2: Initialize the process (creates event loop internally)
-process = program.start()
+# Step 2: Initialize the process synchronously
+process = program.start_sync()
 
 # Even in synchronous code, full tool support is available
-# The method will automatically create an event loop if needed
-result = process.run("Please search for popular Python repositories on GitHub.")
+result = process.run_sync("Please search for popular Python repositories on GitHub.")
 print(process.get_last_message())
 ```
 

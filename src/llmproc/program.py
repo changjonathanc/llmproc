@@ -5,6 +5,7 @@ import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, List, Optional, Union
+import asyncio
 
 from llmproc.common.access_control import AccessLevel
 
@@ -624,6 +625,21 @@ class LLMProgram:
         from llmproc.program_exec import create_process
 
         return await create_process(self, access_level=access_level)
+
+    def start_sync(self, access_level: Optional[AccessLevel] = None) -> "LLMProcess":  # noqa: F821
+        """Synchronous wrapper around :meth:`start`.
+
+        This helper allows code running outside of an event loop to
+        initialize a process without manually calling ``asyncio.run``.
+
+        Args:
+            access_level: Optional access level for the process.
+
+        Returns:
+            A fully initialized :class:`LLMProcess`.
+        """
+
+        return asyncio.run(self.start(access_level=access_level))
 
 
 # Apply full docstrings to class and methods

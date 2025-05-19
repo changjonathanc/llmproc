@@ -86,15 +86,17 @@ from llmproc import LLMProgram
 # Load program from TOML
 program = LLMProgram.from_toml('examples/openai/gpt-4o-mini.toml')
 
-# Start the process (creates event loop internally for sync calls)
-process = program.start()  
+# Start the process synchronously
+process = program.start_sync()
 
-# Run in synchronous context (creates event loop internally)
-result = process.run('Hello, what can you tell me about Python?')
+# Run in synchronous context
+result = process.run_sync('Hello, what can you tell me about Python?')
 print(process.get_last_message())
 ```
 
-This works because both `start()` and `run()` methods detect if they're being called from a synchronous context and internally create an event loop if needed.
+These `*_sync()` helpers simply execute the asynchronous methods inside
+`asyncio.run`, allowing you to use LLMProc without managing an event loop
+explicitly.
 
 ## Program Compiler API
 
