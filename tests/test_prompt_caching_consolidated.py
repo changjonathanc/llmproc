@@ -9,18 +9,17 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc import LLMProgram
 from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.common.results import RunResult
 from llmproc.providers.anthropic_utils import (
-    add_cache_to_message,
     apply_cache_control,
     format_state_to_api_messages,
     format_system_prompt,
     is_cacheable_content,
     prepare_api_request,
 )
+
 from tests.conftest_api import (
     claude_process_with_caching,
     claude_process_without_caching,
@@ -90,39 +89,6 @@ def test_is_cacheable_content():
     # Act & Assert - Valid content should be cacheable
     for valid_case in valid_cases:
         assert is_cacheable_content(valid_case), f"Valid case should be cacheable: {valid_case}"
-
-
-def test_add_cache_to_message():
-    """Test add_cache_to_message function."""
-    # Arrange - string content
-    message = {"role": "user", "content": "Hello"}
-
-    # Act
-    add_cache_to_message(message)
-
-    # Assert
-    assert isinstance(message["content"], list)
-    assert message["content"][0]["type"] == "text"
-    assert message["content"][0]["text"] == "Hello"
-    assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
-
-    # Arrange - list content
-    message = {"role": "user", "content": [{"type": "text", "text": "Hello"}]}
-
-    # Act
-    add_cache_to_message(message)
-
-    # Assert
-    assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
-
-    # Arrange - empty content
-    message = {"role": "user", "content": ""}
-
-    # Act
-    add_cache_to_message(message)
-
-    # Assert
-    assert message["content"] == ""  # Should remain unchanged
 
 
 # =============================================================================
@@ -260,6 +226,7 @@ def test_format_state_to_api_messages():
 
     # Act
     from llmproc.providers.anthropic_utils import format_state_to_api_messages
+
     result = format_state_to_api_messages(state)
 
     # Assert
@@ -268,17 +235,17 @@ def test_format_state_to_api_messages():
     assert LLMPROC_MSG_ID not in result[0], "LLMPROC_MSG_ID should be removed"
     assert LLMPROC_MSG_ID not in result[1], "LLMPROC_MSG_ID should be removed"
     assert LLMPROC_MSG_ID not in result[2], "LLMPROC_MSG_ID should be removed"
-    
+
     # Check first message (string content)
     assert isinstance(result[0]["content"], list)
     assert result[0]["content"][0]["type"] == "text"
     assert "[msg_1]" in result[0]["content"][0]["text"]
-    
+
     # Check second message (string content)
     assert isinstance(result[1]["content"], list)
     assert result[1]["content"][0]["type"] == "text"
-    assert "[msg_2]" in result[1]["content"][0]["text"]
-    
+    assert "[msg_2]" not in result[1]["content"][0]["text"]
+
     # Check third message (list content)
     assert isinstance(result[2]["content"], list)
     assert result[2]["content"][0]["type"] == "text"
@@ -290,25 +257,26 @@ def test_format_system_prompt():
     # Arrange
     string_prompt = "You are a helpful assistant."
     list_prompt = [{"type": "text", "text": "You are a helpful assistant."}]
-    
+
     # Act
     from llmproc.providers.anthropic_utils import format_system_prompt
+
     string_result = format_system_prompt(string_prompt)
     list_result = format_system_prompt(list_prompt)
-    
+
     # Assert
     # String prompt should be converted to list format
     assert isinstance(string_result, list)
     assert len(string_result) == 1
     assert string_result[0]["type"] == "text"
     assert string_result[0]["text"] == string_prompt
-    
+
     # List prompt should remain in list format
     assert isinstance(list_result, list)
     assert len(list_result) == 1
     assert list_result[0]["type"] == "text"
     assert list_result[0]["text"] == "You are a helpful assistant."
-    
+
     # Ensure no cache control was added
     assert "cache_control" not in string_result[0]
     assert "cache_control" not in list_result[0]
@@ -324,34 +292,35 @@ def test_apply_cache_control():
     ]
     system = [{"type": "text", "text": "You are a helpful assistant."}]
     tools = [{"name": "calculator", "description": "A calculator tool"}]
-    
+
     # Act
     from llmproc.providers.anthropic_utils import apply_cache_control
+
     cached_messages, cached_system, cached_tools = apply_cache_control(messages, system, tools)
-    
+
     # Assert
     # Verify system prompt has cache control
     assert "cache_control" in cached_system[0]
     assert cached_system[0]["cache_control"] == {"type": "ephemeral"}
-    
+
     # Verify last 3 messages have cache control
     assert "cache_control" in cached_messages[0]["content"][0]
     assert "cache_control" in cached_messages[1]["content"][0]
     assert "cache_control" in cached_messages[2]["content"][0]
-    
+
     # Verify tools don't have cache control
     assert "cache_control" not in cached_tools[0]
-    
+
     # Verify original messages/system are not modified
     assert "cache_control" not in messages[0]["content"][0]
     assert "cache_control" not in system[0]
-    
+
 
 def test_prepare_api_request():
     """Test prepare_api_request function."""
     # Arrange
     from unittest.mock import MagicMock
-    
+
     # Create a mock process
     process = MagicMock()
     process.state = [
@@ -364,11 +333,13 @@ def test_prepare_api_request():
     process.api_params = {"max_tokens": 1000}
     process.disable_automatic_caching = False
     process.provider = "anthropic"
-    
+    process.tool_manager.message_ids_enabled = True
+
     # Act
     from llmproc.providers.anthropic_utils import prepare_api_request
+
     api_request = prepare_api_request(process)
-    
+
     # Assert
     # Verify structure of API request
     assert "model" in api_request
@@ -376,21 +347,21 @@ def test_prepare_api_request():
     assert "messages" in api_request
     assert "tools" in api_request
     assert "max_tokens" in api_request
-    
+
     # Check model name
     assert api_request["model"] == "claude-3-7-sonnet"
-    
+
     # Check max_tokens
     assert api_request["max_tokens"] == 1000
-    
+
     # System prompt is now a string, not a list with cache_control
-    
+
     # Verify messages have message IDs and cache control
     assert "[msg_1]" in api_request["messages"][0]["content"][0]["text"]
-    assert "[msg_2]" in api_request["messages"][1]["content"][0]["text"]
+    assert "[msg_2]" not in api_request["messages"][1]["content"][0]["text"]
     assert "cache_control" in api_request["messages"][0]["content"][0]
     assert "cache_control" in api_request["messages"][1]["content"][0]
-    
+
     # Test with caching disabled
     api_request_no_cache = prepare_api_request(process, add_cache=False)
     assert "cache_control" not in api_request_no_cache["system"][0]

@@ -19,29 +19,23 @@ uv venv
 # Activate the virtual environment
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install the package in development mode with all optional dependencies
-uv pip install -e ".[dev,all]"
+# Install everything for development (package + all providers + dev tools)
+uv sync --all-extras --all-groups
 
-# Alternative: If you're working on a specific feature, you can install only what you need
-uv pip install -e "."                  # Base package only
-uv pip install -e ".[dev,openai]"      # Development + OpenAI
-uv pip install -e ".[dev,anthropic]"   # Development + Anthropic
-
-# Sync the virtual environment with pyproject.toml changes
-uv pip sync
+# Alternative: Install only what you need
+uv sync                           # Base package only
+uv sync --extra openai --group dev    # Base + OpenAI + dev tools
+uv sync --extra anthropic --group dev # Base + Anthropic + dev tools
 
 # Install pre-commit hooks
-pre-commit install
+pre-commit install --install-hooks
 ```
 
-If you need to update your environment after pulling changes that modify dependencies:
+If you need to update your environment after pulling changes:
 
 ```bash
 # Sync environment with latest dependencies
-uv pip sync
-
-# Or reinstall with specific extras
-uv pip install -e ".[dev,all]"
+uv sync --all-extras --all-groups
 ```
 
 ### Managing Dependencies
@@ -51,11 +45,11 @@ We use `uv` and `pyproject.toml` to manage dependencies:
 ```bash
 # Add a runtime dependency
 uv add package_name
-# This adds the dependency to pyproject.toml
+# This adds the dependency to [project.dependencies]
 
-# Add a development dependency
-uv add --dev package_name
-# This adds the dependency to the [project.optional-dependencies] dev section
+# Add a development dependency  
+uv add --group dev package_name
+# This adds the dependency to [dependency-groups.dev]
 
 # Add a provider-specific optional dependency
 uv add --optional openai package_name
@@ -73,7 +67,11 @@ uv lock
 # The uv.lock file should be committed to git to ensure reproducible builds
 ```
 
-Note: We don't use requirements.txt for dependency management. All dependencies should be defined in pyproject.toml.
+**Important Notes:**
+- Runtime dependencies go in `[project.dependencies]`
+- Provider dependencies go in `[project.optional-dependencies]` (extras) so users can install them selectively
+- Development tools go in `[dependency-groups.dev]` as they're only needed by contributors
+- We don't use requirements.txt files - all dependencies are defined in pyproject.toml
 
 ## Design Principles
 
@@ -155,7 +153,7 @@ uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install the package in development mode
-uv pip install -e ".[dev,all]"
+uv sync --all-extras --all-groups
 
 # Now you can run tests within the isolated environment
 pytest tests/test_specific_feature.py

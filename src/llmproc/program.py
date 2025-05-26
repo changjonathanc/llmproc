@@ -1,12 +1,11 @@
 """LLMProgram compiler for validating and loading LLM program configurations."""
 
+import asyncio
 import logging
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, List, Optional, Union
-
-from llmproc.common.access_control import AccessLevel
+from typing import Any, Optional, Union
 
 import llmproc
 from llmproc._program_docs import (
@@ -25,25 +24,19 @@ from llmproc._program_docs import (
     REGISTER_TOOLS,
     SET_TOOL_ALIASES,
 )
+from llmproc.common.access_control import AccessLevel
+from llmproc.common.metadata import attach_meta, get_tool_meta
+from llmproc.config.tool import ToolConfig
 from llmproc.env_info import EnvInfoBuilder
+from llmproc.file_descriptors.constants import FD_RELATED_TOOLS
+from llmproc.file_descriptors.manager import FileDescriptorManager
+from llmproc.tools import ToolManager
 from llmproc.tools.builtin import BUILTIN_TOOLS
-from llmproc.tools.function_tools import get_tool_name
-from llmproc.tools.mcp import MCPTool
+from llmproc.tools.mcp import MCPServerTools
 
 
-def convert_to_callables(tools: list[Union[str, Callable, MCPTool]]) -> list[Callable]:
-    """Convert string tool names to callable functions.
-
-    Args:
-        tools: List of string names, callable functions, or MCPTool objects
-
-    Returns:
-        List of callable functions, filtering out MCPTool objects
-
-    Raises:
-        ValueError: If an item in the list is not a string, callable, or MCPTool,
-                   or if a string doesn't correspond to a builtin tool
-    """
+def convert_to_callables(tools: list[Union[str, Callable, MCPServerTools, ToolConfig]]) -> list[Callable]:
+    """Return callable tools, ignoring ``MCPServerTools`` descriptors."""
     # Ensure tools is a list
     if not isinstance(tools, list):
         tools = [tools]
@@ -55,13 +48,29 @@ def convert_to_callables(tools: list[Union[str, Callable, MCPTool]]) -> list[Cal
                 result.append(BUILTIN_TOOLS[tool])
             else:
                 raise ValueError(f"Unknown tool name: '{tool}'")
+        elif isinstance(tool, ToolConfig):
+            name = tool.name
+            if name in BUILTIN_TOOLS:
+                func = BUILTIN_TOOLS[name]
+                if tool.description is not None or tool.param_descriptions is not None:
+                    meta = get_tool_meta(func)
+                    if tool.description is not None:
+                        meta.description = tool.description
+                    if tool.param_descriptions is not None:
+                        existing = dict(meta.param_descriptions or {})
+                        existing.update(tool.param_descriptions)
+                        meta.param_descriptions = existing
+                    attach_meta(func, meta)
+                result.append(func)
+            else:
+                raise ValueError(f"Unknown tool name: '{name}'")
         elif callable(tool):
             result.append(tool)
-        elif isinstance(tool, MCPTool):
-            # MCPTool objects are handled separately in __init__
+        elif isinstance(tool, MCPServerTools):
+            # MCPServerTools objects are handled separately in __init__
             pass
         else:
-            raise ValueError(f"Expected string, callable, or MCPTool, got {type(tool)}")
+            raise ValueError(f"Expected string, callable, or MCPServerTools, got {type(tool)}")
     return result
 
 
@@ -112,6 +121,7 @@ class LLMProgram:
         display_name: str | None = None,
         preload_files: list[str] | None = None,
         mcp_config_path: str | None = None,
+        mcp_servers: dict[str, dict] | None = None,
         tools: list[Any] = None,
         tool_aliases: dict[str, str] = None,
         linked_programs: dict[str, Union[str, "LLMProgram"]] | None = None,
@@ -144,16 +154,16 @@ class LLMProgram:
         self.display_name = display_name or f"{provider.title()} {model_name}"
         self.preload_files = preload_files or []
         self.mcp_config_path = mcp_config_path
+        self.mcp_servers = mcp_servers
         self.disable_automatic_caching = disable_automatic_caching
         self.user_prompt = user_prompt
         self.max_iterations = max_iterations
 
         # Initialize the tool manager
-        from llmproc.tools import ToolManager
-
         self.tool_manager = ToolManager()
 
-        # Process tools parameter: can include str names, callables, or MCPTool descriptors
+        # Process tools parameter: can include str names, callables, or
+        # MCPServerTools descriptors
         if tools:
             # Normalize to list
             raw_tools = tools if isinstance(tools, list) else [tools]
@@ -167,32 +177,22 @@ class LLMProgram:
 
         self.linked_programs = linked_programs or {}
         self.linked_program_descriptions = linked_program_descriptions or {}
-        self.env_info = env_info or {
-            "variables": []
-        }  # Default to empty list (disabled)
+        self.env_info = env_info or {"variables": []}  # Default to empty list (disabled)
         self.file_descriptor = file_descriptor or {}
         self.base_dir = base_dir
 
     def _validate_tool_dependencies(self) -> None:
-        """Validate tool dependencies are satisfied.
-
-        This method performs explicit validation of tool dependencies during compilation,
-        ensuring that necessary requirements for tools are met before attempting to use them.
-
-        Validates:
-        1. Spawn tool requires linked programs
-        2. FD tools require file descriptor system
+        """Ensure required dependencies for enabled tools are available.
 
         Raises:
-            ValueError: If dependencies for enabled tools are not satisfied
+            ValueError: If any dependency is missing
         """
         registered_tools = self.tool_manager.get_registered_tools()
 
         # Linked programs dependency for spawn
-        if "spawn" in registered_tools:
-            has_linked_programs = hasattr(self, "linked_programs") and bool(self.linked_programs)
-            if not has_linked_programs:
-                raise ValueError("Tool 'spawn' requires linked programs, but none are configured")
+        # The spawn tool can now fall back to spawning the current program when
+        # no linked programs are configured, so we no longer require them at
+        # compile time.
 
         # File descriptor dependency for fd tools
         if any(name in registered_tools for name in ["read_fd", "fd_to_file"]):
@@ -205,7 +205,7 @@ class LLMProgram:
                 raise ValueError("Tools 'read_fd' or 'fd_to_file' require file descriptor system, but it's not enabled")
 
     def _compile_self(self) -> "LLMProgram":
-        """Internal method to validate and compile this program."""
+        """Compile the program if it hasn't been compiled yet."""
         # Skip if already compiled
         if self.compiled:
             return self
@@ -216,14 +216,12 @@ class LLMProgram:
                 with open(self._system_prompt_file) as f:
                     self.system_prompt = f.read()
             except FileNotFoundError:
-                raise FileNotFoundError(
-                    f"System prompt file not found: {self._system_prompt_file}"
-                )
+                raise FileNotFoundError(f"System prompt file not found: {self._system_prompt_file}")
 
         # Default system_prompt to empty string if None
         if self.system_prompt is None:
             self.system_prompt = ""
-            
+
         # Validate required fields
         if not self.model_name or not self.provider:
             missing = []
@@ -251,22 +249,9 @@ class LLMProgram:
         return self
 
     def _resolve_fd_tool_dependencies(self) -> None:
-        """Resolve dependencies between file descriptor system and FD tools.
-
-        This method ensures consistency between:
-        1. File descriptor system configuration (self.file_descriptor)
-        2. Enabled tools that interact with file descriptors (read_fd, fd_to_file)
-
-        The rules are:
-        - If FD system is enabled, ensure read_fd tool is available
-        - If FD tools are enabled but FD system isn't, enable the FD system
-        """
-        from llmproc.file_descriptors.constants import FD_RELATED_TOOLS
-
+        """Keep FD tools and the file descriptor system in sync."""
         # Get current state
-        has_fd_config = hasattr(self, "file_descriptor") and isinstance(
-            self.file_descriptor, dict
-        )
+        has_fd_config = hasattr(self, "file_descriptor") and isinstance(self.file_descriptor, dict)
         fd_enabled = has_fd_config and self.file_descriptor.get("enabled", False)
         registered_tools = self.tool_manager.get_registered_tools()
         has_fd_tools = any(tool in FD_RELATED_TOOLS for tool in registered_tools)
@@ -289,7 +274,7 @@ class LLMProgram:
             logger.info("FD tools enabled, automatically enabling file descriptor system")
 
     def _compile_linked_programs(self) -> None:
-        """Compile linked programs recursively."""
+        """Compile any linked programs."""
         compiled_linked = {}
 
         # Process each linked program
@@ -300,25 +285,19 @@ class LLMProgram:
                     linked_program = LLMProgram.from_toml(program_or_path)
                     compiled_linked[name] = linked_program
                 except FileNotFoundError:
-                    warnings.warn(
-                        f"Linked program not found: {program_or_path}", stacklevel=2
-                    )
+                    warnings.warn(f"Linked program not found: {program_or_path}", stacklevel=2)
             elif isinstance(program_or_path, LLMProgram):
                 # It's already a program instance, compile it if not already compiled
                 if not program_or_path.compiled:
                     program_or_path._compile_self()
                 compiled_linked[name] = program_or_path
             else:
-                raise ValueError(
-                    f"Invalid linked program type for {name}: {type(program_or_path)}"
-                )
+                raise ValueError(f"Invalid linked program type for {name}: {type(program_or_path)}")
 
         # Replace linked_programs with compiled versions
         self.linked_programs = compiled_linked
 
-    def add_linked_program(
-        self, name: str, program: "LLMProgram", description: str = ""
-    ) -> "LLMProgram":
+    def add_linked_program(self, name: str, program: "LLMProgram", description: str = "") -> "LLMProgram":
         """Link another program to this one."""
         self.linked_programs[name] = program
         self.linked_program_descriptions[name] = description
@@ -357,9 +336,7 @@ class LLMProgram:
         }
         return self
 
-    def configure_thinking(
-        self, enabled: bool = True, budget_tokens: int = 4096
-    ) -> "LLMProgram":
+    def configure_thinking(self, enabled: bool = True, budget_tokens: int = 4096) -> "LLMProgram":
         """Configure Claude 3.7 thinking capability."""
         # Ensure parameters dict exists
         if self.parameters is None:
@@ -383,19 +360,18 @@ class LLMProgram:
             self.parameters["extra_headers"] = {}
 
         # Add header for token-efficient tools
-        self.parameters["extra_headers"]["anthropic-beta"] = (
-            "token-efficient-tools-2025-02-19"
-        )
+        self.parameters["extra_headers"]["anthropic-beta"] = "token-efficient-tools-2025-02-19"
         return self
 
-    def register_tools(self, tools: list[Union[str, Callable, MCPTool]]) -> "LLMProgram":
+    def register_tools(self, tools: list[Union[str, Callable, MCPServerTools]]) -> "LLMProgram":
         """Register tools for use in the program.
 
-        This method accepts string names, callable functions, and MCPTool objects,
+        This method accepts string names, callable functions, and
+        :class:`MCPServerTools` objects,
         providing a consistent interface with the constructor.
 
         Args:
-            tools: List of string names, callable functions, or MCPTool objects
+            tools: List of string names, callable functions, or ``MCPServerTools`` objects
 
         Returns:
             self (for method chaining)
@@ -407,12 +383,12 @@ class LLMProgram:
         if not isinstance(tools, list):
             tools = [tools]
 
-        # Split tools into MCPTool descriptors and other tools
+        # Split tools into MCPServerTools descriptors and other tools
         mcp_tools = []
         other_tools = []
 
         for tool in tools:
-            if isinstance(tool, MCPTool):
+            if isinstance(tool, MCPServerTools):
                 mcp_tools.append(tool)
             else:
                 other_tools.append(tool)
@@ -423,22 +399,14 @@ class LLMProgram:
             # Delegate to the tool manager
             self.tool_manager.register_tools(callables)
 
-        # Register MCPTool descriptors separately
+        # Register MCPServerTools descriptors separately
         if mcp_tools:
             self.tool_manager.register_tools(mcp_tools)
 
         return self
 
     def get_registered_tools(self) -> list[str]:
-        """Get the list of registered tool names.
-
-        Returns:
-            A list of the currently registered tool names
-
-        Note:
-            This method delegates to the tool_manager, which is the
-            single source of truth for registered tools.
-        """
+        """Return the names of registered tools."""
         return self.tool_manager.get_registered_tools()
 
     def set_enabled_tools(self, tools: list[Union[str, Callable]]) -> "LLMProgram":
@@ -477,9 +445,16 @@ class LLMProgram:
         self.max_iterations = max_iterations
         return self
 
-    def configure_mcp(self, config_path: str) -> "LLMProgram":
+    def configure_mcp(
+        self,
+        config_path: str | None = None,
+        servers: dict[str, dict] | None = None,
+    ) -> "LLMProgram":
         """Configure Model Context Protocol (MCP) server connection."""
-        self.mcp_config_path = config_path
+        if config_path is not None:
+            self.mcp_config_path = config_path
+        if servers is not None:
+            self.mcp_servers = servers
         return self
 
     def compile(self) -> "LLMProgram":
@@ -494,33 +469,49 @@ class LLMProgram:
 
     @classmethod
     def from_toml(cls, toml_file, **kwargs):
-        """Create a program from a TOML file.
-
-        This method delegates to ProgramLoader.from_toml for backward compatibility.
-
-        Args:
-            toml_file: Path to the TOML file
-            **kwargs: Additional parameters to override TOML values
-
-        Returns:
-            An initialized LLMProgram instance
-        """
+        """Create a program from a TOML file."""
         from llmproc.config.program_loader import ProgramLoader
 
         return ProgramLoader.from_toml(toml_file, **kwargs)
 
-    def get_tool_configuration(self, linked_programs_instances: dict[str, Any] | None = None) -> dict:
-        """Create tool configuration dictionary for initialization.
+    @classmethod
+    def from_yaml(cls, yaml_file, **kwargs):
+        """Create a program from a YAML file."""
+        from llmproc.config.program_loader import ProgramLoader
 
-        This method extracts the necessary components from the program to initialize
-        tools without requiring a process instance, avoiding circular dependencies.
+        return ProgramLoader.from_yaml(yaml_file, **kwargs)
+
+    @classmethod
+    def from_file(cls, file_path, **kwargs):
+        """Create a program from a configuration file (format auto-detected by extension)."""
+        from llmproc.config.program_loader import ProgramLoader
+
+        return ProgramLoader.from_file(file_path, **kwargs)
+
+    @classmethod
+    def from_dict(cls, config: dict, base_dir: str | Path = None) -> "LLMProgram":
+        """Create a program from a configuration dictionary, primarily for in-memory YAML.
 
         Args:
-            linked_programs_instances: Dictionary of pre-initialized LLMProcess instances
+            config: Dictionary containing program configuration
+            base_dir: Optional base directory for resolving relative paths
 
         Returns:
-            Dictionary with tool configuration components
+            An initialized LLMProgram instance
+
+        Useful for extracting subsections from YAML configurations:
+        ```python
+        with open("config.yaml") as f:
+            config = yaml.safe_load(f)
+        program = LLMProgram.from_dict(config["agents"]["assistant"])
+        ```
         """
+        from llmproc.config.program_loader import ProgramLoader
+
+        return ProgramLoader.from_dict(config, base_dir)
+
+    def get_tool_configuration(self, linked_programs_instances: dict[str, Any] | None = None) -> dict:
+        """Build the configuration used to initialize tools."""
         # Ensure the program is compiled
         if not self.compiled:
             self.compile()
@@ -529,7 +520,10 @@ class LLMProgram:
         config = {
             "provider": self.provider,
             "mcp_config_path": getattr(self, "mcp_config_path", None),
-            "mcp_enabled": getattr(self, "mcp_config_path", None) is not None,
+            "mcp_servers": getattr(self, "mcp_servers", None),
+            "mcp_enabled": (
+                getattr(self, "mcp_config_path", None) is not None or getattr(self, "mcp_servers", None) is not None
+            ),
         }
 
         # Handle linked programs
@@ -546,10 +540,7 @@ class LLMProgram:
         config["linked_programs"] = linked_programs
 
         # Add linked program descriptions if available
-        if (
-            hasattr(self, "linked_program_descriptions")
-            and self.linked_program_descriptions
-        ):
+        if hasattr(self, "linked_program_descriptions") and self.linked_program_descriptions:
             config["linked_program_descriptions"] = self.linked_program_descriptions
         else:
             config["linked_program_descriptions"] = {}
@@ -569,8 +560,6 @@ class LLMProgram:
                 enable_references = fd_config.get("enable_references", False)
 
                 # Create fd_manager
-                from llmproc.file_descriptors.manager import FileDescriptorManager
-
                 fd_manager = FileDescriptorManager(
                     default_page_size=default_page_size,
                     max_direct_output_chars=max_direct_output_chars,
@@ -595,10 +584,10 @@ class LLMProgram:
         ```python
         program = LLMProgram.from_toml("config.toml")
         process = await program.start()  # Default ADMIN access
-        
+
         # Or with specific access level:
         process = await program.start(access_level=AccessLevel.READ)  # Read-only process
-        
+
         # Register callbacks after creation:
         timer = TimingCallback()
         process = await program.start().add_callback(timer)
@@ -624,6 +613,32 @@ class LLMProgram:
         from llmproc.program_exec import create_process
 
         return await create_process(self, access_level=access_level)
+
+    def start_sync(self, access_level: Optional[AccessLevel] = None) -> "SyncLLMProcess":  # noqa: F821
+        """Synchronously create and initialize a :class:`SyncLLMProcess`.
+
+        This method creates a synchronous process that can be used in non-async code.
+        It provides synchronous versions of all the async methods in LLMProcess.
+
+        Args:
+            access_level: Optional access level for the process.
+
+        Returns:
+            A fully initialized :class:`SyncLLMProcess`.
+
+        Example:
+            ```python
+            program = LLMProgram.from_toml("config.toml")
+            process = program.start_sync()  # Returns SyncLLMProcess
+            result = process.run("Hello")   # Blocking call
+            process.close()                 # Blocking cleanup
+            ```
+        """
+        # Import here to avoid circular imports
+        from llmproc.program_exec import create_sync_process
+
+        # Delegate to the modular implementation in program_exec.py
+        return create_sync_process(self, access_level=access_level)
 
 
 # Apply full docstrings to class and methods

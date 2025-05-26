@@ -8,7 +8,6 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.program import LLMProgram
 

@@ -2,16 +2,15 @@
 
 from unittest.mock import MagicMock, Mock, call, patch
 
-from llmproc.common.access_control import AccessLevel
-
 import pytest
-
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 from llmproc.tools.builtin.fd_tools import read_fd_tool
+
 from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
@@ -21,9 +20,7 @@ def test_fd_integration_with_anthropic_executor():
     fd_manager = FileDescriptorManager(max_direct_output_chars=100)
 
     # Set up a large tool result that should be wrapped
-    large_content = (
-        "This is a very large tool output " * 20
-    )  # More than max_direct_output_chars
+    large_content = "This is a very large tool output " * 20  # More than max_direct_output_chars
     tool_result = ToolResult(content=large_content)
 
     # Check direct conditions for wrapping
@@ -160,10 +157,7 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
 
     # New fork FD should exist in fork but not original
     assert "fd:3" in forked_process.fd_manager.file_descriptors
-    assert (
-        forked_process.fd_manager.file_descriptors["fd:3"]["content"]
-        == fd3_fork_content
-    )
+    assert forked_process.fd_manager.file_descriptors["fd:3"]["content"] == fd3_fork_content
 
 
 def test_fd_pagination_with_very_long_lines():
@@ -171,9 +165,7 @@ def test_fd_pagination_with_very_long_lines():
     manager = FileDescriptorManager(default_page_size=100)
 
     # Create content with multiple lines - much more likely to trigger pagination
-    long_line = "\n".join(
-        ["This is line " + str(i) + " " * 20 for i in range(50)]
-    )  # 50 lines with reasonable length
+    long_line = "\n".join(["This is line " + str(i) + " " * 20 for i in range(50)])  # 50 lines with reasonable length
 
     # Create FD
     fd_xml = manager.create_fd_content(long_line)
@@ -190,9 +182,7 @@ def test_fd_pagination_with_very_long_lines():
     result1 = ToolResult(content=xml1, is_error=False)
     page1_content = result1.content.split(">\n")[1].split("\n</fd_content")[0]
     assert len(page1_content) > 0
-    assert (
-        len(page1_content) <= manager.default_page_size
-    )  # Should be limited by page size
+    assert len(page1_content) <= manager.default_page_size  # Should be limited by page size
 
     # Read all pages
     xml_all = manager.read_fd_content(fd_id, read_all=True)
@@ -240,9 +230,7 @@ def test_fd_pagination_with_mixed_line_lengths():
     for i in range(len(all_lines_info) - 1):
         current_end = int(all_lines_info[i].split("-")[1])
         next_start = int(all_lines_info[i + 1].split("-")[0])
-        assert next_start == current_end, (
-            f"Line discontinuity between pages {i + 1} and {i + 2}"
-        )
+        assert next_start == current_end, f"Line discontinuity between pages {i + 1} and {i + 2}"
 
     # Read all content
     xml_all = manager.read_fd_content(fd_id, read_all=True)

@@ -11,9 +11,7 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
-def safe_callback(
-    callback_fn: Optional[Callable], *args, callback_name: str = "callback"
-) -> None:
+def safe_callback(callback_fn: Optional[Callable], *args, callback_name: str = "callback") -> None:
     """
     Safely execute a callback, catching and logging exceptions.
 

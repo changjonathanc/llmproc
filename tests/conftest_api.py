@@ -36,7 +36,6 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc.common.results import RunResult, ToolResult
 
 # Constants for model names - use the smallest models possible for tests
@@ -71,9 +70,7 @@ def vertex_credentials():
     """Check for Vertex AI credentials."""
     creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if not creds_path or not os.path.exists(creds_path):
-        pytest.skip(
-            "Missing or invalid GOOGLE_APPLICATION_CREDENTIALS environment variable"
-        )
+        pytest.skip("Missing or invalid GOOGLE_APPLICATION_CREDENTIALS environment variable")
     return creds_path
 
 
@@ -227,112 +224,6 @@ async def claude_process_with_fd(claude_program_with_fd):
         LLMProcess: A started Claude process instance with file descriptor support
     """
     process = await claude_program_with_fd.start()
-    yield process
-
-
-# Program fixtures with caching
-@pytest.fixture(scope="session")
-def claude_program_with_caching(anthropic_api_key):
-    """Create a Claude program with a large system prompt to trigger caching."""
-    from llmproc import LLMProgram
-
-    # Create a large system prompt to ensure caching kicks in
-    long_system_prompt = "You are a helpful assistant. " + (
-        "This is placeholder content. " * 500
-    )
-
-    return LLMProgram(
-        model_name=CLAUDE_SMALL_MODEL,
-        provider="anthropic",
-        system_prompt=long_system_prompt,
-        parameters={"max_tokens": 150},
-        disable_automatic_caching=False,  # Explicitly enable caching
-    )
-
-
-@pytest.fixture(scope="session")
-def claude_program_without_caching(anthropic_api_key):
-    """Create a Claude program with caching disabled."""
-    from llmproc import LLMProgram
-
-    # Create the same large system prompt for comparison
-    long_system_prompt = "You are a helpful assistant. " + (
-        "This is placeholder content. " * 500
-    )
-
-    return LLMProgram(
-        model_name=CLAUDE_SMALL_MODEL,
-        provider="anthropic",
-        system_prompt=long_system_prompt,
-        parameters={"max_tokens": 150},
-        disable_automatic_caching=True,  # Explicitly disable caching
-    )
-
-
-@pytest.fixture
-async def claude_process_with_caching(claude_program_with_caching):
-    """Create a Claude process with caching enabled."""
-    process = await claude_program_with_caching.start()
-    yield process
-
-
-@pytest.fixture
-async def claude_process_without_caching(claude_program_without_caching):
-    """Create a Claude process with caching disabled."""
-    process = await claude_program_without_caching.start()
-    yield process
-
-
-# Program fixtures with token-efficient tools
-@pytest.fixture(scope="session")
-def claude_program_with_token_efficient_tools(anthropic_api_key):
-    """Create a Claude program with token-efficient tools enabled."""
-    from llmproc import LLMProgram
-
-    program = LLMProgram(
-        model_name="claude-3-7-sonnet-20250219",  # Requires Claude 3.7 for token-efficient tools
-        provider="anthropic",
-        system_prompt="You are a helpful assistant. Use tools when appropriate.",
-        parameters={"max_tokens": 150},
-        tools={"enabled": ["calculator"]},
-    )
-    
-    # Enable token-efficient tools via the proper method
-    program.enable_token_efficient_tools()
-    
-    return program
-
-
-@pytest.fixture
-async def claude_process_with_token_efficient_tools(
-    claude_program_with_token_efficient_tools,
-):
-    """Create a Claude process with token-efficient tools enabled."""
-    process = await claude_program_with_token_efficient_tools.start()
-    yield process
-
-
-# Program fixtures with thinking models
-@pytest.fixture(scope="session")
-def claude_program_with_thinking(anthropic_api_key):
-    """Create a Claude program with thinking model support."""
-    from llmproc import LLMProgram
-
-    return LLMProgram(
-        model_name="claude-3-7-sonnet-20250219",  # Requires Claude 3.7 for thinking
-        provider="anthropic",
-        system_prompt="You are a helpful assistant. Think through problems step by step.",
-        parameters={
-            "max_tokens": 150,
-            "thinking": "high",  # Use high thinking mode
-        },
-    )
-
-
-@pytest.fixture
-async def claude_process_with_thinking(claude_program_with_thinking):
-    """Create a Claude process with thinking model support."""
-    process = await claude_program_with_thinking.start()
     yield process
 
 

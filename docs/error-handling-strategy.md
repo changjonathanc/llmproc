@@ -55,11 +55,11 @@ def log_api_error(logger, provider, error, context=None):
     """Log API errors consistently."""
     context_str = f" | Context: {context}" if context else ""
     logger.error(f"{provider} API error: {str(error)}{context_str}")
-    
+
     # Add standard diagnostic information
     if hasattr(error, "status_code"):
         logger.debug(f"Status code: {error.status_code}")
-    
+
     # Log rate limits differently
     if "rate limit" in str(error).lower() or getattr(error, "status_code", 0) == 429:
         logger.warning(f"{provider} rate limit reached, consider implementing backoff")
@@ -123,16 +123,16 @@ Improve handling of known provider-specific errors without new classes:
 def handle_anthropic_error(error, logger):
     """Handle Anthropic-specific errors."""
     error_msg = str(error).lower()
-    
+
     if "api key" in error_msg or getattr(error, "status_code", 0) == 401:
         logger.error("Anthropic API key validation failed")
         # Forward with specific message
         return f"Authentication error: Please check your Anthropic API key"
-        
+
     elif "rate limit" in error_msg or getattr(error, "status_code", 0) == 429:
         logger.warning("Anthropic rate limit reached")
         return f"Rate limit reached: Please reduce request frequency"
-    
+
     # Default handler
     return f"Anthropic API error: {str(error)}"
 
@@ -156,13 +156,13 @@ class RunResult:
     # Existing fields...
     error: Optional[Exception] = None
     error_context: Optional[dict] = None
-    
+
     def add_error(self, error: Exception, context: dict = None):
         """Add error information to the result."""
         self.error = error
         self.error_context = context or {}
         return self
-        
+
     def has_error(self) -> bool:
         """Check if the run resulted in an error."""
         return self.error is not None
@@ -177,25 +177,25 @@ async def call_with_retry(func, max_retries=3, initial_backoff=1):
     """Call a function with retry logic for common transient errors."""
     retries = 0
     backoff = initial_backoff
-    
+
     while True:
         try:
             return await func()
         except Exception as e:
             retries += 1
-            
+
             # Check if we've exhausted retries
             if retries >= max_retries:
                 logger.warning(f"Max retries ({max_retries}) exceeded")
                 raise  # Re-raise the last exception
-                
+
             # Check if this is a retryable error
             if "rate limit" in str(e).lower() or getattr(e, "status_code", 0) == 429:
                 wait_time = backoff * (2 ** (retries - 1))  # Exponential backoff
                 logger.info(f"Rate limit hit, retrying in {wait_time}s ({retries}/{max_retries})")
                 await asyncio.sleep(wait_time)
                 continue
-                
+
             # Non-retryable error
             raise
 ```
@@ -205,7 +205,7 @@ async def call_with_retry(func, max_retries=3, initial_backoff=1):
 ### Phase 1: Core Improvements (Priority: High)
 
 1. **Standardize logging** across all providers
-   - Use consistent logging levels 
+   - Use consistent logging levels
    - Ensure all components use the logging module, not print
    - Add request ID for correlation
 
@@ -256,18 +256,18 @@ async def run(self, process, user_prompt, max_iterations=10, callbacks=None, run
     callbacks = callbacks or {}
     run_result = run_result or RunResult()
     request_id = generate_request_id()
-    
+
     logger.info(f"[{request_id}] Starting Anthropic request for model {process.model_name}")
-    
+
     # Add user prompt to state
     if not is_tool_continuation:
         process.state.append({"role": "user", "content": user_prompt})
-    
+
     iterations = 0
     while iterations < max_iterations:
         iterations += 1
         logger.debug(f"[{request_id}] Making API call {iterations}/{max_iterations}")
-        
+
         try:
             # Make the API call
             response = await process.client.messages.create(
@@ -277,7 +277,7 @@ async def run(self, process, user_prompt, max_iterations=10, callbacks=None, run
                 tools=process.tools,
                 **process.api_params,
             )
-            
+
             # Track in run result
             run_result.add_api_call({
                 "model": process.model_name,
@@ -285,9 +285,9 @@ async def run(self, process, user_prompt, max_iterations=10, callbacks=None, run
                 "usage": getattr(response, "usage", {}),
                 "stop_reason": getattr(response, "stop_reason", None),
             })
-            
+
             # Process response...
-            
+
         except Exception as e:
             # Log error with context
             error_context = {
@@ -297,16 +297,16 @@ async def run(self, process, user_prompt, max_iterations=10, callbacks=None, run
                 "provider": "anthropic",
             }
             log_api_error(logger, "anthropic", e, error_context)
-            
+
             # Add error to run result
             run_result.add_error(e, error_context)
             process.run_stop_reason = "error"
-            
+
             # Re-raise with context
             raise RuntimeError(
                 f"Anthropic API error on request {request_id}: {str(e)}"
             ) from e
-    
+
     return run_result.complete()
 ```
 

@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import Mock, patch
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.tools import ToolManager, ToolRegistry
 from llmproc.tools.builtin import calculator, fd_to_file_tool, fork_tool, read_fd_tool, read_file, spawn_tool
@@ -271,10 +270,7 @@ async def test_fork_mcp_handling():
                 forked.mcp_enabled = True
 
                 # Handle tool_manager.mcp_manager if it exists
-                if (
-                    hasattr(self.tool_manager, "mcp_manager")
-                    and self.tool_manager.mcp_manager
-                ):
+                if hasattr(self.tool_manager, "mcp_manager") and self.tool_manager.mcp_manager:
                     # In the real method, this is just a comment
                     # We use the pass statement to avoid indentation errors
                     pass

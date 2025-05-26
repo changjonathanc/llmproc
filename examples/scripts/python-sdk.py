@@ -35,12 +35,13 @@ Requirements:
 import asyncio
 import math
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 
 from llmproc import LLMProgram, register_tool
-from llmproc.tools.mcp import MCPTool
+from llmproc.callbacks import CallbackEvent
+from llmproc.tools.mcp import MCPServerTools
 
 # Load environment variables from .env file
 load_dotenv()
@@ -131,7 +132,7 @@ def weather_lookup(location: str, unit: str = "celsius") -> dict[str, Any]:
         "operations": "Statistical operations to perform (mean, median, sum, min, max, std)",
     },
 )
-def stats_calculator(numbers: list[float], operations: list[str] = ["mean", "median"]) -> dict[str, Any]:
+def stats_calculator(numbers: list[float], operations: list[str] = None) -> dict[str, Any]:
     """Calculate statistical measures for a list of numbers.
 
     Args:
@@ -141,6 +142,8 @@ def stats_calculator(numbers: list[float], operations: list[str] = ["mean", "med
     Returns:
         Dictionary with the results of each requested operation
     """
+    if operations is None:
+        operations = ["mean", "median"]
     if not numbers:
         return {"error": "Empty list provided"}
 
@@ -202,7 +205,6 @@ async def spawn_example(
 
 # --- SECTION 2: CALLBACK FUNCTIONS ---
 
-from llmproc.callbacks import CallbackEvent
 
 # Class-based callbacks following the new pattern
 class SDKCallbacks:
@@ -221,7 +223,7 @@ class SDKCallbacks:
         if isinstance(message, dict) and "content" in message:
             print(f"\n🤖 Model response received (length: {len(message['content'])})")
         else:
-            print(f"\n🤖 Model response received")
+            print("\n🤖 Model response received")
 
 
 # --- SECTION 3: MAIN EXAMPLE ---
@@ -317,8 +319,8 @@ async def main():
         # Optional: Configure MCP if you have it set up
         # .configure_mcp("config/mcp_servers.json")
         # .register_tools([
-        #     MCPTool(server="sequential-thinking"),  # all tools
-        #     MCPTool(server="everything", names="add")  # specific tool
+        #     MCPServerTools(server="sequential-thinking"),  # all tools
+        #     MCPServerTools(server="everything", names="add")  # specific tool
         # ])
     )
     print("   ✓ Main program created with all features")
@@ -372,10 +374,10 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor i
 
         print("\n8. Running with test prompt...")
         print(f"   Prompt (truncated): '{user_prompt[:100]}...'")
-        
+
         # Register callbacks using the new pattern
         process.add_callback(SDKCallbacks())
-        
+
         # Run without callbacks parameter
         result = await process.run(user_prompt)
 

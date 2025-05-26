@@ -1,11 +1,11 @@
 # Program Initialization and Linking
 
 This document describes the program initialization and linking system in LLMProc. The system is responsible for:
-1. Loading, validating, and processing TOML program files
+1. Loading, validating, and processing configuration files (TOML or YAML)
 2. Initializing all linked programs recursively
 3. Establishing connections between programs for runtime interaction
 
-> **Note**: While the compilation API (`compile()`, `compile_all()`) is valid and used internally, for most applications we recommend using the simpler workflow with `program = LLMProgram.from_toml()` followed by `process = await program.start()`. The compilation API may be expanded in the future for advanced use cases like program serialization.
+> **Note**: While the compilation API (`compile()`, `compile_all()`) is valid and used internally, for most applications we recommend using the simpler workflow with `program = LLMProgram.from_file()` followed by `process = await program.start()`. The compilation API may be expanded in the future for advanced use cases like program serialization.
 
 ## Initialization Process
 
@@ -13,7 +13,7 @@ This document describes the program initialization and linking system in LLMProc
 
 When initializing a single program file, the system performs the following steps:
 
-1. **Load and Parse TOML**: The program file is loaded and parsed using the `tomllib` module.
+1. **Load and Parse File**: The program file is loaded and parsed using `tomllib` for TOML or `PyYAML` for YAML files.
 2. **Validate Program**: The parsed program is validated using Pydantic models to ensure it follows the expected schema.
 3. **Resolve File Paths**:
    - System prompt files are loaded and validated
@@ -23,8 +23,8 @@ When initializing a single program file, the system performs the following steps
 4. **Create Program Instance**: A `LLMProgram` instance is created with the validated program definition.
 
 ```python
-# Create a program from a TOML file
-program = LLMProgram.from_toml("path/to/program.toml")
+# Create a program from a configuration file
+program = LLMProgram.from_file("path/to/program.yaml")  # or .toml
 ```
 
 ### Recursive Program Initialization
@@ -38,7 +38,7 @@ When programs reference other programs through the `[linked_programs]` section, 
 
 ```python
 # The start() method automatically handles linked programs
-program = LLMProgram.from_toml("path/to/main.toml")
+program = LLMProgram.from_file("path/to/main.yaml")  # or .toml
 process = await program.start()
 ```
 
@@ -54,7 +54,7 @@ The two-step factory pattern handles the complete compilation and linking proces
 
 ```python
 # Step 1: Compile the main program and all its linked programs
-program = LLMProgram.from_toml("path/to/main.toml")
+program = LLMProgram.from_file("path/to/main.yaml")  # or .toml
 
 # Step 2: Start the process
 process = await program.start()  # Use await in async context
@@ -62,7 +62,7 @@ process = await program.start()  # Use await in async context
 
 ## Program Configuration
 
-Programs are defined in TOML files with standard sections:
+Programs are defined in TOML or YAML files with standard sections:
 
 ```toml
 [model]
@@ -99,10 +99,10 @@ system_prompt = "System instructions for the model"
 user = "What are the key features of LLMProc?"  # Executed automatically when the program starts
 ```
 
-When a user prompt is specified in the TOML file, it follows a priority order for execution:
+When a user prompt is specified in the configuration file, it follows a priority order for execution:
 1. Command-line prompt argument (via `-p "prompt"` or `--prompt "prompt"`)
-2. Standard input (via `cat file.txt | llmproc-demo config.toml`)
-3. TOML user prompt (via `user = "prompt"` in TOML)
+2. Standard input (via `cat file.txt | llmproc-demo config.yaml`)
+3. File-defined user prompt (via `user = "prompt"` in the config file)
 4. Interactive mode (if none of the above is provided)
 
 ### Max Iterations Configuration
@@ -191,7 +191,7 @@ program = LLMProgram.compile("path/to/program.toml")
 Compiles a main program and all its linked programs recursively:
 
 ```python
-compiled_programs = LLMProgram.compile_all("path/to/main.toml")
+compiled_programs = LLMProgram.compile_all("path/to/main.yaml")  # or .toml
 ```
 
 Returns a dictionary mapping absolute file paths to compiled program instances.
@@ -201,7 +201,7 @@ Returns a dictionary mapping absolute file paths to compiled program instances.
 Compiles and links a main program and all its linked programs:
 
 ```python
-process = LLMProcess.from_toml("path/to/main.toml")
+process = LLMProcess.from_file("path/to/main.yaml")  # or .toml
 ```
 
 Returns an `LLMProcess` instance with all linked programs properly connected.
@@ -231,7 +231,7 @@ Ensure the specified program file exists and the path is correct.
 
 ### "Invalid program"
 
-Check that your TOML file follows the expected schema. Common issues include:
+Check that your configuration file follows the expected schema. Common issues include:
 - Missing required sections or fields
 - Incorrect types or formats
 - Invalid values for fields
@@ -287,10 +287,10 @@ Compile and link the program graph:
 ```python
 # Using the recommended pattern with program.start()
 from llmproc import LLMProgram
-program = LLMProgram.from_toml("main.toml")
+program = LLMProgram.from_file("main.yaml")  # or .toml
 process = await program.start()  # Creates process with all linked programs
 
-# The process will automatically execute the user prompt specified in the TOML
+# The process will automatically execute the user prompt specified in the configuration file
 # No need to call process.run() unless you want to run additional prompts
 ```
 

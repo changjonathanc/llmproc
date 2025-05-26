@@ -4,11 +4,8 @@ import warnings
 from pathlib import Path
 
 import pytest
-
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
-
-# These tests have been moved to test_env_info_builder.py, which tests EnvInfoBuilder directly
 
 
 def test_program_compile_with_env_info():
@@ -17,7 +14,8 @@ def test_program_compile_with_env_info():
         # Create a temporary TOML file with env_info section
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
-            f.write("""
+            f.write(
+                """
             [model]
             name = "test-model"
             provider = "anthropic"
@@ -28,7 +26,8 @@ def test_program_compile_with_env_info():
             [env_info]
             variables = ["working_directory", "date"]
             custom_var = "custom value"
-            """)
+            """
+            )
 
         # Load the program from TOML
         program = LLMProgram.from_toml(toml_path)
@@ -44,19 +43,22 @@ def test_program_linking_with_env_info():
         # Create a linked program
         linked_program_path = Path(temp_dir) / "linked_program.toml"
         with open(linked_program_path, "w") as f:
-            f.write("""
+            f.write(
+                """
             [model]
             name = "linked-model"
             provider = "anthropic"
 
             [prompt]
             system_prompt = "Linked program system prompt"
-            """)
+            """
+            )
 
         # Create a main program with a link to the other program
         main_program_path = Path(temp_dir) / "main_program.toml"
         with open(main_program_path, "w") as f:
-            f.write(f"""
+            f.write(
+                f"""
             [model]
             name = "main-model"
             provider = "anthropic"
@@ -68,11 +70,12 @@ def test_program_linking_with_env_info():
             variables = ["working_directory"]
 
             [tools]
-            enabled = ["spawn"]
+            builtin = ["spawn"]
 
             [linked_programs]
             test_program = "{linked_program_path}"
-            """)
+            """
+            )
 
         # Compile the main program
         program = LLMProgram.from_toml(main_program_path)
@@ -93,14 +96,16 @@ def test_program_compiler_load_toml():
         # Create a temporary TOML file
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
-            f.write("""
+            f.write(
+                """
             [model]
             name = "test-model"
             provider = "anthropic"
 
             [prompt]
             system_prompt = "Test system prompt"
-            """)
+            """
+            )
 
         # Load the program from TOML
         program = LLMProgram.from_toml(toml_path)
@@ -122,14 +127,16 @@ def test_system_prompt_file_loading():
         # Create a program file referencing the prompt file
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
-            f.write("""
+            f.write(
+                """
             [model]
             name = "test-model"
             provider = "anthropic"
 
             [prompt]
             system_prompt_file = "prompt.md"
-            """)
+            """
+            )
 
         # Load the program from TOML
         program = LLMProgram.from_toml(toml_path)
@@ -144,7 +151,8 @@ def test_preload_files_warnings():
         # Create a program file with non-existent preload files
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
-            f.write("""
+            f.write(
+                """
             [model]
             name = "test-model"
             provider = "anthropic"
@@ -154,7 +162,8 @@ def test_preload_files_warnings():
 
             [preload]
             files = ["non-existent-file.txt"]
-            """)
+            """
+            )
 
         # Check for warnings when loading from TOML
         with warnings.catch_warnings(record=True) as w:
@@ -188,14 +197,16 @@ def test_system_prompt_file_error():
         # Create a program file with a non-existent system prompt file
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
-            f.write("""
+            f.write(
+                """
             [model]
             name = "test-model"
             provider = "anthropic"
 
             [prompt]
             system_prompt_file = "non-existent-prompt.md"
-            """)
+            """
+            )
 
         # Check for FileNotFoundError when loading from TOML
         with pytest.raises(FileNotFoundError) as excinfo:
@@ -212,7 +223,8 @@ def test_mcp_config_file_error():
         # Create a program file with a non-existent MCP config file
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
-            f.write("""
+            f.write(
+                """
             [model]
             name = "test-model"
             provider = "anthropic"
@@ -222,7 +234,8 @@ def test_mcp_config_file_error():
 
             [mcp]
             config_path = "non-existent-config.json"
-            """)
+            """
+            )
 
         # Check for FileNotFoundError when loading from TOML
         with pytest.raises(FileNotFoundError) as excinfo:

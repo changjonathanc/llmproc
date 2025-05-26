@@ -14,11 +14,11 @@ Your goal is to provide accurate, helpful, and safe responses to user queries.
 
 # For Vertex AI configuration:
 # [model]
-# name = "gemini-2.5-pro"            # Or "gemini-2.0-flash" for smaller model 
+# name = "gemini-2.5-pro"            # Or "gemini-2.0-flash" for smaller model
 # provider = "gemini_vertex"
 # project_id = "your-project-id"     # Optional: Override environment variable
 # region = "us-central1"             # Optional: Override environment variable
-# 
+#
 # [demo]
 # display_name = "Gemini 2.5 Pro (Vertex AI)"
 

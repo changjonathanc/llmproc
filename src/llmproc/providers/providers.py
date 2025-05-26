@@ -71,9 +71,7 @@ def get_provider_client(
         # Get API key from environment
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
-            raise ValueError(
-                "OpenAI API key must be provided via OPENAI_API_KEY environment variable"
-            )
+            raise ValueError("OpenAI API key must be provided via OPENAI_API_KEY environment variable")
         return AsyncOpenAI(api_key=openai_api_key)
 
     elif provider == PROVIDER_ANTHROPIC:
@@ -84,9 +82,7 @@ def get_provider_client(
         # Get API key from environment
         anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
         if not anthropic_api_key:
-            raise ValueError(
-                "Anthropic API key must be provided via ANTHROPIC_API_KEY environment variable"
-            )
+            raise ValueError("Anthropic API key must be provided via ANTHROPIC_API_KEY environment variable")
         return AsyncAnthropic(api_key=anthropic_api_key)
 
     elif provider == PROVIDER_ANTHROPIC_VERTEX:

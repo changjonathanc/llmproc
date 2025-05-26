@@ -14,14 +14,14 @@ from llmproc import LLMProgram
 
 async def main():
     # Load and compile
-    program = LLMProgram.from_toml("path/to/config.toml")
-    
+    program = LLMProgram.from_file("path/to/config.yaml")  # or .toml
+
     # Start with async initialization
     process = await program.start()
-    
+
     # Run and get metrics
     run_result = await process.run("User input")
-    
+
     # Get the response text
     response = process.get_last_message()
     print(f"Response: {response}")
@@ -29,6 +29,11 @@ async def main():
 # Run the async function
 asyncio.run(main())
 ```
+
+> **Note:** `LLMProcess` instances are not thread-safe. Only call `run()`
+> sequentially on a given process. See the [FAQ entry on concurrent
+> `run()` calls](../../FAQ.md#is-llmprocessrun-safe-to-call-concurrently) for
+> details.
 
 ### Handling RunResult
 
@@ -78,7 +83,7 @@ This design follows these core principles:
 
 ```python
 # 1. Create program from configuration
-program = LLMProgram.from_toml("config.toml")
+program = LLMProgram.from_file("config.yaml")  # or .toml
 
 # 2. Start process with proper initialization
 process = await program.start()
@@ -108,10 +113,10 @@ async def my_tool(arg1: str, runtime_context=None) -> dict:
     # So you can safely access the required keys
     process = runtime_context["process"]
     fd_manager = runtime_context["fd_manager"]
-    
+
     # Use dependencies to implement the tool
     # ...
-    
+
     return {"result": "Success"}
 ```
 
@@ -149,10 +154,10 @@ async def my_tool_handler(param1: str, param2: int = 0, runtime_context=None) ->
     # So you can safely access required context keys
     process = runtime_context["process"]
     fd_manager = runtime_context["fd_manager"]
-    
+
     # Tool implementation using dependencies
     result = f"Processed {param1} with value {param2}"
-    
+
     # Return a proper ToolResult
     return ToolResult.from_success(result)
 
@@ -164,7 +169,7 @@ def register_my_tool(registry):
 def register_system_tools_config(config):
     # Get the tool registry
     registry = config.get("registry")
-    
+
     # Register custom tool if enabled in config
     if "my_tool" in config.get("enabled_tools", []):
         register_my_tool(registry)
@@ -177,33 +182,33 @@ def register_system_tools_config(config):
 def get_my_provider_client(model_name: str, **kwargs) -> Any:
     # Import necessary client library
     from my_provider_lib import Client
-    
+
     # Get API key
     api_key = os.environ.get("MY_PROVIDER_API_KEY")
     if not api_key:
         raise ValueError("MY_PROVIDER_API_KEY environment variable not set")
-    
+
     # Create and return client
     return Client(api_key=api_key)
 
 # 2. Create a process executor class
 class MyProviderProcessExecutor:
-    async def run(self, process, user_prompt, max_iterations=10, 
+    async def run(self, process, user_prompt, max_iterations=10,
                   callbacks=None, run_result=None):
         # Create a RunResult if not provided
         if run_result is None:
             from llmproc.common.results import RunResult
             run_result = RunResult()
-        
+
         # Implementation specific to this provider
         # ...
-        
+
         # Add API call info
         run_result.add_api_call({
             "model": process.model_name,
             "usage": response.usage
         })
-        
+
         # Complete and return the result
         return run_result.complete()
 
@@ -218,11 +223,11 @@ elif self.provider == "my_provider":
 ### Program Configuration
 
 1. **File Organization**:
-   - Keep all TOML program files in a dedicated directory (e.g., `programs/`)
+   - Keep all program files (TOML or YAML) in a dedicated directory (e.g., `programs/`)
    - Use clear, descriptive names for program files
 
 2. **Configuration Structure**:
-   - Group related settings in the appropriate TOML sections
+   - Group related settings in the appropriate configuration sections
    - Include comments to explain non-obvious settings
 
 3. **System Prompts**:
@@ -258,7 +263,7 @@ elif self.provider == "my_provider":
 3. **Tool Registration**:
    - Register tools only when enabled
    - Use the standard registration pattern
-   - Include tools in the enabled list in TOML configuration
+   - Include tools in the enabled list in the configuration file
 
 ### Callback Usage
 
@@ -339,7 +344,7 @@ print(f"Used {run_result.api_calls} API calls")
 ```python
 # DON'T do this
 def main():
-    program = LLMProgram.from_toml("config.toml")
+    program = LLMProgram.from_file("config.yaml")  # or .toml
     process = asyncio.run(program.start())  # Blocking in sync function
 ```
 
@@ -348,7 +353,7 @@ Instead, use proper async patterns:
 ```python
 # DO this
 async def main():
-    program = LLMProgram.from_toml("config.toml")
+    program = LLMProgram.from_file("config.yaml")  # or .toml
     process = await program.start()
 
 asyncio.run(main())

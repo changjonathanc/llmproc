@@ -11,7 +11,6 @@ import math
 from typing import Union
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin.calculator import calculator, safe_eval
 

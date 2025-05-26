@@ -4,12 +4,11 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.providers.anthropic_utils import (
     add_token_efficient_header_if_needed,
-    safe_callback,
 )
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
+from llmproc.providers.utils import safe_callback
 
 
 class TestAnthropicHelperFunctions:
@@ -37,10 +36,7 @@ class TestAnthropicHelperFunctions:
         result = add_token_efficient_header_if_needed(process, headers)
 
         assert "anthropic-beta" in result
-        assert (
-            "existing-feature,token-efficient-tools-2025-02-19"
-            == result["anthropic-beta"]
-        )
+        assert "existing-feature,token-efficient-tools-2025-02-19" == result["anthropic-beta"]
 
     def test_add_token_efficient_header_already_present(self):
         """Test not duplicating token-efficient header if already present."""
@@ -73,7 +69,7 @@ class TestAnthropicHelperFunctions:
 
         callback_fn.assert_called_once_with("arg1", "arg2")
 
-    @patch("llmproc.providers.anthropic_utils.logger")
+    @patch("llmproc.providers.utils.logger")
     def test_safe_callback_handles_exception(self, mock_logger):
         """Test that exceptions in callbacks are caught and logged."""
         callback_fn = MagicMock(side_effect=Exception("Test error"))
@@ -89,4 +85,3 @@ class TestAnthropicHelperFunctions:
         """Test handling None callback."""
         # Should not raise an exception
         safe_callback(None, "arg1", callback_name="test_callback")
-

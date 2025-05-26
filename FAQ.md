@@ -42,15 +42,26 @@ result = await process.run("Hello")
 message = process.get_last_message()  # Get text response if available
 ```
 
+### Is `LLMProcess.run` safe to call concurrently?
+
+No. `LLMProcess` instances are **not** thread-safe. Each process tracks
+conversation history and other mutable state internally. Calling `run()` from
+multiple tasks or threads at the same time can corrupt that state. The async
+API is designed so you can run separate processes concurrently without
+blocking the event loop—**not** for running the same process in parallel.
+Always await one call before starting the next on a given instance.
+
 ## Configuration and Tools
 
-### Why use TOML for configuration rather than JSON or YAML?
+### What configuration formats does LLMProc support?
 
-TOML was chosen because:
-- It's portable, simple, and easy to read & write for both humans and LLMs
-- It doesn't depend on the implementation, which has changed during development
-- It provides a declarative way to describe the entire program in a single file
-- Section headers create natural organization for different configuration aspects
+LLMProc accepts configuration in multiple formats:
+
+- **TOML** – the original format used by the project
+- **YAML** – follows the same schema as the TOML examples
+- **Python dictionaries** – create programs programmatically with `LLMProgram.from_dict()`
+
+Both TOML and YAML files share identical fields, so choose whichever format best fits your workflow.
 
 ### What's the purpose of the file descriptor system?
 
@@ -99,3 +110,38 @@ result = await process.run("Your query", callbacks=callbacks)
 ```
 
 This approach enables real-time monitoring, custom metrics collection, and integration with external logging systems. You can see examples of callback usage in the CLI implementation at `src/llmproc/cli.py`.
+
+### How do I configure API retry behavior?
+
+LLMProc supports configurable retry behavior for API calls through environment variables. You can control the number of retry attempts, initial wait time, and maximum wait time.
+
+See the [Environment Variables documentation](docs/environment-variables.md#retry-configuration) for details on configuring:
+- `LLMPROC_RETRY_MAX_ATTEMPTS`
+- `LLMPROC_RETRY_INITIAL_WAIT`
+- `LLMPROC_RETRY_MAX_WAIT`
+
+## Configuration
+
+### What's the recommended way to configure prompts?
+
+LLMProc supports two naming styles for prompt configuration:
+
+- **Recommended**: `system` and `user` (concise, modern)
+- **Also supported**: `system_prompt` and `user_prompt` (explicit, legacy)
+
+We recommend using the shorter forms for consistency with other configuration sections:
+
+```toml
+[prompt]
+system = "You are a helpful assistant."
+user = "Hello!"
+
+[tools]
+builtin = ["calculator", "read_file"]  # Not "builtin_tools"
+```
+
+The longer forms (`system_prompt`, `user_prompt`) remain fully supported for backward compatibility. Use them if you prefer more explicit field names or have existing configurations.
+
+Both styles work identically in TOML and YAML configurations.
+
+The retry mechanism uses exponential backoff to handle transient API errors gracefully.

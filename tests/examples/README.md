@@ -13,7 +13,7 @@ These tests serve a different purpose from the core functionality tests:
 ## Current Example Tests
 
 - **goto_context_compaction_test.py:** Tests the `goto_context_compaction_demo.py` script that demonstrates efficient context management
-- **multiply_example_test.py:** Tests the `multiply_example.py` script that shows basic Python API usage
+- **test_multiply_example.py:** Tests the `multiply_example.py` script that shows basic Python API usage
 
 ## Test Organization
 

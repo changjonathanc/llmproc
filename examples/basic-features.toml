@@ -4,7 +4,7 @@ name = "claude-3-5-haiku-20241022"
 provider = "anthropic"
 
 [prompt]
-system_prompt = """You are an assistant with access to several basic LLMProc features:
+system = """You are an assistant with access to several basic LLMProc features:
 
 1. PRELOADED FILES: You have access to preloaded files in your context
 2. ENVIRONMENT INFO: You can see environment information in <env> tags
@@ -48,13 +48,11 @@ variables = [
 
 # Enable tools with their original names
 [tools]
-enabled = ["read_file", "calculator", "list_dir"]
-
-# Define user-friendly tool aliases
-[tools.aliases]
-read = "read_file"
-calc = "calculator"
-dir = "list_dir"
+builtin = [
+    {name = "read_file", alias = "read"},
+    {name = "calculator", alias = "calc"},
+    {name = "list_dir", alias = "dir"},
+]
 
 [demo]
 display_name = "Basic Features Demo"

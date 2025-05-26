@@ -50,9 +50,7 @@ class ToolProgressTracker:
 
         # Clear the spinner line
         if self.active_tools:
-            sys.stdout.write(
-                "\r" + " " * (20 + sum(len(t) for t in self.active_tools)) + "\r"
-            )
+            sys.stdout.write("\r" + " " * (20 + sum(len(t) for t in self.active_tools)) + "\r")
             sys.stdout.flush()
 
     def stop(self):
@@ -80,7 +78,7 @@ class ToolProgressTracker:
 
         if not self.active_tools:
             self.stop()
-            
+
     def response(self, content):
         """Callback for when a response is received"""
         logger.debug(f"Response: {content[:30]}...")

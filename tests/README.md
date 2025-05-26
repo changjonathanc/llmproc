@@ -17,7 +17,7 @@ Tests are organized into several categories:
    - Marked with `@pytest.mark.llm_api` and organized by tier
 
 4. **CLI Tests**: Tests for the command-line interface
-   - Located in main `tests/` directory with `test_cli_*.py` naming
+   - Located in `tests/cli/` directory with `test_cli_*.py` naming
 
 5. **Example Tests**: Tests that verify example configurations and demo scripts
    - Located in `tests/examples/` directory
@@ -62,7 +62,7 @@ python tests/run_api_tests.py --tier release
 API tests are marked with `@pytest.mark.llm_api` and are skipped by default to prevent accidental API usage. To run them:
 
 ```bash
-# Run all API tests 
+# Run all API tests
 pytest --run-api-tests
 
 # Run only tests with specific markers
@@ -102,7 +102,7 @@ The testing strategy is documented in several files:
 | Tools | `test_*_tool.py` | Tests for specific tools | `test_calculator_tool.py` |
 | Program Linking | `test_program_linking*.py` | Tests for program linking | `test_program_linking_core.py` |
 | File Descriptor | `test_file_descriptor*.py` | Tests for file descriptor system | `test_file_descriptor.py` |
-| CLI | `test_cli*.py` | Tests for command-line interface | `test_cli.py` |
+| CLI | `cli/test_cli*.py` | Tests for command-line interface | `cli/test_cli.py` |
 | Reasoning Models | `test_reasoning_models*.py` | Tests for reasoning models | `test_reasoning_models.py` |
 | Configuration | `test_from_toml.py` | Tests for TOML configuration loading | `test_from_toml.py` |
 | Examples | `examples/test_*.py` | Tests for example scripts and demos | `examples/test_goto_context_compaction.py` |
@@ -121,6 +121,7 @@ The testing strategy is documented in several files:
 ### Provider-Specific Markers
 - `@pytest.mark.anthropic_api`: Tests specific to Anthropic's API
 - `@pytest.mark.openai_api`: Tests specific to OpenAI's API
+- `@pytest.mark.gemini_api`: Tests specific to Google Gemini API
 - `@pytest.mark.vertex_api`: Tests specific to Vertex AI
 
 ## Adding New Tests
@@ -146,7 +147,7 @@ When adding new tests, follow these guidelines:
 We are currently in the process of reorganizing and consolidating tests:
 
 - **Standardized Test Suite Structure**: ✅ Completed
-- **Test Suite Structure Followup**: 
+- **Test Suite Structure Followup**:
   - **Stage 1**: ✅ Completed
   - **Stage 2**: 🔄 In Progress
   - **Stage 3**: 🔜 Planned

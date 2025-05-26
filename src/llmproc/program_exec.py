@@ -4,20 +4,20 @@ This module contains modular functions for transforming LLMProgram configuration
 into LLMProcess instances, with each step isolated for better testing and maintenance.
 """
 
-import copy
+import asyncio
 import inspect
 import logging
-import os
-import warnings
 from pathlib import Path
-from typing import Any, NamedTuple, Optional, Union
+from typing import Any, NamedTuple, Optional, TypedDict, Union
 
 from llmproc.common.access_control import AccessLevel
+from llmproc.common.context import RuntimeContext
 from llmproc.env_info.builder import EnvInfoBuilder
 from llmproc.file_descriptors.manager import FileDescriptorManager
-from llmproc.llm_process import LLMProcess
+from llmproc.llm_process import LLMProcess, SyncLLMProcess
 from llmproc.program import LLMProgram
 from llmproc.providers import get_provider_client
+from llmproc.tools import ToolManager
 
 
 class ProcessInitializationError(ValueError):
@@ -28,11 +28,20 @@ class ProcessInitializationError(ValueError):
 
 logger = logging.getLogger(__name__)
 
+# Parameters used only during initialization and removed before process creation
+INITIALIZATION_ONLY_PARAMS = ("project_id", "region")
+
+
+def _remove_init_params(params: dict[str, Any]) -> None:
+    """Remove initialization-only parameters from the given mapping."""
+    for param in INITIALIZATION_ONLY_PARAMS:
+        if param in params:
+            params.pop(param)
+
 
 # --------------------------------------------------------
-# Configuration Return Types
+# Configuration Return Types & Helper Data Structures
 # --------------------------------------------------------
-# NamedTuples for initialization functions to provide structured returns
 class FileDescriptorSystemConfig(NamedTuple):
     """Configuration for the file descriptor system."""
 
@@ -49,205 +58,37 @@ class LinkedProgramsConfig(NamedTuple):
     has_linked_programs: bool
 
 
-def instantiate_process(process_state: dict[str, Any]) -> LLMProcess:
-    """Create bare process instance from pre-computed state using introspection.
+class CoreAttributes(TypedDict):
+    """Core attributes extracted from an LLMProgram."""
 
-    Args:
-        process_state: Dictionary containing all required state for LLMProcess initialization
-
-    Returns:
-        Instantiated LLMProcess with pre-computed state
-
-    Raises:
-        ProcessInitializationError: If required parameters are missing or None
-        TypeError: If unexpected parameters are passed and __init__ doesn't accept **kwargs
-    """
-    logger.debug(f"Instantiating LLMProcess with state dictionary containing {len(process_state)} entries")
-
-    # Use introspection to determine valid parameters for LLMProcess.__init__
-    # This approach is used deliberately to make instantiate_process automatically
-    # adapt to changes in LLMProcess.__init__ signature without requiring manual updates
-    try:
-        init_signature = inspect.signature(LLMProcess.__init__)
-        init_params = init_signature.parameters
-    except ValueError:
-        logger.error("Could not retrieve signature for LLMProcess.__init__")
-        raise ProcessInitializationError("Failed to inspect LLMProcess constructor")
-
-    # Identify required parameters (excluding 'self')
-    required_params = {
-        name for name, param in init_params.items() if param.default is inspect.Parameter.empty and name != "self"
-    }
-
-    # --- Validation ---
-    # Check for missing required parameters
-    missing_required = required_params - process_state.keys()
-    if missing_required:
-        raise ProcessInitializationError(
-            f"Missing required parameters for LLMProcess: {', '.join(sorted(missing_required))}. State provided keys: {', '.join(sorted(process_state.keys()))}"
-        )
-
-    # Check if any required parameters have None values
-    none_required_values = {k for k in required_params if k in process_state and process_state[k] is None}
-    if none_required_values:
-        raise ProcessInitializationError(
-            f"Required parameters cannot be None: {', '.join(sorted(none_required_values))}"
-        )
-
-    # --- Filtering ---
-    # Filter the state to include only parameters accepted by __init__
-    valid_param_names = {name for name in init_params if name != "self"}
-    init_kwargs = {k: v for k, v in process_state.items() if k in valid_param_names}
-
-    logger.debug(f"Filtered state for LLMProcess instantiation includes keys: {', '.join(sorted(init_kwargs.keys()))}")
-
-    # Instantiate the process
-    try:
-        return LLMProcess(**init_kwargs)
-    except TypeError as e:
-        logger.error(f"TypeError during LLMProcess instantiation: {e}")
-        raise ProcessInitializationError(f"Failed to instantiate LLMProcess: {e}") from e
+    model_name: str
+    provider: str
+    original_system_prompt: Optional[str]
+    display_name: Optional[str]
+    base_dir: Optional[Path]
+    api_params: dict[str, Any]
+    tool_manager: ToolManager
+    project_id: Optional[str]
+    region: Optional[str]
+    user_prompt: Optional[str]
+    max_iterations: int
 
 
-def setup_runtime_context(
-    process: LLMProcess, runtime_dependencies: Optional[dict[str, Any]] = None
-) -> "RuntimeContext":
-    """Set up runtime context for dependency injection.
+class RuntimeDefaults(TypedDict):
+    """Default runtime state values for a new process."""
 
-    This is the canonical implementation for creating and configuring
-    runtime context from an LLMProcess instance.
-
-    Args:
-        process: The LLMProcess to set up runtime context for
-        runtime_dependencies: Optional pre-configured dependencies (useful for testing)
-
-    Returns:
-        The configured RuntimeContext dictionary
-    """
-    # Import directly to avoid circular imports
-    from llmproc.common.context import RuntimeContext
-
-    logger.debug("Setting up runtime context for process")
-
-    # Use provided dependencies or extract from process
-    if runtime_dependencies is not None:
-        context = runtime_dependencies
-    else:
-        # Start with a clean context containing just the process
-        context: RuntimeContext = {"process": process}
-
-        # Add file descriptor manager if available
-        if hasattr(process, "fd_manager"):
-            context["fd_manager"] = process.fd_manager
-
-        # Add linked programs if available
-        if hasattr(process, "linked_programs") and process.linked_programs:
-            context["linked_programs"] = process.linked_programs
-
-        # Add linked program descriptions if available
-        if hasattr(process, "linked_program_descriptions") and process.linked_program_descriptions:
-            context["linked_program_descriptions"] = process.linked_program_descriptions
-
-    # Apply context to the process's tool manager
-    if process.tool_manager:
-        process.tool_manager.set_runtime_context(context)
-        
-        # Set access level in tool manager to match process access level
-        if hasattr(process, "access_level"):
-            process.tool_manager.set_process_access_level(process.access_level)
-            logger.debug(f"Set tool manager access level to: {process.access_level}")
-    else:
-        logger.warning("Cannot set runtime context - process.tool_manager is None!")
-
-    logger.debug(f"Runtime context set up with keys: {', '.join(context.keys())}")
-    return context
+    state: list[dict[str, Any]]  # Empty conversation history
+    enriched_system_prompt: Optional[str]  # Generated on first run
+    system_prompt: Optional[str]  # For backward compatibility, usually original_prompt
 
 
-def validate_process(process: LLMProcess) -> None:
-    """Perform final validation and logging.
+class MCPConfig(TypedDict):
+    """MCP (Model Context Protocol) configuration."""
 
-    Args:
-        process: The LLMProcess to validate
-    """
-    logger.info(f"Created process with model {process.model_name} ({process.provider})")
-    logger.info(f"Tools enabled: {len(process.tool_manager.get_registered_tools())}")
-
-
-async def create_process(
-    program: LLMProgram, 
-    additional_preload_files: Optional[list[str]] = None,
-    access_level: Optional[Any] = None
-) -> LLMProcess:
-    """Create fully initialized process from program.
-
-    This function handles the complete program-to-process transition by
-    coordinating all the individual steps in sequence using a functional approach:
-
-    1. Ensure program is compiled (done once at the beginning)
-    2. Prepare all initial state using pure initialization functions
-    3. Extract configuration from program
-    4. Initialize tools with extracted configuration
-    5. Create process instance with pre-computed state
-    6. Set up runtime context for dependency injection
-    7. Perform final validation
-
-    Args:
-        program: The LLMProgram to create a process from
-        additional_preload_files: Optional list of additional files to preload
-        access_level: Optional access level for the process (READ, WRITE, or ADMIN)
-                     If not specified, defaults to ADMIN for root processes
-
-    Returns:
-        A fully initialized LLMProcess
-    """
-    logger.info(f"Starting process creation for program: {getattr(program, 'display_name', program.model_name)}")
-
-    # 1. Ensure program is compiled (only done once here)
-    if not program.compiled:
-        logger.debug("Compiling program...")
-        program.compile()
-        logger.debug("Program compiled successfully")
-
-    # 2. Prepare all initial state using pure initialization functions
-    # Pass additional_preload_files to be included in enriched system prompt
-    logger.debug("Preparing process state...")
-    process_state = prepare_process_state(program, additional_preload_files, access_level)
-    logger.debug(f"Process state prepared with {len(process_state)} entries")
-
-    # 3. Extract configuration from program (program is already compiled)
-    logger.debug("Extracting tool configuration...")
-    config = program.get_tool_configuration()
-    logger.debug("Tool configuration extracted")
-
-    # 4. Initialize tools with configuration
-    logger.debug("Initializing tools...")
-    await program.tool_manager.initialize_tools(config)
-    logger.debug("Tools initialized successfully")
-
-    # 5. Create process instance with pre-computed state
-    logger.debug("Instantiating LLMProcess...")
-    process = instantiate_process(process_state)
-    logger.debug(f"LLMProcess instantiated with ID: {id(process)}")
-
-    # 6. Set up runtime context for tools
-    logger.debug("Setting up runtime context...")
-    setup_runtime_context(process)
-    logger.debug("Runtime context set up successfully")
-
-    # 7. Perform final validation
-    logger.debug("Validating process...")
-    validate_process(process)
-    logger.debug("Process validated successfully")
-
-    logger.info(f"Process created successfully for {process.model_name} ({process.provider})")
-
-    return process
-
-
-# --------------------------------------------------------
-# System Prompt Generation
-# --------------------------------------------------------
-# Function to generate the enriched system prompt at initialization time
+    mcp_config_path: Optional[str]
+    mcp_servers: Optional[dict]
+    mcp_tools: dict[str, Any]
+    mcp_enabled: bool
 
 
 # --------------------------------------------------------
@@ -259,79 +100,43 @@ async def create_process(
 def initialize_file_descriptor_system(
     program: LLMProgram,
 ) -> FileDescriptorSystemConfig:
-    """Initialize file descriptor subsystem based on program configuration.
+    """Initialize file descriptor subsystem based on program configuration."""
+    fd_config = getattr(program, "file_descriptor", {})
+    if not fd_config.get("enabled", False):
+        return FileDescriptorSystemConfig(None, False, False)
 
-    This is a pure function that takes program configuration and returns the
-    file descriptor system configuration without modifying any state.
+    references_enabled = fd_config.get("enable_references", False)
+    fd_manager = FileDescriptorManager(
+        default_page_size=fd_config.get("default_page_size", 4000),
+        max_direct_output_chars=fd_config.get("max_direct_output_chars", 8000),
+        max_input_chars=fd_config.get("max_input_chars", 8000),
+        page_user_input=fd_config.get("page_user_input", True),
+        enable_references=references_enabled,
+    )
+    logger.info(
+        "File descriptor enabled: page_size=%s, references=%s",
+        fd_manager.default_page_size,
+        references_enabled,
+    )
 
-    Args:
-        program: The LLMProgram containing file descriptor configuration
-
-    Returns:
-        FileDescriptorSystemConfig containing the manager and configuration flags
-    """
-    fd_manager = None
-    file_descriptor_enabled = False
-    references_enabled = False
-
-    if hasattr(program, "file_descriptor"):
-        fd_config = program.file_descriptor
-        enabled = fd_config.get("enabled", False)
-
-        if enabled:
-            # Create file descriptor manager with configuration
-            references_enabled = fd_config.get("enable_references", False)
-            fd_manager = FileDescriptorManager(
-                default_page_size=fd_config.get("default_page_size", 4000),
-                max_direct_output_chars=fd_config.get("max_direct_output_chars", 8000),
-                max_input_chars=fd_config.get("max_input_chars", 8000),
-                page_user_input=fd_config.get("page_user_input", True),
-                enable_references=references_enabled,
-            )
-            file_descriptor_enabled = True
-            logger.info(
-                f"File descriptor enabled: page_size={fd_manager.default_page_size}, references={references_enabled}"
-            )
-
-            # Register FD tools to the manager
-            # We do this here instead of in integration.py to avoid side effects during tool registration
-            if hasattr(program, "tools") and program.tools:
-                # Handle both list and dict format for tools
-                if isinstance(program.tools, dict):
-                    enabled_tools = program.tools.get("enabled", [])
-                else:  # List format
-                    enabled_tools = program.tools
-
-                for tool_name in enabled_tools:
-                    if isinstance(tool_name, str) and tool_name in ("read_fd", "fd_to_file"):
-                        logger.debug(f"Pre-registering FD tool '{tool_name}' with fd_manager")
-                        fd_manager.register_fd_tool(tool_name)
+    if hasattr(program, "tools") and program.tools:
+        enabled_tools = program.tools.get("enabled", []) if isinstance(program.tools, dict) else program.tools
+        for tool_name in enabled_tools:
+            if isinstance(tool_name, str) and tool_name in ("read_fd", "fd_to_file"):
+                fd_manager.register_fd_tool(tool_name)
 
     return FileDescriptorSystemConfig(
         fd_manager=fd_manager,
-        file_descriptor_enabled=file_descriptor_enabled,
+        file_descriptor_enabled=True,
         references_enabled=references_enabled,
     )
 
 
 def extract_linked_programs_config(program: LLMProgram) -> LinkedProgramsConfig:
-    """Extract linked programs configuration from program.
-
-    This is a pure function that extracts the linked programs configuration
-    from the program without modifying any state.
-
-    Args:
-        program: The LLMProgram containing linked programs configuration
-
-    Returns:
-        LinkedProgramsConfig with linked program references and descriptions
-    """
-    # Get linked programs from the program
+    """Extract linked programs configuration from program."""
     linked_programs = getattr(program, "linked_programs", {})
     linked_program_descriptions = getattr(program, "linked_program_descriptions", {})
     has_linked_programs = bool(linked_programs)
-
-    logger.debug(f"Extracted {len(linked_programs)} linked program references")
 
     return LinkedProgramsConfig(
         linked_programs=linked_programs,
@@ -341,38 +146,15 @@ def extract_linked_programs_config(program: LLMProgram) -> LinkedProgramsConfig:
 
 
 def initialize_client(program: LLMProgram) -> Any:
-    """Initialize provider client based on program configuration.
-
-    This is a pure function that initializes a provider client without
-    modifying any state.
-
-    Args:
-        program: The LLMProgram containing provider configuration
-
-    Returns:
-        Initialized provider client
-    """
+    """Initialize provider client based on program configuration."""
     project_id = getattr(program, "project_id", None)
     region = getattr(program, "region", None)
-
     client = get_provider_client(program.provider, program.model_name, project_id, region)
-    logger.debug(f"Initialized client for provider {program.provider}")
-
     return client
 
 
-def get_core_attributes(program: LLMProgram) -> dict[str, Any]:
-    """Extract core attributes from program.
-
-    This is a pure function that extracts basic attributes from the program
-    without modifying any state.
-
-    Args:
-        program: The LLMProgram to extract attributes from
-
-    Returns:
-        Dictionary of core attributes
-    """
+def get_core_attributes(program: LLMProgram) -> CoreAttributes:
+    """Extract core attributes from program."""
     return {
         "model_name": program.model_name,
         "provider": program.provider,
@@ -388,114 +170,58 @@ def get_core_attributes(program: LLMProgram) -> dict[str, Any]:
     }
 
 
-def _initialize_runtime_defaults(original_prompt: str) -> dict[str, Any]:
-    """Initialize default runtime state values.
-
-    Args:
-        original_prompt: Original system prompt to use as default
-
-    Returns:
-        Dictionary of default runtime state values
-    """
+def _initialize_runtime_defaults(original_prompt: Optional[str]) -> RuntimeDefaults:
+    """Initialize default runtime state values."""
     return {
-        "state": [],  # Empty conversation history
-        "enriched_system_prompt": None,  # Generated on first run
-        "system_prompt": original_prompt,  # For backward compatibility
+        "state": [],
+        "enriched_system_prompt": None,
+        "system_prompt": original_prompt,
     }
 
 
-def _initialize_mcp_config(program: LLMProgram) -> dict[str, Any]:
-    """Extract MCP configuration from the program.
-
-    Args:
-        program: The LLMProgram containing MCP configuration
-
-    Returns:
-        Dictionary of MCP configuration
-    """
+def _initialize_mcp_config(program: LLMProgram) -> MCPConfig:
+    """Extract MCP configuration from the program."""
     mcp_config_path = getattr(program, "mcp_config_path", None)
+    mcp_servers = getattr(program, "mcp_servers", None)
     return {
         "mcp_config_path": mcp_config_path,
+        "mcp_servers": mcp_servers,
         "mcp_tools": getattr(program, "mcp_tools", {}),
-        "mcp_enabled": mcp_config_path is not None,
+        "mcp_enabled": (mcp_config_path is not None or mcp_servers is not None),
     }
 
 
+# --------------------------------------------------------
+# Process State Preparation
+# --------------------------------------------------------
 def prepare_process_state(
-    program: LLMProgram, 
+    program: LLMProgram,
     additional_preload_files: Optional[list[str]] = None,
-    access_level: Optional[AccessLevel] = None
+    access_level: Optional[AccessLevel] = None,
 ) -> dict[str, Any]:
-    """Prepare the complete initial state for LLMProcess.
-
-    This function aggregates the results of all initialization functions
-    into a single dictionary that can be used to initialize an LLMProcess.
-    It follows a process of incrementally building up the state from various
-    sources and pure initialization functions.
-
-    Args:
-        program: The LLMProgram to prepare state for
-        additional_preload_files: Optional list of additional file paths to preload
-        access_level: Optional access level for the process (READ, WRITE, or ADMIN)
-
-    Returns:
-        Dictionary containing all state needed to initialize an LLMProcess
-    """
+    """Prepare the complete initial state for LLMProcess."""
     state = {}
 
-    # --- Program Reference (needed for core operations) ---
     state["program"] = program
-
-    # --- Core Model Attributes ---
-    # Extract basic information about the model, provider, prompts, etc.
     core_attrs = get_core_attributes(program)
     state.update(core_attrs)
-
-    # --- Initial Runtime State ---
-    # Initialize empty conversation state and runtime configuration
     state.update(_initialize_runtime_defaults(core_attrs["original_system_prompt"]))
-
-    # --- API Client Initialization ---
-    # Create the provider-specific client for API calls
     state["client"] = initialize_client(program)
-
-    # --- File Descriptor System ---
-    # Initialize the file descriptor subsystem if enabled
     fd_info = initialize_file_descriptor_system(program)
     state.update(fd_info._asdict())
-
-    # --- Linked Programs ---
-    # Extract linked program configuration for spawn tool usage
     linked_info = extract_linked_programs_config(program)
     state.update(linked_info._asdict())
 
-    # --- Preloaded Content Collection ---
-    # Collect file paths from program and additional_preload_files
     preload_files = getattr(program, "preload_files", []).copy()
     if additional_preload_files:
         preload_files.extend(additional_preload_files)
 
-    # We don't store preloaded content anymore
-    # The effect of preloading is fully captured in the enriched_system_prompt
-
-    # --- MCP Configuration ---
-    # Set up Model Context Protocol configuration for external tools
     state.update(_initialize_mcp_config(program))
-    
-    # --- Access Level ---
-    # Set the process access level (defaults to ADMIN for root processes)
     state["access_level"] = access_level or AccessLevel.ADMIN
 
-    # --- Generate Enriched System Prompt ---
-    # Now that all necessary components are available, generate the enriched system prompt
-    # This includes environment info, preloaded file content, and FD instructions
-    # Generate it once at initialization time, making it immutable during process execution
     env_config = getattr(program, "env_info", {"variables": []})
     page_user_input = getattr(fd_info.fd_manager, "page_user_input", False) if fd_info.fd_manager else False
 
-    # Generate the enriched system prompt directly
-    # EnvInfoBuilder now handles all file loading
-    logger.debug("Generating enriched system prompt with file preloading")
     state["enriched_system_prompt"] = EnvInfoBuilder.get_enriched_system_prompt(
         base_prompt=state["original_system_prompt"],
         env_config=env_config or {"variables": []},
@@ -506,8 +232,161 @@ def prepare_process_state(
         references_enabled=state["references_enabled"],
         page_user_input=page_user_input,
     )
-
-    logger.debug("Enriched system prompt generated")
-
-    logger.debug(f"Prepared process state dictionary with {len(state)} entries")
     return state
+
+
+# --------------------------------------------------------
+# Core Process Instantiation and Setup
+# --------------------------------------------------------
+def instantiate_process(process_state: dict[str, Any]) -> LLMProcess:
+    """Create bare process instance from pre-computed state using introspection."""
+    try:
+        init_signature = inspect.signature(LLMProcess.__init__)
+        init_params = init_signature.parameters
+    except ValueError:
+        logger.error("Could not retrieve signature for LLMProcess.__init__")
+        raise ProcessInitializationError("Failed to inspect LLMProcess constructor")
+
+    valid_param_names = {name for name in init_params if name != "self"}
+    required_params = {
+        name for name, param in init_params.items() if param.default is inspect.Parameter.empty and name != "self"
+    }
+
+    init_kwargs = {k: v for k, v in process_state.items() if k in valid_param_names}
+    _remove_init_params(init_kwargs)
+
+    missing_required_final = {p for p in required_params if p not in init_kwargs}
+    if missing_required_final:
+        sorted_missing = sorted(list(missing_required_final))
+        sorted_provided_valid = sorted(list(init_kwargs.keys()))
+        raise ProcessInitializationError(
+            f"Missing required parameters for LLMProcess after filtering: {', '.join(sorted_missing)}. "
+            f"Provided valid __init__ args: {', '.join(sorted_provided_valid)}"
+        )
+
+    none_values_in_required = {k for k in required_params if k in init_kwargs and init_kwargs[k] is None}
+    if none_values_in_required:
+        sorted_none_required = sorted(list(none_values_in_required))
+        raise ProcessInitializationError(
+            f"Required parameters for LLMProcess cannot be None: {', '.join(sorted_none_required)}"
+        )
+
+    try:
+        init_kwargs.setdefault("loop", asyncio.get_running_loop())
+    except RuntimeError:
+        pass
+
+    try:
+        return LLMProcess(**init_kwargs)
+    except TypeError as e:
+        logger.error(f"TypeError during LLMProcess instantiation: {e}")
+        raise ProcessInitializationError(f"Failed to instantiate LLMProcess: {e}") from e
+
+
+def setup_runtime_context(
+    process: LLMProcess, runtime_dependencies: Optional[dict[str, Any]] = None
+) -> "RuntimeContext":
+    """Set up runtime context for dependency injection."""
+    if runtime_dependencies is not None:
+        context = runtime_dependencies
+    else:
+        context: RuntimeContext = {"process": process}
+        context["stderr"] = getattr(process, "stderr_log", [])
+        if hasattr(process, "fd_manager"):
+            context["fd_manager"] = process.fd_manager
+        if hasattr(process, "linked_programs") and process.linked_programs:
+            context["linked_programs"] = process.linked_programs
+        if hasattr(process, "linked_program_descriptions") and process.linked_program_descriptions:
+            context["linked_program_descriptions"] = process.linked_program_descriptions
+
+    if process.tool_manager:
+        process.tool_manager.set_runtime_context(context)
+        if hasattr(process, "access_level"):
+            process.tool_manager.set_process_access_level(process.access_level)
+    else:
+        logger.warning("Cannot set runtime context - process.tool_manager is None!")
+    return context
+
+
+def validate_process(process: LLMProcess) -> None:
+    """Perform final validation and logging."""
+    logger.info(f"Created process with model {process.model_name} ({process.provider})")
+    logger.info(f"Tools enabled: {len(process.tool_manager.get_registered_tools())}")
+
+
+# --------------------------------------------------------
+# Generic Process Creation Logic
+# --------------------------------------------------------
+async def _create_process_generic(
+    program: LLMProgram,
+    process_class: type = LLMProcess,
+    process_kwargs: Optional[dict[str, Any]] = None,
+    additional_preload_files: Optional[list[str]] = None,
+    access_level: Optional[AccessLevel] = None,
+) -> Union[LLMProcess, SyncLLMProcess]:
+    """Generic process creation for both async and sync modes."""
+    display_name = getattr(program, "display_name", program.model_name)
+    process_type = process_class.__name__
+    logger.info(f"Starting {process_type} creation for program: {display_name}")
+
+    if not program.compiled:
+        program.compile()
+
+    process_state = prepare_process_state(program, additional_preload_files, access_level)
+
+    if process_kwargs:
+        process_state.update(process_kwargs)
+
+    config = program.get_tool_configuration()
+    await program.tool_manager.initialize_tools(config)
+
+    if process_class is LLMProcess:
+        process = instantiate_process(process_state)
+    else:
+        init_kwargs_for_sync = process_state.copy()
+        _remove_init_params(init_kwargs_for_sync)
+        process = process_class(**init_kwargs_for_sync)
+
+    setup_runtime_context(process)
+    validate_process(process)
+
+    logger.info(f"{process_type} created successfully for {process.model_name} ({process.provider})")
+    return process
+
+
+# --------------------------------------------------------
+# Public Factory Functions
+# --------------------------------------------------------
+async def create_process(
+    program: LLMProgram, additional_preload_files: Optional[list[str]] = None, access_level: Optional[Any] = None
+) -> LLMProcess:
+    """Create fully initialized async LLMProcess from program."""
+    return await _create_process_generic(
+        program=program,
+        process_class=LLMProcess,
+        additional_preload_files=additional_preload_files,
+        access_level=access_level,
+    )
+
+
+def create_sync_process(
+    program: LLMProgram,
+    additional_preload_files: Optional[list[str]] = None,
+    access_level: Optional[AccessLevel] = None,
+) -> SyncLLMProcess:
+    """Create a fully initialized SyncLLMProcess for synchronous API usage."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(
+            _create_process_generic(
+                program=program,
+                process_class=SyncLLMProcess,
+                process_kwargs={"_loop": loop},
+                additional_preload_files=additional_preload_files,
+                access_level=access_level,
+            )
+        )
+    except Exception as e:
+        if not loop.is_closed():
+            loop.close()
+        raise e

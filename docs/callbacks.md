@@ -12,11 +12,16 @@ The callback system is designed to:
 
 ## Event Types
 
-The system supports three standard event types as defined in the `CallbackEvent` enum:
+The system supports several standard event types as defined in the `CallbackEvent` enum:
 
 - `TOOL_START` - Called when a tool is about to be executed
 - `TOOL_END` - Called when a tool execution completes
 - `RESPONSE` - Called when model generates a response
+- `API_REQUEST` - Called right before an API request is sent
+- `API_RESPONSE` - Called when an API response is received
+- `TURN_START` - Called at the start of each turn
+- `TURN_END` - Called at the end of each turn
+- `STDERR_WRITE` - Called when text is appended to the stderr log
 
 ## Using Callbacks
 
@@ -67,12 +72,30 @@ Class-based callbacks can implement methods named after the event string values:
 class MyCallbacks:
     def tool_start(self, tool_name, tool_args):
         print(f"Tool started: {tool_name}")
-        
+
     def tool_end(self, tool_name, result):
         print(f"Tool completed: {tool_name}")
-        
+
     def response(self, text):
         print(f"Response: {text[:30]}...")
+```
+
+### Async Callbacks
+
+Callbacks can also be asynchronous. Both function-based and class-based callbacks
+may be defined as ``async`` and will automatically run on the process event
+loop. A callback class may freely mix synchronous and asynchronous methods.
+
+```python
+async def my_async_callback(event, *args, **kwargs):
+    await log_event(event)
+
+class MixedCallbacks:
+    def tool_start(self, tool_name, tool_args):
+        print("sync start")
+
+    async def response(self, text):
+        await log_response(text)
 ```
 
 ## Callback Arguments
@@ -82,6 +105,11 @@ Each event type passes specific arguments to callbacks:
 - `TOOL_START` - `(tool_name, tool_args)`
 - `TOOL_END` - `(tool_name, result)`
 - `RESPONSE` - `(text)`
+- `API_REQUEST` - `(payload_dict)`
+- `API_RESPONSE` - `(response_obj)`
+- `TURN_START` - `(process)`
+- `TURN_END` - `(process, response_obj, tool_results)`
+- `STDERR_WRITE` - `(text)`
 
 ## Example: Timing Callback
 
@@ -92,20 +120,20 @@ class TimingCallback:
     def __init__(self):
         self.tools = {}
         self.current_tools = {}
-    
+
     def tool_start(self, tool_name, tool_args):
         if tool_name not in self.tools:
             self.tools[tool_name] = {"calls": 0, "total_time": 0}
-            
+
         self.tools[tool_name]["calls"] += 1
         self.current_tools[tool_name] = time.time()
-    
+
     def tool_end(self, tool_name, result):
         if tool_name in self.current_tools:
             elapsed = time.time() - self.current_tools[tool_name]
             self.tools[tool_name]["total_time"] += elapsed
             del self.current_tools[tool_name]
-            
+
     def get_stats(self):
         stats = {}
         for name, data in self.tools.items():
@@ -118,6 +146,23 @@ class TimingCallback:
                 "avg_time": avg
             }
         return stats
+```
+
+## Example: API Logging Callback
+
+Use a callback to capture the raw request and response data for each API call:
+
+```python
+class APILogger:
+    def __init__(self):
+        self.calls = []
+
+    def api_request(self, payload):
+        self.calls.append({"request": payload})
+
+    def api_response(self, response):
+        if self.calls:
+            self.calls[-1]["response"] = response
 ```
 
 ## Callback Inheritance

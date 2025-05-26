@@ -7,7 +7,7 @@ based on their program configuration, without actually making an API call.
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional, TextIO
+from typing import TextIO
 
 from llmproc.program import LLMProgram
 
@@ -60,8 +60,6 @@ def print_system_prompt(
 
         # Handle preloaded files
         if hasattr(program, "preload_files") and program.preload_files:
-            from pathlib import Path
-
             # Simple mock preloading - just use file names
             for file_path in program.preload_files:
                 path = Path(file_path)
@@ -84,9 +82,7 @@ def print_system_prompt(
             process_info.fd_manager = fd_manager
 
         # Get the enriched system prompt with process info
-        enriched_prompt = program.get_enriched_system_prompt(
-            process_instance=process_info, include_env=include_env
-        )
+        enriched_prompt = program.get_enriched_system_prompt(process_instance=process_info, include_env=include_env)
 
         # Print header
         output_file.write("\n===== ENRICHED SYSTEM PROMPT =====\n\n")
@@ -195,21 +191,11 @@ def print_system_prompt(
             fd_config = program.file_descriptor
             output_file.write("\nFile Descriptor Configuration:\n")
             output_file.write(f"  Enabled: {fd_config.get('enabled', False)}\n")
-            output_file.write(
-                f"  Max Direct Output Chars: {fd_config.get('max_direct_output_chars', 8000)}\n"
-            )
-            output_file.write(
-                f"  Default Page Size: {fd_config.get('default_page_size', 4000)}\n"
-            )
-            output_file.write(
-                f"  Max Input Chars: {fd_config.get('max_input_chars', 8000)}\n"
-            )
-            output_file.write(
-                f"  Page User Input: {fd_config.get('page_user_input', True)}\n"
-            )
-            output_file.write(
-                f"  Enable References: {fd_config.get('enable_references', False)}\n"
-            )
+            output_file.write(f"  Max Direct Output Chars: {fd_config.get('max_direct_output_chars', 8000)}\n")
+            output_file.write(f"  Default Page Size: {fd_config.get('default_page_size', 4000)}\n")
+            output_file.write(f"  Max Input Chars: {fd_config.get('max_input_chars', 8000)}\n")
+            output_file.write(f"  Page User Input: {fd_config.get('page_user_input', True)}\n")
+            output_file.write(f"  Enable References: {fd_config.get('enable_references', False)}\n")
 
         # Print tools configuration if available
         if hasattr(program, "tools") and program.tools:
@@ -236,9 +222,7 @@ def print_system_prompt(
 def main():
     """Main entry point for the CLI tool."""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description="Print the enriched system prompt for a program"
-    )
+    parser = argparse.ArgumentParser(description="Print the enriched system prompt for a program")
     parser.add_argument(
         "program_path",
         help="Path to the program TOML file",

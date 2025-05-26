@@ -4,15 +4,14 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 
 
 class TestTokenEfficientTools:
     """Test suite for the token-efficient tools functionality."""
 
-    def test_header_validation(self):
-        """Test that a warning is logged when using token-efficient tools with non-Claude 3.7 models."""
+    def test_warn_non_claude37_header_use(self):
+        """Test that a warning is logged when headers are used with non-Claude 3.7 models."""
         # Create AnthropicProcessExecutor instance
         executor = AnthropicProcessExecutor()
 
@@ -20,9 +19,7 @@ class TestTokenEfficientTools:
         extra_headers = {"anthropic-beta": "token-efficient-tools-2025-02-19"}
 
         # Test with non-Claude 3.7 model
-        with patch(
-            "llmproc.providers.anthropic_process_executor.logger"
-        ) as mock_logger:
+        with patch("llmproc.providers.anthropic_process_executor.logger") as mock_logger:
             # Direct test of the validation logic
             model_name = "claude-3-5-sonnet"
             if (
@@ -39,7 +36,7 @@ class TestTokenEfficientTools:
                 "Token-efficient tools header is only supported by Claude 3.7 models. Currently using claude-3-5-sonnet. The header will be ignored."
             )
 
-    def test_extra_headers_passing(self):
+    def test_extra_headers_passed_to_api(self):
         """Test that extra_headers are passed correctly to API calls."""
         # Create mock process and response
         mock_response = MagicMock()

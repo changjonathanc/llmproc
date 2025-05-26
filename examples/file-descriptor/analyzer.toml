@@ -48,7 +48,7 @@ Remember to read the file descriptor first before responding.
 
 # Only need read_fd for the child process
 [tools]
-enabled = ["read_fd"]
+builtin = ["read_fd"]
 
 # Configure file descriptor system
 [file_descriptor]

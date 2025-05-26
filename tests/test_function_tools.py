@@ -6,7 +6,6 @@ import logging
 from typing import Any, Optional
 
 import pytest
-
 from llmproc import LLMProgram, register_tool
 from llmproc.tools import ToolResult
 from llmproc.tools.function_tools import (
@@ -69,6 +68,15 @@ def patch_process_for_tests():
     llmproc.llm_process.LLMProcess.call_tool = original_call_tool
 
 
+@pytest.fixture(autouse=True)
+def patch_initialize_client():
+    """Patch client initialization to avoid API key requirements."""
+    from unittest.mock import MagicMock, patch
+
+    with patch("llmproc.program_exec.initialize_client", return_value=MagicMock()):
+        yield
+
+
 @pytest.fixture
 def basic_program():
     """Create a basic program for testing."""
@@ -95,9 +103,7 @@ def get_calculator(x: int, y: int) -> int:
 
 
 # Function with complex types
-def search_documents(
-    query: str, limit: int = 5, categories: list[str] | None = None
-) -> list[dict[str, Any]]:
+def search_documents(query: str, limit: int = 5, categories: list[str] | None = None) -> list[dict[str, Any]]:
     """Search documents by query.
 
     Args:
@@ -110,20 +116,13 @@ def search_documents(
     """
     # Dummy implementation
     if categories:
-        return [
-            {"id": i, "title": f"Result {i} for {query} in {categories[0]}"}
-            for i in range(min(3, limit))
-        ]
+        return [{"id": i, "title": f"Result {i} for {query} in {categories[0]}"} for i in range(min(3, limit))]
     else:
-        return [
-            {"id": i, "title": f"Result {i} for {query}"} for i in range(min(3, limit))
-        ]
+        return [{"id": i, "title": f"Result {i} for {query}"} for i in range(min(3, limit))]
 
 
 # Decorated function with custom name and description
-@register_tool(
-    name="weather_info", description="Get weather information for a location"
-)
+@register_tool(name="weather_info", description="Get weather information for a location")
 def get_weather(location: str, units: str = "celsius") -> dict[str, Any]:
     """Get weather for a location.
 
@@ -302,27 +301,6 @@ def test_program_with_function_tools():
     # Process function tools to register handlers and schemas
     program.tool_manager.process_function_tools()
 
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
-
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
-
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
-
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
-
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
-
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
-
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
-    
     # Verify tools appear in the API-ready schema
     tool_schemas = program.tool_manager.get_tool_schemas()
     tool_names = [schema["name"] for schema in tool_schemas]
@@ -401,9 +379,7 @@ async def test_tool_enabling_methods(basic_program):
     # Test weather tool with explicit parameters
     weather_result = await process.call_tool("weather_info", {"location": "New York"})
     assert isinstance(weather_result, ToolResult)
-    assert not weather_result.is_error, (
-        f"Error in weather tool: {weather_result.content}"
-    )
+    assert not weather_result.is_error, f"Error in weather tool: {weather_result.content}"
     assert "location" in weather_result.content
     assert "New York" in str(weather_result.content)
 
@@ -436,6 +412,7 @@ async def test_register_tools_with_function_tools(basic_program, create_program)
     tool_names = []
     for func in program.tool_manager.function_tools:
         from llmproc.common.metadata import get_tool_meta
+
         meta = get_tool_meta(func)
         if meta.name:
             tool_names.append(meta.name)

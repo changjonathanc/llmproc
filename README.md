@@ -22,15 +22,36 @@ LLMProc: A Unix-inspired operating system for language models. Like processes in
 
 ## Installation
 
+### For Users
+
 ```bash
-# Install with uv (recommended)
-uv pip install llmproc               # Base package
-uv pip install "llmproc[openai]"     # For OpenAI models
-uv pip install "llmproc[anthropic]"  # For Anthropic models
-uv pip install "llmproc[all]"        # All providers
+# Install base package
+pip install llmproc
+
+# Install with specific provider support
+pip install "llmproc[openai]"        # For OpenAI models
+pip install "llmproc[anthropic]"     # For Anthropic models  
+pip install "llmproc[vertex]"        # For Vertex AI
+pip install "llmproc[gemini]"        # For Google Gemini
+
+# Install with all providers
+pip install "llmproc[all]"
 ```
 
-See [MISC.md](MISC.md) for additional installation options and provider configurations.
+### For Developers
+
+If you're contributing to llmproc, clone the repository and use:
+
+```bash
+# Create virtual environment
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install everything (package + all providers + dev tools)
+uv sync --all-extras --all-groups
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete developer setup guide.
 
 ## Quick Start
 
@@ -49,7 +70,7 @@ def multiply(a: float, b: float) -> dict:
 
 async def main():
     program = LLMProgram(
-        model_name="claude-3-7-sonnet-20250219", 
+        model_name="claude-3-7-sonnet-20250219",
         provider="anthropic",
         system_prompt="You're a helpful assistant.",
         parameters={"max_tokens": 1024},
@@ -57,7 +78,7 @@ async def main():
     )
     process = await program.start()
     await process.run("Can you multiply 3.14159265359 by 2.71828182846?")
-    
+
     print(process.get_last_message())
 
 
@@ -65,27 +86,59 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Configuration Options (TOML, YAML, or Dict)
+
+Load program configuration in multiple ways:
+
+```python
+# Load from TOML (traditional)
+program = LLMProgram.from_toml("config.toml")
+
+# Or load from YAML
+program = LLMProgram.from_yaml("config.yaml")
+
+# Format auto-detection
+program = LLMProgram.from_file("config.yaml")  # Detects YAML from extension
+
+# Dictionary-based configuration
+program = LLMProgram.from_dict({
+    "model": {"name": "claude-3-7-sonnet", "provider": "anthropic"},
+    "prompt": {"system_prompt": "You are a helpful assistant."},
+    "parameters": {"max_tokens": 1000}
+})
+
+# Extract subsections from configuration files
+with open("multi_agent.yaml") as f:
+    config = yaml.safe_load(f)
+agent_config = config["agents"]["assistant"]  # Extract a specific subsection
+program = LLMProgram.from_dict(agent_config)  # Create program from subsection
+```
+
+See [examples/projects/swe-agent](./examples/projects/swe-agent) for a complete YAML configuration example with dictionary-based configuration and subsection extraction.
+For a full reference of available fields, see [YAML Configuration Schema](docs/yaml_config_schema.md).
+
 ### CLI usage
 
 ```bash
 # Start interactive session
-llmproc-demo ./examples/anthropic.toml
+llmproc-demo ./examples/anthropic.toml  # or ./examples/openai.yaml ... or any other config file
 
 # Single prompt
-llmproc-demo ./examples/openai.toml -p "What is Python?"
+llmproc ./examples/openai.toml -p "What is Python?"  # non-interactive
+llmproc ./examples/openai.toml -p "add details" -a  # append to config prompt
 
 # Read from stdin
-cat questions.txt | llmproc-demo ./examples/anthropic.toml -n
+cat questions.txt | llmproc ./examples/anthropic.toml
 
-# Use Gemini models
-llmproc-demo ./examples/gemini.toml
+# List available builtin tools
+llmproc ./examples/min_claude_code_read_only.yaml -p 'give me a list of builtin tools in llmproc'
 ```
 
 ## Features
 
 ### Supported Model Providers
-- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-4.5
-- **Anthropic**: Claude 3 Haiku, Claude 3.5/3.7 Sonnet (direct API and Vertex AI)
+- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-4.5, GPT-4.1, o1, o3, o4-mini, etc
+- **Anthropic**: Claude 3 Haiku, Claude 3.5/3.7 Sonnet, Claude 4 Sonnet/Opus (direct API and Vertex AI)
 - **Google**: Gemini 1.5 Flash/Pro, Gemini 2.0 Flash, Gemini 2.5 Pro (direct API and Vertex AI)
 
 LLMProc offers a Unix-inspired toolkit for building sophisticated LLM applications:
@@ -105,17 +158,27 @@ LLMProc offers a Unix-inspired toolkit for building sophisticated LLM applicatio
 - See the [Python SDK](./docs/python-sdk.md) documentation for the fluent API
 - Use [Function-Based Tools](./docs/function-based-tools.md) to register Python functions as tools
 - Create [Context-Aware Meta-Tools](./examples/scripts/temperature_sdk_demo.py) to let LLMs modify their own runtime parameters
-- Start with a [simple configuration](./examples/anthropic.toml) for quick experimentation
+- Start with a [simple configuration](./examples/anthropic.yaml) (or TOML equivalent) for quick experimentation
 
 ### Additional Features
 - **File Preloading** - Enhance context by [loading files](./examples/basic-features.toml) into system prompts
 - **Environment Info** - Add [runtime context](./examples/basic-features.toml) like working directory
 - **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
-- **Reasoning/Thinking models** - Claude 3.7 Thinking and OpenAI Reasoning models (configured in anthropic.toml and openai.toml)
-- **Token-efficient tools** - Claude 3.7 optimized tool calling (configured in anthropic.toml)
+- **Reasoning/Thinking models** - Claude 3.7 Thinking and OpenAI Reasoning models (configured in anthropic.yaml or openai.yaml)
+- **Token-efficient tools** - Claude 3.7 optimized tool calling (configured in anthropic.yaml)
 - **[MCP Protocol](./examples/mcp.toml)** - Standardized interface for tool usage
 - **[Tool Aliases](./examples/basic-features.toml)** - Provide simpler, intuitive names for tools
+- **[Dictionary-based Configuration](./examples/projects/swe-agent)** - Create programs from dictionaries for subsection extraction
+- **YAML configuration support** - Use `.yaml` files with the same structure as TOML
 - **Cross-provider support** - Currently supports Anthropic, OpenAI, and Google Gemini
+- **New CLI tools** - `llmproc` for single prompts and `llmproc-demo` for interactive sessions
+- **Synchronous API** - Create blocking processes with `program.start_sync()`
+- **Standard error logging** - Use the `write_stderr` tool and `LLMProcess.get_stderr_log()`
+- **Flexible callbacks** - Callback functions and methods may be synchronous or asynchronous
+- **Instance methods as tools** - Register object methods directly for stateful tools
+- **API retry configuration** - Exponential backoff settings via environment variables
+- **Spawn the current program** - Leave `program_name` blank in the spawn tool
+- **Unified tool configuration** - Built-in and MCP tools share the same `ToolConfig`
 
 ## Demo Tools
 
@@ -126,21 +189,29 @@ LLMProc includes demo command-line tools for quick experimentation:
 Interactive CLI for testing LLM configurations:
 
 ```bash
-llmproc-demo ./examples/anthropic.toml  # Interactive session
-llmproc-demo ./config.toml -p "What is Python?"    # Single prompt
-cat questions.txt | llmproc-demo ./config.toml -n  # Pipe mode
+llmproc-demo ./config.yaml  # Interactive session
 ```
 
 Commands: `exit` or `quit` to end the session
+
+### llmproc
+
+Non-interactive CLI for running a single prompt:
+
+```bash
+llmproc ./config.yaml -p "What is Python?"      # Single prompt
+cat questions.txt | llmproc ./config.yaml       # Read from stdin
+llmproc ./config.yaml -p "extra" -a             # Append on top of config
+```
 
 ### llmproc-prompt
 
 View the compiled system prompt without making API calls:
 
 ```bash
-llmproc-prompt ./config.toml                 # Display to stdout
-llmproc-prompt ./config.toml -o prompt.txt   # Save to file
-llmproc-prompt ./config.toml -E              # Without environment info
+llmproc-prompt ./config.yaml                 # Display to stdout
+llmproc-prompt ./config.yaml -o prompt.txt   # Save to file
+llmproc-prompt ./config.yaml -E              # Without environment info
 ```
 
 ## Use Cases
@@ -161,7 +232,8 @@ llmproc-prompt ./config.toml -E              # Without environment info
 - [Tool Aliases](./docs/tool-aliases.md): Using simpler names for tools
 - [Gemini Integration](./docs/gemini.md): Google Gemini models usage guide
 - [Testing Guide](./docs/testing.md): Testing and validation
-- For complete reference, see [reference.toml](./examples/reference.toml)
+- For a tutorial with all options, see [tutorial-config.toml](./examples/tutorial-config.toml)
+- For the formal specification, see [yaml_config_schema.yaml](./docs/yaml_config_schema.yaml)
 
 For advanced usage and implementation details, see [MISC.md](MISC.md). For design rationales and API decisions, see [FAQ.md](FAQ.md).
 

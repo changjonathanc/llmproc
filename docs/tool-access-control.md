@@ -29,7 +29,7 @@ process = await program.start(access_level=AccessLevel.WRITE)
 process = await program.start(access_level=AccessLevel.READ)
 ```
 
-### Child Process Inheritance 
+### Child Process Inheritance
 
 When a parent process creates children via `fork` or `spawn`:
 
@@ -47,7 +47,7 @@ from llmproc.common.access_control import AccessLevel
 from llmproc.tools.function_tools import register_tool
 
 @register_tool(
-    name="read_file", 
+    name="read_file",
     description="Reads a file from disk",
     access=AccessLevel.READ,  # Specify access level
 )
@@ -59,13 +59,13 @@ async def read_file(path: str):
 
 ```python
 from llmproc.common.access_control import AccessLevel
-from llmproc.tools.mcp import MCPTool
+from llmproc.tools.mcp import MCPServerTools
 
 # Option 1: All tools with same access
-tools = MCPTool(server="calculator", names=["add", "subtract"], access=AccessLevel.READ)
+tools = MCPServerTools(server="calculator", names=["add", "subtract"], access=AccessLevel.READ)
 
 # Option 2: Per-tool access levels
-tools = MCPTool(server="fileserver", names={
+tools = MCPServerTools(server="fileserver", names={
     "read_file": AccessLevel.READ,
     "write_file": AccessLevel.WRITE,
 })

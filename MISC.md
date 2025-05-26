@@ -24,7 +24,7 @@ uv pip install "llmproc[gemini]"     # For Google Gemini models
 uv pip install "llmproc[all]"
 
 # Development installation
-uv pip install -e ".[dev,all]"
+uv sync --all-extras --all-groups
 
 # Or with pip
 pip install llmproc               # Base package

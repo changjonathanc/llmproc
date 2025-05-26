@@ -1,0 +1,47 @@
+model:
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
+  max_iterations: 30
+
+prompt:
+  system_prompt: |
+    You are Claude, a software engineering assistant.
+    You are running in a GitHub Actions workflow.
+    Follow the user's instructions and autonomously complete the task.
+    Do not ask for confirmation or any question from user. Use the tools provided to you to solve the problem.
+
+  user: |
+    Please resolve the merge conflict in the current repo.
+    Start by running `git status` to see the conflicts.
+    Make sure you carefully understand the context and resolve all git merge conflicts, preserving intent.
+    After editing, run `git add -u && git commit -m "Resolve conflicts via llmproc"`.
+    After you are done, summarize the changes you made in a single sentence in the end.
+
+
+parameters:
+  max_tokens: 20000
+mcp:
+  servers:
+    claude:
+      type: "stdio"
+      command: "claude"
+      args:
+        - "mcp"
+        - "serve"
+      # Using the newer claude-code 1.0.2 package with 'claude' command
+
+tools:
+  mcp:
+    claude:
+      - name: "Glob"
+        alias: "glob"
+      - name: "Grep"
+        alias: "grep"
+      - name: "LS"
+        alias: "ls"
+      - name: "Read"
+        alias: "read"
+        description: "Read file contents - Make sure you have the correct file path first."
+      - name: "Bash"
+        alias: "bash"
+        description: "Run a bash command, only use this for git commands."

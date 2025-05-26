@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
@@ -86,9 +85,7 @@ class TestOpenAIProcessExecutor:
 
         # Mock the API call to raise an exception
         process.client = MagicMock()
-        process.client.chat.completions.create = AsyncMock(
-            side_effect=Exception("API error")
-        )
+        process.client.chat.completions.create = AsyncMock(side_effect=Exception("API error"))
 
         # Create the executor
         executor = OpenAIProcessExecutor()

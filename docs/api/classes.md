@@ -18,29 +18,29 @@ sequenceDiagram
     %% Configuration Phase
     rect rgb(70, 80, 120)
         Note right of User: Configuration Phase
-        User->>Program: LLMProgram.from_toml("config.toml")
+        User->>Program: LLMProgram.from_file("config.yaml")
         Note over Program: Load configuration
         Note over Program: Define tools and schemas
-        Note over Program: Configure system prompt 
+        Note over Program: Configure system prompt
     end
 
     %% Initialization Phase
     rect rgb(120, 80, 70)
         Note right of User: Initialization Phase
         User->>+Program: await program.start()
-        
+
         Program->>Tool: get_tool_configuration()
         Note over Tool: Extract config without circular deps
-        
+
         Program->>Tool: await initialize_tools(config)
         Note over Tool: Set up tools before process exists
-        
+
         Program->>Process: Create LLMProcess instance
-        
+
         Process->>FD: Initialize file descriptor system
         Process->>Process: _setup_runtime_context()
         Note over Process: Inject runtime dependencies
-        
+
         Program-->>-User: Return initialized process
     end
 
@@ -63,30 +63,30 @@ flowchart TB
     classDef process fill:#a84e3a,stroke:#aaa,color:#fff
     classDef manager fill:#3a8a5e,stroke:#aaa,color:#fff
     classDef tool fill:#777,stroke:#aaa,color:#fff
-    
+
     Program[LLMProgram]:::program
     Process[LLMProcess]:::process
     ToolMgr[ToolManager]:::manager
     ToolReg[ToolRegistry]:::manager
     FDMgr[FileDescriptorManager]:::manager
     MCPMgr[MCPManager]:::manager
-    
+
     Program -->|"start()"| Process
     Program -->|owns| ToolMgr
     Process -->|runtime_context| ToolMgr
     ToolMgr -->|delegates to| ToolReg
     ToolMgr -->|manages| MCPMgr
     Process -->|runtime_context| FDMgr
-    
+
     Process -->|"run()"| APIExec
-    
+
     subgraph ProviderExecutors["Provider Executors"]
         APIExec[ProcessExecutor]:::tool
         AnthropicExec[AnthropicProcessExecutor]:::tool
         GeminiExec[GeminiProcessExecutor]:::tool
         OpenAIExec[OpenAIProcessExecutor]:::tool
     end
-    
+
     APIExec --> AnthropicExec
     APIExec --> GeminiExec
     APIExec --> OpenAIExec
@@ -98,22 +98,22 @@ flowchart TB
   - Contains model and provider configuration
   - Defines tools, system prompt, parameters
   - Compiled once and used to create runtime instances
-  
+
 - **LLMProcess**: Runtime instance created from a Program (like a Unix process)
   - Contains mutable state (conversation history)
   - Manages access to the LLM API
   - Provides runtime context for tools
-  
+
 - **ToolManager**: Central point for managing all tools
   - Handles registration, aliases, and execution of tools
   - Maintains list of enabled tools
   - Provides runtime context to tools
-  
+
 - **FileDescriptorManager**: Manages large content
   - Handles content that exceeds message size limits
   - Provides pagination and reference system
   - Integrates with tools that use file descriptors
-  
+
 - **ProcessExecutor**: Provider-specific implementations
   - Handle details of LLM API integration
   - Manage token counting and usage
@@ -137,7 +137,8 @@ flowchart TB
   - `compiled`: Flag indicating if the program has been validated
 
 - **Key methods**:
-  - `from_toml(path)`: Load configuration from TOML file
+- `from_toml(path)`: Load configuration from TOML file
+- `from_yaml(path)`: Load configuration from YAML file
   - `start()`: Create fully initialized LLMProcess instance (handles validation automatically)
   - `register_tools(tools)`: Configure available tools
   - `set_tool_aliases(aliases)`: Set user-friendly aliases
@@ -159,10 +160,10 @@ flowchart TB
   - `run(user_input, max_iterations)`: Process user input
   - `call_tool(tool_name, **kwargs)`: Call a tool by name
   - `get_state()`: Return current conversation state
-  - `reset_state(keep_system_prompt)`: Clear conversation history (⚠️ Experimental API)
+  - `reset_state(keep_system_prompt, keep_file_descriptors)`: Clear conversation history (⚠️ Experimental API)
   - `count_tokens()`: Calculate token usage
   - `get_last_message()`: Get most recent model response
-  - `fork_process()`: Create a copy with the same state
+  - `fork_process()`: Create a copy with the same state *(deprecated; use `_fork_process` or the fork tool)*
 
 #### ToolManager
 
@@ -209,26 +210,26 @@ flowchart TB
     classDef process fill:#a84e3a,stroke:#aaa,color:#fff
     classDef executor fill:#7a3a9a,stroke:#aaa,color:#fff
     classDef api fill:#555,stroke:#aaa,color:#fff
-    
+
     Process[LLMProcess]:::process
-    
+
     Process -->|"provider selection"| Executor
-    
+
     subgraph ExecutorGroup["Process Executors"]
         Executor[Provider-specific Executor]:::executor
         AnthropicExec[AnthropicProcessExecutor]:::executor
         GeminiExec[GeminiProcessExecutor]:::executor
         OpenAIExec[OpenAIProcessExecutor]:::executor
     end
-    
+
     Executor --> AnthropicExec
     Executor --> GeminiExec
     Executor --> OpenAIExec
-    
+
     AnthropicAPI[Anthropic API]:::api
     GeminiAPI[Gemini API]:::api
     OpenAIAPI[OpenAI API]:::api
-    
+
     AnthropicExec -->|"async API calls"| AnthropicAPI
     GeminiExec -->|"async API calls"| GeminiAPI
     OpenAIExec -->|"async API calls"| OpenAIAPI
@@ -302,7 +303,7 @@ async def run(self, user_input: str, max_iterations: int = 10, callbacks: dict =
 def get_last_message(self) -> str:
     """Get the most recent assistant message text."""
 
-def reset_state(self, keep_system_prompt: bool = True, keep_preloaded: bool = True) -> None:
+def reset_state(self, keep_system_prompt: bool = True, keep_file_descriptors: bool = True) -> None:
     """Reset the conversation state. ⚠️ Experimental API - may change in future versions."""
 
 def get_state(self) -> list[dict[str, str]]:
@@ -310,9 +311,6 @@ def get_state(self) -> list[dict[str, str]]:
 
 async def call_tool(self, tool_name: str, **kwargs) -> Any:
     """Call a tool by name with the given arguments."""
-
-def preload_files(self, file_paths: list[str]) -> None:
-    """Preload files and add their content to the preloaded_content dictionary."""
 ```
 
 ### Key Properties
@@ -398,7 +396,7 @@ async def run_till_text_response(self, process, user_prompt, max_iterations: int
 @context_aware
 async def spawn_tool(args: Dict[str, Any], runtime_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Execute a query on a linked program.
-    
+
     Args:
         args: Dictionary containing the tool arguments:
             - program_name: The name of the linked program to call

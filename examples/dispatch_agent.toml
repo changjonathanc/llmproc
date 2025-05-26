@@ -23,7 +23,7 @@ type = "enabled"
 budget_tokens = 4000
 
 [tools]
-enabled = ["read_file"]
+builtin = ["read_file"]
 
 [mcp]
 config_path = "config/mcp_servers.json"

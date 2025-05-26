@@ -3,7 +3,6 @@
 import math
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin import calculator, read_file
 

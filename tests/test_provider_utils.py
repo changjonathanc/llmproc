@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.providers.utils import (
     get_context_window_size,
     safe_callback,

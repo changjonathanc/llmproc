@@ -1,13 +1,22 @@
 """Configuration schema for LLM programs using Pydantic models."""
 
-from typing import Any
+import warnings
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
+    Field,
     RootModel,
     field_validator,
     model_validator,
 )
+
+from llmproc.common.access_control import AccessLevel
+
+# Import the simplified MCP models
+from llmproc.config.mcp import MCPServerTools, MCPToolsConfig
+from llmproc.config.tool import ToolConfig
+from llmproc.config.utils import resolve_path
 
 
 class ModelConfig(BaseModel):
@@ -26,17 +35,13 @@ class ModelConfig(BaseModel):
         """Validate that the provider is supported."""
         supported_providers = {"openai", "anthropic", "vertex"}
         if v not in supported_providers:
-            raise ValueError(
-                f"Provider '{v}' not supported. Must be one of: {', '.join(supported_providers)}"
-            )
+            raise ValueError(f"Provider '{v}' not supported. Must be one of: {', '.join(supported_providers)}")
         return v
 
     @model_validator(mode="after")
     def validate_caching_config(self):
         """Validate that automatic caching is only disabled for Anthropic providers."""
         if self.disable_automatic_caching and "anthropic" not in self.provider:
-            import warnings
-
             warnings.warn(
                 f"'disable_automatic_caching' is set to true, but the provider is '{self.provider}'. Automatic caching is only supported for Anthropic providers, so this setting will have no effect.",
                 stacklevel=2,
@@ -47,9 +52,11 @@ class ModelConfig(BaseModel):
 class PromptConfig(BaseModel):
     """Prompt configuration section."""
 
-    system_prompt: str | None = ""
+    model_config = {"populate_by_name": True}
+
+    system_prompt: str | None = Field(default="", alias="system")
     system_prompt_file: str | None = None
-    user: str | None = None
+    user: str | None = Field(default=None, alias="user_prompt")
 
     @model_validator(mode="after")
     def check_prompt_sources(self):
@@ -72,8 +79,6 @@ class PromptConfig(BaseModel):
         Raises:
             FileNotFoundError: If system_prompt_file is specified but doesn't exist
         """
-        from llmproc.config.utils import resolve_path
-
         # First check for system_prompt_file (takes precedence)
         if self.system_prompt_file:
             try:
@@ -98,36 +103,21 @@ class PreloadConfig(BaseModel):
     files: list[str] = []
 
 
-class MCPToolsConfig(RootModel):
-    """MCP tools configuration."""
-
-    root: dict[str, list[str] | str] = {}
-
-    @classmethod
-    @field_validator("root")
-    def validate_tools(cls, v):
-        """Validate that tool configurations are either lists or 'all'."""
-        for server, tools in v.items():
-            if not isinstance(tools, list) and tools != "all":
-                raise ValueError(
-                    f"Tool configuration for server '{server}' must be 'all' or a list of tool names"
-                )
-        return v
-
-
 class MCPConfig(BaseModel):
     """MCP configuration section."""
 
     config_path: str | None = None
+    servers: dict[str, dict] | None = None
     # tools field has been moved to ToolsConfig.mcp
 
 
 class ToolsConfig(BaseModel):
     """Tools configuration section."""
 
-    enabled: list[str] = []
-    aliases: dict[str, str] = {}  # Maps alias names to actual tool names
+    builtin: list[str | ToolConfig] = Field(default_factory=list, alias="enabled")
     mcp: MCPToolsConfig | None = None  # MCP tools configuration moved from [mcp.tools]
+
+    model_config = {"populate_by_name": True}
 
 
 class EnvInfoConfig(BaseModel):
@@ -208,8 +198,6 @@ class LLMProgramConfig(BaseModel):
                     f"Invalid reasoning_effort value '{v['reasoning_effort']}'. Must be one of: {', '.join(valid_values)}"
                 )
 
-        # Remove validation for deprecated thinking_budget parameter
-
         # Check for token parameter conflicts
         if "max_tokens" in v and "max_completion_tokens" in v:
             raise ValueError(
@@ -218,9 +206,7 @@ class LLMProgramConfig(BaseModel):
 
         # Validate extra_headers structure if present
         if "extra_headers" in v and not isinstance(v["extra_headers"], dict):
-            raise ValueError(
-                "parameters.extra_headers must be a dictionary of header key-value pairs"
-            )
+            raise ValueError("parameters.extra_headers must be a dictionary of header key-value pairs")
 
         # Validate thinking structure if present
         if "thinking" in v:
@@ -230,24 +216,16 @@ class LLMProgramConfig(BaseModel):
 
             # Check for required fields
             if "type" in thinking and thinking["type"] not in ["enabled", "disabled"]:
-                raise ValueError(
-                    "parameters.thinking.type must be 'enabled' or 'disabled'"
-                )
+                raise ValueError("parameters.thinking.type must be 'enabled' or 'disabled'")
 
             # Check budget_tokens if present
             if "budget_tokens" in thinking:
                 budget = thinking["budget_tokens"]
                 if not isinstance(budget, int):
-                    raise ValueError(
-                        "parameters.thinking.budget_tokens must be an integer"
-                    )
+                    raise ValueError("parameters.thinking.budget_tokens must be an integer")
                 if budget < 0:
-                    raise ValueError(
-                        "parameters.thinking.budget_tokens must be non-negative"
-                    )
+                    raise ValueError("parameters.thinking.budget_tokens must be non-negative")
                 if budget > 0 and budget < 1024:
-                    import warnings
-
                     warnings.warn(
                         f"parameters.thinking.budget_tokens set to {budget}, but Claude requires minimum 1024. This will likely fail at runtime.",
                         stacklevel=2,
@@ -259,11 +237,9 @@ class LLMProgramConfig(BaseModel):
     def validate_file_descriptor(self):
         """Validate file descriptor configuration is consistent with tools.
 
-        This validator checks if file_descriptor.enabled is true but no FD tools are enabled.
-        It also issues a warning if there's a file_descriptor section but no FD tools.
+        This validator checks if ``file_descriptor.enabled`` is true but no FD tools are enabled.
+        It also issues a warning if there's a ``file_descriptor`` section but no FD tools.
         """
-        import warnings
-
         # FD tools
         fd_tools = ["read_fd", "fd_to_file"]
 
@@ -271,8 +247,8 @@ class LLMProgramConfig(BaseModel):
         if self.file_descriptor:
             # Check if any FD tools are enabled
             has_fd_tools = False
-            if self.tools and self.tools.enabled:
-                has_fd_tools = any(tool in fd_tools for tool in self.tools.enabled)
+            if self.tools and self.tools.builtin:
+                has_fd_tools = any((t if isinstance(t, str) else t.name) in fd_tools for t in self.tools.builtin)
 
             # If explicitly enabled but no tools, raise error
             if self.file_descriptor.enabled and not has_fd_tools:
@@ -300,8 +276,6 @@ class LLMProgramConfig(BaseModel):
         This validator doesn't reject unknown parameters, it just issues warnings.
         We want to stay flexible as LLM APIs evolve, but provide guidance on what's expected.
         """
-        import warnings
-
         # Standard LLM API parameters that we expect to see
         known_parameters = {
             "temperature",

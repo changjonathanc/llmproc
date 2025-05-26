@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # Add src to path if needed (when running from repo)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -24,9 +24,11 @@ if str(SRC_DIR) not in sys.path:
 # Configure minimal logging
 logging.basicConfig(level=logging.WARNING)  # Only show warnings and errors
 
-from llmproc import LLMProgram
-from llmproc.common.results import ToolResult
-from llmproc.tools.function_tools import register_tool
+from llmproc import LLMProgram  # noqa: E402
+from llmproc.callbacks import CallbackEvent  # noqa: E402
+from llmproc.common.results import ToolResult  # noqa: E402
+from llmproc.tools.function_tools import register_tool  # noqa: E402
+
 
 # You can define your own meta-tools with this decorator.
 @register_tool(
@@ -49,14 +51,14 @@ async def set_sampling_temperature(temperature: float, runtime_context: dict):
         runtime_context: Automatically injected dictionary containing at least
             the key ``"process"`` which is the active :class:`llmproc.LLMProcess`.
 
-    Returns
+    Returns:
     -------
     str | ToolResult
         A confirmation message on success or a ``ToolResult`` object if an
         error occurs.
     """
     # Validate arguments
-    if not isinstance(temperature, (int, float)):
+    if not isinstance(temperature, int | float):
         return ToolResult.from_error("Temperature must be a number.")
 
     # The Anthropic API accepts values between 0 and 1
@@ -74,11 +76,12 @@ async def set_sampling_temperature(temperature: float, runtime_context: dict):
     return f"Sampling temperature set to {temperature}."
 
 
-from llmproc.callbacks import CallbackEvent
+# Simple callback class implementing the new callback system
+
 
 # Simple callback class implementing the new callback system
 class TemperatureCallbacks:
-    def tool_start(self, tool_name: str, tool_args: Dict[str, Any]) -> None:
+    def tool_start(self, tool_name: str, tool_args: dict[str, Any]) -> None:
         """Print when a tool starts"""
         if tool_name == "set_sampling_temperature":
             print(f"\n🔄 Changing temperature to: {tool_args.get('temperature')}")
@@ -104,12 +107,15 @@ async def main():
     try:
         # Step 1: Create an LLM program using the Python SDK
         print("Creating LLM program...")
-        system_prompt="""You are Claude, a helpful assistant. You are a LLM that can change your own sampling temperature. \nYou the set_sampling_temperature tool to change your temperature whenever you want."""
+        system_prompt = """You are Claude, a helpful assistant. You are a LLM that can change your own sampling temperature. \nYou the set_sampling_temperature tool to change your temperature whenever you want."""
         print(f"System prompt: {system_prompt}")
         program = LLMProgram(
             model_name="claude-3-7-sonnet-latest",
             provider="anthropic",
-            parameters={"temperature": 0, "max_tokens": 300},  # start with a temperature of 0, for better reproducibility
+            parameters={
+                "temperature": 0,
+                "max_tokens": 300,
+            },  # start with a temperature of 0, for better reproducibility
             display_name="Temperature Demo",
             system_prompt=system_prompt,
         )
@@ -121,7 +127,7 @@ async def main():
         # Step 3: Start the process
         print("Starting LLM process...")
         process = await program.start()
-        
+
         # Step 4: Register callbacks using the new system
         process.add_callback(TemperatureCallbacks())
 
@@ -139,6 +145,7 @@ async def main():
         print(f"{response}")
     except Exception as e:
         import traceback
+
         print(f"Error: {str(e)}")
         print("\nTraceback:")
         traceback.print_exc()

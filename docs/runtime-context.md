@@ -26,7 +26,7 @@ from llmproc.tools.function_tools import register_tool
 async def example_tool(param1: str, param2: int, runtime_context=None):
     # Access the process from the context
     process = runtime_context["process"]
-    
+
     # Use the process to do something
     return f"Process model: {process.model_name}"
 ```
@@ -45,7 +45,7 @@ async def spawn_tool(program_name: str, prompt: str, runtime_context=None):
     # You can safely access the required keys without additional checks
     process = runtime_context["process"]
     linked_programs = runtime_context["linked_programs"]
-    
+
     # Implementation...
     return result
 ```
@@ -71,6 +71,7 @@ class RuntimeContext(TypedDict, total=False):
     fd_manager: Any  # FileDescriptorManager instance
     linked_programs: dict[str, Any]  # Dictionary of linked programs
     linked_program_descriptions: dict[str, str]  # Dictionary of program descriptions
+    stderr: list[str]  # Buffer for logging via write_stderr tool
 ```
 
 ## Runtime Context Initialization
@@ -83,6 +84,17 @@ from llmproc.program_exec import setup_runtime_context
 
 # Create context for a process
 context = setup_runtime_context(process)
+```
+
+## Logging to Standard Error
+
+The built-in `write_stderr` tool appends log messages to the
+`stderr` buffer in the runtime context. Retrieve the accumulated log with
+`process.get_stderr_log()`.
+
+```python
+process.call_tool("write_stderr", {"message": "starting step"})
+print(process.get_stderr_log())
 ```
 
 ## Best Practices

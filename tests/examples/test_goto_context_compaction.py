@@ -47,9 +47,9 @@ def test_goto_context_compaction():
         print("\n".join(output.split("\n")[-20:]))  # Show the last 20 lines
 
         # Verify the script ran successfully
-        assert result.returncode == 0, (
-            f"Demo script failed with return code {result.returncode}. Error: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Demo script failed with return code {result.returncode}. Error: {result.stderr}"
     except subprocess.TimeoutExpired:
         pytest.fail("Demo script timed out after 5 minutes")
     except Exception as e:

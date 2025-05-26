@@ -4,24 +4,26 @@ This directory contains examples demonstrating LLMProc features and configuratio
 
 ## Quick Start
 
-- [**reference.toml**](./reference.toml): Comprehensive reference with all configuration options
-- [**openai.toml**](./openai.toml): OpenAI model configuration with GPT-4o
-- [**anthropic.toml**](./anthropic.toml): Anthropic model configuration with Claude 3.5 Sonnet
+- [**tutorial-config.toml**](./tutorial-config.toml): Step-by-step configuration guide with all options explained
+- [**openai.toml**](./openai.toml) / [**openai.yaml**](./openai.yaml): OpenAI model configuration with GPT-4o
+- [**anthropic.toml**](./anthropic.toml) / [**anthropic.yaml**](./anthropic.yaml): Anthropic model configuration with Claude 3.5 Sonnet
 - [**dispatch_agent.toml**](./dispatch_agent.toml): Claude Code with Dispatch Agent configuration
+
+For the formal configuration specification, see [`../docs/yaml_config_schema.yaml`](../docs/yaml_config_schema.yaml)
 
 ## Model Configuration Examples
 
-- [**openai.toml**](./openai.toml): OpenAI model configuration
+- [**openai.toml**](./openai.toml) / [**openai.yaml**](./openai.yaml): OpenAI model configuration
   - Defaults to GPT-4o with commented options for GPT-4o-mini, GPT-4.5
   - Includes configuration for o3-mini with reasoning levels
 
-- [**anthropic.toml**](./anthropic.toml): Anthropic model configuration
+- [**anthropic.toml**](./anthropic.toml) / [**anthropic.yaml**](./anthropic.yaml): Anthropic model configuration
   - Defaults to Claude 3.5 Sonnet
   - Contains commented configurations for all Claude variants (Haiku, 3.7 Sonnet)
   - Includes thinking budget options for Claude 3.7
   - Supports Vertex AI configuration options
 
-- [**gemini.toml**](./gemini.toml): Google Gemini model configuration
+- [**gemini.toml**](./gemini.toml) / [**gemini.yaml**](./gemini.yaml): Google Gemini model configuration
   - Defaults to Gemini 2.5 Pro with Direct API
   - Includes commented options for Gemini 2.0 Flash and Vertex AI
 
@@ -68,9 +70,9 @@ Use the `llmproc-demo` command-line tool:
 
 ```bash
 # Model examples
-llmproc-demo ./examples/openai.toml
-llmproc-demo ./examples/anthropic.toml
-llmproc-demo ./examples/gemini.toml
+llmproc-demo ./examples/openai.toml   # or ./examples/openai.yaml
+llmproc-demo ./examples/anthropic.toml   # or ./examples/anthropic.yaml
+llmproc-demo ./examples/gemini.toml   # or ./examples/gemini.yaml
 
 # Feature examples
 llmproc-demo ./examples/basic-features.toml
@@ -103,18 +105,18 @@ To see what the enriched system prompt looks like for an example:
 llmproc-prompt ./examples/file-descriptor/references.toml
 ```
 
-## TOML Configuration Features
+## Configuration Features
 
-LLMProc supports several advanced configuration options in TOML files:
+LLMProc supports several advanced configuration options in TOML or YAML files:
 
-### User Prompts in TOML
+### User Prompts in Configuration
 - Add `user = "Your prompt here"` to the `[prompt]` section to auto-execute a prompt
 - Set `max_iterations` in the `[model]` section for program-level control
 - Configure `[demo]` section for sequential multi-turn prompts
 
 ### Tool Aliases
-- Configure user-friendly tool names with `[tools.aliases]` section
-- Example: `read = "read_file"`, `calc = "calculator"`
+- Configure user-friendly tool names by adding an `alias` field to each tool
+- Example: `{name = "read_file", alias = "read"}`, `{name = "calculator", alias = "calc"}`
 
 ### Unix-inspired Program/Process Model
 - Programs (configuration) are separated from Processes (runtime)
@@ -126,13 +128,13 @@ LLMProc supports several advanced configuration options in TOML files:
 LLMProc supports configuring models with different reasoning capabilities to balance thoroughness against speed:
 
 ### OpenAI Reasoning Models
-- **openai.toml**: Includes configuration options for o3-mini with three reasoning levels:
+- **openai.toml** / **openai.yaml**: Includes configuration options for o3-mini with three reasoning levels:
   - High reasoning effort - thoroughness prioritized over speed
   - Medium reasoning effort - balanced approach
   - Low reasoning effort - speed prioritized over thoroughness
 
 ### Claude Thinking Models
-- **anthropic.toml**: Includes configuration options for Claude 3.7 thinking budgets:
+- **anthropic.toml** / **anthropic.yaml**: Includes configuration options for Claude 3.7 thinking budgets:
   - High thinking budget (16,000 tokens) for thorough reasoning
   - Medium thinking budget (4,000 tokens) for balanced approach
   - Low thinking budget (1,024 tokens) for faster responses

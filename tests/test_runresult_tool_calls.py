@@ -4,11 +4,10 @@ This tests the functionality of the RunResult.add_tool_call() method.
 """
 
 import pytest
-
 from llmproc.common.results import RunResult
 
 
-def test_runresult_add_tool_call():
+def test_runresult_records_tool_call():
     """Test that RunResult.add_tool_call() works correctly."""
     # Create a RunResult
     result = RunResult()
@@ -31,7 +30,7 @@ def test_runresult_add_tool_call():
     assert result.tool_calls[1]["tool_name"] == "another_tool"
 
 
-def test_runresult_tool_calls_property():
+def test_total_interactions_property():
     """Test the total_interactions property which relies on tool_calls."""
     result = RunResult()
 
@@ -51,7 +50,7 @@ def test_runresult_tool_calls_property():
     assert result.total_interactions == 3
 
 
-def test_total_interactions_counts_all_tools():
+def test_total_interactions_counts_calls():
     """Test that total_interactions properly counts both API calls and tool calls."""
     # Create a RunResult
     result = RunResult()

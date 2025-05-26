@@ -18,6 +18,7 @@ Start here if you're new to LLMProc:
    - [Function-Based Tools](function-based-tools.md) - Register Python functions as tools
    - [Preload Feature](preload-feature.md) - Include files in system prompts
    - [Environment Info](env_info.md) - Add runtime context
+   - [Environment Variables](environment-variables.md) - Configuration via environment variables
    - [Program Initialization](program-initialization.md) - Configure user prompts and demo mode
 
 ### Core Features
@@ -32,6 +33,7 @@ These features form the foundation of LLMProc's Unix-inspired approach:
    - [Program Linking](program-linking.md) - Delegate tasks to specialized processes
    - [Fork Feature](fork-feature.md) - Create process copies with shared state
    - [GOTO Feature](goto-feature.md) - Reset conversations to previous points
+   - [Persistent Event Loop](persistent-event-loop.md) - Dedicated loop for synchronous LLMProcess access
    - [Tool Access Control](tool-access-control.md) - Secure multi-process environments with permissions
 
 3. **Tool System**
@@ -54,8 +56,16 @@ For users looking to extend and optimize LLMProc:
 
 - [Program Initialization](program-initialization.md) - How programs are initialized and validated
 - [RunResult Callbacks](runresult-callbacks.md) - Monitor execution with callbacks
+- [Tool Registration Callback](tool-registration-callback.md) - Customize tool initialization during registration
 - [Error Handling Strategy](error-handling-strategy.md) - How errors are managed
 - [Testing](testing.md) - Testing approach and API testing
+
+- [Program Compiler](program-compiler.md) - Compile and cache programs for reuse
+- [Runtime Context Management](runtime-context.md) - Dependency injection for tools
+- [System Prompt Examination Tool](system-prompt-tool.md) - Inspect enriched prompts
+- [Tool Error Handling Guidelines](tool-error-handling.md) - Error handling patterns
+- [Test Plan](test-plan.md) - Outline of planned tests
+- [YAML Configuration Schema](yaml_config_schema.md) - Auto-generated configuration reference
 
 ## Learning Paths
 
@@ -88,7 +98,6 @@ If you're implementing complex agent architectures:
 
 ## API Reference
 
-- [API Patterns](api_patterns.md) - Recommended usage patterns
 - [API Parameters](api_parameters.md) - Configuration parameters
 - [API Testing](api_testing.md) - Testing with real APIs
 
@@ -96,3 +105,15 @@ For details on the full API, see:
 - [Core API Architecture](api/core.md)
 - [Class Reference](api/classes.md)
 - [API Patterns and Best Practices](api/patterns.md)
+
+## Release Notes
+
+Detailed release notes for each version are available in the release_notes directory:
+
+- [Release Notes 0.8.0](release_notes/RELEASE_NOTES_0.8.0.md)
+
+## External References
+
+Additional provider guides are located in the [external-references](external-references/) directory.
+
+- [Anthropic API Guide](external-references/anthropic-api.md)

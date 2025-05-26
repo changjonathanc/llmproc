@@ -4,11 +4,11 @@ import re
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
+
 from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
@@ -174,9 +174,7 @@ async def test_llm_process_user_input_paging(mock_get_provider_client):
     # Enable file descriptors and user input paging
     process.file_descriptor_enabled = True
     process.page_user_input = True
-    process.fd_manager = FileDescriptorManager(
-        max_input_chars=1000, page_user_input=True
-    )
+    process.fd_manager = FileDescriptorManager(max_input_chars=1000, page_user_input=True)
 
     # Since run is an async method, we need to properly mock it
     async def mock_async_run(user_input):
@@ -211,9 +209,7 @@ async def test_llm_process_user_input_paging(mock_get_provider_client):
 
     # Verify FD was created
     assert fd_id in process.fd_manager.file_descriptors
-    assert (
-        len(process.fd_manager.file_descriptors[fd_id]["content"]) >= 1900
-    )  # Account for possible line breaks
+    assert len(process.fd_manager.file_descriptors[fd_id]["content"]) >= 1900  # Account for possible line breaks
 
 
 @pytest.mark.asyncio
@@ -240,9 +236,7 @@ async def test_read_paged_user_input(mock_get_provider_client):
     # Enable file descriptors and user input paging
     process.file_descriptor_enabled = True
     process.page_user_input = True
-    process.fd_manager = FileDescriptorManager(
-        max_input_chars=1000, page_user_input=True
-    )
+    process.fd_manager = FileDescriptorManager(max_input_chars=1000, page_user_input=True)
 
     # Create a large structured user input
     large_input = """

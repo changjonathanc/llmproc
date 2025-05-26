@@ -1,6 +1,6 @@
 [project]
 name = "llmproc"
-version = "0.7.0"
+version = "0.8.0"
 description = "A simple framework for LLM-powered applications"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,17 +19,14 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.8",
-    "mcp-registry>=0.9.1",
+    "mcp>=1.6.0",
     "python-dotenv>=1.0.1",
     "tomli>=2.2.1",
+    "PyYAML>=6.0",
+    "anthropic>=0.52.0",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.3.5",
-    "pytest-cov>=6.1.0",
-    "ruff>=0.9.9",
-]
 openai = [
     "openai>=1.70.0",
 ]
@@ -49,16 +46,29 @@ all = [
     "google-genai>=1.9.0",
 ]
 
-[tool.setuptools]
-packages = ["llmproc"]
-package-dir = {"" = "src"}
+[dependency-groups]
+dev = [
+    "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "pytest-anyio>=0.0.0",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.0",
+    "ruff>=0.9.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llmproc"]
 
 [tool.ruff]
 # This sets the hard limit for both linting and formatting
 # The formatter will try to keep lines under this length when possible
 line-length = 120
 target-version = "py311"
-exclude = ["dev/"]
+exclude = ["dev/", "projects/swe-agent/", "tests/"]
 
 [tool.ruff.format]
 # The formatter will try to keep lines under line-length when possible
@@ -106,6 +116,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E402", "F811"]  # Allow imports not at top and fixture redefinition in tests
+"projects/swe-agent/min_swe_env/*" = ["E402", "B012"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -120,12 +131,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
-[dependency-groups]
-dev = [
-    "pytest-anyio>=0.0.0",
-    "pytest-asyncio>=0.26.0",
-]
-
 [project.scripts]
+llmproc = "llmproc.cli.run:main"
 llmproc-demo = "llmproc.cli.demo:main"
 llmproc-prompt = "llmproc.cli.print_system_prompt:main"

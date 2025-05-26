@@ -67,15 +67,15 @@ import asyncio
 from llmproc import LLMProgram
 
 async def main():
-    program = LLMProgram.from_toml('examples/anthropic/claude-3-7-thinking-high.toml')
+    program = LLMProgram.from_file('examples/anthropic/claude-3-7-thinking-high.yaml')
     process = await program.start()
-    
+
     # Math example
     result = await process.run(
         "Find the definite integral of f(x) = x^2 * sin(x) from 0 to π"
     )
     print(process.get_last_message())
-    
+
     # Science example
     result = await process.run(
         "Explain the Krebs cycle in cellular respiration, focusing on the key molecules involved."
@@ -91,19 +91,19 @@ Thinking models can generate and debug code with strong reasoning:
 
 ```python
 async def code_example():
-    program = LLMProgram.from_toml('examples/anthropic/claude-3-7-thinking-high.toml')
+    program = LLMProgram.from_file('examples/anthropic/claude-3-7-thinking-high.yaml')
     process = await program.start()
-    
+
     # Code generation example
     result = await process.run(
         "Write a Python function to find the longest increasing subsequence in a list of integers."
     )
     print(process.get_last_message())
-    
+
     # Debugging example
     result = await process.run('''
     Debug this function and explain the issue:
-    
+
     def fibonacci(n):
         if n <= 0:
             return 0
@@ -135,7 +135,7 @@ asyncio.run(code_example())
 
 ## Examples
 
-See the example configuration options in [anthropic.toml](../examples/anthropic.toml), which includes commented sections for Claude 3.7 thinking model configuration with different budget options.
+See the example configuration options in [anthropic.yaml](../examples/anthropic.yaml) (and the TOML equivalent), which includes commented sections for Claude 3.7 thinking model configuration with different budget options.
 
 ## Future Enhancements
 

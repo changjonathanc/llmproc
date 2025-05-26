@@ -4,10 +4,8 @@ import copy
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.providers.anthropic_utils import (
-    add_cache_to_message,
     add_message_ids,
     add_token_efficient_header_if_needed,
     apply_cache_control,
@@ -16,9 +14,9 @@ from llmproc.providers.anthropic_utils import (
     get_context_window_size,
     is_cacheable_content,
     prepare_api_request,
-    safe_callback,
 )
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
+from llmproc.providers.utils import safe_callback
 from llmproc.utils.id_utils import render_id
 
 
@@ -38,48 +36,9 @@ class TestCacheControl:
     def test_is_cacheable_content_dict(self):
         """Test that dictionaries with content are cacheable."""
         assert is_cacheable_content({"type": "text", "text": "content"}) is True
-        assert (
-            is_cacheable_content({"type": "tool_result", "content": "result"}) is True
-        )
+        assert is_cacheable_content({"type": "tool_result", "content": "result"}) is True
         assert is_cacheable_content({"type": "text", "text": ""}) is False
-        assert (
-            is_cacheable_content({"type": "other"}) is True
-        )  # Default is True for other types
-
-    def test_add_cache_to_message_list_content(self):
-        """Test adding cache to a message with list content."""
-        message = {"role": "assistant", "content": [{"type": "text", "text": "Hello"}]}
-        add_cache_to_message(message)
-        assert message["content"][0].get("cache_control") == {"type": "ephemeral"}
-
-    def test_add_cache_to_message_string_content(self):
-        """Test adding cache to a message with string content."""
-        message = {"role": "assistant", "content": "Hello"}
-        add_cache_to_message(message)
-        assert isinstance(message["content"], list)
-        assert message["content"][0].get("cache_control") == {"type": "ephemeral"}
-        assert message["content"][0].get("text") == "Hello"
-
-    def test_add_cache_to_message_empty_content(self):
-        """Test that cache is not added to empty content."""
-        message = {"role": "assistant", "content": ""}
-        message_copy = copy.deepcopy(message)
-        add_cache_to_message(message)
-        # Message should be unchanged
-        assert message == message_copy
-
-    def test_add_cache_to_message_only_adds_to_first_eligible(self):
-        """Test that cache is only added to the first eligible content."""
-        message = {
-            "role": "assistant",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "text", "text": "World"},
-            ],
-        }
-        add_cache_to_message(message)
-        assert message["content"][0].get("cache_control") == {"type": "ephemeral"}
-        assert message["content"][1].get("cache_control") is None
+        assert is_cacheable_content({"type": "other"}) is True  # Default is True for other types
 
 
 class TestMessageFormatting:
@@ -93,7 +52,7 @@ class TestMessageFormatting:
         ]
         result = add_message_ids(messages)
         assert result[0]["content"].startswith(render_id("msg_0"))
-        assert result[1]["content"].startswith(render_id("msg_1"))
+        assert render_id("msg_1") not in result[1]["content"]
 
     def test_add_message_ids_list_content(self):
         """Test adding message IDs to messages with list content."""
@@ -103,7 +62,7 @@ class TestMessageFormatting:
         ]
         result = add_message_ids(messages)
         assert result[0]["content"][0]["text"].startswith(render_id("msg_0"))
-        assert result[1]["content"][0]["text"].startswith(render_id("msg_1"))
+        assert render_id("msg_1") not in result[1]["content"][0]["text"]
 
     def test_add_message_ids_custom_msg_id(self):
         """Test that custom message IDs are used and then removed."""
@@ -114,7 +73,7 @@ class TestMessageFormatting:
         result = add_message_ids(messages)
         assert result[0]["content"].startswith(render_id("custom_id"))
         assert LLMPROC_MSG_ID not in result[0]
-        assert result[1]["content"].startswith(render_id("msg_1"))
+        assert render_id("msg_1") not in result[1]["content"]
 
     def test_format_and_cache_messages(self):
         """Test formatting messages and applying caching."""
@@ -123,27 +82,27 @@ class TestMessageFormatting:
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi"},
         ]
-        
+
         # Format the messages
         formatted = format_state_to_api_messages(state)
-        
+
         # Apply cache
         cached_messages, _, _ = apply_cache_control(formatted, [])
-        
+
         # Verify caching
         assert len(cached_messages) == 2
         last_message = cached_messages[-1]
         assert last_message["role"] == "assistant"
         assert isinstance(last_message["content"], list)
         assert last_message["content"][0].get("cache_control") == {"type": "ephemeral"}
-        
+
         # Check first message has cache too (as per our 3 message caching policy)
         assert cached_messages[0]["content"][0].get("cache_control") == {"type": "ephemeral"}
-        
+
         # Verify message IDs are added
         assert isinstance(formatted[0]["content"], list)
         assert render_id("msg_0") in formatted[0]["content"][0]["text"]
-        assert render_id("msg_1") in formatted[1]["content"][0]["text"]
+        assert render_id("msg_1") not in formatted[1]["content"][0]["text"]
 
 
 class TestAPIFormatting:
@@ -168,10 +127,10 @@ class TestAPIFormatting:
         """Test formatting system prompt and applying cache."""
         system = "Hello, I am Claude"
         formatted = format_system_prompt(system)
-        
+
         # Apply cache
         _, cached_system, _ = apply_cache_control([], formatted)
-        
+
         assert isinstance(cached_system, list)
         assert len(cached_system) == 1
         assert cached_system[0]["type"] == "text"
@@ -193,17 +152,17 @@ class TestAPIFormatting:
         process.model_name = "claude-3-sonnet"
         process.api_params = {}
         process.disable_automatic_caching = False
-        
+
         # Call prepare_api_request
         request = prepare_api_request(process)
-        
+
         # Verify request structure
         assert "model" in request
         assert "system" in request
         assert "messages" in request
         assert "tools" in request
-        
-        # Check tools are included 
+
+        # Check tools are included
         assert request["tools"] == process.tools
 
 
@@ -232,10 +191,7 @@ class TestTokenEfficientHeaders:
         result = add_token_efficient_header_if_needed(process, headers)
 
         assert "anthropic-beta" in result
-        assert (
-            "existing-feature,token-efficient-tools-2025-02-19"
-            == result["anthropic-beta"]
-        )
+        assert "existing-feature,token-efficient-tools-2025-02-19" == result["anthropic-beta"]
 
     def test_add_token_efficient_header_already_present(self):
         """Test not duplicating token-efficient header if already present."""
@@ -272,7 +228,7 @@ class TestSafeCallback:
 
         callback_fn.assert_called_once_with("arg1", "arg2")
 
-    @patch("llmproc.providers.anthropic_utils.logger")
+    @patch("llmproc.providers.utils.logger")
     def test_safe_callback_handles_exception(self, mock_logger):
         """Test that exceptions in callbacks are caught and logged."""
         callback_fn = MagicMock(side_effect=Exception("Test error"))
@@ -292,7 +248,6 @@ class TestSafeCallback:
 
 class TestMiscUtils:
     """Tests for miscellaneous utility functions."""
-
 
     def test_get_context_window_size(self):
         """Test getting context window size for various models."""

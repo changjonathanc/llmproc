@@ -57,22 +57,21 @@ class OpenAIProcessExecutor:
         # Add user message to conversation history
         process.state.append({"role": "user", "content": user_prompt})
 
+        # Trigger TURN_START event
+        process.trigger_event(CallbackEvent.TURN_START, process)
+
         # Set up messages for OpenAI format
         formatted_messages = []
 
         # First add system message if present
         if process.enriched_system_prompt:
-            formatted_messages.append(
-                {"role": "system", "content": process.enriched_system_prompt}
-            )
+            formatted_messages.append({"role": "system", "content": process.enriched_system_prompt})
 
         # Then add conversation history
         for message in process.state:
             # Add user and assistant messages
             if message["role"] in ["user", "assistant"]:
-                formatted_messages.append(
-                    {"role": message["role"], "content": message["content"]}
-                )
+                formatted_messages.append({"role": message["role"], "content": message["content"]})
 
         # Create a new RunResult if one wasn't provided
         if run_result is None:
@@ -98,14 +97,27 @@ class OpenAIProcessExecutor:
                 if "reasoning_effort" in api_params:
                     del api_params["reasoning_effort"]
 
+            # Build API request payload
+            api_request = {
+                "model": process.model_name,
+                "messages": formatted_messages,
+                "params": api_params,
+            }
+
+            # Trigger API request event
+            process.trigger_event(CallbackEvent.API_REQUEST, api_request)
+
             # Make API call
-                
+
             response = await process.client.chat.completions.create(
                 model=process.model_name,
                 messages=formatted_messages,
                 **api_params,
             )
-            
+
+            # Trigger API response event
+            process.trigger_event(CallbackEvent.API_RESPONSE, response)
+
             # Process API response
 
             # Track API call in the run result
@@ -113,6 +125,8 @@ class OpenAIProcessExecutor:
                 "model": process.model_name,
                 "usage": getattr(response, "usage", {}),
                 "id": getattr(response, "id", None),
+                "request": api_request,
+                "response": response,
             }
             run_result.add_api_call(api_info)
 
@@ -130,12 +144,20 @@ class OpenAIProcessExecutor:
             if message_content:
                 process.trigger_event(CallbackEvent.RESPONSE, message_content)
 
+            # Trigger TURN_END event
+            process.trigger_event(CallbackEvent.TURN_END, process, response, [])
+
         except Exception as e:
             logger.error(f"Error in OpenAI API call: {str(e)}")
             # Add error to run result
             run_result.add_api_call({"type": "error", "error": str(e)})
             process.run_stop_reason = "error"
             raise
+
+        # Set the last_message in the RunResult to ensure it's available
+        # This is critical for the sync interface tests
+        last_message = process.get_last_message()
+        run_result.set_last_message(last_message)
 
         # Complete the RunResult and return it
         return run_result.complete()

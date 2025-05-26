@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.llm_process import LLMProcess

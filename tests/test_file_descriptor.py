@@ -2,10 +2,9 @@
 
 from unittest.mock import MagicMock, Mock, patch
 
-from llmproc.common.access_control import AccessLevel
-
 import pytest
 
+from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
 from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
@@ -269,13 +268,12 @@ def test_calculate_total_pages_and_fd_tools():
     # Small content - single page
     small_fd_id = manager.create_fd_content("Small content").split('fd="')[1].split('"')[0]
     assert manager.file_descriptors[small_fd_id]["total_pages"] == 1
-    assert manager._calculate_total_pages(small_fd_id) == 1
 
     # Large content - multiple pages
     large_content = "\n".join(["X" * 100] * 5)  # 500+ chars
     large_fd_id = manager.create_fd_content(large_content).split('fd="')[1].split('"')[0]
     assert manager.file_descriptors[large_fd_id]["total_pages"] > 1
-    assert manager._calculate_total_pages(large_fd_id) >= 2
+    assert manager.file_descriptors[large_fd_id]["total_pages"] >= 2
 
     # Test 2: FD-related tool identification
     assert manager.is_fd_related_tool("read_fd")

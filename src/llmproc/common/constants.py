@@ -10,6 +10,6 @@ LLMPROC_MSG_ID = "llmproc_msg_id"
 MESSAGE_ID_PREFIX = "msg_"
 
 # Tool metadata attribute name used to attach metadata to tool functions
-# Double underscores plus the llmproc prefix virtually removes any 
+# Double underscores plus the llmproc prefix virtually removes any
 # collision risk with user‑defined attributes
 TOOL_METADATA_ATTR = "__llmproc_tool_meta__"

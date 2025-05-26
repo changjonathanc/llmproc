@@ -9,6 +9,12 @@ import warnings
 from pathlib import Path
 from typing import Any, Optional
 
+from llmproc.tools import (
+    fd_user_input_instructions,
+    file_descriptor_instructions,
+    reference_instructions,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -209,20 +215,14 @@ class EnvInfoBuilder:
 
         # Add file descriptor instructions if enabled
         if file_descriptor_enabled:
-            from llmproc.tools import file_descriptor_instructions
-
             parts.append(file_descriptor_instructions)
 
             # Add user input paging instructions if enabled
             if page_user_input:
-                from llmproc.tools import fd_user_input_instructions
-
                 parts.append(fd_user_input_instructions)
 
         # Add reference instructions if enabled
         if references_enabled and file_descriptor_enabled:
-            from llmproc.tools import reference_instructions
-
             parts.append(reference_instructions)
 
         # Handle preloaded content

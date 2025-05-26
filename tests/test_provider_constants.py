@@ -1,7 +1,6 @@
 """Tests for the provider constants."""
 
 import pytest
-
 from llmproc.providers.constants import (
     ANTHROPIC_PROVIDERS,
     GEMINI_PROVIDERS,

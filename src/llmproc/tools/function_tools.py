@@ -16,33 +16,68 @@ import inspect
 import logging
 import re
 from collections.abc import Callable
-from typing import Any, Optional, Union, get_args, get_origin, get_type_hints
+from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from llmproc.common.access_control import AccessLevel
-from llmproc.common.constants import TOOL_METADATA_ATTR
 from llmproc.common.context import validate_context_has
-from llmproc.common.results import ToolResult
 from llmproc.common.metadata import (
     ToolMeta,
     attach_meta,
     get_tool_meta,
 )
-
-
-def get_tool_name(tool: Callable) -> str:
-    """Extract tool name from a callable function.
-
-    Args:
-        tool: The callable tool function
-
-    Returns:
-        The name of the tool (from _tool_name attribute or function name)
-    """
-    return getattr(tool, "_tool_name", tool.__name__)
-
+from llmproc.common.results import ToolResult
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def wrap_instance_method(method: Callable) -> Callable:
+    """Convert an instance method to a standalone function that can hold metadata.
+
+    This function creates a thin wrapper around an instance method that preserves
+    all behavior but can have attributes set on it (unlike bound methods).
+
+    Args:
+        method: A bound instance method
+
+    Returns:
+        A standalone function that calls the original method
+
+    Note:
+        This function is primarily used internally by the register_tool decorator
+        to support instance methods. The wrapper is not intended for direct use.
+    """
+    if not (hasattr(method, "__self__") and method.__self__ is not None):
+        # Not a bound method, return as is
+        return method
+
+    # Get original information
+    is_async = asyncio.iscoroutinefunction(method)
+    instance = method.__self__
+    method_name = method.__name__
+
+    # Create appropriate wrapper based on sync/async
+    if is_async:
+
+        @functools.wraps(method)
+        async def method_wrapper(*args, **kwargs):
+            # Get method from instance to ensure proper binding
+            bound_method = getattr(instance, method_name)
+            return await bound_method(*args, **kwargs)
+    else:
+
+        @functools.wraps(method)
+        def method_wrapper(*args, **kwargs):
+            # Get method from instance to ensure proper binding
+            bound_method = getattr(instance, method_name)
+            return bound_method(*args, **kwargs)
+
+    # Add metadata for clarity and debugging
+    method_wrapper.__wrapped_instance_method__ = True
+    method_wrapper.__original_instance__ = instance
+    method_wrapper.__original_method_name__ = method_name
+
+    return method_wrapper
 
 
 def get_tool_name(tool: Callable) -> str:
@@ -70,6 +105,7 @@ def register_tool(
     required_context_keys: list[str] = None,
     schema_modifier: Callable[[dict, dict], dict] = None,
     access: Union[AccessLevel, str] = AccessLevel.WRITE,
+    on_register: Callable[[str, Any], None] = None,
 ):
     """Decorator to register a function as a tool with enhanced schema support.
 
@@ -86,6 +122,8 @@ def register_tool(
         required_context_keys: List of context keys that must be present in runtime_context
         schema_modifier: Optional function to modify schema with runtime config
         access: Access level for this tool (READ, WRITE, or ADMIN). Defaults to WRITE.
+        on_register: Optional callback executed when the tool is registered with ToolManager.
+            The callback receives the tool name and ToolManager instance as parameters.
 
     Returns:
         Decorator function that registers the tool metadata
@@ -97,14 +135,18 @@ def register_tool(
         return register_tool()(func)
 
     def decorator(func):
+        # Handle instance methods by wrapping them first
+        if hasattr(func, "__self__") and func.__self__ is not None:
+            func = wrap_instance_method(func)
+
         # Convert access level string to enum if needed
         access_level = access
         if isinstance(access, str):
             access_level = AccessLevel.from_string(access)
-            
+
         # Determine tool name (from parameter or function name)
         tool_name = name if name is not None else func.__name__
-        
+
         # Create the common metadata object
         meta_obj = ToolMeta(
             name=tool_name,
@@ -116,8 +158,9 @@ def register_tool(
             requires_context=requires_context,
             required_context_keys=tuple(required_context_keys or ()) if requires_context else (),
             schema_modifier=schema_modifier,
+            on_register=on_register,
         )
-        
+
         # If requires context, create a wrapper with context validation
         if requires_context:
             # Create the context wrapper
@@ -235,10 +278,10 @@ def type_to_json_schema(
 
 def get_tool_access_level(func: Callable) -> AccessLevel:
     """Get the access level for a tool function.
-    
+
     Args:
         func: The tool function to check
-        
+
     Returns:
         The AccessLevel enum value (defaults to WRITE if not specified)
     """
@@ -250,7 +293,7 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
     """Convert a function to a tool schema."""
     # Get function metadata from the centralized metadata object
     meta = get_tool_meta(func)
-    
+
     # If there's a custom schema defined, just use that
     if meta.custom_schema:
         return meta.custom_schema
@@ -297,9 +340,7 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
         param_type = type_hints.get(param_name, Any)
 
         # Convert the type to JSON schema
-        param_schema = type_to_json_schema(
-            param_type, param_name, docstring_params, explicit_descriptions
-        )
+        param_schema = type_to_json_schema(param_type, param_name, docstring_params, explicit_descriptions)
 
         # Add to properties
         schema["input_schema"]["properties"][param_name] = param_schema
@@ -311,7 +352,7 @@ def function_to_tool_schema(func: Callable) -> dict[str, Any]:
     # Override with explicitly provided required parameters from metadata
     if meta.required_params:
         schema["input_schema"]["required"] = list(meta.required_params)
-    
+
     return schema
 
 
@@ -359,7 +400,7 @@ def prepare_tool_handler(func: Callable) -> Callable:
 
     # Transfer the metadata to the handler
     attach_meta(handler, meta)
-    
+
     return handler
 
 
@@ -390,7 +431,7 @@ def create_process_aware_handler(func: Callable, process: Any) -> Callable:
 
     # Transfer metadata to handler directly
     attach_meta(handler, meta)
-    
+
     return handler
 
 

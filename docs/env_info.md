@@ -26,7 +26,7 @@ date: 2025-03-19
 
 ## Configuration
 
-Environment information is configured in the TOML program file using the `[env_info]` section:
+Environment information is configured in the program file (TOML or YAML) using the `[env_info]` section:
 
 ```toml
 [env_info]

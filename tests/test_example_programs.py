@@ -10,7 +10,6 @@ from typing import Optional
 
 import pytest
 import tomli
-
 from llmproc import LLMProcess, LLMProgram
 
 
@@ -21,8 +20,8 @@ def get_example_programs():
 
     # Get all .toml files recursively
     for program_file in base_dir.glob("**/*.toml"):
-        # Skip reference file and any scripts
-        if program_file.name not in ["reference.toml", "scripts"]:
+        # Skip tutorial/reference files and any scripts
+        if program_file.name not in ["tutorial-config.toml", "scripts"]:
             programs.append(program_file.relative_to(base_dir.parent))
 
     return programs
@@ -32,10 +31,7 @@ def api_keys_available():
     """Check if required API keys are available."""
     has_openai = "OPENAI_API_KEY" in os.environ
     has_anthropic = "ANTHROPIC_API_KEY" in os.environ
-    has_vertex = (
-        "GOOGLE_APPLICATION_CREDENTIALS" in os.environ
-        or "GOOGLE_CLOUD_PROJECT" in os.environ
-    )
+    has_vertex = "GOOGLE_APPLICATION_CREDENTIALS" in os.environ or "GOOGLE_CLOUD_PROJECT" in os.environ
 
     return has_openai and has_anthropic and has_vertex
 
@@ -110,9 +106,7 @@ async def test_example_program(program_path):
     process = await program.start()
 
     # Send a simple test query
-    test_query = (
-        "Respond with a short one-sentence confirmation that you received this message."
-    )
+    test_query = "Respond with a short one-sentence confirmation that you received this message."
 
     # Run the process and get the response
     result = await process.run(test_query)
@@ -196,14 +190,12 @@ def test_cli_with_minimal_example():
         os.chdir(original_dir)
 
     # Check if the CLI ran successfully and echoed back our test string
-    assert unique_test_string in output, (
-        f"Expected CLI output to echo back the test string: {unique_test_string}"
-    )
+    assert unique_test_string in output, f"Expected CLI output to echo back the test string: {unique_test_string}"
 
     # Check if program information is shown
-    assert any(term in output for term in ["Program Summary", "Configuration"]), (
-        "Expected CLI to show program information"
-    )
+    assert any(
+        term in output for term in ["Program Summary", "Configuration"]
+    ), "Expected CLI to show program information"
 
 
 @pytest.mark.llm_api
@@ -232,9 +224,7 @@ def test_cli_with_program_linking():
         os.chdir(original_dir)
 
     # Check if the response includes the expected greeting
-    assert "hello" in output.lower() and "world" in output.lower(), (
-        "Expected CLI output to include greeting"
-    )
+    assert "hello" in output.lower() and "world" in output.lower(), "Expected CLI output to include greeting"
 
 
 @pytest.mark.llm_api
@@ -247,7 +237,6 @@ def test_cli_with_program_linking():
         "claude-code.toml",
         "mcp.toml",
         "basic-features.toml",
-        # Removed Vertex param as it's now integrated into anthropic.toml
     ],
 )
 def test_cli_with_all_programs(program_name):
@@ -276,9 +265,9 @@ def test_cli_with_all_programs(program_name):
 
         # Just check that we get a response (don't require the exact echo since models vary)
         assert len(output) > 0, f"Expected CLI using {program_name} to produce output"
-        assert any(term in output for term in ["Program Summary", "Configuration"]), (
-            f"Expected CLI using {program_name} to show program information"
-        )
+        assert any(
+            term in output for term in ["Program Summary", "Configuration"]
+        ), f"Expected CLI using {program_name} to show program information"
 
     except subprocess.TimeoutExpired:
         pytest.fail(f"CLI with {program_name} timed out")
@@ -298,13 +287,15 @@ def test_error_handling_and_recovery():
 
     # First create a temporary invalid program
     with tempfile.NamedTemporaryFile("w+", suffix=".toml") as invalid_program:
-        invalid_program.write("""
+        invalid_program.write(
+            """
         [invalid]
         this_is_not_valid = true
 
         model_name = "nonexistent-model"
         provider = "unknown"
-        """)
+        """
+        )
         invalid_program.flush()
 
         # Try to run with invalid program (should return non-zero)
@@ -320,9 +311,9 @@ def test_error_handling_and_recovery():
 
         # Verify error is reported
         assert result.returncode != 0, "Expected non-zero return code for invalid program"
-        assert "error" in result.stderr.lower() or "error" in result.stdout.lower(), (
-            "Expected error message for invalid program"
-        )
+        assert (
+            "error" in result.stderr.lower() or "error" in result.stdout.lower()
+        ), "Expected error message for invalid program"
 
     # Now test with a valid program to make sure the system recovers
     program_path = Path(__file__).parent.parent / "examples" / "openai.toml"

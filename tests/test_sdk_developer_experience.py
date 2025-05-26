@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-
 from llmproc.program import LLMProgram
 
 
@@ -44,17 +43,12 @@ def test_program_linking():
     )
 
     # Link them using the fluent interface
-    main_program.add_linked_program(
-        "expert", expert_program, "Expert for specialized tasks"
-    )
+    main_program.add_linked_program("expert", expert_program, "Expert for specialized tasks")
 
     # Check the linking was done correctly
     assert "expert" in main_program.linked_programs
     assert main_program.linked_programs["expert"] == expert_program
-    assert (
-        main_program.linked_program_descriptions["expert"]
-        == "Expert for specialized tasks"
-    )
+    assert main_program.linked_program_descriptions["expert"] == "Expert for specialized tasks"
 
 
 def test_fluent_methods_chaining():
@@ -236,6 +230,3 @@ def test_register_tools():
     # The method might clear and set new tools or it might append
     # to existing tools - both are valid implementations
     # so we check that it's working correctly without assuming specific behavior
-
-
-# Error handling tests moved to process initialization tests

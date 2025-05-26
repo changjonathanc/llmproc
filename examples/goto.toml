@@ -36,7 +36,7 @@ Let's begin! What is Python?
 """
 
 [tools]
-enabled = ["goto", "read_file", "calculator"]
+builtin = ["goto", "read_file", "calculator"]
 
 # The GOTO tool enables the model to jump back to an earlier point
 # in the conversation. This is useful for:

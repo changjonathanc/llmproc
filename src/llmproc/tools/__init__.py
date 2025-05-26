@@ -36,14 +36,7 @@ from llmproc.tools.builtin.spawn import spawn_tool
 # Import tools registry
 # Import all tools - these imports will register themselves
 from . import registry_data
-from .exceptions import (
-    ToolConfigurationError,
-    ToolError,
-    ToolExecutionError,
-    ToolNotFoundError,
-    ToolRegistrationError,
-)
-from .function_tools import create_tool_from_function, register_tool
+from .function_tools import create_tool_from_function, get_tool_name, register_tool
 from .tool_manager import ToolManager
 from .tool_registry import ToolHandler, ToolRegistry, ToolSchema
 
@@ -94,13 +87,9 @@ __all__ = [
     "ToolHandler",
     "ToolRegistry",
     "ToolManager",
-    "ToolError",
-    "ToolNotFoundError",
-    "ToolRegistrationError",
-    "ToolExecutionError",
-    "ToolConfigurationError",
     # Functions from function_tools
     "ToolResult",
+    "get_tool_name",
     "register_tool",
     "create_tool_from_function",
 ]

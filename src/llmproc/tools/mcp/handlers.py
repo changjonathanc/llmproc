@@ -5,7 +5,6 @@ This module provides functions for registering and handling MCP tools.
 
 import logging
 
-# from collections.abc import Callable  # Unused, removed
 # Use TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -13,9 +12,9 @@ from llmproc.common.results import ToolResult
 from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
 
 if TYPE_CHECKING:
-    from mcp_registry import MCPAggregator
-    from mcp_registry.types import MCPTool
+    from mcp.types import Tool as MCPTool
 
+    from llmproc.mcp_registry import MCPAggregator
     from llmproc.tools.tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -36,9 +35,7 @@ def format_tool_for_anthropic(tool: "MCPTool", server_name: str | None = None) -
         Dictionary with tool information formatted for Anthropic API
     """
     # Create namespaced name with server prefix
-    namespaced_name = (
-        f"{server_name}{MCP_TOOL_SEPARATOR}{tool.name}" if server_name else tool.name
-    )
+    namespaced_name = f"{server_name}{MCP_TOOL_SEPARATOR}{tool.name}" if server_name else tool.name
 
     # Ensure input schema has required fields
     input_schema = tool.inputSchema.copy() if tool.inputSchema else {}
@@ -53,10 +50,6 @@ def format_tool_for_anthropic(tool: "MCPTool", server_name: str | None = None) -
         "description": tool.description,
         "input_schema": input_schema,
     }
-
-
-# NOTE: This function was removed as it was redundant with format_tool_for_anthropic
-# Any code that was using _create_tool_schema should use format_tool_for_anthropic directly
 
 
 async def create_mcp_handler(

@@ -43,11 +43,11 @@ logger = logging.getLogger(__name__)
 )
 async def your_tool_name(param1: str, param2: int = 42) -> Any:
     """Detailed description of what the tool does.
-    
+
     Args:
         param1: Description of param1
         param2: Description of param2 with its default value
-        
+
     Returns:
         Description of the return value
     """
@@ -55,7 +55,7 @@ async def your_tool_name(param1: str, param2: int = 42) -> Any:
         # Implement your tool logic here
         result = do_something(param1, param2)
         return result
-        
+
     except Exception as e:
         # Log the error
         error_msg = f"Error in your_tool_name: {str(e)}"
@@ -169,8 +169,8 @@ logger = logging.getLogger(__name__)
     },
 )
 async def list_dir(
-    directory_path: str = ".", 
-    show_hidden: bool = False, 
+    directory_path: str = ".",
+    show_hidden: bool = False,
     detailed: bool = False
 ) -> str:
     """List directory contents with options for showing hidden files and detailed information.
@@ -205,7 +205,7 @@ registry_data.register("list_dir", list_dir)
 __all__ = [
     # Function-based tools
     "calculator",
-    "read_file", 
+    "read_file",
     "list_dir",  # Add this line
     # Other exports...
 ]

@@ -85,6 +85,10 @@ The spawn tool:
 
 When the primary LLM uses the spawn tool, the query is executed by the linked program asynchronously, and the result is returned as part of the conversation.
 
+### Spawning the Current Program
+
+If no linked programs are configured, leave `program_name` blank. The spawn tool will create a fresh process from the current program and execute the provided prompt in that new context.
+
 ## Using Program Linking with the New API
 
 ```python

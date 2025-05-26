@@ -28,6 +28,22 @@ except ImportError:
     # Provide placeholder if the module is not available
     GeminiProcessExecutor = None
 
+# Map provider identifiers to their executor classes
+from llmproc.providers.constants import ANTHROPIC_PROVIDERS, GEMINI_PROVIDERS
+
+EXECUTOR_MAP: dict[str, type] = {}
+
+if OpenAIProcessExecutor is not None:
+    EXECUTOR_MAP["openai"] = OpenAIProcessExecutor
+
+if AnthropicProcessExecutor is not None:
+    for _p in ANTHROPIC_PROVIDERS:
+        EXECUTOR_MAP[_p] = AnthropicProcessExecutor
+
+if GeminiProcessExecutor is not None:
+    for _p in GEMINI_PROVIDERS:
+        EXECUTOR_MAP[_p] = GeminiProcessExecutor
+
 
 __all__ = [
     "get_provider_client",
@@ -38,4 +54,5 @@ __all__ = [
     "OpenAIProcessExecutor",
     "GeminiProcessExecutor",
     "genai",
+    "EXECUTOR_MAP",
 ]

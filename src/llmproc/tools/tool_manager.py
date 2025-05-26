@@ -12,10 +12,11 @@ from typing import Any, Optional
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.constants import TOOL_METADATA_ATTR
 from llmproc.common.context import RuntimeContext, validate_context_has
+from llmproc.common.metadata import get_tool_meta
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin import BUILTIN_TOOLS
 from llmproc.tools.function_tools import create_tool_from_function, get_tool_access_level
-from llmproc.common.metadata import get_tool_meta
+from llmproc.tools.mcp import MCPServerTools
 from llmproc.tools.registry_helpers import check_for_duplicate_schema_names
 from llmproc.tools.tool_registry import ToolRegistry
 
@@ -45,14 +46,12 @@ class ToolManager:
         # function_tools holds callables awaiting registration
         self.function_tools: list[Callable] = []
 
-        # mcp_tools holds MCPTool descriptors awaiting registration
-        from llmproc.tools.mcp import MCPTool
-
-        self.mcp_tools: list[MCPTool] = []
+        # mcp_tools holds MCPServerTools descriptors awaiting registration
+        self.mcp_tools: list[MCPServerTools] = []
 
         # Runtime context for tool execution
         self.runtime_context = {}
-        
+
         # Process access ceiling (default to ADMIN for root process)
         self.process_access_level = AccessLevel.ADMIN
 
@@ -71,46 +70,51 @@ class ToolManager:
     def register_tools(self, tools_config: list):
         """Register tools for availability.
 
-        This method accepts both callable functions and MCPTool descriptors.
+        This method accepts both callable functions and ``MCPServerTools``
+        descriptors.
         String-based tool names are handled at the LLMProgram level.
         The actual registration/initialization of these marked tools
         happens during process initialization.
 
         Args:
-            tools_config: List of callable functions or MCPTool objects to enable
+            tools_config: List of callable functions or ``MCPServerTools`` objects to enable
 
         Returns:
             self (for method chaining)
 
         Raises:
-            ValueError: If any item is neither a callable nor an MCPTool
+            ValueError: If any item is neither a callable nor an ``MCPServerTools`` object
         """
         if not isinstance(tools_config, list):
             tools_config = [tools_config]  # Convert single item to list
 
-        from llmproc.tools.mcp import MCPTool
-
         # Process each tool
         processed_tool_names = []
         for tool_item in tools_config:
-            if isinstance(tool_item, MCPTool):
-                # Add MCPTool to mcp_tools list
+            if isinstance(tool_item, MCPServerTools):
+                # Add MCPServerTools descriptor to mcp_tools list
                 self.mcp_tools.append(tool_item)
                 server = tool_item.server
-                if tool_item.names == "all":
+                if tool_item.tools == "all":
                     processed_tool_names.append(f"{server}:all")
                 else:
-                    processed_tool_names.append(f"{server}:{','.join(tool_item.names)}")
+                    # Get tool names as strings
+                    tool_names = []
+                    for t in tool_item.tools:
+                        if isinstance(t, str):
+                            tool_names.append(t)
+                        elif hasattr(t, "name"):
+                            tool_names.append(t.name)
+                    processed_tool_names.append(f"{server}:{','.join(tool_names)}")
             elif callable(tool_item):
                 # Add the function for later processing
                 self.add_function_tool(tool_item)
 
                 # Extract the name from metadata (fallback to __name__)
-                from llmproc.common.metadata import get_tool_meta
                 meta = get_tool_meta(tool_item)
                 processed_tool_names.append(meta.name or tool_item.__name__)
             else:
-                raise ValueError(f"Tools must be callables or MCPTool objects, got {type(tool_item)}")
+                raise ValueError(f"Tools must be callables or MCPServerTools objects, got {type(tool_item)}")
 
         # Remove duplicates while preserving order
         names = list(dict.fromkeys(processed_tool_names))
@@ -152,15 +156,15 @@ class ToolManager:
         self.runtime_context = context
         logger.debug(f"Set runtime context with keys: {', '.join(context.keys())}")
         return self
-        
+
     def set_process_access_level(self, access_level: AccessLevel):
         """Set the process access level ceiling.
-        
+
         This limits which tools the process can call based on their access level.
-        
+
         Args:
             access_level: The maximum access level allowed for this process
-            
+
         Returns:
             self (for method chaining)
         """
@@ -225,7 +229,7 @@ class ToolManager:
         try:
             # Get the handler (handles alias resolution internally)
             handler = self.runtime_registry.get_handler(name)
-            
+
             # Get tool metadata
             meta = get_tool_meta(handler)
 
@@ -233,7 +237,9 @@ class ToolManager:
             tool_access = meta.access
             # Reject if tool access level exceeds process access level
             if tool_access.compare_to(self.process_access_level) > 0:
-                logger.warning(f"Access denied for tool '{name}': {tool_access.value} > {self.process_access_level.value}")
+                logger.warning(
+                    f"Access denied for tool '{name}': {tool_access.value} > {self.process_access_level.value}"
+                )
                 return ToolResult.from_error(
                     f"Access denied: this tool requires {tool_access.value} access but process has {self.process_access_level.value}"
                 )
@@ -281,7 +287,7 @@ class ToolManager:
             try:
                 # Get metadata to see if we need to log more details
                 meta = get_tool_meta(func_tool)
-                
+
                 # Create handler and schema
                 handler, schema = create_tool_from_function(func_tool)
                 tool_name = schema["name"]
@@ -292,6 +298,14 @@ class ToolManager:
                     registered_count += 1
                     # Enhanced logging with access level
                     logger.debug(f"Registered function tool: {tool_name} (access={meta.access.value})")
+
+                    # Execute on_register callback if provided
+                    if meta.on_register is not None:
+                        try:
+                            meta.on_register(tool_name, self)
+                            logger.debug(f"Executed on_register callback for tool '{tool_name}'")
+                        except Exception as e:
+                            logger.error(f"Error in on_register callback for tool '{tool_name}': {e}")
                 else:
                     logger.debug(f"Function tool '{tool_name}' already registered, skipping")
 
@@ -352,10 +366,6 @@ class ToolManager:
         aliased = self.runtime_registry.alias_schemas(schemas)
         # Remove any duplicate schema names and return
         return check_for_duplicate_schema_names(aliased)
-        
-    # Method removed in favor of AccessLevel.compare_to method
-
-    # These methods have been replaced with direct registration in initialize_tools
 
     async def initialize_tools(self, config: dict[str, Any]) -> "ToolManager":
         """Initialize all tools for the given configuration.
@@ -392,22 +402,28 @@ class ToolManager:
                     self.runtime_registry.register_tool(tool_name, handler, schema)
                     registered_count += 1
                     logger.debug(f"Successfully registered tool: {tool_name}")
+
+                    # Execute on_register callback if provided
+                    meta = get_tool_meta(tool_callable)
+                    if meta.on_register is not None:
+                        try:
+                            meta.on_register(tool_name, self)
+                            logger.debug(f"Executed on_register callback for tool '{tool_name}'")
+                        except Exception as e:
+                            logger.error(f"Error in on_register callback for tool '{tool_name}': {e}")
             except Exception as e:
                 logger.error(f"Error registering tool {getattr(tool_callable, '__name__', str(tool_callable))}: {e}")
         logger.info(f"Registered {registered_count} function tools with configuration")
 
         # Delegate MCP tools registration to MCPManager
-        if config.get("mcp_enabled") and config.get("mcp_config_path"):
+        if config.get("mcp_enabled"):
             from llmproc.tools.mcp.manager import MCPManager
 
-            # Convert mcp_tools list to tools_config format for MCPManager
-            tools_config = {}
-            for mcp_tool in self.mcp_tools:
-                tools_config[mcp_tool.server] = mcp_tool.names
-
+            # Pass MCPServerTools descriptors directly to the manager
             self.mcp_manager = MCPManager(
                 config_path=config.get("mcp_config_path"),
-                tools_config=tools_config,
+                servers=config.get("mcp_servers"),
+                mcp_tools=self.mcp_tools,
                 provider=config.get("provider"),
             )
             ok = await self.mcp_manager.initialize(self.runtime_registry)
@@ -417,8 +433,6 @@ class ToolManager:
                 for name, handler, schema in await self.mcp_manager.get_tool_registrations():
                     self.runtime_registry.register_tool(name, handler, schema)
                     # No need to add to a separate list now that registry is source of truth
-        elif config.get("mcp_enabled") and not config.get("mcp_config_path"):
-            logger.warning("MCP is enabled but no configuration path was provided")
 
         logger.info("Tool initialization complete")
         return self

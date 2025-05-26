@@ -113,3 +113,7 @@ Both Anthropic API and Anthropic on Vertex AI support the full range of tools av
   - You're using the correct model name format (`claude-3-5-haiku@20241022`, with the `@` symbol)
   - Your project has been approved to use Claude on Vertex AI
   - You have the proper service agent roles for the Vertex AI service accounts
+
+## Further Reading
+
+- [Anthropic API Guide](external-references/anthropic-api.md)

@@ -29,9 +29,7 @@ def copy_tool_from_source_to_target(
         True if registration succeeded, False otherwise
     """
     # Extract all components from source
-    success, handler, definition_copy = extract_tool_components(
-        source_registry, tool_name
-    )
+    success, handler, definition_copy = extract_tool_components(source_registry, tool_name)
     if not (success and handler and definition_copy):
         return False
 

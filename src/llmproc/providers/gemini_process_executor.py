@@ -27,7 +27,7 @@ class GeminiProcessExecutor:
 
     This class manages interactions with the Gemini API via the google-genai SDK,
     including handling basic conversation flow. Works with both direct API and Vertex AI access paths.
-    
+
     Note: This executor is minimally maintained as we plan to replace provider-specific
     executors with LiteLLM in a future release for unified provider support.
     """
@@ -37,7 +37,7 @@ class GeminiProcessExecutor:
         "gemini-1.5-flash": 128000,
         "gemini-1.5-pro": 1000000,
         "gemini-2.0-flash": 128000,
-        # Note: gemini-2.0-pro does not exist and has been removed
+        # gemini-2.0-pro is no longer available
         "gemini-2.5-pro": 1000000,
     }
 
@@ -121,6 +121,9 @@ class GeminiProcessExecutor:
         if not is_tool_continuation:
             process.state.append({"role": "user", "content": user_prompt})
 
+        # Trigger TURN_START event
+        process.trigger_event(CallbackEvent.TURN_START, process)
+
         # Prepare messages for the API - convert internal state format to Gemini format
         contents = self.format_state_to_api_messages(process.state)
 
@@ -128,7 +131,16 @@ class GeminiProcessExecutor:
         api_params = self._prepare_api_params(process.api_params)
 
         # Prepare API call
-        
+        api_request = {
+            "model": process.model_name,
+            "contents": contents,
+            "system_instruction": process.enriched_system_prompt,
+            "config": api_params,
+        }
+
+        # Trigger API request event
+        process.trigger_event(CallbackEvent.API_REQUEST, api_request)
+
         # Make the API call
         response = await self._make_api_call(
             client=process.client,
@@ -137,7 +149,10 @@ class GeminiProcessExecutor:
             system_instruction=process.enriched_system_prompt,
             config=api_params,
         )
-        
+
+        # Trigger API response event
+        process.trigger_event(CallbackEvent.API_RESPONSE, response)
+
         # Process API response
 
         # Track API call in the run result if available
@@ -146,12 +161,14 @@ class GeminiProcessExecutor:
             api_info = {
                 "model": process.model_name,
                 "id": getattr(response, "id", None),
+                "request": api_request,
+                "response": response,
             }
             run_result.add_api_call(api_info)
 
         # Extract the text response
         text_response = getattr(response, "text", "")
-        
+
         # Trigger response event
         if text_response:
             process.trigger_event(CallbackEvent.RESPONSE, text_response)
@@ -159,12 +176,20 @@ class GeminiProcessExecutor:
         # Add assistant response to state - maintain consistent state format
         process.state.append({"role": "assistant", "content": text_response})
 
+        # Trigger TURN_END event (Gemini has no tool calls)
+        process.trigger_event(CallbackEvent.TURN_END, process, response, [])
+
         # Set the stop reason (consistent with other providers)
         process.run_stop_reason = "end_turn"
 
         # Create a new RunResult if one wasn't provided
         if run_result is None:
             run_result = RunResult()
+
+        # Set the last_message in the RunResult to ensure it's available
+        # This is critical for the sync interface tests
+        last_message = process.get_last_message()
+        run_result.set_last_message(last_message)
 
         # Complete the RunResult and return it
         return run_result.complete()
@@ -211,10 +236,7 @@ class GeminiProcessExecutor:
             if "rate limit" in error_message.lower():
                 # Rate limit error
                 raise ValueError(f"Gemini API rate limit exceeded: {error_message}")
-            elif (
-                "invalid authentication" in error_message.lower()
-                or "permission" in error_message.lower()
-            ):
+            elif "invalid authentication" in error_message.lower() or "permission" in error_message.lower():
                 # Authentication error
                 raise ValueError(f"Gemini API authentication error: {error_message}")
             else:
@@ -224,13 +246,13 @@ class GeminiProcessExecutor:
     def format_state_to_api_messages(self, state):
         """
         Convert internal state to Gemini API format.
-        
+
         Following our unified API payload preparation pattern, this function
         formats conversation state into the structure expected by the Gemini API.
-        
+
         Args:
             state: The conversation state to convert
-            
+
         Returns:
             List of messages in Gemini API format
         """
@@ -375,9 +397,7 @@ class GeminiProcessExecutor:
                 token_count = getattr(token_count_response, "total_tokens", 0)
 
                 # Check for cached content token count (used in some Gemini models)
-                cached_count = getattr(
-                    token_count_response, "cached_content_token_count", 0
-                )
+                cached_count = getattr(token_count_response, "cached_content_token_count", 0)
                 if cached_count:
                     logger.debug(f"Cached content tokens: {cached_count}")
 
@@ -385,9 +405,7 @@ class GeminiProcessExecutor:
                 window_size = self._get_context_window_size(process.model_name)
 
                 # Calculate window usage metrics and return
-                return self._calculate_window_usage(
-                    token_count, window_size, cached_count
-                )
+                return self._calculate_window_usage(token_count, window_size, cached_count)
             except Exception as token_error:
                 # If token counting fails, log it and return an error
                 logger.warning(f"Token counting failed: {str(token_error)}")

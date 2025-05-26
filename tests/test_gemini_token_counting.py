@@ -4,16 +4,17 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.program import LLMProgram
 from llmproc.providers.constants import PROVIDER_GEMINI, PROVIDER_GEMINI_VERTEX
 
 
 @pytest.mark.llm_api
+# @pytest.mark.extended_api
+@pytest.mark.gemini_api
 @pytest.mark.parametrize(
     "provider,model_name",
     [
-        (PROVIDER_GEMINI, "gemini-2.0-flash"),
+        (PROVIDER_GEMINI, "gemini-2.5-flash"),
     ],
 )
 async def test_gemini_token_counting_api(provider, model_name):
@@ -49,13 +50,14 @@ async def test_gemini_token_counting_api(provider, model_name):
     assert after_message_tokens["input_tokens"] > initial_tokens["input_tokens"]
 
     # Add a longer message and verify token count increases further
-    await process.run(
-        "Can you explain how token counting works in Gemini models? I want to understand the mechanism."
-    )
+    await process.run("Can you explain how token counting works in Gemini models? I want to understand the mechanism.")
     final_tokens = await process.count_tokens()
     assert final_tokens["input_tokens"] > after_message_tokens["input_tokens"]
 
 
+@pytest.mark.llm_api
+# @pytest.mark.extended_api
+@pytest.mark.gemini_api
 async def test_gemini_token_counting_api_parsing():
     """Test token count parsing from API response."""
     # Import here to avoid mocking issues

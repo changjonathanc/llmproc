@@ -20,7 +20,7 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - name: Install dependencies
       run: |
         # Install uv
@@ -32,8 +32,8 @@ jobs:
         uv venv
         # Activate virtual environment
         source .venv/bin/activate
-        # Install dependencies with uv (including all provider dependencies)
-        uv pip install -e ".[dev,all]"
+        # Install dependencies with uv (including all provider dependencies and dev tools)
+        uv sync --all-extras --all-groups
 
     - name: Run tests (excluding API tests)
       env:
@@ -41,6 +41,8 @@ jobs:
         ANTHROPIC_API_KEY: sk-ant-mock-key-for-testing
         ANTHROPIC_VERTEX_PROJECT_ID: mock-project-id
         GOOGLE_APPLICATION_CREDENTIALS: mock-credentials.json
+        GEMINI_API_KEY: mock-gemini-api-key-for-testing
+        GOOGLE_API_KEY: mock-google-api-key-for-testing
       run: |
         # Activate virtual environment
         source .venv/bin/activate

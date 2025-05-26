@@ -8,7 +8,6 @@ import re
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.file_descriptors import FileDescriptorManager
 
@@ -283,13 +282,13 @@ def test_references_extraction():
     # Create a message with references
     message = """
     Here is some text with references:
-    
+
     <ref id="ref1">
     First reference content
     </ref>
-    
+
     And another reference:
-    
+
     <ref id="ref2">
     Second reference content
     </ref>

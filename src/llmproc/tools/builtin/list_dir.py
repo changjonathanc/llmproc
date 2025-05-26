@@ -70,9 +70,7 @@ async def list_dir(directory_path: str = ".", show_hidden: bool = False, detaile
                 # Get type indicator (directory, file, etc.)
                 type_indicator = "d" if item.is_dir() else "f"
                 # Add detailed item info
-                dir_items.append(
-                    f"{type_indicator} {item.name} (Size: {size}, Modified: {mtime})"
-                )
+                dir_items.append(f"{type_indicator} {item.name} (Size: {size}, Modified: {mtime})")
             else:
                 # Add simple item name with type indicator
                 dir_items.append(f"{'d' if item.is_dir() else 'f'} {item.name}")

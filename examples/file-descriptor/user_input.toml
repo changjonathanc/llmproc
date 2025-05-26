@@ -42,7 +42,7 @@ When you receive this as a file descriptor:
 
 # Enable the file descriptor system with read_fd
 [tools]
-enabled = ["read_fd", "fd_to_file"]
+builtin = ["read_fd", "fd_to_file"]
 
 # Configure the file descriptor system with user input handling
 [file_descriptor]

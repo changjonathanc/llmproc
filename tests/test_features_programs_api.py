@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from llmproc.program import LLMProgram
 
 # Define base paths for examples to make future path changes easier

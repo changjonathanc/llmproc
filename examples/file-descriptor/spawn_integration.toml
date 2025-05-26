@@ -58,7 +58,7 @@ Show all the commands you're using and explain how they work.
 
 # Enable tools
 [tools]
-enabled = ["read_fd", "fd_to_file", "read_file", "spawn"]
+builtin = ["read_fd", "fd_to_file", "read_file", "spawn"]
 
 # Configure file descriptor system
 [file_descriptor]

@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.program import LLMProgram
 from llmproc.providers.constants import PROVIDER_GEMINI, PROVIDER_GEMINI_VERTEX
 
@@ -33,6 +32,8 @@ def test_gemini_program_creation(provider, model_name):
 
 
 @pytest.mark.llm_api
+@pytest.mark.extended_api
+@pytest.mark.gemini_api
 @pytest.mark.parametrize(
     "provider,model_name",
     [

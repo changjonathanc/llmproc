@@ -11,11 +11,9 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
+import pytest
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin.fork import fork_tool, tool_result_stub
@@ -28,7 +26,6 @@ from llmproc.tools.builtin.fork import fork_tool, tool_result_stub
 @pytest.fixture()
 def parent_process() -> Any:
     """Return a minimal MagicMock that looks like an LLMProcess for fork_tool."""
-
     proc = MagicMock()
 
     # access + tool management ------------------------------------------------
@@ -65,7 +62,6 @@ def parent_process() -> Any:
 @pytest.mark.asyncio
 async def test_fork_tool_success(parent_process):
     """fork_tool should succeed and return as many results as prompts."""
-
     runtime_context = {
         "process": parent_process,
         "msg_prefix": [
@@ -80,20 +76,20 @@ async def test_fork_tool_success(parent_process):
 
     # Create mock child processes
     child_process = MagicMock()
-    
+
     # Mock the run method to return deterministic responses
     async def mock_run(prompt, max_iterations=None):
         # ensure max_iterations was inherited and forwarded
         assert max_iterations == parent_process.max_iterations
         # Return deterministic text so we can JSON‑deserialize later
         return f"result‑for‑{prompt}"
-    
+
     child_process.run = AsyncMock(side_effect=mock_run)
     child_process.get_last_message = MagicMock(return_value="should not be called")
-    
+
     # Mock fork_process to return our mock child
     parent_process.fork_process = AsyncMock(return_value=child_process)
-    
+
     # Run the fork tool
     result: ToolResult = await fork_tool(prompts, runtime_context)
 
@@ -111,10 +107,11 @@ async def test_fork_tool_errors_without_context():
     # When calling fork_tool directly, the tool's context validation wrapper should handle this,
     # not fork_tool itself. However, in production code, the ToolManager would prevent this case.
     # We patch fork_tool to test this error case simulation.
-    from llmproc.common.context import validate_context_has
     from unittest.mock import patch
-    
-    with patch('llmproc.common.context.validate_context_has', return_value=(False, "Runtime context is missing")):
+
+    from llmproc.common.context import validate_context_has
+
+    with patch("llmproc.common.context.validate_context_has", return_value=(False, "Runtime context is missing")):
         result = await fork_tool(["x"], runtime_context=None)
         assert result.is_error
 
@@ -147,7 +144,6 @@ async def test_fork_tool_too_many_prompts(parent_process):
 @pytest.mark.asyncio
 async def test_child_state_is_independent(parent_process):
     """Mutating parent after fork should not alter child state (deep copy)."""
-
     runtime_context = {
         "process": parent_process,
         "msg_prefix": [{"role": "user", "content": "hi"}],
@@ -157,13 +153,13 @@ async def test_child_state_is_independent(parent_process):
 
     # Create a child process mock
     child_process = MagicMock()
-    
+
     # Mock the run method to return immediately
     async def mock_run(prompt, max_iterations=None):
         return "ok"
-    
+
     child_process.run = AsyncMock(side_effect=mock_run)
-    
+
     # Add the child to parent's created_children list for test access
     parent_process._created_children = [child_process]
     parent_process.fork_process = AsyncMock(return_value=child_process)
@@ -174,7 +170,7 @@ async def test_child_state_is_independent(parent_process):
     # Retrieve the child instance
     child = parent_process._created_children[0]
 
-    # Mutate parent msg_prefix and ensure child.state untouched 
+    # Mutate parent msg_prefix and ensure child.state untouched
     runtime_context["msg_prefix"].append({"role": "assistant", "content": "bye"})
     assert child.state[0] == {"role": "user", "content": "hi"}
     assert child.state[1]["role"] == "assistant"
@@ -184,7 +180,6 @@ async def test_child_state_is_independent(parent_process):
 @pytest.mark.asyncio
 async def test_access_level_blocked_for_child():
     """Child created with WRITE access should not be able to call fork again."""
-
     parent = MagicMock()
     parent.tool_manager = MagicMock(process_access_level=AccessLevel.ADMIN)
 

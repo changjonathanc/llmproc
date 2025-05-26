@@ -8,7 +8,6 @@ import os
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from llmproc.common.metadata import get_tool_meta
 from llmproc.common.results import ToolResult
 from llmproc.llm_process import LLMProcess
@@ -134,10 +133,7 @@ def test_configuration_based_tool_registration():
 
     # Verify spawn tool was registered
     assert "spawn" in tool_manager.runtime_registry.tool_handlers
-    assert any(
-        schema.get("name") == "spawn"
-        for schema in tool_manager.runtime_registry.tool_definitions
-    )
+    assert any(schema.get("name") == "spawn" for schema in tool_manager.runtime_registry.tool_definitions)
 
 
 def test_fd_tools_implementation():
@@ -150,6 +146,7 @@ def test_fd_tools_implementation():
 
     # Verify the context-aware marker was set in metadata
     from llmproc.common.metadata import get_tool_meta
+
     meta = get_tool_meta(test_handler)
     assert meta.requires_context
     assert get_tool_meta(test_handler).requires_context

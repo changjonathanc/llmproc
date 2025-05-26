@@ -5,14 +5,13 @@ import tempfile
 from unittest import mock
 
 import pytest
-
 from llmproc import LLMProgram
 from llmproc.config.schema import LLMProgramConfig
 
 # We'll use asyncio only for specific tests
 
 
-def test_user_prompt_in_llmprogram():
+def test_set_user_prompt_via_constructor():
     """Test that user_prompt can be set in the LLMProgram constructor."""
     # Create a program with a user prompt
     program = LLMProgram(
@@ -43,16 +42,18 @@ def test_user_prompt_from_toml():
     """Test that user_prompt can be loaded from a TOML configuration."""
     # Create a temporary TOML file
     with tempfile.NamedTemporaryFile(suffix=".toml", mode="w", delete=False) as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "test-model"
         provider = "anthropic"
         max_iterations = 8
-        
+
         [prompt]
         system = "You are a test assistant."
         user = "Tell me about testing"
-        """)
+        """
+        )
         toml_path = f.name
 
     try:

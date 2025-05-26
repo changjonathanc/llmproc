@@ -9,7 +9,6 @@ import os
 import time
 
 import pytest
-
 from llmproc import LLMProcess, LLMProgram
 
 
@@ -27,49 +26,55 @@ def test_reasoning_models_configuration(tmp_path):
     low_config = tmp_path / "o3-mini-low.toml"
 
     # Write high reasoning config content
-    high_config.write_text("""
+    high_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini High Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using high reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "high"
     max_completion_tokens = 25000
-    """)
+    """
+    )
 
     # Write medium reasoning config content
-    medium_config.write_text("""
+    medium_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini Medium Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using medium reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "medium"
     max_completion_tokens = 10000
-    """)
+    """
+    )
 
     # Write low reasoning config content
-    low_config.write_text("""
+    low_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini Low Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using low reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "low"
     max_completion_tokens = 5000
-    """)
+    """
+    )
 
     # Load all three reasoning model configurations from temporary files
     high_program = LLMProgram.from_toml(high_config)
@@ -109,9 +114,7 @@ def validate_reasoning_parameters(program):
     assert "max_tokens" not in program.parameters
 
     # Return effort level and token limit for specific assertions
-    return program.parameters["reasoning_effort"], program.parameters[
-        "max_completion_tokens"
-    ]
+    return program.parameters["reasoning_effort"], program.parameters["max_completion_tokens"]
 
 
 # Test parameter validation without requiring API access
@@ -123,49 +126,55 @@ def test_reasoning_models_parameter_validation(tmp_path):
     low_config = tmp_path / "o3-mini-low.toml"
 
     # Write high reasoning config content
-    high_config.write_text("""
+    high_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini High Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using high reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "high"
     max_completion_tokens = 25000
-    """)
+    """
+    )
 
     # Write medium reasoning config content
-    medium_config.write_text("""
+    medium_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini Medium Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using medium reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "medium"
     max_completion_tokens = 10000
-    """)
+    """
+    )
 
     # Write low reasoning config content
-    low_config.write_text("""
+    low_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini Low Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using low reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "low"
     max_completion_tokens = 5000
-    """)
+    """
+    )
 
     # Load all three reasoning model configurations from temporary files
     high_program = LLMProgram.from_toml(high_config)
@@ -201,19 +210,21 @@ async def test_reasoning_models_basic_functionality(tmp_path):
     low_config = tmp_path / "o3-mini-low.toml"
 
     # Write low reasoning config content
-    low_config.write_text("""
+    low_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini Low Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using low reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "low"
     max_completion_tokens = 5000
-    """)
+    """
+    )
 
     # Simple problem for testing
     simple_problem = "What is 24 * 7?"

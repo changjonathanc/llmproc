@@ -9,8 +9,9 @@ creating circular imports.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.constants import TOOL_METADATA_ATTR
@@ -35,6 +36,7 @@ class ToolMeta:
 
     # Extensibility / callbacks --------------------------------------------
     schema_modifier: Callable[[dict, dict], dict] | None = None
+    on_register: Callable[[str, Any], None] | None = None
 
 
 def attach_meta(func: Callable, meta: ToolMeta) -> None:

@@ -12,7 +12,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from llmproc import LLMProgram
 
 
@@ -62,14 +61,16 @@ class TestBasicConfigLoading:
         """
         # Arrange - Create a minimal TOML file
         config_path = tmp_path / "minimal.toml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
         [model]
         name = "gpt-4o-mini"
         provider = "openai"
-        
+
         [prompt]
         system_prompt = "You are a test assistant."
-        """)
+        """
+        )
 
         # Act - Load the configuration
         program = LLMProgram.from_toml(config_path)
@@ -94,21 +95,23 @@ class TestBasicConfigLoading:
         """
         # Arrange - Create a TOML file with API parameters
         config_path = tmp_path / "parameters.toml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
         [model]
         name = "gpt-4o"
         provider = "openai"
-        
+
         [prompt]
         system_prompt = "You are a test assistant."
-        
+
         [parameters]
         temperature = 0.8
         max_tokens = 2000
         top_p = 0.95
         frequency_penalty = 0.2
         presence_penalty = 0.1
-        """)
+        """
+        )
 
         # Act - Load the configuration
         program = LLMProgram.from_toml(config_path)
@@ -145,14 +148,16 @@ class TestAdvancedConfigLoading:
         prompt_file.write_text("You are a complex test assistant.")
 
         config_path = tmp_path / "prompt_file.toml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
         [model]
         name = "gpt-4o"
         provider = "openai"
-        
+
         [prompt]
         system_prompt_file = "prompts/system_prompt.md"
-        """)
+        """
+        )
 
         # Act - Load the configuration
         program = LLMProgram.from_toml(config_path)
@@ -174,21 +179,22 @@ class TestAdvancedConfigLoading:
         """
         # Arrange - Create a TOML file with tools configuration
         config_path = tmp_path / "tools.toml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
         [model]
         name = "claude-3-5-sonnet"
         provider = "anthropic"
-        
+
         [prompt]
         system_prompt = "You are a helpful assistant."
-        
+
         [tools]
-        enabled = ["calculator", "read_file"]
-        
-        [tools.aliases]
-        calc = "calculator"
-        read = "read_file"
-        """)
+        builtin = [
+            {name = "calculator", alias = "calc"},
+            {name = "read_file", alias = "read"},
+        ]
+        """
+        )
 
         # Act - Load the configuration
         program = LLMProgram.from_toml(config_path)
@@ -230,13 +236,15 @@ class TestErrorHandling:
         """
         # Arrange - Create an invalid TOML file missing required fields
         config_path = tmp_path / "invalid.toml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
         [model]
         name = "gpt-4o-mini"
         # Missing provider
-        
+
         # Missing [prompt] section
-        """)
+        """
+        )
 
         # Act & Assert - Verify appropriate error is raised
         with pytest.raises(ValueError) as excinfo:
@@ -272,14 +280,16 @@ class TestErrorHandling:
         """
         # Arrange - Create a TOML file with invalid syntax
         config_path = tmp_path / "invalid_syntax.toml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
         [model]
         name = "gpt-4o-mini"
         provider = "openai"
-        
+
         [prompt
         system_prompt = "You are a test assistant."
-        """)  # Missing closing bracket
+        """
+        )  # Missing closing bracket
 
         # Act & Assert - Verify appropriate error is raised
         with pytest.raises(Exception) as excinfo:

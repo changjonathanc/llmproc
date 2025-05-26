@@ -7,6 +7,7 @@ This document serves as the canonical reference for the core API structure of th
 ```
 LLMProgram
 ├── from_toml()     # Load program from TOML
+├── from_yaml()     # Load program from YAML
 ├── start()         # Create and initialize a process (handles validation automatically)
 ├── register_tools() # Configure tools (accepts strings and/or callables)
 ├── set_tool_aliases() # Set LLM-friendly aliases for tools
@@ -54,7 +55,7 @@ from llmproc import LLMProgram
 
 async def main():
     # 1. Load program configuration
-    program = LLMProgram.from_toml("path/to/config.toml")
+    program = LLMProgram.from_file("path/to/config.yaml")  # or .toml
 
     # 2. Start the process (handles validation automatically)
     process = await program.start()
@@ -76,8 +77,8 @@ from llmproc import LLMProgram
 
 async def main():
     # 1. Load program configuration with user prompt
-    program = LLMProgram.from_toml("path/to/config.toml")
-    
+    program = LLMProgram.from_file("path/to/config.yaml")  # or .toml
+
     # Optional: set or override user prompt programmatically
     program.set_user_prompt("What are the key features of LLMProc?")
     program.set_max_iterations(15)  # Override default max_iterations
@@ -85,7 +86,7 @@ async def main():
     # 2. Start the process (handles validation automatically)
     # If user_prompt is set, it will be executed automatically
     process = await program.start()
-    
+
     # 3. No need to call process.run() unless you want to run additional prompts
     # The result of the automatic execution is available in the process
     response = process.get_last_message()
@@ -143,7 +144,7 @@ The library follows a carefully designed dependency structure to minimize circul
 - Supporting demo mode configuration
 
 **Dependencies:**
-- Uses **ProgramLoader** for TOML configuration loading
+- Uses **ProgramLoader** for configuration loading (TOML or YAML)
 - Creates **ToolManager** for tool definition and registration
 - Creates **LLMProcess** instances through `start()` method
 
@@ -168,7 +169,7 @@ The library follows a carefully designed dependency structure to minimize circul
 
 **Responsibilities:**
 - Tracking metrics and timing
-- Recording API information 
+- Recording API information
 - Calculating timing data
 - Recording tool calls
 
@@ -186,10 +187,9 @@ The library follows a carefully designed dependency structure to minimize circul
 - Tool alias resolution and mapping
 
 **Dependencies:**
-- Contains multiple **ToolRegistry** instances:
-  - `builtin_registry`: For built-in tool definitions
-  - `mcp_registry`: For MCP tool definitions
+- Contains two **ToolRegistry** instances:
   - `runtime_registry`: For active tool execution
+  - `mcp_registry`: For MCP tool definitions
 - May contain **MCPManager** for MCP tool registration
 
 ### ToolRegistry
@@ -211,7 +211,7 @@ The interaction between these components follows a unidirectional flow:
 
 1. **Configuration Phase**:
    ```
-   TOML File → LLMProgram → ToolManager (Definition) → Tool Schemas
+   Config File (TOML/YAML) → LLMProgram → ToolManager (Definition) → Tool Schemas
    ```
 
 2. **Initialization Phase**:

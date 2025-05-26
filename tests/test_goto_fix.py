@@ -9,7 +9,6 @@ import logging
 import time
 
 import pytest
-
 from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.common.results import ToolResult
 from llmproc.program import LLMProgram
@@ -46,7 +45,7 @@ async def goto_process():
 def goto_tracker():
     """Create a tracker for GOTO tool usage."""
     from llmproc.callbacks import CallbackEvent
-    
+
     class GotoTracker:
         def __init__(self):
             self.goto_used = False
@@ -83,7 +82,7 @@ def goto_tracker():
 async def test_goto_basic_functionality_fixed(goto_process, goto_tracker):
     """
     Basic test for GOTO tool functionality (simplified version).
-    
+
     Tests that:
     1. Model can use GOTO tool when explicitly asked
     2. GOTO correctly identifies position
@@ -92,7 +91,7 @@ async def test_goto_basic_functionality_fixed(goto_process, goto_tracker):
     """
     process = goto_process
     tracker = goto_tracker
-    
+
     # Register the tracker callback
     process.add_callback(tracker)
 
@@ -142,7 +141,7 @@ async def test_goto_basic_functionality_fixed(goto_process, goto_tracker):
 
     # Verify GOTO was used
     assert tracker.goto_used, "GOTO tool should be used when explicitly requested"
-    
+
     # Step 4: Verify we can continue conversation after GOTO
     await process.run("Can you tell me a brief joke?")
     final_state_length = len(process.state)

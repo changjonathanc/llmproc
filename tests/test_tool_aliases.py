@@ -11,7 +11,6 @@ from tempfile import NamedTemporaryFile
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
-
 from llmproc import LLMProcess
 from llmproc.common.results import ToolResult
 from llmproc.program import LLMProgram
@@ -23,7 +22,7 @@ from llmproc.tools.tool_registry import ToolRegistry
 
 
 # Mock tool function for testing
-def test_tool(**kwargs):
+def alias_test_tool(**kwargs):
     """Test tool for aliases testing."""
     return "test result"
 
@@ -100,7 +99,7 @@ def mock_mcp_registry():
     with patch.dict(
         "sys.modules",
         {
-            "mcp_registry": mock_mcp_registry,
+            "llmproc.mcp_registry": mock_mcp_registry,
         },
     ):
         # Set attributes on the mock module
@@ -111,7 +110,7 @@ def mock_mcp_registry():
         yield mock_aggregator
 
 
-def test_tool_registry_aliases():
+def test_registry_registers_aliases():
     """Test that tool aliases are correctly registered in ToolRegistry."""
     registry = ToolRegistry()
 
@@ -131,12 +130,8 @@ def test_tool_registry_aliases():
 
     # Test alias resolution
     assert registry.tool_aliases.get("t", "t") == "test_tool"
-    assert (
-        registry.tool_aliases.get("test_tool", "test_tool") == "test_tool"
-    )  # Non-aliased name returns itself
-    assert (
-        registry.tool_aliases.get("unknown", "unknown") == "unknown"
-    )  # Unknown name returns itself
+    assert registry.tool_aliases.get("test_tool", "test_tool") == "test_tool"  # Non-aliased name returns itself
+    assert registry.tool_aliases.get("unknown", "unknown") == "unknown"  # Unknown name returns itself
 
 
 @pytest.mark.asyncio
@@ -188,7 +183,7 @@ def test_tool_manager_register_aliases():
 
     # Register the tool using function reference - not string
     # Register tool using callable function reference
-    manager.register_tools([test_tool])
+    manager.register_tools([alias_test_tool])
 
     # Register an alias
     manager.register_aliases({"t": "test_tool"})
@@ -211,7 +206,7 @@ def test_tool_manager_get_schemas_with_aliases():
 
     # Register the tool using function reference - not string
     # Register tool using callable function reference
-    manager.register_tools([test_tool])
+    manager.register_tools([alias_test_tool])
 
     # Get schemas without aliases
     schemas_without_aliases = manager.get_tool_schemas()
@@ -227,7 +222,7 @@ def test_tool_manager_get_schemas_with_aliases():
     assert schemas_with_aliases[0]["name"] == "t"
 
 
-@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
+@patch.dict("sys.modules", {"llmproc.mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
 def test_llm_program_set_tool_aliases(mock_anthropic, mock_env):
     """Test that aliases can be set through LLMProgram.set_tool_aliases."""
@@ -283,7 +278,7 @@ def test_llm_program_set_tool_aliases(mock_anthropic, mock_env):
 
 
 @pytest.mark.asyncio
-@patch.dict("sys.modules", {"mcp_registry": MagicMock()})
+@patch.dict("sys.modules", {"llmproc.mcp_registry": MagicMock()})
 @patch("llmproc.providers.providers.AsyncAnthropic")
 async def test_calling_tools_with_aliases(mock_anthropic, mock_env):
     """Test calling tools using their aliases."""
@@ -355,7 +350,7 @@ async def test_calling_tools_with_aliases(mock_anthropic, mock_env):
         assert result.content == "This tool is not available"
 
 
-def test_llm_program_alias_validation():
+def test_alias_validation_detects_conflicts():
     """Test that validation is performed when registering aliases."""
     # Create a program with some tools
     program = LLMProgram(
@@ -370,9 +365,7 @@ def test_llm_program_alias_validation():
         program.set_tool_aliases(["calc", "read"])
 
     # Test duplicate target tool (multiple aliases to same tool)
-    with pytest.raises(
-        ValueError, match="Multiple aliases point to the same target tool"
-    ):
+    with pytest.raises(ValueError, match="Multiple aliases point to the same target tool"):
         program.set_tool_aliases({"calc": "calculator", "calculate": "calculator"})
 
 

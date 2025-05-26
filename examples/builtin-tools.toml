@@ -48,7 +48,7 @@ temperature = 0.7
 
 # Enable all builtin tools
 [tools]
-enabled = ["calculator", "read_file", "list_dir"]
+builtin = ["calculator", "read_file", "list_dir"]
 
 [demo]
 display_name = "Builtin Tools Demo"

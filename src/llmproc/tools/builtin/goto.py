@@ -9,10 +9,9 @@ import logging
 from typing import Any, Optional
 
 from llmproc.common.access_control import AccessLevel
-from llmproc.common.constants import LLMPROC_MSG_ID
+from llmproc.common.constants import MESSAGE_ID_PREFIX
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
-from llmproc.common.constants import MESSAGE_ID_PREFIX
 from llmproc.utils.message_utils import append_message_with_id
 
 # Set up logger
@@ -78,7 +77,7 @@ def find_position_by_id(state, message_id):
     """Find a message position in conversation history by its ID.
 
     LLMs see messages with formatted IDs like "[msg_0]" at the beginning.
-    When using the goto tool, LLMs naturally refer to these IDs using the 
+    When using the goto tool, LLMs naturally refer to these IDs using the
     format they see, e.g., "msg_0" rather than just "0". We need to parse
     these formatted IDs to find the actual integer position in the state.
 
@@ -107,12 +106,12 @@ def find_position_by_id(state, message_id):
         # Case 1: LLM uses "msg_X" format as seen in messages
         if message_id.startswith(MESSAGE_ID_PREFIX):
             try:
-                idx = int(message_id[len(MESSAGE_ID_PREFIX):])
+                idx = int(message_id[len(MESSAGE_ID_PREFIX) :])
                 if 0 <= idx < len(state):
                     return idx
             except ValueError:
                 pass
-            
+
         # Case 2: Direct string integer ("0", "1", etc.)
         try:
             idx = int(message_id)
@@ -123,6 +122,12 @@ def find_position_by_id(state, message_id):
 
     # Message ID not found
     return None
+
+
+def enable_message_ids(tool_name, tool_manager):
+    """Enable message IDs when goto tool is registered."""
+    tool_manager.message_ids_enabled = True
+    logger.info("Message IDs enabled for goto tool support")
 
 
 @register_tool(
@@ -140,6 +145,7 @@ def find_position_by_id(state, message_id):
     # state by truncating history, this is strictly internal to the process and doesn't
     # pose race condition risks in multi-process environments.
     access=AccessLevel.READ,
+    on_register=enable_message_ids,
 )
 async def handle_goto(position: str, message: str, runtime_context: Optional[dict[str, Any]] = None):
     """Reset conversation to a previous point identified by message ID.
@@ -164,24 +170,18 @@ async def handle_goto(position: str, message: str, runtime_context: Optional[dic
     }
 
     if not position or not position.startswith("msg_"):
-        return ToolResult.from_error(
-            error_messages["invalid_id_format"].format(position)
-        )
+        return ToolResult.from_error(error_messages["invalid_id_format"].format(position))
 
     # Find target position in history by message ID
     target_index = find_position_by_id(process.state, position)
     if target_index is None:
         # Show available range in error message
         max_id = len(process.state) - 1
-        return ToolResult.from_error(
-            error_messages["id_not_found"].format(position, max_id)
-        )
+        return ToolResult.from_error(error_messages["id_not_found"].format(position, max_id))
 
     # Check if trying to go forward instead of backward
     if target_index >= len(process.state) - 1:
-        return ToolResult.from_error(
-            error_messages["cannot_go_forward"].format(position)
-        )
+        return ToolResult.from_error(error_messages["cannot_go_forward"].format(position))
 
     # Log the operation
     logger.info(f"GOTO: Resetting conversation from {len(process.state)} messages to {target_index + 1} messages")

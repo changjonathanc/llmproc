@@ -40,7 +40,7 @@ from llmproc import LLMProgram
 
 async def main():
     # Load and compile program
-    program = LLMProgram.from_toml("config.toml")
+    program = LLMProgram.from_file("config.yaml")  # or .toml
 
     # Start the process
     process = await program.start()

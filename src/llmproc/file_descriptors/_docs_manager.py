@@ -29,14 +29,6 @@ Args:
     enable_references: Whether to enable the reference ID system
 """
 
-# Removed: The create_fd method has been removed
-# New code should use create_fd_content instead
-
-# Removed: The read_fd method has been removed
-# New code should use read_fd_content or the fd_tools module instead
-
-# Removed: The write_fd_to_file method has been removed
-# New code should use write_fd_to_file_content or the fd_tools module instead
 
 HANDLE_USER_INPUT = """Handle large user input by creating a file descriptor if needed.
 
@@ -50,7 +42,7 @@ Returns:
 
 PROCESS_REFERENCES = """Process references in an assistant message.
 
-Detects and processes reference patterns in assistant messages, 
+Detects and processes reference patterns in assistant messages,
 storing referenced sections as file descriptors for efficient retrieval.
 
 Args:

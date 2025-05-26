@@ -11,11 +11,11 @@ from llmproc.tools.builtin import calculator  # Import built-in tool functions
 # Simple function with type hints
 def get_calculator(x: int, y: int) -> int:
     """Calculate the sum of two numbers.
-    
+
     Args:
         x: First number
         y: Second number
-        
+
     Returns:
         The sum of x and y
     """
@@ -32,7 +32,7 @@ program = (
     )
 )
 
-# Or set tools after creation 
+# Or set tools after creation
 # program.register_tools([calculator, get_calculator, "read_file"])
 
 # Start the LLM process
@@ -50,7 +50,7 @@ from typing import Dict, Any
 from llmproc import register_tool
 
 @register_tool(
-    name="weather_info", 
+    name="weather_info",
     description="Get weather information for a location",
     param_descriptions={
         "location": "City name or postal code to get weather for. More specific locations yield better results.",
@@ -68,7 +68,81 @@ def get_weather(location: str, units: str = "celsius") -> Dict[str, Any]:
     }
 ```
 
-The `param_descriptions` argument allows you to explicitly define parameter descriptions instead of relying on docstring parsing, which should be considered a fallback mechanism. Explicit parameter descriptions provide more control and clarity in your tool schemas.
+The `param_descriptions` argument allows you to explicitly define parameter descriptions instead of relying on docstring parsing, which should be considered a fallback mechanism. Explicit parameter descriptions provide more control and clarity in your tool schemas. When you override a single parameter using `ToolConfig` or `MCPServerTools`, LLMProc merges your override with the existing descriptions so that unspecified parameters retain their built-in text.
+
+## Class Instance Methods as Tools
+
+LLMProc supports registering class instance methods as tools, allowing for stateful tools where the method has access to the instance state:
+
+```python
+from typing import Dict, Any
+from llmproc import LLMProgram, register_tool
+
+class DataProvider:
+    def __init__(self):
+        self.counter = 0
+        self.data = {"users": ["Alice", "Bob"]}
+
+    def get_data(self, key: str) -> Dict[str, Any]:
+        """Get data for the specified key.
+
+        Args:
+            key: The data key to retrieve
+
+        Returns:
+            Data associated with the key
+        """
+        self.counter += 1
+        return {
+            "key": key,
+            "value": self.data.get(key, None),
+            "access_count": self.counter
+        }
+
+    async def fetch_remote(self, resource_id: str) -> Dict[str, Any]:
+        """Fetch data from remote resource.
+
+        Args:
+            resource_id: ID of the resource to fetch
+
+        Returns:
+            The fetched resource data
+        """
+        # Async implementation
+        self.counter += 1
+        return {"id": resource_id, "access_count": self.counter}
+
+# Create an instance
+provider = DataProvider()
+
+# Method 1: Register instance methods directly
+program = LLMProgram(
+    model_name="claude-3-7-sonnet",
+    provider="anthropic"
+)
+program.register_tools([
+    provider.get_data,      # Registers the bound method
+    provider.fetch_remote   # Works with async methods too
+])
+
+# Method 2: Apply register_tool decorator to instance methods
+# This enables full customization of the tool metadata
+decorated_method = register_tool(
+    name="get_provider_data",
+    description="Get data from the provider with access tracking"
+)(provider.get_data)
+
+program.register_tools([decorated_method])
+```
+
+When registering instance methods as tools:
+
+1. The method maintains access to the instance state (`self`) when called
+2. Both sync and async instance methods are supported
+3. The `self` parameter is automatically handled and not exposed to the LLM
+4. You can apply `register_tool` decorator to instance methods for advanced customization
+
+> **Implementation Note**: When using `register_tool` on an instance method, internally a wrapper function is created to hold the metadata. This wrapper is for internal use by llmproc only and should not be called directly in your code. Always interact with the returned decorated method through the LLMProcess API.
 
 ## Async Function Support
 
@@ -82,11 +156,11 @@ from llmproc import register_tool
 @register_tool()
 async def fetch_data(url: str, timeout: int = 30) -> Dict[str, Any]:
     """Fetch data from a URL.
-    
+
     Args:
         url: The URL to fetch data from
         timeout: Request timeout in seconds
-        
+
     Returns:
         The fetched data
     """
@@ -115,11 +189,11 @@ The tool system automatically extracts parameter descriptions and return type in
 ```python
 def search_documents(query: str, limit: int = 5):
     """Search documents by query.
-    
+
     Args:
         query: The search query string
         limit: Maximum number of results to return
-        
+
     Returns:
         List of document dictionaries matching the query
     """
@@ -183,11 +257,11 @@ Tool errors are automatically handled and returned as proper error responses wit
 ```python
 def division_tool(x: int, y: int) -> float:
     """Divide two numbers.
-    
+
     Args:
         x: Numerator
         y: Denominator
-        
+
     Returns:
         The result of x / y
     """
@@ -249,18 +323,18 @@ async def spawn_child_process(
     runtime_context: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Create a new process from a linked program.
-    
+
     Args:
         program_name: Name of the linked program to call
         prompt: The prompt to send
         runtime_context: Injected runtime context
-        
+
     Returns:
         Response from the child process
     """
     # Access the process instance from runtime context
     parent_process = runtime_context["process"]
-    
+
     # Implementation...
     return {"response": "Child process response"}
 ```

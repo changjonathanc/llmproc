@@ -6,11 +6,10 @@ import gc
 import re
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
-from llmproc.common.access_control import AccessLevel
-
 import pytest
-
+from llmproc.common.access_control import AccessLevel
 from llmproc.file_descriptors import FileDescriptorManager
+
 from tests.conftest import create_test_llmprocess_directly
 
 
@@ -50,13 +49,14 @@ from llmproc.common.results import RunResult, ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin.spawn import spawn_tool
+
 from tests.conftest import create_mock_llm_program
 
 
 class TestReferenceExtraction:
     """Tests for the reference ID extraction functionality."""
 
-    def test_extract_references_basic(self):
+    def test_extract_single_reference_from_message(self):
         """Test basic reference extraction from assistant messages."""
         manager = ReferenceFDManager()
 
@@ -84,7 +84,7 @@ class TestReferenceExtraction:
         fd_id = "ref:simple_function"
         assert fd_id in manager.file_descriptors
 
-    def test_extract_multiple_references(self):
+    def test_extract_multiple_references_from_message(self):
         """Test extracting multiple references from a single message."""
         manager = ReferenceFDManager()
 
@@ -348,9 +348,7 @@ async def test_reference_inheritance_during_spawn():
     Parent's reference content that should be inherited
     </ref>
     """
-    parent_references = parent_process.fd_manager.extract_references_from_message(
-        message
-    )
+    parent_references = parent_process.fd_manager.extract_references_from_message(message)
     assert len(parent_references) == 1
     assert "ref:parent_ref" in parent_process.fd_manager.file_descriptors
 
@@ -391,10 +389,7 @@ async def test_reference_inheritance_during_spawn():
     assert "ref:parent_ref" in child_process.fd_manager.file_descriptors
     assert "ref:parent_ref2" in child_process.fd_manager.file_descriptors
     assert "ref:parent_ref3" in child_process.fd_manager.file_descriptors
-    assert (
-        "Parent's reference content"
-        in child_process.fd_manager.file_descriptors["ref:parent_ref"]["content"]
-    )
+    assert "Parent's reference content" in child_process.fd_manager.file_descriptors["ref:parent_ref"]["content"]
 
     # Create a reference in the child process to verify isolation
     child_message = """
@@ -402,9 +397,7 @@ async def test_reference_inheritance_during_spawn():
     Child's reference content that should not be shared with parent
     </ref>
     """
-    child_references = child_process.fd_manager.extract_references_from_message(
-        child_message
-    )
+    child_references = child_process.fd_manager.extract_references_from_message(child_message)
     assert len(child_references) == 1
     assert "ref:child_ref" in child_process.fd_manager.file_descriptors
 
@@ -513,8 +506,8 @@ async def test_reference_inheritance_during_fork():
         future = asyncio.Future()
         future.set_result(mock_forked_process)
         mock_create_process.return_value = future
-        # Fork the process using the fork_process method - this will use our mocked create_process
-        forked_process = await process.fork_process()
+        # Fork the process using the newer _fork_process method - this will use our mocked create_process
+        forked_process = await process._fork_process()
 
         # Verify create_process was called with the correct program
         mock_create_process.assert_called_once_with(process.program)
@@ -526,10 +519,7 @@ async def test_reference_inheritance_during_fork():
 
     # Verify references were copied from parent to forked process
     assert "ref:original_ref" in forked_process.fd_manager.file_descriptors
-    assert (
-        "This is important content"
-        in forked_process.fd_manager.file_descriptors["ref:original_ref"]["content"]
-    )
+    assert "This is important content" in forked_process.fd_manager.file_descriptors["ref:original_ref"]["content"]
 
     # Create a new reference in the forked process to verify isolation
     forked_message = """
@@ -537,9 +527,7 @@ async def test_reference_inheritance_during_fork():
     This is a new reference created in the forked process
     </ref>
     """
-    forked_references = forked_process.fd_manager.extract_references_from_message(
-        forked_message
-    )
+    forked_references = forked_process.fd_manager.extract_references_from_message(forked_message)
     assert len(forked_references) == 1
     assert "ref:forked_ref" in forked_process.fd_manager.file_descriptors
 

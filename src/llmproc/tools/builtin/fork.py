@@ -145,36 +145,33 @@ async def fork_tool(
         # This maintains proper encapsulation and allows the process to handle
         # the provider-specific details internally
         try:
-            response = await child.run(
-                prompt,
-                max_iterations=child.max_iterations
-            )
-            
+            response = await child.run(prompt, max_iterations=child.max_iterations)
+
             # Check if we got a string response or a RunResult object
             if not isinstance(response, str):
                 logger.info(f"Child {idx} didn't return a string response, getting last message")
-                
+
                 # Use get_last_message() to get the text of the last assistant message
                 text_response = child.get_last_message()
-                
+
                 # If we couldn't get a text response, make a follow-up call
                 if not text_response:
                     logger.info(f"Child {idx} making follow-up call for final response")
                     follow_up = await child.run(
                         "Please provide a final text summary of your findings.",
-                        max_iterations=1  # Limit to 1 to prevent more tool usage
+                        max_iterations=1,  # Limit to 1 to prevent more tool usage
                     )
-                    
+
                     # Check if the follow-up response is a string
                     if isinstance(follow_up, str):
                         text_response = follow_up
                     else:
                         # Try get_last_message again after follow-up
                         text_response = child.get_last_message()
-                
+
                 # Use the retrieved text or a fallback message
                 response = text_response or "No text response available"
-            
+
             return {"id": idx, "message": response}
         except Exception as e:
             logger.error(f"Error in child process {idx}: {str(e)}", exc_info=True)

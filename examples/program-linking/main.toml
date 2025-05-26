@@ -16,7 +16,7 @@ Use these experts when appropriate and summarize their responses for the user.""
 max_tokens = 1000
 
 [tools]
-enabled = ["spawn"]
+builtin = ["spawn"]
 
 # Connect to specialized models with descriptive metadata
 [linked_programs.repo_expert]

@@ -61,7 +61,7 @@ async def main():
         .register_tools(["calculator"])  # Enable the calculator tool
         .enable_token_efficient_tools()  # Enable token-efficient tool use
     )
-    
+
     # Start the process
     process = await program.start()
 
@@ -98,13 +98,13 @@ async def main():
         .configure_thinking(budget_tokens=16000)  # High thinking budget
         .enable_token_efficient_tools()  # Enable token-efficient tool use
     )
-    
+
     # Start the process
     process = await program.start()
-    
+
     # Run with both features enabled
     await process.run("Solve this multi-step problem: If I have 3 bags with 4 apples each, and 2 bags with 7 oranges each, how many pieces of fruit do I have in total? Then explain your thought process.")
-    
+
     print(process.get_last_message())
 
 asyncio.run(main())

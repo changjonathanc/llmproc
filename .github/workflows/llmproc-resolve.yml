@@ -1,0 +1,290 @@
+# .github/workflows/llmproc-resolve.yml
+#
+# This workflow automatically resolves merge conflicts in pull requests using Claude.
+#
+# How it works:
+# 1. When someone comments "@llmproc" on a PR with merge conflicts
+# 2. This workflow posts an initial status comment on the PR
+# 3. It creates a new branch from the PR head
+# 4. It merges the base branch, which generates conflicts
+# 5. It uses llmproc with Claude to automatically resolve those conflicts
+# 6. It commits the changes and creates a new PR with the resolved conflicts
+# 7. It updates the status comment with the final result (success/failure/skipped)
+#
+# Technical Specification:
+#
+# Variables:
+#   PR_BRANCH: The source branch of the pull request (with changes to be merged)
+#   TARGET_BRANCH: The destination branch for the pull request (typically main/master)
+#   RESOLUTION_BRANCH: A new branch created to resolve conflicts
+#
+# A. Trigger conditions:
+#    - Comment on a PR containing "@llmproc" mention
+#
+# B. Main workflow steps:
+#    1. Fetch PR metadata to determine:
+#       - PR_BRANCH (head ref of the PR)
+#       - TARGET_BRANCH (base ref of the PR)
+#       - Mergeable status
+#    2. Post initial status comment on the PR
+#    3. Abort if PR is already mergeable (no conflicts between PR_BRANCH and TARGET_BRANCH)
+#    4. Create RESOLUTION_BRANCH from PR_BRANCH
+#    5. Attempt to merge TARGET_BRANCH into RESOLUTION_BRANCH (creates conflicts)
+#    6. Run llmproc with Claude to resolve conflicts
+#       - Install required dependencies (Node.js, Bun, Claude Code package)
+#       - Execute llmproc with Claude Code MCP server for tools
+#    7. Verify resolution success with these checks:
+#       - Verify working tree is clean (all changes committed)
+#       - Verify RESOLUTION_BRANCH contains all commits from PR_BRANCH
+#       - Verify RESOLUTION_BRANCH has merge commit from TARGET_BRANCH
+#       - Verify RESOLUTION_BRANCH can be merged into TARGET_BRANCH without conflicts
+#    8. Push RESOLUTION_BRANCH and create a new PR targeting TARGET_BRANCH
+#    9. Update the initial status comment with the final result
+#
+# Resolution is successful if:
+# - Commit history is preserved (all PR_BRANCH commits are present)
+# - A merge commit from TARGET_BRANCH exists
+# - All changes are committed (clean working tree)
+# - RESOLUTION_BRANCH can be merged into TARGET_BRANCH without conflicts
+#
+# The human reviewer should verify:
+# - Logical correctness of conflict resolutions
+# - Preservation of intended functionality
+
+name: Resolve merge conflicts via llmproc
+
+on:
+  issue_comment: # top-level PR comments
+    types: [created]
+  pull_request_review_comment: # code-line comments
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+
+    # Fire only when someone @-mentions llmproc in a PR comment
+    if: >
+      (
+        (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        contains(github.event.comment.body, '@llmproc')) ||
+        (github.event_name == 'pull_request_review_comment' &&
+        contains(github.event.comment.body, '@llmproc'))
+      ) &&
+      (
+        github.event.comment.author_association == 'OWNER'  ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
+
+    steps:
+      # -- 1. Get PR metadata -------------------------------------------------
+      - name: Fetch PR JSON
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          URL: ${{ github.event.issue.pull_request.url || github.event.comment.pull_request_url }}
+        run: |
+          gh api "$URL" > pr.json
+          echo "mergeable=$(jq -r .mergeable pr.json)" >> $GITHUB_OUTPUT
+          echo "base=$(jq -r .base.ref pr.json)"       >> $GITHUB_OUTPUT
+          echo "head=$(jq -r .head.ref pr.json)"       >> $GITHUB_OUTPUT
+          echo "num=$(jq -r .number pr.json)"          >> $GITHUB_OUTPUT
+
+      # -- 2. Post initial status comment -------------------------------------
+      - name: "Post initial status comment"
+        id: start_comment
+        env:
+          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          PR_NUM: ${{ steps.pr.outputs.num }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cid=$(gh api --method POST \
+                "/repos/${{ github.repository }}/issues/$PR_NUM/comments" \
+                -f body="🛠️ **Conflict-resolver run started** — [view logs]($RUN_URL)" \
+                --jq .id)
+          echo "id=$cid" >> $GITHUB_OUTPUT
+
+      # -- 3. Abort if no conflicts ------------------------------------------
+      - name: Abort if no conflicts
+        id: abort_check
+        if: steps.pr.outputs.mergeable == 'MERGEABLE'
+        run: |
+          echo "PR is mergeable; nothing to do."
+          echo "skip=true" >> $GITHUB_OUTPUT
+          exit 0
+
+      # -- 4. Decide a unique branch name -------------------------------------
+      - name: Compute branch
+        id: vars
+        if: steps.abort_check.outputs.skip != 'true'
+        run: echo "branch=resolve/pr-${{ steps.pr.outputs.num }}-${{ github.run_id }}" >> $GITHUB_OUTPUT
+
+      # -- 5. Check out PR branch and create result branch --------------------
+      - uses: actions/checkout@v4
+        if: steps.abort_check.outputs.skip != 'true'
+        with:
+          ref: ${{ steps.pr.outputs.head }}
+          fetch-depth: 0
+          token: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+
+      - name: Prepare resolve branch
+        if: steps.abort_check.outputs.skip != 'true'
+        run: |
+          git config --global user.name "llmproc"
+          git config --global user.email "llmproc@users.noreply.github.com"
+          git fetch origin "${{ steps.pr.outputs.base }}"
+          git checkout -B "${{ steps.vars.outputs.branch }}"
+          git merge "origin/${{ steps.pr.outputs.base }}" --no-edit || true
+
+      # -- 6. Hand the unresolved tree to Claude ------------------------------
+      - name: Setup Node.js
+        if: steps.abort_check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+
+      - name: Install Bun
+        if: steps.abort_check.outputs.skip != 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.11
+
+      - name: Install Claude Code
+        if: steps.abort_check.outputs.skip != 'true'
+        run: npm install -g @anthropic-ai/claude-code@1.0.2
+
+      - name: Claude resolves conflicts using llmproc
+        if: steps.abort_check.outputs.skip != 'true'
+        run: |
+          # Install uv for Python dependency management
+          python -m pip install uv
+          uv venv
+          source .venv/bin/activate
+          uv sync --all-extras
+
+          # Verify Claude is working and available
+          claude --version
+
+          # Run llmproc with improved MCP configuration
+          llmproc .github/config/claude_resolve_pr_conflict.yaml
+        env:
+          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLMPROC_TOOL_FETCH_TIMEOUT: 180
+          LLMPROC_MCP_TRANSIENT: true
+
+      # -- 7a. Verify resolution success with comprehensive checks -----------
+      - name: Verify successful conflict resolution
+        id: conflict_check
+        if: steps.abort_check.outputs.skip != 'true'
+        run: |
+          # Define branch variables for clarity
+          PR_BRANCH="${{ steps.pr.outputs.head }}"
+          TARGET_BRANCH="origin/${{ steps.pr.outputs.base }}"
+          RESOLUTION_BRANCH="${{ steps.vars.outputs.branch }}"
+
+          echo "Checking resolution integrity..."
+          echo "PR_BRANCH: $PR_BRANCH"
+          echo "TARGET_BRANCH: $TARGET_BRANCH"
+          echo "RESOLUTION_BRANCH: $RESOLUTION_BRANCH (current)"
+
+          # 1. Check if the working tree is clean (all changes committed)
+          if ! git diff-index --quiet HEAD --; then
+            echo "ERROR: Uncommitted changes exist after resolution attempt"
+            git status
+            echo "failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # 2. Verify the commit is a merge commit that includes TARGET_BRANCH
+          if ! git merge-base --is-ancestor "$TARGET_BRANCH" HEAD; then
+            echo "ERROR: Resolution doesn't include the target branch"
+            echo "failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # 3. Verify the resolution can be merged to TARGET_BRANCH without conflicts
+          # This is the ultimate test that conflicts were resolved
+          MERGE_TEST=$(git merge-tree "$(git merge-base HEAD $TARGET_BRANCH)" HEAD "$TARGET_BRANCH")
+          if echo "$MERGE_TEST" | grep -q "<<<<<<<"; then
+            echo "ERROR: Resolution still has conflicts with target branch"
+            echo "failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "SUCCESS: Conflict resolution complete and verified:"
+          echo "- Working tree is clean"
+          echo "- Resolution includes target branch"
+          echo "- No conflicts remain with target branch"
+          echo "failed=false" >> $GITHUB_OUTPUT
+
+      # -- 7b. Check if branch has meaningful changes compared to base ------------
+      - name: Check for meaningful changes
+        id: diff_check
+        if: steps.abort_check.outputs.skip != 'true' && steps.conflict_check.outputs.failed != 'true'
+        run: |
+          git fetch origin "${{ steps.pr.outputs.base }}"
+          if git diff --quiet HEAD "origin/${{ steps.pr.outputs.base }}"; then
+            echo "No changes compared to base branch - resolution didn't produce unique results"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      # -- 7c. Push branch only if we have meaningful changes --------------------
+      - name: Push resolved branch
+        if: steps.abort_check.outputs.skip != 'true' && steps.diff_check.outputs.skip != 'true' && steps.conflict_check.outputs.failed != 'true'
+        run: |
+          git push -u origin "${{ steps.vars.outputs.branch }}" --force-with-lease
+
+      # -- 8. Create follow-up PR only if we have meaningful changes -------------
+      - name: Open follow-up PR
+        if: steps.abort_check.outputs.skip != 'true' && steps.diff_check.outputs.skip != 'true' && steps.conflict_check.outputs.failed != 'true'
+        id: newpr
+        env:
+          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+        run: |
+          url=$(gh pr create \
+                  --head "${{ steps.vars.outputs.branch }}" \
+                  --base "${{ steps.pr.outputs.base }}" \
+                  --title "Auto-resolved conflicts for #${{ steps.pr.outputs.num }}" \
+                  --body  "This PR resolves merge conflicts in #${{ steps.pr.outputs.num }} using Claude.")
+          echo "url=$url" >> $GITHUB_OUTPUT
+
+      # -- 9. Update the initial status comment with final result ------------
+      - name: "Update status comment with final result"
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          COMMENT_ID: ${{ steps.start_comment.outputs.id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NEW_PR_URL: ${{ steps.newpr.outputs.url }}
+          FAILED: ${{ steps.conflict_check.outputs.failed }}
+          SKIPPED: ${{ steps.diff_check.outputs.skip }}
+          NO_CONFLICTS: ${{ steps.abort_check.outputs.skip }}
+        run: |
+          # If, for some reason, we never created the start comment, bail quietly
+          [[ -z "$COMMENT_ID" ]] && exit 0
+
+          if [[ "$NO_CONFLICTS" == 'true' ]]; then
+            body="✅ **No conflicts detected** — PR is already mergeable. [View logs]($RUN_URL)"
+          elif [[ "$FAILED" == 'true' ]]; then
+            body="❌ **Conflict resolution failed** — Claude was unable to resolve all conflict markers. [View logs]($RUN_URL)"
+          elif [[ "$SKIPPED" == 'true' ]]; then
+            body="⚠️ **Conflict resolution did not produce any changes** compared to the base branch. [View logs]($RUN_URL)"
+          elif [[ -n "$NEW_PR_URL" ]]; then
+            body="✅ **Conflicts resolved** — Follow-up PR: $NEW_PR_URL"
+          else
+            body="✅ **Conflicts resolved** — [View logs]($RUN_URL)"
+          fi
+
+          gh api --method PATCH \
+            "/repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+            -f body="$body"

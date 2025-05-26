@@ -7,7 +7,6 @@ reasoning models and Claude thinking models without requiring API access.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc import LLMProgram
 from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 
@@ -47,9 +46,7 @@ def test_reasoning_model_parameter_transformation():
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock()
     mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(message=MagicMock(content="Test response"), finish_reason="stop")
-    ]
+    mock_response.choices = [MagicMock(message=MagicMock(content="Test response"), finish_reason="stop")]
     mock_client.chat.completions.create.return_value = mock_response
 
     # Assign the same mock client to all processes
@@ -86,52 +83,58 @@ def test_reasoning_model_configs(tmp_path):
     low_config = tmp_path / "o3-mini-low.toml"
 
     # Write high reasoning config content
-    high_config.write_text("""
+    high_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini High Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using high reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "high"
     max_completion_tokens = 25000
     temperature = 0.7
-    """)
+    """
+    )
 
     # Write medium reasoning config content
-    medium_config.write_text("""
+    medium_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini Medium Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using medium reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "medium"
     max_completion_tokens = 10000
     temperature = 0.7
-    """)
+    """
+    )
 
     # Write low reasoning config content
-    low_config.write_text("""
+    low_config.write_text(
+        """
     [model]
     name = "o3-mini"
     provider = "openai"
     display_name = "O3-Mini Low Reasoning"
-    
+
     [prompt]
     system_prompt = "You are a helpful AI assistant using low reasoning effort."
-    
+
     [parameters]
     reasoning_effort = "low"
     max_completion_tokens = 5000
     temperature = 0.7
-    """)
+    """
+    )
 
     # Load the three reasoning model configurations from the temporary files
     high_program = LLMProgram.from_toml(high_config)
@@ -190,6 +193,3 @@ def test_reasoning_model_validation():
             parameters={"max_tokens": 1000, "max_completion_tokens": 2000},
         )
     assert "Cannot specify both 'max_tokens' and 'max_completion_tokens'" in str(excinfo.value)
-
-
-# Removed display_name test as it's not critical for functionality

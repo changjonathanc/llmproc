@@ -91,7 +91,7 @@ def hello_world():
 You can use the reference later by accessing it with read_fd(fd="ref:example_code").
 ```
 
-References are automatically created as file descriptors with the prefix `ref:` followed by the ID. 
+References are automatically created as file descriptors with the prefix `ref:` followed by the ID.
 They can be accessed using the standard `read_fd` tool just like any other file descriptor.
 
 ### Spawn and Fork Integration

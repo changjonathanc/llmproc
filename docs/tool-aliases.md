@@ -4,16 +4,15 @@ Tool aliases allow you to provide more LLM-friendly names for tools. This is par
 
 ## Configuration
 
-You can define tool aliases in your TOML configuration file:
+You can define tool aliases directly on each tool entry in your TOML configuration:
 
 ```toml
 [tools]
-enabled = ["read_file", "calculator", "list_dir"]
-
-[tools.aliases]
-read = "read_file"
-calc = "calculator"
-dir = "list_dir"
+enabled = [
+    {name = "read_file", alias = "read"},
+    {name = "calculator", alias = "calc"},
+    {name = "list_dir", alias = "dir"},
+]
 ```
 
 For MCP tools, you can alias the namespaced tool name:
@@ -21,11 +20,11 @@ For MCP tools, you can alias the namespaced tool name:
 ```toml
 [mcp]
 config_path = "config/mcp_servers.json"
-[tools.mcp]
-everything = ["add"]
 
-[tools.aliases]
-add = "everything__add"  # MCP tool alias
+[tools.mcp]
+everything = [
+    {name = "add", alias = "add"}  # MCP tool alias
+]
 ```
 
 ## Using Aliases in System Prompts
@@ -39,7 +38,7 @@ You are a helpful assistant with access to tools.
 
 The following tools are available through easy-to-use aliases:
 - 'read': Reads a file from the local filesystem
-- 'calc': Performs mathematical calculations 
+- 'calc': Performs mathematical calculations
 - 'dir': Lists files in a directory
 
 Please use these simple names when invoking tools.
@@ -76,7 +75,7 @@ Aliases are registered during program compilation and are automatically applied 
 
 ## Important Notes
 
-- You must enable the original tool names, not the aliases, in the `tools.enabled` list
+- You must enable the original tool names, not the aliases, in the `tools.builtin` (or legacy `tools.enabled`) list
 - Aliases must form a one-to-one mapping (no duplicate aliases pointing to the same tool)
 - When a tool is called using its alias, error messages will include both the alias and the resolved tool name
 - Aliases can be used for both built-in tools and MCP tools

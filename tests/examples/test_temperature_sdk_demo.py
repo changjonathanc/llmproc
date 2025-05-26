@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.extended_api
 def test_temperature_sdk_demo():
     """Test that the temperature SDK demo script runs successfully.
-    
+
     This test:
     1. Runs the temperature_sdk_demo.py script
     2. Captures stdout/stderr
@@ -31,7 +31,7 @@ def test_temperature_sdk_demo():
 
     # Verify script exists
     assert script_path.exists(), f"Script not found at {script_path}"
-    
+
     # Run the script as a subprocess and capture its output
     print(f"\nRunning temperature SDK demo from: {script_path}")
     try:
@@ -49,21 +49,21 @@ def test_temperature_sdk_demo():
         print("\n".join(output.split("\n")[-20:]))  # Show the last 20 lines
 
         # Verify the script ran successfully
-        assert result.returncode == 0, (
-            f"Demo script failed with return code {result.returncode}. Error: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Demo script failed with return code {result.returncode}. Error: {result.stderr}"
     except subprocess.TimeoutExpired:
         pytest.fail("Demo script timed out after 5 minutes")
     except Exception as e:
         pytest.fail(f"Failed to run demo script: {str(e)}")
-    
+
     # Check that we have exactly 2 successful tool results
     success_markers = "✅ Tool result:"
     success_count = output.count(success_markers)
-    
+
     print("\nVerifying temperature tool usage...")
     print(f"- Found {success_count} successful tool usages")
-    
+
     # We expect 2 tool results ideally
     if success_count == 0:
         pytest.fail("No successful tool results found in the output")
@@ -73,13 +73,13 @@ def test_temperature_sdk_demo():
         print("⚠️ WARNING: Only found 1 tool use instead of the expected 2")
     else:
         print("✅ Found 2 or more tool usages as expected")
-        
+
     # Verify at least one tool use occurred
     assert success_count >= 1, "Expected at least 1 successful tool result"
-    
+
     # Check for temperature changes in the output
     assert "Changing temperature to:" in output, "Expected to find temperature changes in output"
-    
+
     print("✅ All assertions passed: Temperature SDK demo verified!")
 
 

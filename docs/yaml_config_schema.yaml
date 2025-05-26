@@ -1,0 +1,311 @@
+$defs:
+  AccessLevel:
+    description: "Access level for tools to manage read/write operations.\n\nLevels:\n\
+      \    READ: Tool only reads state, no side effects\n    WRITE: Tool modifies\
+      \ state or has side effects (default)\n    ADMIN: Tool has system-level access\
+      \ (fork, spawn, goto)"
+    enum:
+    - read
+    - write
+    - admin
+    title: AccessLevel
+    type: string
+  DemoConfig:
+    description: Demo configuration for multi-turn demonstrations.
+    properties:
+      prompts:
+        default: []
+        items:
+          type: string
+        title: Prompts
+        type: array
+      pause_between_prompts:
+        default: true
+        title: Pause Between Prompts
+        type: boolean
+      display_name:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Display Name
+    title: DemoConfig
+    type: object
+  EnvInfoConfig:
+    additionalProperties: true
+    description: Environment information configuration section.
+    properties:
+      variables:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: string
+        default: []
+        title: Variables
+    title: EnvInfoConfig
+    type: object
+  FileDescriptorConfig:
+    description: File descriptor configuration section.
+    properties:
+      enabled:
+        default: false
+        title: Enabled
+        type: boolean
+      max_direct_output_chars:
+        default: 8000
+        title: Max Direct Output Chars
+        type: integer
+      default_page_size:
+        default: 4000
+        title: Default Page Size
+        type: integer
+      max_input_chars:
+        default: 8000
+        title: Max Input Chars
+        type: integer
+      page_user_input:
+        default: true
+        title: Page User Input
+        type: boolean
+      enable_references:
+        default: false
+        title: Enable References
+        type: boolean
+    title: FileDescriptorConfig
+    type: object
+  LinkedProgramItem:
+    description: Configuration for a single linked program.
+    properties:
+      path:
+        title: Path
+        type: string
+      description:
+        default: ''
+        title: Description
+        type: string
+    required:
+    - path
+    title: LinkedProgramItem
+    type: object
+  LinkedProgramsConfig:
+    additionalProperties:
+      anyOf:
+      - type: string
+      - $ref: '#/$defs/LinkedProgramItem'
+    default: {}
+    description: Linked programs configuration section.
+    title: LinkedProgramsConfig
+    type: object
+  MCPConfig:
+    description: MCP configuration section.
+    properties:
+      config_path:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Config Path
+    title: MCPConfig
+    type: object
+  ToolConfig:
+    description: Configuration item for a tool.
+    properties:
+      name:
+        title: Name
+        type: string
+      alias:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Alias
+      description:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Description
+      param_descriptions:
+        anyOf:
+        - type: object
+        - type: 'null'
+        default: null
+        title: Param Descriptions
+      access:
+        $ref: '#/$defs/AccessLevel'
+        default: write
+    required:
+    - name
+    title: ToolConfig
+    type: object
+  MCPToolsConfig:
+    additionalProperties:
+      anyOf:
+      - const: all
+        type: string
+      - items:
+          anyOf:
+          - type: string
+          - $ref: '#/$defs/ToolConfig'
+          - additionalProperties: true
+            type: object
+        type: array
+    default: {}
+    description: "MCP tools configuration.\n\nThis provides a simplified configuration\
+      \ model for MCP tools with four supported formats:\n\n1. \"all\" - Include\
+      \ all tools from a server\n   example = \"all\"\n\n2. List of tool names - Include\
+      \ specific tools with default access\n   example = [\"tool1\", \"tool2\"]\n\n\
+      3. List of ToolConfig objects - Include specific tools with custom access\n\
+      \   example = [\n       ToolConfig(name=\"tool1\", access=AccessLevel.READ),\n\
+      \       ToolConfig(name=\"tool2\")\n   ]\n\n      4. Dictionary of tool names to access/description settings\n\
+      \   example = {\n       \"tool1\": {access: read, description: Custom},\n\
+      \       \"tool2\": {description: Other}\n   }"
+    title: MCPToolsConfig
+    type: object
+  ModelConfig:
+    description: Model configuration section.
+    properties:
+      name:
+        title: Name
+        type: string
+      provider:
+        title: Provider
+        type: string
+      disable_automatic_caching:
+        default: false
+        title: Disable Automatic Caching
+        type: boolean
+      project_id:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Project Id
+      region:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Region
+      max_iterations:
+        default: 10
+        title: Max Iterations
+        type: integer
+    required:
+    - name
+    - provider
+    title: ModelConfig
+    type: object
+  PreloadConfig:
+    description: Preload configuration section.
+    properties:
+      files:
+        default: []
+        items:
+          type: string
+        title: Files
+        type: array
+    title: PreloadConfig
+    type: object
+  PromptConfig:
+    description: Prompt configuration section.
+    properties:
+      system_prompt:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: ''
+        title: System Prompt
+      system_prompt_file:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: System Prompt File
+      user:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: User
+    title: PromptConfig
+    type: object
+  ToolsConfig:
+    description: Tools configuration section.
+    properties:
+      builtin:
+        default: []
+        items:
+          anyOf:
+          - type: string
+          - $ref: '#/$defs/ToolConfig'
+        title: Builtin
+        type: array
+      mcp:
+        anyOf:
+        - $ref: '#/$defs/MCPToolsConfig'
+        - type: 'null'
+        default: null
+    title: ToolsConfig
+    type: object
+additionalProperties: false
+description: Full LLM program configuration.
+properties:
+  model:
+    $ref: '#/$defs/ModelConfig'
+  prompt:
+    $ref: '#/$defs/PromptConfig'
+    default:
+      system_prompt: ''
+      system_prompt_file: null
+      user: null
+  parameters:
+    additionalProperties: true
+    default: {}
+    title: Parameters
+    type: object
+  preload:
+    anyOf:
+    - $ref: '#/$defs/PreloadConfig'
+    - type: 'null'
+    default:
+      files: []
+  mcp:
+    anyOf:
+    - $ref: '#/$defs/MCPConfig'
+    - type: 'null'
+    default: null
+  tools:
+    anyOf:
+    - $ref: '#/$defs/ToolsConfig'
+    - type: 'null'
+    default:
+      enabled: []
+      mcp: null
+  env_info:
+    anyOf:
+    - $ref: '#/$defs/EnvInfoConfig'
+    - type: 'null'
+    default:
+      variables: []
+  linked_programs:
+    anyOf:
+    - $ref: '#/$defs/LinkedProgramsConfig'
+    - type: 'null'
+    default: {}
+  file_descriptor:
+    anyOf:
+    - $ref: '#/$defs/FileDescriptorConfig'
+    - type: 'null'
+    default: null
+  demo:
+    anyOf:
+    - $ref: '#/$defs/DemoConfig'
+    - type: 'null'
+    default: null
+required:
+- model
+title: LLMProgramConfig
+type: object
+

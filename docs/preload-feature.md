@@ -46,17 +46,17 @@ async def main():
         .add_preload_file("README.md")
         .add_preload_file("CONTRIBUTING.md")
     )
-    
+
     # Start the process (handles async initialization)
     process = await program.start()
-    
+
     # The model already has context from preloaded files
     run_result = await process.run("What information can you tell me about the project?")
-    
+
     # Get the assistant's response
     response = process.get_last_message()
     print(f"Response: {response}")  # Will incorporate information from preloaded files
-    
+
     # Run another query
     run_result = await process.run("Tell me more about the project structure")
     response = process.get_last_message()
@@ -78,16 +78,16 @@ async def main():
     # Load a program with linked programs
     program = LLMProgram.from_toml("examples/program-linking/main.toml")
     process = await program.start()
-    
+
     # Preload files are passed as an argument to the spawn tool
     run_result = await process.run(
         "Use the spawn tool to call the repo_expert program with these additional files: " +
         "README.md, pyproject.toml, and docs/preload-feature.md"
     )
-    
+
     # The spawn tool will internally pass these files to create_process
     # with the additional_preload_files parameter
-    
+
     # Get the response
     response = process.get_last_message()
     print(f"Response: {response}")
@@ -130,7 +130,7 @@ This structure helps the model understand the source of the information and main
 ## Implementation Details
 
 - Files are loaded at initialization time only
-- Content is stored in the `preloaded_content` dictionary
+- File content is inserted directly into the `enriched_system_prompt`; it is not stored separately
 - The enriched system prompt is generated during process creation, combining the original system prompt with preloaded content
 - The enriched system prompt is immutable after process creation
 - For child processes created with `spawn`, additional files can be preloaded via the `additional_preload_files` parameter

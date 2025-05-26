@@ -5,11 +5,11 @@ This document outlines the error handling patterns for tools in the llmproc libr
 ## Principles
 
 1. **LLM-Focused Error Messages**: Error messages returned in ToolResult objects should be concise, helpful, and written for the LLM's understanding - not for developers. These messages appear directly in the conversation.
-   
+
 2. **Developer-Focused Logging**: Use logger.error(), logger.warning(), etc. with detailed information for developers. These logs don't reach the LLM and should include as much diagnostic detail as possible.
 
 3. **Separation of Concerns**: Clear division of error handling responsibilities between components, with each handling its specific domain.
-   
+
 4. **Categorized Errors**: Different handling for availability errors vs. execution errors, with consistent messaging patterns for each category.
 
 ## Error Categories
@@ -104,7 +104,7 @@ try:
 except Exception as e:
     # Log full details for debugging
     logger.error(f"Exception in tool '{resolved_name}': {str(e)}", exc_info=True)
-    
+
     # Parameter errors show details
     if "missing required parameter" in str(e).lower() or "invalid parameter" in str(e).lower():
         return ToolResult.from_error(f"Error: {str(e)}")

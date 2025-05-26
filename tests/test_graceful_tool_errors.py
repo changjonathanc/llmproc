@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.tools import ToolManager
 

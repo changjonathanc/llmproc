@@ -90,11 +90,11 @@ class ToolResult:
             A ToolResult instance marked as successful
         """
         return cls(content=content, is_error=False)
-        
+
     @classmethod
     def from_abort(cls, content: Any) -> "ToolResult":
         """Create a ToolResult instance that signals execution should abort.
-        
+
         Use this for tools like GOTO that require stopping further tool processing
         after they execute.
 
@@ -136,12 +136,12 @@ class RunResult:
     # Primary data storage - simplified to just two collections
     api_call_infos: list[dict[str, Any]] = field(default_factory=list)
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
-    
+
     # Timing information
     start_time: float = field(default_factory=time.time)
     end_time: float | None = None
     duration_ms: int = 0
-    
+
     # Token statistics - stored as private counters for performance
     _input_tokens: int = 0
     _output_tokens: int = 0
@@ -160,63 +160,65 @@ class RunResult:
 
     def add_api_call(self, info: dict[str, Any]) -> "RunResult":
         """Record information about an API call.
-        
+
         Args:
             info: Dictionary with API call information
-            
+
         Returns:
             self for method chaining
         """
         self.api_call_infos.append(info)
-        
+
         # Update token statistics from usage info
         usage = info.get("usage", {})
-        
+
         # Handle both dictionary and object access for token counts
         if hasattr(usage, "input_tokens"):
             self._input_tokens += getattr(usage, "input_tokens", 0)
         elif isinstance(usage, dict):
             self._input_tokens += usage.get("input_tokens", 0)
-            
+
         if hasattr(usage, "output_tokens"):
             self._output_tokens += getattr(usage, "output_tokens", 0)
         elif isinstance(usage, dict):
             self._output_tokens += usage.get("output_tokens", 0)
-            
+
         if hasattr(usage, "cache_read_input_tokens"):
             self._cached_tokens += getattr(usage, "cache_read_input_tokens", 0)
         elif isinstance(usage, dict):
             self._cached_tokens += usage.get("cache_read_input_tokens", 0)
-            
+
         if hasattr(usage, "cache_creation_input_tokens"):
             self._cache_write_tokens += getattr(usage, "cache_creation_input_tokens", 0)
         elif isinstance(usage, dict):
             self._cache_write_tokens += usage.get("cache_creation_input_tokens", 0)
-            
+
         return self
 
     def add_tool_call(self, name: str, args: dict = None) -> "RunResult":
         """Record a tool call.
-        
+
         Args:
             name: The name of the tool
             args: The arguments passed to the tool
-            
+
         Returns:
             self for method chaining
         """
-        self.tool_calls.append({
-            "tool_name": name,
-            "args": args or {},
-        })
+        self.tool_calls.append(
+            {
+                "tool_name": name,
+                "args": args or {},
+            }
+        )
         return self
 
     def set_last_message(self, text: str) -> "RunResult":
         """Set the last message from the assistant.
-        
+
         Args:
             text: The text of the last message
-            
+
         Returns:
             self for method chaining
         """
@@ -225,17 +227,17 @@ class RunResult:
 
     def complete(self) -> "RunResult":
         """Mark the run as complete and calculate duration.
-        
+
         Returns:
             self for method chaining
         """
         self.end_time = time.time()
         self.duration_ms = int((self.end_time - self.start_time) * 1000)
         return self
-        
+
     def finish(self) -> "RunResult":
         """Alias for complete() for API consistency.
-        
+
         Returns:
             self for method chaining
         """

@@ -24,9 +24,7 @@ def index_lines(content: str) -> tuple[list[int], int]:
     return lines, len(lines)
 
 
-def get_page_content(
-    content: str, lines: list[int], page_size: int, start_pos: int
-) -> tuple[str, dict[str, Any]]:
+def get_page_content(content: str, lines: list[int], page_size: int, start_pos: int) -> tuple[str, dict[str, Any]]:
     """Get content for a specific page position with line-aware pagination.
 
     Args:
@@ -178,9 +176,7 @@ def extract_content_by_mode(
     if mode == "line":
         # Validate line range
         if start < 1 or start > total_lines:
-            raise ValueError(
-                f"Invalid line start position. Valid range: 1-{total_lines}"
-            )
+            raise ValueError(f"Invalid line start position. Valid range: 1-{total_lines}")
 
         end_line = min(start + count - 1, total_lines)
 
@@ -216,9 +212,7 @@ def extract_content_by_mode(
 
         # Validate char range
         if start < 0 or start >= content_length:
-            raise ValueError(
-                f"Invalid character start position. Valid range: 0-{content_length - 1}"
-            )
+            raise ValueError(f"Invalid character start position. Valid range: 0-{content_length - 1}")
 
         end_char = min(start + count, content_length)
 
@@ -273,9 +267,7 @@ def extract_content_by_mode(
             last_page_info = None
 
             for p in range(start, end_page + 1):
-                section_content, position_info = get_page_content(
-                    content, lines, page_size, p
-                )
+                section_content, position_info = get_page_content(content, lines, page_size, p)
                 all_content.append(section_content)
 
                 if p == start:
@@ -301,9 +293,7 @@ def extract_content_by_mode(
 
         else:
             # Single page case
-            content_to_return, position_info = get_page_content(
-                content, lines, page_size, start
-            )
+            content_to_return, position_info = get_page_content(content, lines, page_size, start)
 
             # Create the response metadata
             metadata = {

@@ -4,6 +4,7 @@ This module contains the FileDescriptorManager class that centrally manages
 file descriptors, their creation, access, and lifecycle within an LLMProcess.
 """
 
+import copy
 import logging
 import os
 import time
@@ -76,9 +77,7 @@ class FileDescriptorManager:
         """
         return tool_name in self.fd_related_tools
 
-    def create_fd_from_tool_result(
-        self, content: str, tool_name: Optional[str] = None
-    ) -> tuple:
+    def create_fd_from_tool_result(self, content: str, tool_name: Optional[str] = None) -> tuple:
         """Create a file descriptor from tool result content if needed.
 
         Args:
@@ -111,9 +110,7 @@ class FileDescriptorManager:
         """
         self.fd_related_tools.add(tool_name)
 
-    def create_fd_content(
-        self, content: str, page_size: int | None = None, source: str = "tool_result"
-    ) -> str:
+    def create_fd_content(self, content: str, page_size: int | None = None, source: str = "tool_result") -> str:
         """Create a new file descriptor for large content.
 
         Args:
@@ -145,9 +142,7 @@ class FileDescriptorManager:
         }
 
         # Generate preview content (first page)
-        preview_content, preview_info = get_page_content(
-            content, lines, page_size, start_pos=1
-        )
+        preview_content, preview_info = get_page_content(content, lines, page_size, start_pos=1)
 
         # Calculate the actual number of pages by simulating pagination
         num_pages = calculate_total_pages(content, lines, page_size)
@@ -167,9 +162,7 @@ class FileDescriptorManager:
             "source": source,
         }
 
-        logger.debug(
-            f"Created file descriptor {fd_id} with {num_pages} pages, {total_lines} lines, source: {source}"
-        )
+        logger.debug(f"Created file descriptor {fd_id} with {num_pages} pages, {total_lines} lines, source: {source}")
 
         # Format the response in standardized XML format
         return format_fd_result(fd_result)
@@ -216,9 +209,7 @@ class FileDescriptorManager:
 
         # Validate mode parameter
         if mode not in ["page", "line", "char"]:
-            error_msg = (
-                f"Invalid mode: {mode}. Valid options are 'page', 'line', or 'char'."
-            )
+            error_msg = f"Invalid mode: {mode}. Valid options are 'page', 'line', or 'char'."
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -403,45 +394,11 @@ class FileDescriptorManager:
         fd_id = fd_xml.split('fd="')[1].split('"')[0]
 
         # Format a user message that references the file descriptor
-        formatted_message = format_user_input_reference(
-            user_input, fd_id, max_preview_chars=self.max_input_chars // 20
-        )
+        formatted_message = format_user_input_reference(user_input, fd_id, max_preview_chars=self.max_input_chars // 20)
 
         return formatted_message
 
-    def _calculate_total_pages(self, fd_id: str) -> int:
-        """Calculate the total number of pages in a file descriptor.
-
-        This is provided for backward compatibility with tests.
-
-        Args:
-            fd_id: The file descriptor ID
-
-        Returns:
-            The total number of pages
-        """
-        if fd_id not in self.file_descriptors:
-            return 0
-
-        fd_entry = self.file_descriptors[fd_id]
-
-        # If total_pages is already calculated, return it
-        if "total_pages" in fd_entry:
-            return fd_entry["total_pages"]
-
-        content = fd_entry["content"]
-        lines = fd_entry["lines"]
-        page_size = fd_entry["page_size"]
-
-        # Calculate using the paginator function
-        pages = calculate_total_pages(content, lines, page_size)
-        fd_entry["total_pages"] = pages
-
-        return pages
-
-    def extract_references_from_message(
-        self, assistant_message: str
-    ) -> list[dict[str, str]]:
+    def extract_references_from_message(self, assistant_message: str) -> list[dict[str, str]]:
         """Extract references from an assistant message and store in FD system."""
         if not self.enable_references:
             return []
@@ -473,16 +430,14 @@ class FileDescriptorManager:
 
     def clone(self) -> "FileDescriptorManager":
         """Return a deep‑cloned copy of this manager for forked processes.
-        
+
         This method creates a complete, independent copy of the file descriptor manager,
         including all file descriptors and settings. It's used specifically by the
         fork tool to ensure proper isolation between parent and child processes.
-        
+
         Returns:
             A deep copy of this FileDescriptorManager with independent state
         """
-        import copy
-
         cloned = FileDescriptorManager(
             default_page_size=self.default_page_size,
             max_direct_output_chars=self.max_direct_output_chars,

@@ -14,11 +14,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin.spawn import spawn_tool
+
 from tests.conftest import create_test_llmprocess_directly
 
 
@@ -35,7 +35,8 @@ def mock_linked_programs(temp_dir):
     # Create main program TOML
     main_toml = temp_dir / "main.toml"
     with open(main_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "main-model"
         provider = "anthropic"
@@ -44,36 +45,41 @@ def mock_linked_programs(temp_dir):
         system_prompt = "Main program"
 
         [tools]
-        enabled = ["spawn"]
+        builtin = ["spawn"]
 
         [linked_programs]
         helper = "helper.toml"
         expert = "expert.toml"
-        """)
+        """
+        )
 
     # Create helper program TOML
     helper_toml = temp_dir / "helper.toml"
     with open(helper_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "helper-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Helper program"
-        """)
+        """
+        )
 
     # Create expert program TOML
     expert_toml = temp_dir / "expert.toml"
     with open(expert_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "expert-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Expert program"
-        """)
+        """
+        )
 
     return {
         "main_toml": main_toml,
@@ -88,7 +94,8 @@ def mock_linked_programs_with_descriptions(temp_dir):
     # Create main program TOML with descriptions
     main_toml = temp_dir / "main_with_desc.toml"
     with open(main_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "main-model"
         provider = "anthropic"
@@ -97,36 +104,41 @@ def mock_linked_programs_with_descriptions(temp_dir):
         system_prompt = "Main program"
 
         [tools]
-        enabled = ["spawn"]
+        builtin = ["spawn"]
 
         [linked_programs]
         helper = { path = "helper_with_desc.toml", description = "A helper program that provides assistance" }
         expert = { path = "expert_with_desc.toml", description = "An expert program with specialized knowledge" }
-        """)
+        """
+        )
 
     # Create helper program TOML
     helper_toml = temp_dir / "helper_with_desc.toml"
     with open(helper_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "helper-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Helper program"
-        """)
+        """
+        )
 
     # Create expert program TOML
     expert_toml = temp_dir / "expert_with_desc.toml"
     with open(expert_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "expert-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Expert program"
-        """)
+        """
+        )
 
     return {
         "main_toml": main_toml,
@@ -141,7 +153,8 @@ def mock_nested_linked_programs(temp_dir):
     # Create main program TOML
     main_toml = temp_dir / "main_nested.toml"
     with open(main_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "main-model"
         provider = "anthropic"
@@ -150,51 +163,58 @@ def mock_nested_linked_programs(temp_dir):
         system_prompt = "Main program"
 
         [tools]
-        enabled = ["spawn"]
+        builtin = ["spawn"]
 
         [linked_programs]
         helper = "helper_nested.toml"
         expert = "expert_nested.toml"
-        """)
+        """
+        )
 
     # Create helper program TOML that links to utility
     helper_toml = temp_dir / "helper_nested.toml"
     with open(helper_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "helper-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Helper program"
-        
+
         [linked_programs]
         utility = "utility.toml"
-        """)
+        """
+        )
 
     # Create expert program TOML
     expert_toml = temp_dir / "expert_nested.toml"
     with open(expert_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "expert-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Expert program"
-        """)
+        """
+        )
 
     # Create utility program TOML
     utility_toml = temp_dir / "utility.toml"
     with open(utility_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "utility-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Utility program"
-        """)
+        """
+        )
 
     return {
         "main_toml": main_toml,
@@ -204,7 +224,7 @@ def mock_nested_linked_programs(temp_dir):
     }
 
 
-def test_compile_basic_linking(mock_linked_programs):
+def test_compile_basic_program_linking(mock_linked_programs):
     """Test compiling a program with basic linked programs."""
     # Compile the main program
     program = LLMProgram.from_toml(mock_linked_programs["main_toml"])
@@ -269,7 +289,8 @@ def test_program_linking_paths(temp_dir):
     # Create main program in root dir
     main_toml = temp_dir / "main_path.toml"
     with open(main_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "main-model"
         provider = "anthropic"
@@ -279,19 +300,22 @@ def test_program_linking_paths(temp_dir):
 
         [linked_programs]
         subdir_expert = "subdir/expert_path.toml"
-        """)
+        """
+        )
 
     # Create expert program in subdirectory
     expert_toml = subdir / "expert_path.toml"
     with open(expert_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "expert-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Expert program"
-        """)
+        """
+        )
 
     # Compile the main program
     program = LLMProgram.from_toml(main_toml)
@@ -310,7 +334,7 @@ async def test_program_start_with_linked_programs(mock_linked_programs):
     program.compile()
 
     # Patch the get_provider_client function to avoid actual API calls
-    with patch("llmproc.providers.get_provider_client") as mock_get_client:
+    with patch("llmproc.program_exec.get_provider_client") as mock_get_client:
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
@@ -328,7 +352,7 @@ async def test_program_start_with_linked_programs(mock_linked_programs):
 
 
 @pytest.mark.asyncio
-async def test_spawn_tool_functionality():
+async def test_spawn_tool_in_linked_programs():
     """Test the spawn tool functionality for program linking."""
     # Create a mock for program_exec.create_process
     with patch("llmproc.program_exec.create_process") as mock_create_process:
@@ -405,7 +429,7 @@ async def test_process_with_linked_programs():
     mock_client.messages.create = AsyncMock(return_value=mock_response)
 
     # Start the process with mocked client
-    with patch("llmproc.providers.get_provider_client", return_value=mock_client):
+    with patch("llmproc.program_exec.get_provider_client", return_value=mock_client):
         process = await program.start()
 
         # Verify that the process has the linked program

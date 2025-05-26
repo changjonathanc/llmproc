@@ -4,7 +4,6 @@ import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin import BUILTIN_TOOLS
 from llmproc.tools.builtin.integration import load_builtin_tools
@@ -42,6 +41,7 @@ def test_schema_modifier_in_register_tool():
 
     # Verify schema_modifier is stored in metadata
     from llmproc.common.metadata import get_tool_meta
+
     meta = get_tool_meta(test_function)
     assert meta.schema_modifier == test_modifier
 
@@ -81,10 +81,10 @@ def test_load_builtin_tools_uses_mapping():
 
 def test_spawn_tool_schema_modifier():
     """Test that spawn tool's schema modifier is applied."""
-    from llmproc.tools.builtin.spawn import modify_spawn_schema, spawn_tool
-
     # Verify spawn tool has schema_modifier in metadata
     from llmproc.common.metadata import get_tool_meta
+    from llmproc.tools.builtin.spawn import modify_spawn_schema, spawn_tool
+
     meta = get_tool_meta(spawn_tool)
     assert meta.schema_modifier == modify_spawn_schema
 
@@ -187,17 +187,19 @@ def test_toml_string_to_function_conversion():
 
     # Create a temporary TOML file with string tool names
     with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as temp_file:
-        temp_file.write("""
+        temp_file.write(
+            """
         [model]
         name = "test-model"
         provider = "anthropic"
-        
+
         [prompt]
         system_prompt = "Test system prompt"
-        
+
         [tools]
-        enabled = ["calculator", "read_file"]
-        """)
+        builtin = ["calculator", "read_file"]
+        """
+        )
         temp_path = temp_file.name
 
     try:
@@ -248,7 +250,8 @@ def test_program_validates_tool_dependencies():
     program.register_tools([spawn_tool])
 
     # Spawn tool compilation should complete with proper linked programs
-    program.compile()
+    with pytest.warns(UserWarning):
+        program.compile()
     assert program.compiled
 
     # FD tool compilation should complete with FD system configured
@@ -296,6 +299,3 @@ async def test_direct_tool_registration():
     # Verify that tools were registered directly to the runtime registry
     assert "calculator" in manager.runtime_registry.tool_handlers
     assert "read_file" in manager.runtime_registry.tool_handlers
-
-    # Since we've removed _load_builtin_tools and register_system_tools methods,
-    # We just verify that direct registration works.

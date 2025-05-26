@@ -9,7 +9,6 @@ import logging
 import time
 
 import pytest
-
 from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.common.results import ToolResult
 from llmproc.program import LLMProgram
@@ -50,7 +49,7 @@ async def test_goto_basic_functionality(goto_process, goto_tracker):
     """
     process = goto_process
     tracker = goto_tracker
-    
+
     # Register the tracker callback with the process
     process.add_callback(tracker)
 
@@ -87,33 +86,33 @@ async def test_goto_basic_functionality(goto_process, goto_tracker):
     assert tracker.goto_position == "msg_0", f"GOTO should target position msg_0, got: {tracker.goto_position}"
 
     # Log state lengths for debugging
-    logger.debug(f"State lengths: initial={initial_state_length}, mid={mid_state_length}, post-goto={post_goto_state_length}")
-    
+    logger.debug(
+        f"State lengths: initial={initial_state_length}, mid={mid_state_length}, post-goto={post_goto_state_length}"
+    )
+
     # After GOTO, we expect one of these message patterns:
     # Ideal minimal case (if model follows instructions exactly):
     # 1. User message with system note about GOTO (the reset point)
-    
+
     # More common case (with tool usage flow):
     # 1. User message with system note about GOTO (the reset point)
     # 2. Assistant message with tool use block
     # 3. User message with tool result
-    
+
     # Sometimes the model adds commentary:
     # 1. User message with system note about GOTO (the reset point)
     # 2. Assistant message with tool use block
     # 3. User message with tool result
     # 4. Assistant response message
-    
+
     # Allow for any of these patterns:
-    assert 1 <= len(process.state) <= 4, (
-        f"State after GOTO should contain 1-4 messages, but found {len(process.state)}"
-    )
+    assert 1 <= len(process.state) <= 4, f"State after GOTO should contain 1-4 messages, but found {len(process.state)}"
 
     # Let's check that the first message is the user message with the system note
     user_goto_message = process.state[0]
-    assert user_goto_message.get("role") == "user", (
-        f"First message should be from user, but got {user_goto_message.get('role')}"
-    )
+    assert (
+        user_goto_message.get("role") == "user"
+    ), f"First message should be from user, but got {user_goto_message.get('role')}"
     system_note = user_goto_message.get("content", "")
     logger.debug(f"System note: {system_note}")
 
@@ -129,7 +128,7 @@ async def test_goto_basic_functionality(goto_process, goto_tracker):
         if msg.get("role") == "assistant":
             assistant_found = True
             break
-    
+
     assert assistant_found, "No assistant message found in state"
 
     # Log minimal state information
@@ -152,16 +151,3 @@ async def test_goto_basic_functionality(goto_process, goto_tracker):
     logger.info(f"Mid state: {mid_state_length} messages")
     logger.info(f"After GOTO: {post_goto_state_length} messages")
     logger.info(f"Final state: {final_state_length} messages")
-
-
-# Note: This test was removed as it's redundant with test_goto_basic_functionality
-# and test_goto_context_compaction.py, which provide more comprehensive testing of
-# conversation state management and topic transitions.
-
-
-# Note: This test was removed as it's redundant with test_goto_basic_functionality
-# and test_goto_context_compaction.py, which provide more comprehensive testing.
-
-
-# Note: This test has been replaced by the more comprehensive test_goto_context_compaction.py
-# which demonstrates the same functionality with clearer prompts and better assertions.

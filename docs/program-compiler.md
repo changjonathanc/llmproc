@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Program Compiler feature provides a robust way to validate, load, and process TOML program files before instantiating an `LLMProcess`. This separation of concerns makes the codebase more maintainable and easier to extend. The compiler now uses a global registry and builds a complete object graph of compiled programs.
+The Program Compiler feature provides a robust way to validate, load, and process configuration files (TOML or YAML) before instantiating an `LLMProcess`. This separation of concerns makes the codebase more maintainable and easier to extend. The compiler now uses a global registry and builds a complete object graph of compiled programs.
 
 ## Key Benefits
 
@@ -78,14 +78,14 @@ program = LLMProgram.from_toml("path/to/program.toml")
 async def main():
     # Start the process (handles async initialization)
     process = await program.start()
-    
+
     # Get metrics for the run
     run_result = await process.run("Hello, how are you?")
-    
+
     # Get the assistant's response
     response = process.get_last_message()
     print(f"Response: {response}")
-    
+
     # Display metrics
     print(f"API calls: {run_result.api_calls}")
     print(f"Duration: {run_result.duration_ms}ms")
@@ -103,21 +103,21 @@ from llmproc import LLMProgram
 async def main():
     program = LLMProgram.from_toml("path/to/program.toml")
     process = await program.start()
-    
+
     # Define callbacks
     callbacks = {
         "on_tool_start": lambda tool_name, args: print(f"Starting tool: {tool_name}"),
         "on_tool_end": lambda tool_name, result: print(f"Tool completed: {tool_name}"),
         "on_response": lambda content: print(f"Received response: {content[:30]}...")
     }
-    
+
     # Run with callbacks
     run_result = await process.run("What can you tell me about Python?", callbacks=callbacks)
-    
+
     # Get the final response
     response = process.get_last_message()
     print(f"Final response: {response}")
-    
+
     # Print run metrics
     print(f"Run completed in {run_result.duration_ms}ms")
     print(f"API calls: {run_result.api_calls}")
@@ -132,7 +132,7 @@ from llmproc import LLMProgram
 
 # Create a program and start the process in one session
 program = LLMProgram.from_toml("path/to/program.toml")
-process = program.start()  # Creates event loop internally for sync calls
+process = program.start_sync()
 ```
 
 ## Validation Features
@@ -173,7 +173,7 @@ A compiled program includes these components:
 - `linked_programs`: Dictionary of linked programs (references to Program objects)
 - `base_dir`: Base directory for resolving relative paths
 - `compiled`: Flag indicating whether the program is fully compiled
-- `source_path`: Path to the source TOML file
+- `source_path`: Path to the source configuration file
 - `env_info`: Environment information configuration
 
 ## RunResult Object
@@ -183,9 +183,9 @@ The new `RunResult` class provides detailed metrics about each run:
 ```python
 class RunResult:
     """Contains metadata about a process run."""
-    
+
     api_call_infos: List[Dict[str, Any]]  # Raw API response data
-    api_calls: int                        # Number of API calls made 
+    api_calls: int                        # Number of API calls made
     start_time: float                     # When the run started
     end_time: Optional[float]             # When the run completed
     duration_ms: int                      # Duration in milliseconds
@@ -218,10 +218,10 @@ from llmproc import LLMProgram
 async def main():
     # Load the program configuration
     main_program = LLMProgram.from_toml("path/to/main.toml")
-    
+
     # Start the process with async initialization
     main_process = await main_program.start()
-    
+
     # Linked programs are instantiated only when used via tools
     run_result = await main_process.run("Use the expert to analyze this code.")
 
@@ -231,7 +231,7 @@ asyncio.run(main())
 ## Implementation Details
 
 - Uses Pydantic models for validation
-- Resolves relative file paths based on the TOML file location
+- Resolves relative file paths based on the configuration file location
 - Extracts API parameters for convenient access
 - Provides both synchronous compilation and async initialization methods
 - Uses a singleton registry to avoid redundant compilation

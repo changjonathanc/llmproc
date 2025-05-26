@@ -19,7 +19,7 @@ This document outlines additional tests needed to improve coverage and robustnes
 
 **Implementation Notes:**
 ```python
-# Create test_cli.py with:
+# Create tests/cli/test_cli.py with:
 
 import pytest
 from click.testing import CliRunner

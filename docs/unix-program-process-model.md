@@ -40,20 +40,20 @@ Program → Process → ToolManager → Process (circular dependency)
    - Validates settings
    - Defines tools and their schemas
    - Contains static definitions
-   
+
 2. **LLMProcess**: Manages runtime execution
    - Contains conversation state
    - Coordinates API calls
    - Manages file descriptors
    - Provides runtime context for tools
-   
+
 3. **Runtime Context**: Dependency injection container
    - Contains references to runtime components (process, file descriptors, etc.)
    - Injected into tools during execution
    - Decouples tools from process implementation
 
 4. **Context-Aware Tools**: Tools that explicitly declare their runtime dependencies
-   - Defined with `register_tool(requires_context=True)` 
+   - Defined with `register_tool(requires_context=True)`
    - Receive runtime context during execution
    - Extract only the dependencies they need
 
@@ -74,10 +74,10 @@ async def my_tool(param: str, runtime_context=None):
     # Extract dependencies - validation happens automatically
     process = runtime_context["process"]
     fd_manager = runtime_context["fd_manager"]
-    
+
     # Use dependencies
     # ...
-    
+
     return result
 ```
 
@@ -122,7 +122,7 @@ The configuration dictionary contains all dependencies tools need at initializat
 Key components in the configuration:
 
 1. **Resource References**: References to resources like `fd_manager` and `linked_programs`
-2. **Capability Flags**: Flags like `has_linked_programs` and `mcp_enabled` 
+2. **Capability Flags**: Flags like `has_linked_programs` and `mcp_enabled`
 3. **Configuration Paths**: Paths like `mcp_config_path` for external resources
 
 This approach separates tool registration (which doesn't need process) from tool execution (which uses runtime context).
@@ -163,19 +163,19 @@ from llmproc.common.results import ToolResult
 )
 async def my_tool(param1: str, param2: int = 0, runtime_context=None) -> ToolResult:
     """A tool that requires access to the file descriptor manager.
-    
+
     Args:
         param1: First parameter description
         param2: Second parameter description
         runtime_context: Runtime context with fd_manager (validated automatically)
-        
+
     Returns:
         ToolResult with the operation result
     """
     # The decorator already validated fd_manager is present
     # So we can safely access it directly
     fd_manager = runtime_context["fd_manager"]
-    
+
     try:
         # Tool implementation
         result = f"Processed {param1} with value {param2}"
@@ -243,15 +243,15 @@ import pytest
 async def test_my_tool():
     # Create mock dependencies
     mock_fd_manager = MockFileDescriptorManager()
-    
+
     # Create mock runtime context
     mock_context = {
         "fd_manager": mock_fd_manager
     }
-    
+
     # Call tool with mock context
     result = await my_tool({"param1": "test"}, runtime_context=mock_context)
-    
+
     # Verify result
     assert result.is_error is False
     assert "Processed test" in result.content
@@ -292,7 +292,7 @@ Tools should be initialized with configuration dictionaries, not direct process 
 # ANTI-PATTERN: Direct process parameter
 async def tool_handler(args, process):  # WRONG!
     # ...
-    
+
 # CORRECT PATTERN: Use register_tool with requires_context
 @register_tool(requires_context=True)
 async def tool_handler(args, runtime_context=None):  # Correct!
@@ -328,7 +328,7 @@ from llmproc.tools.function_tools import register_tool
 async def tool_handler(args, runtime_context=None):
     # Get process from context
     process = runtime_context.get("process")
-    
+
     # Use process
     result = process_data(process, args)
     return result

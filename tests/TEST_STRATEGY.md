@@ -13,22 +13,22 @@ Tests that validate core functionality of the LLMProc framework:
 
 ### Feature Tests
 Tests for specific features of the LLMProc framework:
-- **File Descriptor:** 
+- **File Descriptor:**
   - test_file_descriptor_core.py (core functionality unit tests)
   - test_file_descriptor_tools.py (FD-related tools tests)
   - test_fd_spawn_integration.py (FD with spawn integration)
   - test_fd_all_features.py (testing TOML configurations)
   - test_fd_to_file_tool.py (specific tool tests)
-- **Program Linking:** test_program_linking_core.py, test_program_linking_integration.py
-- **Goto:** test_goto_unit.py, test_goto_integration.py
-- **Fork:** test_fork.py
-- **MCP:** test_mcp_core.py, test_mcp_integration.py
+  - **Program Linking:** test_program_linking_core.py, test_program_linking_integration.py
+  - **Goto:** unit/test_goto_tool.py, test_goto_integration.py
+  - **Fork:** test_fork.py
+  - **MCP:** mcp/test_mcp_core.py, mcp/test_mcp_integration.py
 
 ### Example/Demo Tests
 Tests that validate example configurations and demo features:
 - `test_example_programs.py`
 - `examples/test_goto_context_compaction.py` (tests examples/scripts/goto_context_compaction_demo.py)
-- `test_multiply_example.py` (tests examples/multiply_example.py)
+  - `examples/test_multiply_example.py` (tests examples/multiply_example.py)
 
 #### Testing Example TOML Files
 
@@ -51,7 +51,7 @@ When testing example TOML files:
        # Store original directory and change to examples
        original_dir = os.getcwd()
        os.chdir(Path(__file__).parent.parent / "examples")
-       
+
        try:
            # Run CLI with example TOML
            result = subprocess.run(
@@ -72,7 +72,7 @@ Tests for specific LLM providers:
 
 ### Integration Tests
 Tests that validate the interaction between multiple components:
-- `test_integration.py`
+  - `test_runtime_context_integration.py`
 - `test_program_linking_integration.py`
 - `test_mcp_integration.py`
 
@@ -134,9 +134,9 @@ def test_cli_functionality(mock_run):
     # Mock the run method to return a predefined response
     mock_run.return_value = RunResult()
     mock_run.return_value.set_response("Mocked response")
-    
+
     # Test CLI with the mock
-    result = subprocess.run(["llmproc-demo", "config.toml", "-p", "test prompt"], 
+    result = subprocess.run(["llmproc-demo", "config.toml", "-p", "test prompt"],
                            capture_output=True, text=True)
     assert "Mocked response" in result.stdout
 ```

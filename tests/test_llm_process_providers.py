@@ -5,7 +5,6 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc import LLMProcess
 
 
@@ -40,6 +39,7 @@ def test_openai_provider_run(mock_openai, mock_env):
 
     # Create LLMProcess using the helper function
     from llmproc.program import LLMProgram
+
     from tests.conftest import create_test_llmprocess_directly
 
     # Create program and process
@@ -56,10 +56,32 @@ def test_openai_provider_run(mock_openai, mock_env):
         state=[],  # Start with empty state
     )
 
-    # Mock the internal async method to return a known value
-    with patch.object(process, "_async_run", return_value="Test response from OpenAI"):
-        # Use asyncio.run to handle the async run method
-        response = asyncio.run(process.run("Hello!"))
+    # Create a SyncLLMProcess for synchronous testing
+    from llmproc import SyncLLMProcess
+
+    # Create a sync process wrapper around our mocked process (without passing executor)
+    sync_process = SyncLLMProcess(
+        _loop=asyncio.new_event_loop(),
+        **{
+            k: getattr(process, k)
+            for k in [
+                "program",
+                "model_name",
+                "provider",
+                "original_system_prompt",
+                "system_prompt",
+                "display_name",
+                "state",
+                "client",
+                "tool_manager",
+            ]
+        },
+    )
+
+    # Now patch the executor on the sync process
+    with patch.object(sync_process.executor, "run", return_value="Test response from OpenAI"):
+        # Use the synchronous run method
+        response = sync_process.run("Hello!")
 
         # Manually update the state to match expected result
         process.state = [
@@ -93,6 +115,7 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
 
     # Create LLMProcess using the helper function
     from llmproc.program import LLMProgram
+
     from tests.conftest import create_test_llmprocess_directly
 
     # Create program and process
@@ -109,12 +132,32 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
         state=[],  # Start with empty state
     )
 
-    # Mock the internal async method to return a known value
-    with patch.object(
-        process, "_async_run", return_value="Test response from Anthropic"
-    ):
-        # Use asyncio.run to handle the async run method
-        response = asyncio.run(process.run("Hello!"))
+    # Create a SyncLLMProcess for synchronous testing
+    from llmproc import SyncLLMProcess
+
+    # Create a sync process wrapper around our mocked process (without passing executor)
+    sync_process = SyncLLMProcess(
+        _loop=asyncio.new_event_loop(),
+        **{
+            k: getattr(process, k)
+            for k in [
+                "program",
+                "model_name",
+                "provider",
+                "original_system_prompt",
+                "system_prompt",
+                "display_name",
+                "state",
+                "client",
+                "tool_manager",
+            ]
+        },
+    )
+
+    # Now patch the executor on the sync process
+    with patch.object(sync_process.executor, "run", return_value="Test response from Anthropic"):
+        # Use the synchronous run method
+        response = sync_process.run("Hello!")
 
         # Manually update the state to match expected result
         process.state = [
@@ -148,6 +191,7 @@ def test_anthropic_vertex_provider_run(mock_vertex, mock_env):
 
     # Create LLMProcess using the helper function
     from llmproc.program import LLMProgram
+
     from tests.conftest import create_test_llmprocess_directly
 
     # Create program and process
@@ -164,12 +208,32 @@ def test_anthropic_vertex_provider_run(mock_vertex, mock_env):
         state=[],  # Start with empty state
     )
 
-    # Mock the internal async method to return a known value
-    with patch.object(
-        process, "_async_run", return_value="Test response from Anthropic Vertex"
-    ):
-        # Use asyncio.run to handle the async run method
-        response = asyncio.run(process.run("Hello!"))
+    # Create a SyncLLMProcess for synchronous testing
+    from llmproc import SyncLLMProcess
+
+    # Create a sync process wrapper around our mocked process (without passing executor)
+    sync_process = SyncLLMProcess(
+        _loop=asyncio.new_event_loop(),
+        **{
+            k: getattr(process, k)
+            for k in [
+                "program",
+                "model_name",
+                "provider",
+                "original_system_prompt",
+                "system_prompt",
+                "display_name",
+                "state",
+                "client",
+                "tool_manager",
+            ]
+        },
+    )
+
+    # Now patch the executor on the sync process
+    with patch.object(sync_process.executor, "run", return_value="Test response from Anthropic Vertex"):
+        # Use the synchronous run method
+        response = sync_process.run("Hello!")
 
         # Manually update the state to match expected result
         process.state = [

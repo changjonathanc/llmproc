@@ -8,14 +8,13 @@ from tempfile import NamedTemporaryFile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc import LLMProcess
 
 
 @pytest.fixture
 def mock_get_provider_client():
     """Mock the provider client function."""
-    with patch("llmproc.providers.get_provider_client") as mock_get_client:
+    with patch("llmproc.program_exec.get_provider_client") as mock_get_client:
         # Set up a mock client that will be returned
         mock_client = MagicMock()
 
@@ -84,7 +83,7 @@ async def test_initialization(mock_env, mock_get_provider_client, create_test_pr
 
 
 @pytest.mark.asyncio
-async def test_run(mock_env, mock_get_provider_client, create_test_process):
+async def test_llm_process_run_updates_state(mock_env, mock_get_provider_client, create_test_process):
     """Test that LLMProcess.run works correctly."""
     # Completely mock out the OpenAI client creation
     with patch("openai.OpenAI"):
@@ -98,9 +97,9 @@ async def test_run(mock_env, mock_get_provider_client, create_test_process):
         )
         process = await create_test_process(program)
 
-        # Mock the _async_run method to avoid dealing with async complexities
-        with patch.object(process, "_async_run", return_value="Test response"):
-            # Run the process (will synchronously call our mocked _async_run)
+        # Mock the executor run method to avoid dealing with async complexities
+        with patch.object(process.executor, "run", return_value="Test response"):
+            # Run the process using the mocked executor
             response = await process.run("Hello!")
 
         # Manually update state to match what would happen (since we mocked _async_run)
@@ -118,9 +117,6 @@ async def test_run(mock_env, mock_get_provider_client, create_test_process):
     }
     assert process.state[1] == {"role": "user", "content": "Hello!"}
     assert process.state[2] == {"role": "assistant", "content": "Test response"}
-
-
-# reset_state tests have been removed as they're not needed for now
 
 
 @pytest.mark.asyncio
@@ -197,13 +193,15 @@ async def test_llm_uses_preloaded_content_at_creation():
 
     # Create a temporary test file with the secret flag
     with NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:
-        temp_file.write(f"""
+        temp_file.write(
+            f"""
         This is a test document containing a special flag.
 
         Important: The secret flag is {secret_flag}
 
         Please remember this flag as it will be used to verify preloading functionality.
-        """)
+        """
+        )
         temp_path = temp_file.name
 
     try:
@@ -228,9 +226,7 @@ async def test_llm_uses_preloaded_content_at_creation():
         response = process.get_last_message()
 
         # Assert the secret flag is in the response
-        assert secret_flag in response, (
-            f"Secret flag '{secret_flag}' not found in LLM response: '{response}'"
-        )
+        assert secret_flag in response, f"Secret flag '{secret_flag}' not found in LLM response: '{response}'"
 
     finally:
         os.unlink(temp_path)
@@ -370,7 +366,7 @@ async def test_mcp_tools_initialization(mock_env, mock_get_provider_client):
 
     # Mock the import in integration.py
     with (
-        patch.dict("sys.modules", {"mcp_registry": MagicMock()}),
+        patch.dict("sys.modules", {"llmproc.mcp_registry": MagicMock()}),
         patch.object(program, "get_tool_configuration", return_value=mock_config),
         patch.object(program.tool_manager, "initialize_tools") as mock_init_tools,
     ):
@@ -407,7 +403,7 @@ async def test_mcp_tool_initialization_in_create_process(mock_env, mock_get_prov
     # Mock program_exec.create_process to verify how it handles MCP initialization
     with (
         patch("llmproc.program_exec.create_process") as mock_create_process,
-        patch.dict("sys.modules", {"mcp_registry": MagicMock()}),
+        patch.dict("sys.modules", {"llmproc.mcp_registry": MagicMock()}),
     ):
         # Configure mock
         mock_process = MagicMock()

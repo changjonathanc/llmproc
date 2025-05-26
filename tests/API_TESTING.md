@@ -129,11 +129,11 @@ async def test_feature_name(claude_process_with_tools):
     # Arrange
     process = claude_process_with_tools
     prompt = "Test prompt"
-    
+
     # Act
     with timed_test(timeout_seconds=8.0):
         result = await process.run(prompt)
-    
+
     # Assert
     assert_successful_response(result)
     assert "Expected output" in process.get_last_message()
@@ -151,11 +151,11 @@ def test_function_unit():
     """Test description."""
     # Arrange
     mock_dependency = MagicMock()
-    
+
     # Act
     with patch("llmproc.module.dependency", mock_dependency):
         result = function_to_test("input")
-    
+
     # Assert
     assert result == "expected"
     mock_dependency.assert_called_once_with("input")
@@ -182,11 +182,11 @@ async def test_specific_behavior(configured_process):
     """Test specific behavior."""
     # Arrange
     process = configured_process
-    
+
     # Act
     with timed_test(timeout_seconds=8.0):
         result = await process.run("Test input")
-    
+
     # Assert
     assert result.is_success
     assert "Expected output" in process.get_last_message()
@@ -201,20 +201,20 @@ from tests.patterns import timed_test
 @pytest.mark.anthropic_api
 class TestComplexFeature:
     """Test suite for complex feature requiring shared setup."""
-    
+
     @pytest.fixture(autouse=True)
     async def setup(self):
         """Set up complex test environment."""
         self.complex_setup = await create_complex_environment()
         yield
         await self.complex_setup.cleanup()
-    
+
     @pytest.mark.asyncio
     async def test_scenario_one(self, claude_base_process):
         """Test first scenario using shared setup."""
         # Arrange
         process = claude_base_process
-        
+
         # Act & Assert
         with timed_test():
             # Test using self.complex_setup
@@ -243,10 +243,10 @@ def test_config_validation(tmp_path: Path):
     [prompt]
     system_prompt = "Test prompt"
     """)
-    
+
     # Act
     program = LLMProgram.from_toml(config_file)
-    
+
     # Assert
     assert program.model_name == "test-model"
     assert program.provider == "test-provider"
@@ -300,9 +300,9 @@ When writing API tests, please follow these guidelines:
    ```python
    # Start timing
    start_time = time.time()
-   
+
    # Test logic here...
-   
+
    # Check timing
    duration = time.time() - start_time
    assert duration < 10.0, f"Test took too long: {duration:.2f}s > 10.0s timeout"

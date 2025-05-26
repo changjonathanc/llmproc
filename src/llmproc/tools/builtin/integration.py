@@ -15,6 +15,7 @@ from llmproc.common.results import ToolResult
 from llmproc.file_descriptors.constants import (
     FD_RELATED_TOOLS,
 )
+from llmproc.tools.builtin import BUILTIN_TOOLS
 
 # Import builtin tool components
 from llmproc.tools.builtin.calculator import calculator
@@ -24,6 +25,7 @@ from llmproc.tools.builtin.goto import handle_goto
 from llmproc.tools.builtin.list_dir import list_dir
 from llmproc.tools.builtin.read_file import read_file
 from llmproc.tools.builtin.spawn import spawn_tool
+from llmproc.tools.function_tools import create_tool_from_function
 from llmproc.tools.registry_data import get_function_tool_names
 from llmproc.tools.registry_helpers import extract_tool_components
 from llmproc.tools.tool_registry import ToolRegistry
@@ -49,8 +51,6 @@ def load_builtin_tools(registry: ToolRegistry) -> bool:
     logger.info("Loading builtin tools into registry")
 
     # Import function tools utilities and builtin tools
-    from llmproc.tools.builtin import BUILTIN_TOOLS
-    from llmproc.tools.function_tools import create_tool_from_function
 
     # Register each tool from the central mapping
     # Note: We don't pass config here since this is just initial catalog loading
@@ -97,8 +97,6 @@ def register_system_tools(
     logger.info(f"Starting system tools registration based on enabled list: {enabled_tools}")
 
     # Import necessary components
-    from llmproc.tools.builtin import BUILTIN_TOOLS
-    from llmproc.tools.function_tools import create_tool_from_function
 
     # Extract config components for dependency checking
     fd_manager = config.get("fd_manager")
@@ -174,18 +172,10 @@ def copy_tool_from_source_to_target(
 
     # Check if tool is already registered in target registry to avoid duplicates
     if tool_name in target_registry.tool_handlers:
-        logger.debug(
-            f"Tool {tool_name} already registered in target registry, skipping"
-        )
+        logger.debug(f"Tool {tool_name} already registered in target registry, skipping")
         return True
 
     # Register the tool with the target registry
     target_registry.register_tool(tool_name, handler, definition)
     logger.debug(f"Registered tool {tool_name} in target registry")
     return True
-
-
-# All deprecated helper functions have been removed.
-# Use register_system_tools instead, which provides a unified approach to tool registration.
-# For file descriptor tools, the fd_manager.register_fd_tool call happens during fd_manager initialization
-# in program_exec.py, which is a more appropriate place for this operation.

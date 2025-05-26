@@ -21,7 +21,7 @@ Explain what happened in each fork and how this feature is useful.
 max_tokens = 1000
 
 [tools]
-enabled = ["fork", "read_file"]
+builtin = ["fork", "read_file"]
 
 [demo]
 display_name = "Claude with Fork"

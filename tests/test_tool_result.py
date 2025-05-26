@@ -4,7 +4,6 @@ import json
 from typing import Any
 
 import pytest
-
 from llmproc.common.results import ToolResult
 
 
@@ -99,6 +98,6 @@ def test_tool_result_str():
 
     error_result = ToolResult.from_error("Error message")
     assert str(error_result) == "ToolResult(content=Error message, is_error=True, abort_execution=False)"
-    
+
     abort_result = ToolResult.from_abort("Abort operation")
     assert str(abort_result) == "ToolResult(content=Abort operation, is_error=False, abort_execution=True)"

@@ -29,7 +29,7 @@ Explain what the file descriptor system is and why it's useful for handling larg
 
 # Enable the file descriptor system and tools
 [tools]
-enabled = ["read_fd", "fd_to_file", "read_file"]
+builtin = ["read_fd", "fd_to_file", "read_file"]
 
 # Configure the file descriptor system
 [file_descriptor]

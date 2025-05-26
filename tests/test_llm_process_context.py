@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram

@@ -23,8 +23,8 @@ Unlike fork (which creates a copy of the current process), spawn creates a compl
 2. Its own separate conversation history
 3. Potentially different tools or capabilities
 
-spawn(program_name, prompt, additional_preload_files=None)
-- program_name: The name of the linked program to call (must be one of the available linked programs)
+- spawn(program_name, prompt, additional_preload_files=None)
+- program_name: The name of the linked program to call. Leave blank to spawn the current program when no linked programs are configured.
 - prompt: The prompt to send to the linked program
 - additional_preload_files: Optional list of file paths to preload into the child process's context
 
@@ -79,19 +79,19 @@ def modify_spawn_schema(schema: dict, config: dict) -> dict:
     name="spawn",
     description=SPAWN_DESCRIPTION,
     param_descriptions={
-        "program_name": "Name of the linked program to call",
+        "program_name": "Name of the linked program to call. Leave blank to spawn the current program",
         "prompt": "The prompt to send to the linked program",
         "additional_preload_files": "Optional list of file paths to preload into the child process's context",
     },
-    required=["program_name", "prompt"],
+    required=["prompt"],
     requires_context=True,
     required_context_keys=["process"],
     schema_modifier=modify_spawn_schema,
     access=AccessLevel.ADMIN,
 )
 async def spawn_tool(
-    program_name: str,
     prompt: str,
+    program_name: str = "",
     additional_preload_files: Optional[list[str]] = None,
     runtime_context: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
@@ -101,8 +101,8 @@ async def spawn_tool(
     to handle specialized tasks, with optional file preloading for context.
 
     Args:
-        program_name: The name of the linked program to call
         prompt: The prompt to send to the linked program
+        program_name: The name of the linked program to call. Leave blank to spawn the current program when no linked programs exist
         additional_preload_files: Optional list of file paths to preload
         runtime_context: Runtime context dictionary containing dependencies needed by the tool.
             Required keys: 'process' (LLMProcess instance with linked_programs)
@@ -128,16 +128,15 @@ async def spawn_tool(
         return ToolResult.from_error(error_msg)
 
     linked_programs = llm_process.linked_programs
-    if program_name not in linked_programs:
+    spawn_self = not program_name or not linked_programs
+
+    if not spawn_self and program_name not in linked_programs:
         # Create a formatted list of available programs with descriptions
         available_programs_list = []
         for name, program in linked_programs.items():
             description = ""
             # Try to get the description from various possible sources
-            if (
-                hasattr(llm_process, "linked_program_descriptions")
-                and name in llm_process.linked_program_descriptions
-            ):
+            if hasattr(llm_process, "linked_program_descriptions") and name in llm_process.linked_program_descriptions:
                 description = llm_process.linked_program_descriptions[name]
             elif hasattr(program, "description") and program.description:
                 description = program.description
@@ -153,8 +152,8 @@ async def spawn_tool(
         return ToolResult.from_error(error_msg)
 
     try:
-        # Get the linked program object
-        linked_program = linked_programs[program_name]
+        # Get the linked program object or fall back to the current program
+        linked_program = llm_process.program if spawn_self else linked_programs[program_name]
 
         # Import from program_exec to ensure consistent process creation
         from llmproc.program_exec import create_process
@@ -162,8 +161,8 @@ async def spawn_tool(
         # In the new architecture, linked_program should always be an LLMProgram instance
         # We create a process on-demand each time spawn is called
         linked_process = await create_process(linked_program, additional_preload_files)
-        
-        #------------------------------------------------------------------
+
+        # ------------------------------------------------------------------
         # Access‑level policy for spawned children
         #
         # – The *spawn* tool itself is marked as ADMIN, therefore the parent
@@ -180,7 +179,7 @@ async def spawn_tool(
         # – If the model later gains an "ADMIN_READ" capability (ADMIN
         #   without WRITE), we must revisit this logic and compute
         #   `min(parent_level, WRITE)` instead of hard‑coding WRITE.
-        #------------------------------------------------------------------
+        # ------------------------------------------------------------------
         linked_process.access_level = AccessLevel.WRITE
         if hasattr(linked_process, "tool_manager") and linked_process.tool_manager:
             linked_process.tool_manager.set_process_access_level(AccessLevel.WRITE)
@@ -191,10 +190,7 @@ async def spawn_tool(
             linked_process.file_descriptor_enabled = True
 
             # Create a FileDescriptorManager for the child if it doesn't already have one
-            if (
-                not hasattr(linked_process, "fd_manager")
-                or linked_process.fd_manager is None
-            ):
+            if not hasattr(linked_process, "fd_manager") or linked_process.fd_manager is None:
                 from llmproc.file_descriptors import FileDescriptorManager
 
                 linked_process.fd_manager = FileDescriptorManager(
@@ -205,21 +201,14 @@ async def spawn_tool(
                 )
 
             # Copy settings from parent to child
-            linked_process.references_enabled = getattr(
-                llm_process, "references_enabled", False
-            )
+            linked_process.references_enabled = getattr(llm_process, "references_enabled", False)
 
             # Copy all reference file descriptors (they are automatically shared)
             # This enables the child to access references created in the parent
             if linked_process.references_enabled:
                 for fd_id, fd_data in llm_process.fd_manager.file_descriptors.items():
-                    if (
-                        fd_id.startswith("ref:")
-                        and fd_id not in linked_process.fd_manager.file_descriptors
-                    ):
-                        linked_process.fd_manager.file_descriptors[fd_id] = (
-                            fd_data.copy()
-                        )
+                    if fd_id.startswith("ref:") and fd_id not in linked_process.fd_manager.file_descriptors:
+                        linked_process.fd_manager.file_descriptors[fd_id] = fd_data.copy()
                         logger.debug(f"Copied reference {fd_id} to child process")
 
         # Execute the prompt on the process

@@ -59,7 +59,7 @@ Here's a conversation example showing the GOTO tool in action:
 
 The conversation resets to:
 [msg_0] User: Hello, what can you help me with?
-[msg_1] User: 
+[msg_1] User:
 <system_message>
 GOTO tool used. Conversation reset to message msg_0. 3 messages were removed.
 </system_message>
@@ -83,12 +83,12 @@ The GOTO tool consists of several key components:
    - Messages are assigned integer IDs internally (0, 1, 2...)
    - IDs are formatted consistently for display (e.g., "[msg_0]")
    - The formatting is centralized and configurable
-   
-2. **Tool Definition**: 
+
+2. **Tool Definition**:
    - Contains detailed instructions for the LLM on when and how to use the time travel capability
    - Explains how to reference message IDs using the format visible in messages
-   
-3. **Handler Function**: 
+
+3. **Handler Function**:
    - Parses message IDs in the format that LLMs naturally use
    - Implements the state manipulation to reset the conversation
    - Formats system notes with appropriate XML tags

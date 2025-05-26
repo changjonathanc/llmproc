@@ -107,6 +107,37 @@ The `start()` method automatically:
 
 This is the preferred way to create a process from a program definition.
 
+## Creating Programs from Dictionaries
+
+You can create programs directly from Python dictionaries without configuration files:
+
+```python
+from llmproc import LLMProgram
+
+# Create from dictionary
+config = {
+    "model": {
+        "name": "claude-3-5-sonnet-20241022",
+        "provider": "anthropic"
+    },
+    "parameters": {
+        "temperature": 0.7,
+        "max_tokens": 1000
+    },
+    "tools": {
+        "builtin": ["read_file", "calculator"]
+    }
+}
+
+program = LLMProgram.from_dict(config)
+process = await program.start()
+```
+
+This is useful for:
+- Dynamic configuration generation
+- Testing with different configurations
+- Integrating with configuration management systems
+
 ## Advanced Configuration
 
 ### Environment Information
@@ -179,39 +210,48 @@ The Model Context Protocol (MCP) allows integration with external tool servers. 
 First, configure the MCP server connection:
 
 ```python
-# Set up MCP server configuration
+# Set up MCP server configuration from a JSON file
 program.configure_mcp(config_path="config/mcp_servers.json")
+
+# Or embed server definitions directly
+program.configure_mcp(servers={"calc": {"type": "stdio", "command": "echo"}})
 ```
 
 In your TOML configuration files, MCP server configuration is defined in the `[mcp]` section, and MCP tools are defined in the `[tools.mcp]` section:
 
 ```toml
 [mcp]
-config_path = "config/mcp_servers.json"
+config_path = "config/mcp_servers.json"  # or use inline servers
+#servers = { calc = { type = "stdio", command = "echo", args = ["calc"] } }
 
 # MCP tools configuration
 [tools.mcp]
 sequential-thinking = "all"  # Use all tools from this server
 github = ["search_repositories", "get_file_contents"]  # Specific tools
+# Example with description override
+#github = [
+#    { name = "search_repositories", access = "read", description = "Search GitHub" }
+#]
 ```
 
 #### Registering MCP Tools
 
-After setting up the server configuration, register MCP tools using the `MCPTool` class:
+After setting up the server configuration, register MCP tools using the
+`MCPServerTools` class:
 
 ```python
-from llmproc.tools.mcp import MCPTool
+from llmproc.tools.mcp import MCPServerTools
 
-# Register MCP tools using the MCPTool class
+# Register MCP tools using the MCPServerTools class
 program.register_tools([
     # Include all tools from the "calc" server
-    MCPTool(server="calc"),
+    MCPServerTools(server="calc"),
     # Include specific tools from the "github" server
-    MCPTool(server="github", names=["search_repositories", "get_file_contents"]),
+    MCPServerTools(server="github", names=["search_repositories", "get_file_contents"]),
     # Include a list of tools from the "weather" server
-    MCPTool(server="weather", names=["current", "forecast"]),
+    MCPServerTools(server="weather", names=["current", "forecast"]),
     # Include a single tool from the "code" server with READ access
-    MCPTool(server="code", names="explain", access="read")
+    MCPServerTools(server="code", names="explain", access="read")
 ])
 ```
 
@@ -220,7 +260,7 @@ program.register_tools([
 You can also set up everything at once in the constructor:
 
 ```python
-from llmproc.tools.mcp import MCPTool
+from llmproc.tools.mcp import MCPServerTools
 from llmproc.tools.builtin import calculator, read_file
 
 # Create program with MCP configuration and tools
@@ -233,8 +273,8 @@ program = LLMProgram(
     # Mix MCP tools with other tool types
     tools=[
         # MCP tools
-        MCPTool(server="calc"),
-        MCPTool(server="github", names="search_repositories"),
+        MCPServerTools(server="calc"),
+        MCPServerTools(server="github", names="search_repositories"),
         # Built-in tools
         calculator,
         read_file
@@ -251,7 +291,7 @@ This approach provides a clean separation between server configuration and tool 
 You can pass tools directly in the LLMProgram constructor:
 
 ```python
-# Using the direct constructor approach 
+# Using the direct constructor approach
 from llmproc.tools.builtin import calculator, read_file
 
 program = LLMProgram(

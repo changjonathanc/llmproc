@@ -10,25 +10,15 @@ import pytest
 def pytest_configure(config):
     """Register custom markers."""
     # API test markers
-    config.addinivalue_line(
-        "markers", "llm_api: mark test as requiring an LLM API call"
-    )
-    config.addinivalue_line(
-        "markers", "anthropic_api: mark test as requiring Anthropic API"
-    )
+    config.addinivalue_line("markers", "llm_api: mark test as requiring an LLM API call")
+    config.addinivalue_line("markers", "anthropic_api: mark test as requiring Anthropic API")
     config.addinivalue_line("markers", "openai_api: mark test as requiring OpenAI API")
     config.addinivalue_line("markers", "gemini_api: mark test as requiring Gemini API")
 
     # Test tier markers
-    config.addinivalue_line(
-        "markers", "essential_api: mark test as essential for daily development"
-    )
-    config.addinivalue_line(
-        "markers", "extended_api: mark test as extended for regular validation"
-    )
-    config.addinivalue_line(
-        "markers", "release_api: mark test as comprehensive for pre-release testing"
-    )
+    config.addinivalue_line("markers", "essential_api: mark test as essential for daily development")
+    config.addinivalue_line("markers", "extended_api: mark test as extended for regular validation")
+    config.addinivalue_line("markers", "release_api: mark test as comprehensive for pre-release testing")
 
 
 def get_test_dir() -> str:
@@ -44,6 +34,18 @@ def get_repo_root() -> str:
 def get_examples_dir() -> str:
     """Get the path to the examples directory."""
     return os.path.join(get_repo_root(), "examples")
+
+
+def get_example_file_path(relative_path: str) -> str:
+    """Get the absolute path to an example file.
+
+    Args:
+        relative_path: Path relative to the examples directory
+
+    Returns:
+        Absolute path to the file
+    """
+    return os.path.join(get_examples_dir(), relative_path)
 
 
 def get_test_data_path(relative_path: str) -> str:
@@ -176,9 +178,6 @@ class GotoTracker:
 def goto_tracker():
     """Create a tracker for GOTO tool usage."""
     return GotoTracker()
-
-
-# Removed legacy goto_callbacks fixture - use process.add_callback() instead
 
 
 @pytest.fixture
@@ -321,7 +320,10 @@ async def mocked_llm_process():
     )
 
     # Patch the actual client to prevent API calls
-    with patch("anthropic.AsyncAnthropic") as mock_client_class:
+    with (
+        patch("anthropic.AsyncAnthropic") as mock_client_class,
+        patch("llmproc.program_exec.initialize_client", return_value=MagicMock()),
+    ):
         # Configure the mock client
         mock_client = MagicMock()
         mock_messages = MagicMock()

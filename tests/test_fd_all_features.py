@@ -3,9 +3,16 @@
 from pathlib import Path
 
 import pytest
-
+from unittest.mock import MagicMock, patch
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
+
+
+@pytest.fixture(autouse=True)
+def patch_initialize_client():
+    """Patch client initialization to avoid API key requirements."""
+    with patch("llmproc.program_exec.initialize_client", return_value=MagicMock()):
+        yield
 
 
 @pytest.fixture
@@ -15,22 +22,23 @@ def all_features_program(tmp_path):
     all_features_config = tmp_path / "all_features.toml"
 
     # Write the file descriptor configuration
-    all_features_config.write_text("""
+    all_features_config.write_text(
+        """
     [model]
     name = "claude-3-5-sonnet-20240620"
     provider = "anthropic"
     display_name = "Claude with All FD Features"
-    
+
     [parameters]
     temperature = 0.7
     max_tokens = 4000
-    
+
     [prompt]
     system_prompt = "You are a powerful assistant with access to an advanced file descriptor system."
-    
+
     [tools]
-    enabled = ["read_fd", "fd_to_file", "read_file"]
-    
+    builtin = ["read_fd", "fd_to_file", "read_file"]
+
     [file_descriptor]
     enabled = true
     max_direct_output_chars = 2000
@@ -38,7 +46,8 @@ def all_features_program(tmp_path):
     max_input_chars = 2000
     page_user_input = true
     enable_references = true
-    """)
+    """
+    )
 
     return LLMProgram.from_toml(all_features_config)
 

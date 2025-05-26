@@ -4,17 +4,12 @@ This module provides type definitions, validation utilities, helper functions,
 and decorators for working with runtime context for dependency injection in tools.
 """
 
-import functools
 import logging
 from collections.abc import Callable
-# Runtime context utilities live in common; avoid importing higher‑level
+
+# Runtime context utilities live in common; avoid importing higher-level
 # packages to keep layering clean.
-
-from typing import Any, Optional, TypedDict, TypeVar, cast
-
-from llmproc.common.constants import TOOL_METADATA_ATTR
-
-from llmproc.common.results import ToolResult
+from typing import Any, Optional, TypedDict, TypeVar
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -35,6 +30,7 @@ class RuntimeContext(TypedDict, total=False):
     fd_manager: Any  # FileDescriptorManager instance
     linked_programs: dict[str, Any]  # Dictionary of linked programs
     linked_program_descriptions: dict[str, str]  # Dictionary of program descriptions
+    stderr: list[str]  # Buffer for stderr logging via write_stderr tool
 
 
 def validate_context_has(context: Optional[dict[str, Any]], *keys: str) -> tuple[bool, Optional[str]]:
@@ -64,5 +60,3 @@ def validate_context_has(context: Optional[dict[str, Any]], *keys: str) -> tuple
         return False, f"Runtime context missing required keys: {', '.join(missing)}"
 
     return True, None
-
-

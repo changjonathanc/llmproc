@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.program_exec import (
@@ -73,7 +72,9 @@ async def test_create_process_new_path():
 
         # Verify all steps were called in the correct order
         program.compile.assert_called_once()  # Ensure compilation happened
-        mock_prepare.assert_called_once_with(program, None, None)  # Verify prepare_process_state was called with correct args
+        mock_prepare.assert_called_once_with(
+            program, None, None
+        )  # Verify prepare_process_state was called with correct args
         mock_get_config.assert_called_once()  # Verify program.get_tool_configuration was called
         mock_initialize.assert_called_once_with(
             {"tool_config": "test", "provider": "anthropic"}

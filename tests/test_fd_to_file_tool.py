@@ -5,12 +5,12 @@ import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin.fd_tools import fd_to_file_tool
+
 from tests.conftest import create_test_llmprocess_directly
 
 
@@ -117,12 +117,13 @@ async def test_fd_to_file_invalid_path(mocked_llm_process):
     # Use an invalid path that should fail
     invalid_path = "/nonexistent/directory/file.txt"
 
-    # Call the tool with runtime_context
-    result = await fd_to_file_tool(
-        fd=fd_id,
-        file_path=invalid_path,
-        runtime_context={"fd_manager": process.fd_manager},
-    )
+    # Patch open to force a permission error
+    with patch("builtins.open", side_effect=PermissionError("no permission")):
+        result = await fd_to_file_tool(
+            fd=fd_id,
+            file_path=invalid_path,
+            runtime_context={"fd_manager": process.fd_manager},
+        )
 
     # Check result
     assert result.is_error
@@ -133,9 +134,7 @@ async def test_fd_to_file_invalid_path(mocked_llm_process):
 async def test_fd_to_file_no_process():
     """Test fd_to_file without a valid process."""
     # Call the tool without runtime_context
-    result = await fd_to_file_tool(
-        fd="fd:1", file_path="test.txt", runtime_context=None
-    )
+    result = await fd_to_file_tool(fd="fd:1", file_path="test.txt", runtime_context=None)
 
     # Check result
     assert result.is_error

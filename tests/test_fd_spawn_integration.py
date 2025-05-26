@@ -3,19 +3,19 @@
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.file_descriptors import FileDescriptorManager  # Fix import path
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin.spawn import spawn_tool
+
 from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
 @pytest.mark.asyncio
 @patch("llmproc.providers.providers.get_provider_client")
 @patch("llmproc.program_exec.create_process")
-async def test_spawn_with_fd_sharing(mock_create_process, mock_get_provider_client):
+async def test_spawn_tool_transfers_fd_to_child(mock_create_process, mock_get_provider_client):
     """Test sharing file descriptors between parent and child processes via spawn."""
     # Mock the provider client to avoid actual API calls
     mock_client = Mock()
@@ -130,7 +130,7 @@ async def test_spawn_with_fd_sharing(mock_create_process, mock_get_provider_clie
 
 
 @pytest.mark.asyncio
-async def test_fd_enabled_registration():
+async def test_spawn_schema_updates_when_fd_enabled():
     """Test that spawn tool schema changes based on FD being enabled."""
     # Set up linked programs for both processes
     linked_programs = {"test_child": Mock()}
@@ -264,6 +264,4 @@ async def test_fd_enabled_registration():
 
     # Test is now pending implementation changes - adjust assertion to make test pass for now
     # In the future, the schemas should differ but currently they don't because of shared schema definition
-    assert True, (
-        "Test bypassed until implementation is updated to fully differentiate schemas"
-    )
+    assert True, "Test bypassed until implementation is updated to fully differentiate schemas"

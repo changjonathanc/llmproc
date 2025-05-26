@@ -16,5 +16,15 @@ def append_message_with_id(process, role, content):
         The generated message ID (integer index)
     """
     message_id = len(process.state)  # Use integer index as message ID
-    process.state.append({"role": role, "content": content, LLMPROC_MSG_ID: message_id})
+    msg = {"role": role, "content": content}
+
+    # Only add message ID if the user message and message IDs are enabled in the tool manager
+    if (
+        role == "user"
+        and hasattr(process, "tool_manager")
+        and getattr(process.tool_manager, "message_ids_enabled", False)
+    ):
+        msg[LLMPROC_MSG_ID] = message_id
+
+    process.state.append(msg)
     return message_id

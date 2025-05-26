@@ -3,10 +3,9 @@
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # Import the module and functions under test
 import llmproc.program_exec as program_exec
+import pytest
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.program_exec import (
@@ -128,6 +127,7 @@ def test_setup_runtime_context_default(mock_process):
         "fd_manager": mock_process.fd_manager,
         "linked_programs": mock_process.linked_programs,
         "linked_program_descriptions": mock_process.linked_program_descriptions,
+        "stderr": [],
     }
     assert context == expected_context
 
@@ -166,6 +166,7 @@ def test_setup_runtime_context_no_tool_manager(mock_process):
         "fd_manager": mock_process.fd_manager,
         "linked_programs": mock_process.linked_programs,
         "linked_program_descriptions": mock_process.linked_program_descriptions,
+        "stderr": [],
     }
     assert context == expected_context
     # No assertion for set_runtime_context as it shouldn't be called

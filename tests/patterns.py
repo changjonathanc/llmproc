@@ -40,10 +40,9 @@ import contextlib
 import inspect
 import time
 from collections.abc import Callable
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 import pytest
-
 from llmproc.common.results import RunResult, ToolResult
 
 
@@ -78,9 +77,9 @@ def assert_successful_response(result: Union[RunResult, ToolResult, str]):
     if isinstance(result, ToolResult):
         assert not result.is_error, f"Expected successful result, but got error: {result.content}"
     elif isinstance(result, RunResult):
-        assert result.last_message.strip() if hasattr(result, "last_message") else True, (
-            "Expected non-empty response content"
-        )
+        assert (
+            result.last_message.strip() if hasattr(result, "last_message") else True
+        ), "Expected non-empty response content"
     elif isinstance(result, str):
         assert result.strip(), "Expected non-empty response content"
     else:

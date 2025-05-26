@@ -99,11 +99,11 @@ The llmproc codebase includes several test files that make real API calls to LLM
 - **Purpose**: Tests for the non-interactive mode of the CLI
 - **API Calls**: Makes calls to multiple providers via CLI
 - **Tests**:
-  - `test_prompt_option`: Tests the --prompt option with examples
-  - `test_non_interactive_option`: Tests the --non-interactive option
+  - `test_cli_prompt_option_outputs_marker`: Tests the --prompt option with examples
+  - `test_cli_non_interactive_reads_stdin`: Tests the --non-interactive option
   - `test_tool_usage_in_non_interactive_mode`: Tests tool usage in non-interactive mode
   - `test_program_linking_in_non_interactive_mode`: Tests program linking in non-interactive mode
-  - `test_invalid_program_handling`: Tests handling of invalid programs
+  - `test_cli_handles_invalid_program`: Tests handling of invalid programs
   - `test_empty_prompt_handling`: Tests handling of empty prompts
 
 ### 14. `test_claude_thinking_models_integration.py`

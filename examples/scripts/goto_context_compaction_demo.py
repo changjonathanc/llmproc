@@ -72,17 +72,17 @@ async def run_demo() -> int:
         2. A summary of the key design decisions explained in the FAQ""",
         # Task 2: Use GOTO to compact
         """Thank you for that detailed summary! Now our context window is getting full.
-        
-        Please use the GOTO tool to return to our first message (position msg_0). 
+
+        Please use the GOTO tool to return to our first message (position msg_0).
         In your time travel message, keep it BRIEF (under 250 words) including:
         1. A one-sentence overview of what this library does
         2. A bullet list of 5-7 key features (one phrase each)
         3. 2-3 important design decisions from the FAQ
-        
+
         NOTE: after time travel, acknowledge and return immediately.""",
         # Task 3: Test knowledge retention
         """Now that we've compacted our conversation, which feature do you find most interesting?
-        
+
         IMPORTANT: Please DO NOT use the read_file tool again. Answer based only on what you
         already know from our previous conversation.""",
     ]
@@ -111,7 +111,7 @@ The goto tool's detailed instructions will guide you on proper usage. Use this c
         # Start process
         process = await program.start()
         tracker = SimpleTracker()
-        
+
         # Register callbacks with the new pattern
         process.add_callback(tracker)
 

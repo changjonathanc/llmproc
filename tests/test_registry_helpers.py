@@ -1,7 +1,6 @@
 """Tests for registry helper functions."""
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.tools.registry_helpers import (
     apply_aliases_to_schemas,
@@ -52,9 +51,7 @@ def test_extract_tool_components():
     bad_registry.tool_handlers["bad_tool"] = dummy_handler
     success, handler, definition = extract_tool_components(bad_registry, "bad_tool")
     assert success is False
-    assert (
-        handler is not None
-    )  # Handler should be returned even if definition not found
+    assert handler is not None  # Handler should be returned even if definition not found
     assert definition is None
 
 

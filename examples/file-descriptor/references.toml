@@ -38,7 +38,7 @@ I'd like to see how the reference system works with different types of code.
 
 # Enable file descriptor system with references
 [tools]
-enabled = ["read_fd", "fd_to_file"]
+builtin = ["read_fd", "fd_to_file"]
 
 # Configure the file descriptor system with references enabled
 [file_descriptor]

@@ -5,14 +5,16 @@ for runtime context consolidation.
 """
 
 import pytest
-
 from llmproc.common.context import RuntimeContext, validate_context_has
 from llmproc.common.metadata import get_tool_meta
+
 
 # Local helper replicating former API for concise tests
 def check_requires_context(handler):  # noqa: D401
     """Return True if the handler requires runtime context."""
     return get_tool_meta(handler).requires_context
+
+
 from llmproc.common.results import ToolResult
 from llmproc.tools.function_tools import register_tool
 from llmproc.tools.tool_manager import ToolManager
@@ -82,9 +84,6 @@ def test_validate_context_has():
     assert "missing_key" in error.lower()
 
 
-# Helper function tests removed as those functions were removed from the codebase
-
-
 def test_register_tool_with_requires_context_simple():
     """Test the register_tool decorator with requires_context=True."""
 
@@ -97,6 +96,7 @@ def test_register_tool_with_requires_context_simple():
 
     # Verify it's marked as context-aware using metadata system
     from llmproc.common.metadata import get_tool_meta
+
     meta = get_tool_meta(test_function)
     assert meta.requires_context is True
     assert check_requires_context(test_function)
@@ -142,6 +142,7 @@ async def test_register_tool_with_required_context_keys():
 
     # Verify required keys are stored in metadata
     from llmproc.common.metadata import get_tool_meta
+
     meta = get_tool_meta(test_function)
     assert meta.required_context_keys
     assert "process" in meta.required_context_keys
@@ -208,6 +209,7 @@ async def test_register_tool_with_required_context():
 
     # Verify it's marked as context-aware using metadata
     from llmproc.common.metadata import get_tool_meta
+
     meta = get_tool_meta(test_function)
     assert meta.requires_context is True
     assert check_requires_context(test_function)
@@ -234,6 +236,7 @@ async def test_register_tool_with_required_keys():
 
     # Verify required keys are stored in metadata
     from llmproc.common.metadata import get_tool_meta
+
     meta = get_tool_meta(test_function)
     assert meta.required_context_keys
     assert "process" in meta.required_context_keys

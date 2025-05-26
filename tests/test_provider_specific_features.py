@@ -12,10 +12,8 @@ from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 from llmproc.providers.anthropic_utils import (
-    add_cache_to_message,
     apply_cache_control,
     format_system_prompt,
     prepare_api_request,
@@ -147,44 +145,6 @@ class TestProviderSpecificUnitTests:
         # Assert
         assert not is_direct_anthropic
 
-    def test_cache_control_parameters(self):
-        """Test adding cache control parameters to messages."""
-        # Arrange - Simple message
-        message = {"role": "user", "content": "Hello, world!"}
-
-        # Act
-        add_cache_to_message(message)
-
-        # Assert - Check content was transformed to structured format with cache
-        assert isinstance(message["content"], list)
-        assert message["content"][0]["type"] == "text"
-        assert message["content"][0]["text"] == "Hello, world!"
-        assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
-
-        # Arrange - Structured message
-        message = {
-            "role": "user",
-            "content": [{"type": "text", "text": "Hello, world!"}],
-        }
-
-        # Act
-        add_cache_to_message(message)
-
-        # Assert - Check that cache was added to structured content
-        assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
-
-        # Arrange - Tool result
-        message = {
-            "role": "user",
-            "content": [{"type": "tool_result", "content": "Calculator result"}],
-        }
-
-        # Act
-        add_cache_to_message(message)
-
-        # Assert - Check that cache was added to tool result
-        assert message["content"][0]["cache_control"] == {"type": "ephemeral"}
-
     def test_system_prompt_format_and_cache(self):
         """Test formatting system prompt and applying cache."""
         # Arrange
@@ -192,7 +152,7 @@ class TestProviderSpecificUnitTests:
 
         # Format the system prompt
         formatted = format_system_prompt(system_prompt)
-        
+
         # Apply cache
         _, cached_system, _ = apply_cache_control([], formatted)
 
@@ -204,7 +164,7 @@ class TestProviderSpecificUnitTests:
 
         # Format without applying cache
         formatted = format_system_prompt(system_prompt)
-        
+
         # Assert - Check formatting without cache
         assert isinstance(formatted, list)
         assert len(formatted) == 1
@@ -217,7 +177,7 @@ class TestProviderSpecificUnitTests:
 
         # Format structured prompt
         formatted = format_system_prompt(structured_prompt)
-        
+
         # Assert - Check structure is preserved
         assert isinstance(formatted, list)
         assert len(formatted) == 1
@@ -237,13 +197,13 @@ class TestProviderSpecificUnitTests:
         process.model_name = "claude-3-sonnet"
         process.api_params = {}
         process.disable_automatic_caching = False
-        
+
         # Act - Prepare API request
         request = prepare_api_request(process)
-        
+
         # Assert - Tools should be included in request
         assert request["tools"] is process.tools
-        
+
         # Verify tools are not modified by cache application
         assert "cache_control" not in request["tools"][0]
         assert "cache_control" not in request["tools"][1]
@@ -390,11 +350,7 @@ class TestProviderSpecificAPITests:
 
             # Calculate difference
             difference = output_tokens_standard - output_tokens_efficient
-            percent_reduction = (
-                (difference / output_tokens_standard) * 100
-                if output_tokens_standard > 0
-                else 0
-            )
+            percent_reduction = (difference / output_tokens_standard) * 100 if output_tokens_standard > 0 else 0
 
             # There should be some token reduction (even small confirms it's working)
             assert percent_reduction >= 0, "Expected token-efficient tools to not increase token usage"

@@ -18,19 +18,19 @@ The file descriptor system provides robust handling for large content with these
    - Large outputs are automatically stored as file descriptors (fd:1, fd:2, etc.)
    - Large user inputs are automatically converted to file descriptors
    - Tools are provided to read, extract, and export this content
-   
+
 2. POSITIONING AND EXTRACTION
    - Page-based: read_fd(fd="fd:1", mode="page", start=0, count=2)
    - Line-based: read_fd(fd="fd:1", mode="line", start=10, count=5)
    - Character-based: read_fd(fd="fd:1", mode="char", start=100, count=50)
    - Extraction to new FDs: read_fd(..., extract_to_new_fd=true)
-   
+
 3. FILE OPERATIONS
    - Export to file: fd_to_file(fd="fd:1", file_path="output.txt")
    - Append mode: fd_to_file(fd="fd:1", file_path="output.txt", mode="append")
    - Safe file creation: fd_to_file(fd="fd:1", file_path="output.txt", exist_ok=false)
    - Update existing only: fd_to_file(fd="fd:1", file_path="output.txt", create=false)
-   
+
 4. REFERENCE ID SYSTEM
    - Mark important content with reference tags:
      <ref id="python_example">print("Hello world")</ref>
@@ -94,7 +94,7 @@ This should be a comprehensive showcase of the file descriptor system's power!
 
 # Enable all file descriptor tools and process control tools
 [tools]
-enabled = ["read_fd", "fd_to_file", "read_file", "spawn", "fork"]
+builtin = ["read_fd", "fd_to_file", "read_file", "spawn", "fork"]
 
 # Configure the file descriptor system with ALL features enabled
 [file_descriptor]

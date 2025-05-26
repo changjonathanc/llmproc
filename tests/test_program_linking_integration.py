@@ -16,10 +16,10 @@ from textwrap import dedent
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin import spawn_tool
+
 from tests.conftest import create_test_llmprocess_directly
 
 # Constants for model names - use the smallest models possible for tests
@@ -91,7 +91,8 @@ def test_program_linking_configuration(temp_dir):
     # Create main program TOML
     main_toml = temp_dir / "main_config.toml"
     with open(main_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "main-model"
         provider = "anthropic"
@@ -100,36 +101,41 @@ def test_program_linking_configuration(temp_dir):
         system_prompt = "Main program"
 
         [tools]
-        enabled = ["spawn"]
+        builtin = ["spawn"]
 
         [linked_programs]
         helper = { path = "helper_config.toml", description = "Helper program description" }
         expert = { path = "expert_config.toml", description = "Expert program description" }
-        """)
+        """
+        )
 
     # Create helper program TOML
     helper_toml = temp_dir / "helper_config.toml"
     with open(helper_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "helper-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Helper program"
-        """)
+        """
+        )
 
     # Create expert program TOML
     expert_toml = temp_dir / "expert_config.toml"
     with open(expert_toml, "w") as f:
-        f.write("""
+        f.write(
+            """
         [model]
         name = "expert-model"
         provider = "anthropic"
 
         [prompt]
         system_prompt = "Expert program"
-        """)
+        """
+        )
 
     # Load the program
     program = LLMProgram.from_toml(main_toml)
@@ -145,56 +151,7 @@ def test_program_linking_configuration(temp_dir):
     assert program.linked_program_descriptions["helper"] == "Helper program description"
     assert program.linked_program_descriptions["expert"] == "Expert program description"
 
-
-@pytest.mark.asyncio
-async def test_spawn_tool_integration():
-    """Test spawn tool integration with the tool system."""
-    # Skip integration test for now
-    pytest.skip("Integration test requires full mock setup")
-
-    # Create programs
-    parent_program = LLMProgram(
-        model_name="parent-model",
-        provider="anthropic",
-        system_prompt="Parent system prompt",
-    )
-
-    child_program = LLMProgram(
-        model_name="child-model",
-        provider="anthropic",
-        system_prompt="Child system prompt",
-    )
-
-    # Link the programs
-    parent_program.add_linked_program("child", child_program)
-    parent_program.register_tools([spawn_tool])
-
-    # Verify program settings
-    assert "child" in parent_program.linked_programs
-    assert "spawn" in parent_program.tool_manager.get_registered_tools()
-
-
-@pytest.mark.asyncio
-async def test_process_communication():
-    """Test communication between linked processes."""
-    # Skip integration test for now
-    pytest.skip("Integration test requires full mock setup")
-
-    # Create the parent and expert programs
-    parent = LLMProgram(model_name="parent-model", provider="anthropic", system_prompt="Parent system prompt")
-    parent.register_tools([spawn_tool])
-
-    expert = LLMProgram(model_name="expert-model", provider="anthropic", system_prompt="Expert system prompt")
-
-    # Link the programs
-    parent.add_linked_program("expert", expert)
-
-    # Verify program linking setup
-    assert "expert" in parent.linked_programs
-    assert parent.linked_programs["expert"] == expert
-
-
-def test_program_linking_with_descriptions():
+def test_linked_program_descriptions():
     """Test program linking with descriptions."""
     # Create parent program with descriptions
     parent = LLMProgram(
@@ -220,7 +177,7 @@ def test_program_linking_with_descriptions():
     assert parent.linked_program_descriptions["code_expert"] == "A programming expert who specializes in Python code"
 
 
-def test_error_handling_in_linking():
+def test_linked_program_error_handling():
     """Test error handling in program linking."""
     # Create a program directly in code instead of from TOML
     program = LLMProgram(model_name="main-model", provider="anthropic", system_prompt="Main program with tools")
@@ -256,7 +213,8 @@ def api_temp_toml_files():
         main_toml_path = Path(temp_dir) / "main.toml"
         with open(main_toml_path, "w") as f:
             f.write(
-                dedent(f"""
+                dedent(
+                    f"""
             [model]
             name = "{CLAUDE_MODEL}"
             provider = "anthropic"
@@ -269,18 +227,20 @@ def api_temp_toml_files():
             temperature = 0
 
             [tools]
-            enabled = ["spawn"]
+            builtin = ["spawn"]
 
             [linked_programs]
             expert = {{ path = "expert.toml", description = "A knowledge expert who knows secret information" }}
-            """)
+            """
+                )
             )
 
         # Create expert program TOML
         expert_toml_path = Path(temp_dir) / "expert.toml"
         with open(expert_toml_path, "w") as f:
             f.write(
-                dedent(f"""
+                dedent(
+                    f"""
             [model]
             name = "{CLAUDE_MODEL}"
             provider = "anthropic"
@@ -291,7 +251,8 @@ def api_temp_toml_files():
             [parameters]
             max_tokens = 50
             temperature = 0
-            """)
+            """
+                )
             )
 
         yield {"main": main_toml_path, "expert": expert_toml_path}
@@ -300,7 +261,7 @@ def api_temp_toml_files():
 @pytest.mark.llm_api
 @pytest.mark.essential_api
 @pytest.mark.asyncio
-async def test_program_linking_basic(api_temp_toml_files):
+async def test_program_linking_basic_api(api_temp_toml_files):
     """Test basic program linking functionality with API."""
     if not check_api_keys():
         pytest.skip("API keys not set")
@@ -321,7 +282,7 @@ async def test_program_linking_basic(api_temp_toml_files):
 @pytest.mark.llm_api
 @pytest.mark.extended_api
 @pytest.mark.asyncio
-async def test_program_linking_minimal_input(api_temp_toml_files):
+async def test_program_linking_with_minimal_input(api_temp_toml_files):
     """Test program linking with minimal input."""
     if not check_api_keys():
         pytest.skip("API keys not set")
@@ -343,7 +304,7 @@ async def test_program_linking_minimal_input(api_temp_toml_files):
 @pytest.mark.llm_api
 @pytest.mark.extended_api
 @pytest.mark.asyncio
-async def test_program_linking_state_reset(api_temp_toml_files):
+async def test_program_linking_resets_state(api_temp_toml_files):
     """Test program linking with state reset."""
     if not check_api_keys():
         pytest.skip("API keys not set")
@@ -368,7 +329,7 @@ async def test_program_linking_state_reset(api_temp_toml_files):
 
 @pytest.mark.llm_api
 @pytest.mark.asyncio
-async def test_program_linking_descriptions_api():
+async def test_program_linking_descriptions_with_api():
     """Test program linking descriptions with API."""
     # Skip if no API key is available
     for key_name in ["VERTEX_AI_PROJECT", "VERTEX_AI_LOCATION", "ANTHROPIC_API_KEY"]:
@@ -386,7 +347,8 @@ async def test_program_linking_descriptions_api():
         expert_toml = temp_dir_path / "expert.toml"
 
         # Create the expert TOML
-        expert_toml_content = dedent(f"""
+        expert_toml_content = dedent(
+            f"""
         [model]
         name = "{CLAUDE_MODEL}"
         provider = "anthropic"
@@ -398,13 +360,15 @@ async def test_program_linking_descriptions_api():
         [parameters]
         max_tokens = 150
         temperature = 0
-        """)
+        """
+        )
 
         with open(expert_toml, "w") as f:
             f.write(expert_toml_content)
 
         # Create the main TOML with descriptions
-        main_toml_content = dedent(f"""
+        main_toml_content = dedent(
+            f"""
         [model]
         name = "{CLAUDE_MODEL}"
         provider = "anthropic"
@@ -418,11 +382,12 @@ async def test_program_linking_descriptions_api():
         temperature = 0
 
         [tools]
-        enabled = ["spawn"]
+        builtin = ["spawn"]
 
         [linked_programs]
         expert = {{ path = "{expert_toml.name}", description = "Specialized expert with knowledge about program descriptions" }}
-        """)
+        """
+        )
 
         with open(main_toml, "w") as f:
             f.write(main_toml_content)

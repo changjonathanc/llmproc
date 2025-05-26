@@ -37,7 +37,7 @@ enabled = ["fork", "spawn"]
 
 ## Usage
 
-Once enabled, the fork tool is available to the LLM through the standard tool-calling interface. 
+Once enabled, the fork tool is available to the LLM through the standard tool-calling interface.
 
 ### Tool Schema
 
@@ -83,7 +83,7 @@ The fork system call is ideal for:
 The fork feature is implemented through:
 
 1. A `fork_tool` function in `tools/builtin/fork.py` that handles forking requests
-2. A `fork_process` method in `LLMProcess` that creates deep copies of a process
+2. The `_fork_process` method in `LLMProcess` that manages the forking process
 3. The standard `ToolManager` system for registering and calling the fork tool
 4. Access level controls to manage which processes can use the fork tool
 
@@ -93,7 +93,7 @@ The fork tool is a first-class provider-agnostic tool executed via ToolManager j
 
 When a process is forked:
 
-1. A new LLMProcess instance is created with the same program configuration
+1. A new process is created via `program.start()` to ensure proper initialization
 2. The entire conversation state is deep-copied to the new process using the `ProcessSnapshot` mechanism
 3. All preloaded content and system prompts are preserved
 4. File descriptors are properly cloned to maintain independence between processes

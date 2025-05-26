@@ -6,7 +6,6 @@ These tests verify the integration functions in the builtin.integration module.
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
-
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin.integration import (
     copy_tool_from_source_to_target,

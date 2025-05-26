@@ -46,9 +46,7 @@ class ToolRegistry:
         # real_to_alias: actual tool name -> alias name (one-to-one)
         self.real_to_alias: dict[str, str] = {}
 
-    def register_tool(
-        self, name: str, handler: ToolHandler, definition: ToolSchema
-    ) -> ToolSchema:
+    def register_tool(self, name: str, handler: ToolHandler, definition: ToolSchema) -> ToolSchema:
         """Register a tool with its handler and definition.
 
         Args:

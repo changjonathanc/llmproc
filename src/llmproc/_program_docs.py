@@ -202,7 +202,7 @@ Examples:
 
     # Later, replace with different tools
     program.register_tools(["calculator", "spawn"])
-    
+
     # Enabling fd tools will automatically enable the file descriptor system
     program.register_tools(["calculator", "read_fd", "fd_to_file"])
     ```
@@ -223,10 +223,10 @@ Aliases allow you to provide shorter, more intuitive names for tools.
 
 Args:
     aliases: Dictionary mapping alias names to target tool names
-    
+
 Returns:
     Self for method chaining
-    
+
 Examples:
     ```python
     # Set aliases for built-in and MCP tools
@@ -236,11 +236,11 @@ Examples:
         "add": "everything__add"
     })
     ```
-    
+
 Note:
     The original tool names should be enabled via set_enabled_tools.
     Aliases are only for the LLM's use when calling tools.
-    
+
 Raises:
     ValueError: If aliases is not a dictionary or if multiple aliases
                point to the same target tool (must be one-to-one mapping)
@@ -248,26 +248,32 @@ Raises:
 
 CONFIGURE_MCP = """Configure Model Context Protocol (MCP) server connection.
 
-This method sets up the MCP server configuration for the program.
-After configuring the server connection, use register_tools() with
-MCPTool instances to select specific tools from MCP servers.
+This method sets up the MCP server configuration for the program. You can
+provide a path to a JSON configuration file or embed server definitions
+directly as a dictionary. After configuring the server connection, use
+``register_tools()`` with ``MCPServerTools`` to select specific tools from
+MCP servers.
 
 Args:
     config_path: Path to the MCP servers configuration file
+    servers: Optional dictionary of embedded server definitions
 
 Returns:
     self (for method chaining)
 
 Examples:
     ```python
-    # Configure MCP server connection
+    # Configure using a JSON file
     program.configure_mcp(config_path="config/mcp_servers.json")
-    
+
+    # Or embed server definitions directly
+    program.configure_mcp(servers={"calc": {"type": "stdio", "command": "echo"}})
+
     # Then register specific MCP tools
-    from llmproc.tools.mcp import MCPTool
+    from llmproc.tools.mcp import MCPServerTools
     program.register_tools([
-        MCPTool(server="calc"),                               # All tools from "calc" server
-        MCPTool(server="github", names="search_repositories") # Specific tool from "github" server
+        MCPServerTools(server="calc"),
+        MCPServerTools(server="github", names="search_repositories"),
     ])
     ```
 """

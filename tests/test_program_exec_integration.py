@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 
@@ -23,7 +22,7 @@ async def test_program_start_with_new_initialization_path(model, provider):
     program = LLMProgram(model_name=model, provider=provider, system_prompt="Test system prompt")
 
     # Patch provider client to avoid actual API calls
-    with patch("llmproc.providers.get_provider_client") as mock_get_client:
+    with patch("llmproc.program_exec.get_provider_client") as mock_get_client:
         mock_get_client.return_value = MagicMock()
 
         # Start the process using program.start()
@@ -41,7 +40,7 @@ async def test_program_start_with_new_initialization_path(model, provider):
 
 
 @pytest.mark.asyncio
-@patch("llmproc.providers.get_provider_client")
+@patch("llmproc.program_exec.get_provider_client")
 async def test_process_run_with_new_initialization_path(mock_get_client):
     """Test process.run() works correctly with a process created via the new initialization path."""
     # Mock the client and its response

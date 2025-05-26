@@ -4,9 +4,8 @@ import asyncio
 from unittest.mock import Mock, patch
 
 import pytest
-
 from llmproc.common.results import ToolResult
-from llmproc.tools import ToolManager, ToolNotFoundError, ToolRegistry
+from llmproc.tools import ToolManager, ToolRegistry
 from llmproc.tools.builtin import calculator, fd_to_file_tool, fork_tool, read_fd_tool, read_file, spawn_tool
 from llmproc.tools.function_tools import register_tool
 
@@ -95,10 +94,7 @@ def test_get_tool_schemas():
 
     # Verify the specific schema was found and has expected properties
     assert calculator_schema_result is not None
-    assert (
-        calculator_schema_result.get("description")
-        == "Evaluate mathematical expressions"
-    )
+    assert calculator_schema_result.get("description") == "Evaluate mathematical expressions"
     assert "input_schema" in calculator_schema_result
     assert "properties" in calculator_schema_result["input_schema"]
     assert "expression" in calculator_schema_result["input_schema"]["properties"]
@@ -116,9 +112,7 @@ async def test_call_tool():
                 return ToolResult.from_error("Missing expression parameter")
 
             # Simple eval-based calculator (safe for testing only)
-            result = eval(
-                expression, {"__builtins__": {}}, {"abs": abs, "max": max, "min": min}
-            )
+            result = eval(expression, {"__builtins__": {}}, {"abs": abs, "max": max, "min": min})
             return ToolResult.from_success(str(result))
         except Exception as e:
             return ToolResult.from_error(f"Error: {str(e)}")
@@ -268,9 +262,7 @@ async def test_initialize_tools_directly():
     mock_process = Mock()
     mock_process.has_linked_programs = True
     mock_process.linked_programs = {"test_program": Mock()}
-    mock_process.linked_program_descriptions = {
-        "test_program": "Test program description"
-    }
+    mock_process.linked_program_descriptions = {"test_program": "Test program description"}
     mock_process.file_descriptor_enabled = True
 
     # Mock the fd_manager to avoid AttributeError
@@ -330,10 +322,7 @@ async def test_initialize_tools_directly():
     )
     assert isinstance(fork_result, ToolResult)
     # Check that an appropriate error is surfaced (exact wording may evolve)
-    assert (
-        "Runtime context" in str(fork_result.content)
-        or "Direct calls to fork_tool" in str(fork_result.content)
-    )
+    assert "Runtime context" in str(fork_result.content) or "Direct calls to fork_tool" in str(fork_result.content)
 
 
 def test_register_tools_with_mixed_input():

@@ -4,7 +4,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
@@ -105,7 +104,7 @@ class TestInstantiateProcess:
             instantiate_process(sample_process_state)
 
         # Verify error message
-        assert "Required parameters cannot be None" in str(excinfo.value)
+        assert "Required parameters for LLMProcess cannot be None" in str(excinfo.value)
         assert "model_name" in str(excinfo.value)
 
     def test_instantiate_process_with_introspection(self):

@@ -3,7 +3,8 @@
 import asyncio
 import copy
 import logging
-from typing import Optional
+import os
+from typing import Any, Optional
 
 # Import Anthropic clients (will be None if not installed)
 try:
@@ -23,7 +24,62 @@ from llmproc.providers.constants import ANTHROPIC_PROVIDERS
 from llmproc.providers.utils import safe_callback
 from llmproc.utils.message_utils import append_message_with_id
 
+# Set up logging
 logger = logging.getLogger(__name__)
+
+try:  # pragma: no cover - anthropic optional
+    from anthropic import (
+        APIConnectionError,
+        APIStatusError,
+        APITimeoutError,
+        OverloadedError,
+        RateLimitError,
+    )
+except Exception:  # pragma: no cover - anthropic optional
+
+    class RateLimitError(Exception):
+        pass
+
+    class OverloadedError(Exception):
+        pass
+
+    class APIStatusError(Exception):
+        pass
+
+    class APIConnectionError(Exception):
+        pass
+
+    class APITimeoutError(Exception):
+        pass
+
+
+async def _call_with_retry(client: Any, request: dict[str, Any]) -> Any:
+    """Call ``client.messages.create`` with retries based on environment vars."""
+    max_attempts = int(os.getenv("LLMPROC_RETRY_MAX_ATTEMPTS", "6"))
+    initial_wait = int(os.getenv("LLMPROC_RETRY_INITIAL_WAIT", "1"))
+    max_wait = int(os.getenv("LLMPROC_RETRY_MAX_WAIT", "90"))
+
+    attempt = 0
+    wait = initial_wait
+    while True:
+        try:
+            return await client.messages.create(**request)
+        except (
+            RateLimitError,
+            OverloadedError,
+            APIStatusError,
+            APIConnectionError,
+            APITimeoutError,
+        ) as e:
+            attempt += 1
+            if attempt >= max_attempts:
+                logger.warning(
+                    f"Max retry attempts ({max_attempts}) reached for Anthropic API call, giving up: {str(e)}"
+                )
+                raise
+            logger.warning(f"Anthropic API error (attempt {attempt}/{max_attempts}), retrying in {wait}s: {str(e)}")
+            await asyncio.sleep(min(wait, max_wait))
+            wait = min(wait * 2, max_wait)
 
 
 class AnthropicProcessExecutor:
@@ -87,6 +143,9 @@ class AnthropicProcessExecutor:
             self.msg_prefix = []
             self.tool_results_prefix = []
 
+            # Trigger TURN_START event
+            process.trigger_event(CallbackEvent.TURN_START, process)
+
             # Set up runtime context with live references to our buffers
             ctx = process.tool_manager.runtime_context
             ctx["msg_prefix"] = self.msg_prefix
@@ -97,12 +156,16 @@ class AnthropicProcessExecutor:
             # Prepare the API request with unified payload preparation
             use_caching = not getattr(process, "disable_automatic_caching", False)
             api_request = prepare_api_request(process, add_cache=use_caching)
-            
-            # Prepare and make API call
-            
-            # Make the API call
-            response = await process.client.messages.create(**api_request)
-            
+
+            # Trigger API request event
+            process.trigger_event(CallbackEvent.API_REQUEST, api_request)
+
+            # Prepare and make API call with retry logic
+            response = await _call_with_retry(process.client, api_request)
+
+            # Trigger API response event
+            process.trigger_event(CallbackEvent.API_RESPONSE, response)
+
             # Process API response
 
             # Track API call in the run result if available
@@ -112,6 +175,8 @@ class AnthropicProcessExecutor:
                     "usage": getattr(response, "usage", {}),
                     "stop_reason": getattr(response, "stop_reason", None),
                     "id": getattr(response, "id", None),
+                    "request": api_request,
+                    "response": response,
                 }
                 run_result.add_api_call(api_info)
 
@@ -127,10 +192,10 @@ class AnthropicProcessExecutor:
                     # ERROR: all messages must have non-empty content except for the optional final assistant message
                     if not hasattr(block, "text") or not block.text.strip():
                         continue  # Skip empty text blocks
-                    
+
                     # Trigger response event
                     process.trigger_event(CallbackEvent.RESPONSE, block.text)
-                    
+
                     # Store the original block for later assembly
                     self.msg_prefix.append(block)
                     continue
@@ -140,7 +205,7 @@ class AnthropicProcessExecutor:
 
                 # Store the original block
                 self.msg_prefix.append(block)
-                
+
                 # Extract tool details
                 tool_name = block.name
                 tool_args = block.input
@@ -169,14 +234,18 @@ class AnthropicProcessExecutor:
 
                 # Check if tool execution should abort further processing
                 if hasattr(result, "abort_execution") and result.abort_execution:
-                    logger.info(f"Tool '{tool_name}' requested execution abort. Stopping tool processing for this response.")
+                    logger.info(
+                        f"Tool '{tool_name}' requested execution abort. Stopping tool processing for this response."
+                    )
                     execution_aborted = True
                     break  # Exit the loop processing tools for this API response
 
                 # Process result for file descriptors if needed
                 if not isinstance(result, ToolResult):
                     # This is a programming error - tools must return ToolResult
-                    error_msg = f"Tool '{tool_name}' did not return a ToolResult instance. Got {type(result).__name__} instead."
+                    error_msg = (
+                        f"Tool '{tool_name}' did not return a ToolResult instance. Got {type(result).__name__} instead."
+                    )
                     logger.error(error_msg)
                     tool_result = ToolResult.from_error(error_msg)
                 else:
@@ -200,11 +269,19 @@ class AnthropicProcessExecutor:
                 # Add assistant message with all content blocks
                 if self.msg_prefix:
                     append_message_with_id(process, "assistant", self.msg_prefix)
-                
+
                 # Add tool results as user messages
                 if self.tool_results_prefix:
                     for tool_result in self.tool_results_prefix:
                         append_message_with_id(process, "user", tool_result)
+
+            # Trigger TURN_END event
+            process.trigger_event(
+                CallbackEvent.TURN_END,
+                process,
+                response,
+                self.tool_results_prefix,
+            )
 
             # If no response or no tools were invoked, we're done with this iteration
             if not response.content or not tool_invoked:
@@ -222,9 +299,13 @@ class AnthropicProcessExecutor:
         if run_result is None:
             run_result = RunResult()
 
+        # Set the last_message in the RunResult to ensure it's available
+        # This is critical for the sync interface tests
+        last_message = process.get_last_message()
+        run_result.set_last_message(last_message)
+
         # Complete the RunResult and return it
         return run_result.complete()
-
 
     async def count_tokens(self, process: "Process") -> dict:
         """Count tokens in the current conversation context using Anthropic's API."""
@@ -233,7 +314,7 @@ class AnthropicProcessExecutor:
             process_copy = copy.copy(process)
             process_copy.state = copy.deepcopy(process.state or []) + [{"role": "user", "content": "Hi"}]
             api_request = prepare_api_request(process_copy, add_cache=False)
-            
+
             # Get token count with inline parameter validation
             system = api_request.get("system")
             tools = api_request.get("tools")
@@ -241,20 +322,19 @@ class AnthropicProcessExecutor:
                 model=process_copy.model_name,
                 messages=api_request["messages"],
                 **({"system": system} if isinstance(system, list) and system else {}),
-                **({"tools": tools} if isinstance(tools, list) and tools else {})
+                **({"tools": tools} if isinstance(tools, list) and tools else {}),
             )
-            
+
             # Calculate window metrics
             tokens = getattr(response, "input_tokens", 0)
             window_size = get_context_window_size(process.model_name, self.CONTEXT_WINDOW_SIZES)
-            
+
             return {
                 "input_tokens": tokens,
                 "context_window": window_size,
                 "percentage": (tokens / window_size * 100) if window_size > 0 else 0,
-                "remaining_tokens": max(0, window_size - tokens)
+                "remaining_tokens": max(0, window_size - tokens),
             }
         except Exception as e:
             logger.warning(f"Token counting failed: {str(e)}")
             return {"error": str(e)}
-
