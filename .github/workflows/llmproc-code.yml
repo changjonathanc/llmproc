@@ -6,6 +6,10 @@
 # - ANTHROPIC_API_KEY: API key for Claude
 # - LLMPROC_WRITE_TOKEN: GitHub personal access token with write permissions (contents, pull-requests)
 #
+# LIMITATION: This workflow cannot modify files under .github/workflows/ due to GitHub's
+# security restrictions. Even if your token has 'workflow' permission, GitHub Actions
+# prevents workflows from modifying workflow files as an additional security measure.
+#
 # How it works:
 # 1. Triggered when someone comments "@llmproc /code <request>" on an issue or PR
 # 2. Posts an initial status comment indicating processing has started
@@ -82,19 +86,32 @@ jobs:
       # -- 2. Extract request from comment ---------------------------------
       - name: Extract request
         id: extract_request
-        run: |
-          # Extract everything after "@llmproc /code" or "@llmproc dev /code"
-          request=$(echo "${{ github.event.comment.body }}" | sed -n 's/.*@llmproc\( dev\)\? \/code[[:space:]]*//p')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = context.payload.comment.body;
 
-          # If sed didn't find the pattern, try a different approach
-          if [ -z "$request" ]; then
-            # Use awk to find the line with @llmproc /code and get everything after
-            request=$(echo "${{ github.event.comment.body }}" | awk '/@llmproc( dev)? \/code/ {sub(/.*@llmproc( dev)? \/code[[:space:]]*/, ""); found=1} found {print}' | sed '/^$/d')
-          fi
+            // Check if this is dev mode
+            const isDev = comment.includes('@llmproc dev');
 
-          # Base64 encode to preserve newlines and special characters
-          request_b64=$(echo "$request" | base64 | tr -d '\n')
-          echo "request=$request_b64" >> $GITHUB_OUTPUT
+            // Extract request after @llmproc /code or @llmproc dev /code
+            const pattern = isDev ? /@llmproc\s+dev\s+\/code\s+([\s\S]*)/ : /@llmproc\s+\/code\s+([\s\S]*)/;
+            const match = comment.match(pattern);
+
+            if (!match || !match[1]) {
+              core.setFailed('Could not extract request from comment');
+              return;
+            }
+
+            const request = match[1].trim();
+
+            // Set outputs
+            core.setOutput('is_dev', isDev);
+            core.setOutput('request', request);
+
+            // Log for debugging
+            console.log('Extracted request:', request);
+            console.log('Is dev mode:', isDev);
 
       # -- 3. Get context details ------------------------------------------
       - name: Get issue/PR context
@@ -172,7 +189,7 @@ jobs:
       - name: Create implementation prompt
         id: create_prompt
         run: |
-          request=$(echo "${{ steps.extract_request.outputs.request }}" | base64 -d)
+          request="${{ steps.extract_request.outputs.request }}"
           title=$(echo "${{ steps.context.outputs.title_b64 }}" | base64 -d)
           body=$(echo "${{ steps.context.outputs.body_b64 }}" | base64 -d)
 
@@ -194,9 +211,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          # Check if the comment starts with "@llmproc dev"
-          comment_start=$(echo "${{ github.event.comment.body }}" | head -n 1 | xargs | cut -d' ' -f1-2)
-          if [ "$comment_start" = "@llmproc dev" ]; then
+          # Check if dev mode was detected
+          if [ "${{ steps.extract_request.outputs.is_dev }}" = "true" ]; then
             echo "Using llmproc from source"
             source .venv/bin/activate
             output=$(llmproc .github/config/llmproc-code-claude.yaml -f prompt.txt --json)
