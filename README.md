@@ -33,6 +33,8 @@ LLMProc: A Unix-inspired operating system for language models. Like processes in
 
 > *`--disallowedTools` allows removing builtin tools, but not MCP tools.
 
+**👉 Check out our [GitHub Actions examples](#github-actions-examples) for powerful automation workflows.**
+
 ## Installation
 
 ```bash
