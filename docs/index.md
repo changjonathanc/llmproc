@@ -55,7 +55,7 @@ Documentation for specific model providers:
 For users looking to extend and optimize LLMProc:
 
 - [Program Initialization](program-initialization.md) - How programs are initialized and validated
-- [RunResult Callbacks](runresult-callbacks.md) - Monitor execution with callbacks
+- [Callbacks System](callbacks.md) - Monitor execution events
 - [Tool Registration Callback](tool-registration-callback.md) - Customize tool initialization during registration
 - [Error Handling Strategy](error-handling-strategy.md) - How errors are managed
 - [Testing](testing.md) - Testing approach and API testing
@@ -110,6 +110,7 @@ For details on the full API, see:
 
 Detailed release notes for each version are available in the release_notes directory:
 
+- [Release Notes 0.9.0](release_notes/RELEASE_NOTES_0.9.0.md)
 - [Release Notes 0.8.0](release_notes/RELEASE_NOTES_0.8.0.md)
 
 ## External References

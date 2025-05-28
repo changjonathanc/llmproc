@@ -28,6 +28,7 @@ anthropic-beta = "token-efficient-tools-2025-02-19"
 
 [preload]
 files = ["CLAUDE.md"]  # Load project preferences
+relative_to = "program"
 
 [mcp]
 config_path = "config/mcp_servers.json"

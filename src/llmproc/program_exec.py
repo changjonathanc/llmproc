@@ -12,6 +12,7 @@ from typing import Any, NamedTuple, Optional, TypedDict, Union
 
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.context import RuntimeContext
+from llmproc.config import EnvInfoConfig
 from llmproc.env_info.builder import EnvInfoBuilder
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.llm_process import LLMProcess, SyncLLMProcess
@@ -219,14 +220,18 @@ def prepare_process_state(
     state.update(_initialize_mcp_config(program))
     state["access_level"] = access_level or AccessLevel.ADMIN
 
-    env_config = getattr(program, "env_info", {"variables": []})
+    env_config = getattr(program, "env_info", EnvInfoConfig())
     page_user_input = getattr(fd_info.fd_manager, "page_user_input", False) if fd_info.fd_manager else False
+
+    preload_base = program.base_dir
+    if getattr(program, "preload_relative_to", "program") == "cwd":
+        preload_base = Path.cwd()
 
     state["enriched_system_prompt"] = EnvInfoBuilder.get_enriched_system_prompt(
         base_prompt=state["original_system_prompt"],
-        env_config=env_config or {"variables": []},
+        env_config=env_config,
         preload_files=preload_files,
-        base_dir=program.base_dir,
+        base_dir=preload_base,
         include_env=True,
         file_descriptor_enabled=state["file_descriptor_enabled"],
         references_enabled=state["references_enabled"],

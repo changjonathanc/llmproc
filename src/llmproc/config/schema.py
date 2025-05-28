@@ -17,6 +17,7 @@ from llmproc.common.access_control import AccessLevel
 from llmproc.config.mcp import MCPServerTools, MCPToolsConfig
 from llmproc.config.tool import ToolConfig
 from llmproc.config.utils import resolve_path
+from llmproc.env_info.constants import STANDARD_VAR_NAMES
 
 
 class ModelConfig(BaseModel):
@@ -101,6 +102,7 @@ class PreloadConfig(BaseModel):
     """Preload configuration section."""
 
     files: list[str] = []
+    relative_to: Literal["program", "cwd"] = "program"
 
 
 class MCPConfig(BaseModel):
@@ -123,9 +125,32 @@ class ToolsConfig(BaseModel):
 class EnvInfoConfig(BaseModel):
     """Environment information configuration section."""
 
-    variables: list[str] | str = []  # Empty list by default (disabled)
+    variables: list[str] = Field(default_factory=list)
+    commands: list[str] = Field(default_factory=list)
+    env_vars: dict[str, str] = Field(default_factory=dict)
+    file_map_root: str | None = None
+    file_map_max_files: int = 50
+    file_map_show_size: bool = True
     # Allow additional custom environment variables as strings
     model_config = {"extra": "allow"}
+
+    @field_validator("variables", mode="before")
+    @classmethod
+    def parse_variables(cls, v):
+        """Normalize variables field input."""
+        if v == "all":
+            return STANDARD_VAR_NAMES
+        if isinstance(v, str):
+            return [v]
+        return v
+
+    @field_validator("file_map_max_files")
+    @classmethod
+    def validate_positive(cls, v: int) -> int:
+        """Validate that integer values are positive."""
+        if v <= 0:
+            raise ValueError("Value must be positive")
+        return v
 
 
 class FileDescriptorConfig(BaseModel):

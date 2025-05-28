@@ -1,0 +1,28 @@
+[model]
+name = "claude-3-5-haiku@20241022"
+provider = "anthropic_vertex"
+
+region = "us-east5"  # Specify your preferred region based on GCP documentation
+
+[prompt]
+system_prompt = """You are a helpful assistant with specialized knowledge of the LLMProc project.
+Use the preloaded project files to answer questions about LLMProc functionality and usage.
+The user can't see the tool call results. You must always end your turn with a non-empty message containing the answer to the user's question.
+
+Keep all responses clear, accurate, and based only on the preloaded documentation.
+"""
+
+[parameters]
+max_tokens = 1000
+
+[preload]
+# Preload key project files for reference
+files = [
+  "../../README.md",
+  "../../pyproject.toml",
+  "../../src/llmproc/llm_process.py",
+]
+relative_to = "program"
+
+[demo]
+display_name = "LLMProc Repository Expert"

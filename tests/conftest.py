@@ -403,7 +403,9 @@ def create_test_llmprocess_directly(program=None, **kwargs):
         program.linked_programs = kwargs.get("linked_programs", {})
         program.linked_program_descriptions = kwargs.get("linked_program_descriptions", {})
         program.preload_files = []
-        program.env_info = {"variables": []}
+        from llmproc.config import EnvInfoConfig
+
+        program.env_info = EnvInfoConfig()
         program.compiled = True
 
     # Set up some key attributes if they don't exist already, for backward compatibility

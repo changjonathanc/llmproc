@@ -9,40 +9,18 @@ import sys
 import time
 import tomllib
 import traceback
-import warnings
 from pathlib import Path
 from typing import Any
 
 import click
 
 from llmproc import LLMProgram
-from llmproc.cli.log_utils import log_program_info
-from llmproc.common.results import RunResult
-from llmproc.providers.constants import ANTHROPIC_PROVIDERS
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%H:%M:%S",
+from llmproc.cli.log_utils import (
+    CliCallbackHandler,
+    get_logger,
+    log_program_info,
 )
-logger = logging.getLogger("llmproc.cli")
-
-
-def get_logger(log_level: str = "INFO"):
-    """Return a logger configured for the provided level."""
-    level = getattr(logging, log_level.upper(), logging.INFO)
-    logger.setLevel(level)
-
-    # Set httpx to WARNING to suppress HTTP request logs
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-
-    logging.getLogger("llmproc.llm_process").setLevel(level)
-
-    if level >= logging.ERROR:
-        warnings.filterwarnings("ignore", module="pydantic")
-
-    return logger
+from llmproc.common.results import RunResult
 
 
 def run_with_prompt(
@@ -170,7 +148,14 @@ def check_and_run_demo_mode(
     is_flag=True,
     help="Suppress most CLI output while retaining chosen log level",
 )
-def main(program_path, log_level: str = "INFO", quiet: bool = False) -> None:
+@click.option(
+    "--prompt",
+    "-p",
+    default=None,
+    flag_value="",  # When -p is used without value, use empty string
+    help="Override embedded prompt with custom prompt. Use -p alone to skip embedded prompt.",
+)
+def main(program_path, log_level: str = "INFO", quiet: bool = False, prompt: str = None) -> None:
     """Run an interactive CLI for LLMProc.
 
     PROGRAM_PATH is the path to a TOML or YAML program file. The command always
@@ -235,7 +220,7 @@ def main(program_path, log_level: str = "INFO", quiet: bool = False) -> None:
         try:
             # Use start_sync() to create a process with a persistent event loop
             process = program.start_sync()
-            
+
             init_time = time.time() - start_time
             cli_logger.info(f"Process initialized in {init_time:.2f} seconds")
         except RuntimeError as e:
@@ -247,28 +232,19 @@ def main(program_path, log_level: str = "INFO", quiet: bool = False) -> None:
                 click.echo("Possible solutions:", err=True)
                 click.echo("1. Increase the timeout: export LLMPROC_TOOL_FETCH_TIMEOUT=300", err=True)
                 click.echo("2. Check if the MCP server is running properly", err=True)
-                click.echo("3. If you're using npx to run an MCP server, make sure the package exists and is accessible", err=True)
-                click.echo("4. To run without requiring MCP tools: export LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT=false", err=True)
+                click.echo(
+                    "3. If you're using npx to run an MCP server, make sure the package exists and is accessible",
+                    err=True,
+                )
+                click.echo(
+                    "4. To run without requiring MCP tools: export LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT=false", err=True
+                )
                 sys.exit(2)
             else:
                 raise
 
-        # Create callback class for real-time updates
-        class CliCallbackHandler:
-            def tool_start(self, tool_name, args):
-                if not quiet_mode:
-                    cli_logger.info(f"Using tool: {tool_name}")
-
-            def tool_end(self, tool_name, result):
-                if not quiet_mode:
-                    cli_logger.info(f"Tool {tool_name} completed")
-
-            def response(self, content):
-                if not quiet_mode:
-                    cli_logger.info(f"Received response: {content[:50]}...")
-
         # Create callback handler and register it with the process
-        callback_handler = CliCallbackHandler()
+        callback_handler = CliCallbackHandler(cli_logger)
         process.add_callback(callback_handler)
 
         # Use the helper function to run prompts
@@ -286,92 +262,109 @@ def main(program_path, log_level: str = "INFO", quiet: bool = False) -> None:
         if check_and_run_demo_mode(program, run_prompt_func, quiet_mode, cli_logger):
             return  # Exit after demo is complete
 
-        elif hasattr(process, "user_prompt") and process.user_prompt:
-            # Run with embedded user prompt from TOML
-            run_prompt_func(process.user_prompt, source="embedded")
-
+        # Handle prompt logic: custom prompt (-p), embedded prompt, or skip to interactive
+        if prompt is not None:
+            # Custom prompt provided via -p flag
+            if prompt:  # Non-empty string
+                run_prompt_func(prompt, source="command line")
+            # else: empty string means skip to interactive mode
         else:
-            # Interactive mode
-            if not quiet_mode:
-                click.echo("\nStarting interactive chat session. Type 'exit' or 'quit' to end.")
+            embedded_prompt = getattr(process, "user_prompt", "")
+            if isinstance(embedded_prompt, str) and embedded_prompt:
+                # Show embedded user prompt and ask user if they want to run it
+                if not quiet_mode:
+                    click.echo("\nFound embedded user prompt:")
+                    prompt_preview = embedded_prompt
+                    if len(prompt_preview) > 200:
+                        prompt_preview = prompt_preview[:197] + "..."
+                    click.echo(f'  "{prompt_preview}"')
+                    click.echo()
 
-            # Show initial token count for Anthropic models (unless in quiet mode)
-            if not quiet_mode and process.provider in ANTHROPIC_PROVIDERS:
+                    if click.confirm("Run this embedded prompt?"):
+                        run_prompt_func(embedded_prompt, source="embedded")
+                else:
+                    # In quiet mode, just run the embedded prompt
+                    run_prompt_func(embedded_prompt, source="embedded")
+
+        # Interactive mode (always reached now unless demo mode exited)
+        if not quiet_mode:
+            click.echo("\nStarting interactive chat session. Type 'exit' or 'quit' to end.")
+
+        # Show initial token count if supported (unless in quiet mode)
+        if not quiet_mode:
+            try:
+                # Count tokens in the current context - SyncLLMProcess.count_tokens is already synchronous
+                token_info = process.count_tokens()
+                if token_info and "input_tokens" in token_info:
+                    click.echo(
+                        f"Initial context size: {token_info['input_tokens']:,} tokens ({token_info['percentage']:.1f}% of {token_info['context_window']:,} token context window)"
+                    )
+            except Exception as e:
+                cli_logger.warning(f"Failed to count initial tokens: {str(e)}")
+
+        while True:
+            # Display token usage if available from the count_tokens method (unless in quiet mode)
+            token_display = ""
+            if not quiet_mode:
                 try:
-                    # Count tokens in the current context - SyncLLMProcess.count_tokens is already synchronous
+                    # Count tokens for display - SyncLLMProcess.count_tokens is already synchronous
                     token_info = process.count_tokens()
                     if token_info and "input_tokens" in token_info:
-                        click.echo(
-                            f"Initial context size: {token_info['input_tokens']:,} tokens ({token_info['percentage']:.1f}% of {token_info['context_window']:,} token context window)"
-                        )
+                        token_display = f" [Tokens: {token_info['input_tokens']:,}/{token_info['context_window']:,}]"
                 except Exception as e:
-                    cli_logger.warning(f"Failed to count initial tokens: {str(e)}")
+                    cli_logger.warning(f"Failed to count tokens for prompt: {str(e)}")
 
-            while True:
-                # Display token usage if available from the count_tokens method (unless in quiet mode)
-                token_display = ""
-                if not quiet_mode and process.provider in ANTHROPIC_PROVIDERS:
-                    try:
-                        # Count tokens for display - SyncLLMProcess.count_tokens is already synchronous
-                        token_info = process.count_tokens()
-                        if token_info and "input_tokens" in token_info:
-                            token_display = (
-                                f" [Tokens: {token_info['input_tokens']:,}/{token_info['context_window']:,}]"
-                            )
-                    except Exception as e:
-                        cli_logger.warning(f"Failed to count tokens for prompt: {str(e)}")
+            user_input = click.prompt(f"\nYou{token_display}", prompt_suffix="> ")
 
-                user_input = click.prompt(f"\nYou{token_display}", prompt_suffix="> ")
-
-                if user_input.lower() in ("exit", "quit"):
-                    if not quiet_mode:
-                        click.echo("Ending session.")
-                    break
-
-                # Track time for this run
-                start_time = time.time()
-
-                # Show a spinner while running (unless in quiet mode)
+            if user_input.lower() in ("exit", "quit"):
                 if not quiet_mode:
-                    click.echo("Thinking...", nl=False)
+                    click.echo("Ending session.")
+                break
 
-                if not getattr(process, "state", []):
-                    log_program_info(process, user_input, cli_logger)
-                # Run the process without passing callbacks (already registered above)
-                run_result = process.run(user_input)
+            # Track time for this run
+            start_time = time.time()
 
-                # Get the elapsed time
-                elapsed = time.time() - start_time
+            # Show a spinner while running (unless in quiet mode)
+            if not quiet_mode:
+                click.echo("Thinking...", nl=False)
 
-                # Clear the "Thinking..." text (unless in quiet mode)
-                if not quiet_mode:
-                    click.echo("\r" + " " * 12 + "\r", nl=False)
+            if not getattr(process, "state", []):
+                log_program_info(process, user_input, cli_logger)
+            # Run the process without passing callbacks (already registered above)
+            run_result = process.run(user_input)
 
-                # Token counting is now handled before each prompt using the count_tokens method
+            # Get the elapsed time
+            elapsed = time.time() - start_time
 
-                # Log basic info
-                if run_result.api_calls > 0:
-                    cli_logger.info(
-                        f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s"
-                    )
+            # Clear the "Thinking..." text (unless in quiet mode)
+            if not quiet_mode:
+                click.echo("\r" + " " * 12 + "\r", nl=False)
 
-                # Get the last assistant message
-                response = process.get_last_message()
+            # Token counting is now handled before each prompt using the count_tokens method
 
-                # Display the response (with or without model name based on quiet mode)
-                if quiet_mode:
-                    click.echo(f"\n{response}")
-                else:
-                    display_name = process.display_name or process.model_name
-                    click.echo(f"\n{display_name}> {response}")
+            # Log basic info
+            if run_result.api_calls > 0:
+                cli_logger.info(
+                    f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s"
+                )
 
-                # Display token usage stats if available (unless in quiet mode)
-                if not quiet_mode and hasattr(run_result, "total_tokens") and run_result.total_tokens > 0:
-                    click.echo(
-                        f"[API calls: {run_result.api_calls}, "
-                        f"Tool calls: {run_result.tool_calls}, "
-                        f"Tokens: {run_result.input_tokens}/{run_result.output_tokens}/{run_result.total_tokens} (in/out/total)]"
-                    )
+            # Get the last assistant message
+            response = process.get_last_message()
+
+            # Display the response (with or without model name based on quiet mode)
+            if quiet_mode:
+                click.echo(f"\n{response}")
+            else:
+                display_name = process.display_name or process.model_name
+                click.echo(f"\n{display_name}> {response}")
+
+            # Display token usage stats if available (unless in quiet mode)
+            if not quiet_mode and hasattr(run_result, "total_tokens") and run_result.total_tokens > 0:
+                click.echo(
+                    f"[API calls: {run_result.api_calls}, "
+                    f"Tool calls: {run_result.tool_calls}, "
+                    f"Tokens: {run_result.input_tokens}/{run_result.output_tokens}/{run_result.total_tokens} (in/out/total)]"
+                )
 
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)

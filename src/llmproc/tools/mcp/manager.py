@@ -176,8 +176,12 @@ class MCPManager:
             """Return the list of Tool objects for *server_name* with retry logic."""
             retry_count = 0
             max_retries = MCP_MAX_FETCH_RETRIES
-            fail_on_init_timeout = os.environ.get("LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT", "true").lower() in ("true", "1", "yes")
-            
+            fail_on_init_timeout = os.environ.get("LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT", "true").lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+
             while retry_count <= max_retries:
                 try:
                     if getattr(self.aggregator, "transient", False):
@@ -187,32 +191,27 @@ class MCPManager:
                     client = await self.aggregator._get_or_create_client(server_name)  # type: ignore[attr-defined]
                     result = await client.list_tools()
                     return result.tools or []
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     retry_count += 1
                     if retry_count <= max_retries:
                         logger.warning(
                             MCP_LOG_RETRY_FETCH.format(
-                                server=server_name, 
-                                attempt=retry_count, 
-                                max_attempts=max_retries + 1
+                                server=server_name, attempt=retry_count, max_attempts=max_retries + 1
                             )
                         )
                         # Exponential backoff
                         await asyncio.sleep(1 * (2 ** (retry_count - 1)))
                     else:
-                        error_msg = MCP_ERROR_TOOL_FETCH_TIMEOUT.format(
-                            server=server_name, 
-                            timeout=tool_fetch_timeout
-                        )
+                        error_msg = MCP_ERROR_TOOL_FETCH_TIMEOUT.format(server=server_name, timeout=tool_fetch_timeout)
                         logger.error(error_msg)
-                        
+
                         if fail_on_init_timeout:
                             raise RuntimeError(error_msg)
                         return []
                 except Exception as exc:  # noqa: BLE001 – log and continue
                     error_msg = f"Unable to fetch tools from MCP server '{server_name}': {exc}"
                     logger.error(error_msg)
-                    
+
                     if fail_on_init_timeout:
                         raise RuntimeError(error_msg)
                     return []
@@ -224,8 +223,12 @@ class MCPManager:
         server_names = {d.server for d in self.mcp_tools}
 
         # Read environment variable to determine whether to fail on MCP initialization timeout
-        fail_on_init_timeout = os.environ.get("LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT", "true").lower() in ("true", "1", "yes")
-        
+        fail_on_init_timeout = os.environ.get("LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
         try:
             # Apply timeout to the concurrent tool fetching
             async with asyncio.timeout(tool_fetch_timeout):
@@ -237,7 +240,7 @@ class MCPManager:
                         strict=False,
                     )
                 }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Provide more detailed error with server names
             server_list = ", ".join(server_names)
             error_msg = (
@@ -248,14 +251,14 @@ class MCPManager:
                 f"(current value: {tool_fetch_timeout:.1f} seconds) or check the MCP servers' status."
             )
             logger.error(error_msg)
-            
+
             if fail_on_init_timeout:
                 raise RuntimeError(error_msg)
             return []
         except Exception as exc:
             error_msg = f"Error fetching tools from MCP servers: {exc}"
             logger.error(error_msg)
-            
+
             if fail_on_init_timeout:
                 raise RuntimeError(error_msg)
             return []
@@ -266,7 +269,9 @@ class MCPManager:
             if not server_tools:
                 # Check if we should fail when a server returns no tools
                 if fail_on_init_timeout:
-                    error_msg = f"MCP server '{server}' returned no tools. This may indicate a server configuration issue."
+                    error_msg = (
+                        f"MCP server '{server}' returned no tools. This may indicate a server configuration issue."
+                    )
                     logger.error(error_msg)
                     raise RuntimeError(error_msg)
                 continue

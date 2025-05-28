@@ -1,0 +1,335 @@
+# .github/workflows/llmproc-code-implementation.yml
+#
+# This workflow implements code changes requested in GitHub issues or PRs using Claude.
+#
+# Required secrets:
+# - ANTHROPIC_API_KEY: API key for Claude
+# - LLMPROC_WRITE_TOKEN: GitHub personal access token with write permissions (contents, pull-requests)
+#
+# How it works:
+# 1. Triggered when someone comments "@llmproc /code <request>" on an issue or PR
+# 2. Posts an initial status comment indicating processing has started
+# 3. Creates a new feature branch from the base branch (main/master)
+# 4. Uses llmproc with Claude to implement the requested changes
+# 5. Commits the changes if any were made
+# 6. Creates a PR with the implemented changes if there are new commits
+# 7. Updates the status comment with the final result
+#
+# Comment behavior:
+# - Creates only ONE status comment per invocation (no duplicate comments)
+# - The initial "Processing..." comment is updated with the final result
+# - Includes implementation details and any work logs
+#
+# Security:
+# - Only responds to comments from repository owners, members, and collaborators
+# - Uses GitHub token for authentication
+#
+# Request format:
+# - Single line: @llmproc /code Add a new feature X
+# - Multi-line:
+#   @llmproc /code Implement the following:
+#   - Add feature X
+#   - Update documentation
+#
+# Development mode (uses llmproc from source):
+# - @llmproc dev /code <request>
+#
+# Production mode (uses llmproc from PyPI via uvx):
+# - @llmproc /code <request>
+
+name: LLMProc /code
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+
+    # Only run when:
+    # 1. Comment contains "@llmproc /code" or "@llmproc dev /code"
+    # 2. Comment is from a trusted user
+    if: >
+      (contains(github.event.comment.body, '@llmproc /code') ||
+       contains(github.event.comment.body, '@llmproc dev /code')) &&
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
+
+    steps:
+      # -- 1. Post initial status comment ----------------------------------
+      - name: Post initial status comment
+        id: start_comment
+        env:
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cid=$(gh api --method POST \
+                "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
+                -f body="🔨 **Processing your code request...** — [View logs]($RUN_URL)" \
+                --jq .id)
+          echo "id=$cid" >> $GITHUB_OUTPUT
+
+      # -- 2. Extract request from comment ---------------------------------
+      - name: Extract request
+        id: extract_request
+        run: |
+          # Extract everything after "@llmproc /code" or "@llmproc dev /code"
+          request=$(echo "${{ github.event.comment.body }}" | sed -n 's/.*@llmproc\( dev\)\? \/code[[:space:]]*//p')
+
+          # If sed didn't find the pattern, try a different approach
+          if [ -z "$request" ]; then
+            # Use awk to find the line with @llmproc /code and get everything after
+            request=$(echo "${{ github.event.comment.body }}" | awk '/@llmproc( dev)? \/code/ {sub(/.*@llmproc( dev)? \/code[[:space:]]*/, ""); found=1} found {print}' | sed '/^$/d')
+          fi
+
+          # Base64 encode to preserve newlines and special characters
+          request_b64=$(echo "$request" | base64 | tr -d '\n')
+          echo "request=$request_b64" >> $GITHUB_OUTPUT
+
+      # -- 3. Get context details ------------------------------------------
+      - name: Get issue/PR context
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+        run: |
+          # Check if this is a PR
+          if [ -n "${{ github.event.issue.pull_request }}" ]; then
+            echo "is_pr=true" >> $GITHUB_OUTPUT
+
+            # Get PR details
+            gh api "/repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" > pr.json
+            echo "base_branch=$(jq -r .base.ref pr.json)" >> $GITHUB_OUTPUT
+          else
+            echo "is_pr=false" >> $GITHUB_OUTPUT
+            # For issues, use the default branch
+            echo "base_branch=$(gh api /repos/${{ github.repository }} --jq .default_branch)" >> $GITHUB_OUTPUT
+          fi
+
+          # Get title and body
+          echo "title_b64=$(echo "${{ github.event.issue.title }}" | base64 | tr -d '\n')" >> $GITHUB_OUTPUT
+          body="${{ github.event.issue.body }}"
+          if [ -z "$body" ]; then
+            body="(No description provided)"
+          fi
+          echo "body_b64=$(echo "$body" | base64 | tr -d '\n')" >> $GITHUB_OUTPUT
+
+      # -- 4. Checkout and setup -------------------------------------------
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for proper branching
+          ref: ${{ steps.context.outputs.base_branch }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create feature branch
+        id: create_branch
+        run: |
+          # Create unique branch name
+          timestamp=$(date +%s)
+          branch_name="llmproc-code-${timestamp}"
+
+          # Create and checkout new branch
+          git checkout -b "$branch_name"
+          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+
+          # Record initial commit for comparison
+          echo "initial_commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      # -- 5. Setup Node.js and Claude Code tools --------------------------
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Install Claude Code globally
+        run: npm install -g @anthropic-ai/claude-code@1.0.2
+
+      # -- 6. Setup Python and llmproc -------------------------------------
+      - name: Setup Python and dependencies
+        run: |
+          python -m pip install uv
+          uv venv
+          source .venv/bin/activate
+          uv sync --all-extras
+
+      - name: Create implementation prompt
+        id: create_prompt
+        run: |
+          request=$(echo "${{ steps.extract_request.outputs.request }}" | base64 -d)
+          title=$(echo "${{ steps.context.outputs.title_b64 }}" | base64 -d)
+          body=$(echo "${{ steps.context.outputs.body_b64 }}" | base64 -d)
+
+          if [ "${{ steps.context.outputs.is_pr }}" = "true" ]; then
+            printf '%s\n\nPR Description:\n%s\n\nImplementation Request:\n%s\n' \
+              "Context: This request is from a pull request titled: $title" \
+              "$body" \
+              "$request" > prompt.txt
+          else
+            printf '%s\n\nIssue Description:\n%s\n\nImplementation Request:\n%s\n' \
+              "Context: This request is from an issue titled: $title" \
+              "$body" \
+              "$request" > prompt.txt
+          fi
+
+      # -- 7. Run llmproc to implement changes -----------------------------
+      - name: Run llmproc to implement changes
+        id: implement_step
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Check if the comment starts with "@llmproc dev"
+          comment_start=$(echo "${{ github.event.comment.body }}" | head -n 1 | xargs | cut -d' ' -f1-2)
+          if [ "$comment_start" = "@llmproc dev" ]; then
+            echo "Using llmproc from source"
+            source .venv/bin/activate
+            output=$(llmproc .github/config/llmproc-code-claude.yaml -f prompt.txt --json)
+          else
+            echo "Using llmproc from PyPI"
+            output=$(uvx llmproc .github/config/llmproc-code-claude.yaml -f prompt.txt --json)
+          fi
+
+          # Save output for debugging
+          echo "$output" > llmproc_result.json
+
+          # Extract and encode results
+          if jq -e . llmproc_result.json >/dev/null 2>&1; then
+            last_message=$(jq -r '.last_message // "Error: No message in output"' llmproc_result.json)
+            last_message_b64=$(echo "$last_message" | base64 | tr -d '\n')
+            echo "last_message=$last_message_b64" >> $GITHUB_OUTPUT
+
+            # Extract and encode stderr log as markdown bullets
+            stderr_log=$(jq -r '.stderr | if length > 0 then map("- " + .) | join("\n") else empty end' llmproc_result.json)
+            if [ -n "$stderr_log" ]; then
+              stderr_log_b64=$(echo "$stderr_log" | base64 | tr -d '\n')
+            else
+              stderr_log_b64=""
+            fi
+            echo "stderr_log=$stderr_log_b64" >> $GITHUB_OUTPUT
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            # Handle non-JSON output
+            echo "last_message=$(echo 'Error: Failed to parse llmproc output' | base64 | tr -d '\n')" >> $GITHUB_OUTPUT
+            echo "stderr_log=" >> $GITHUB_OUTPUT
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      # -- 8. Detect commits and create PR if needed ----------------------
+      - name: Detect new commits
+        id: check_commits
+        run: |
+          current_commit=$(git rev-parse HEAD)
+          if [ "$current_commit" != "${{ steps.create_branch.outputs.initial_commit }}" ]; then
+            echo "has_commits=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_commits=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push branch and create PR
+        id: create_pr
+        if: steps.check_commits.outputs.has_commits == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+        run: |
+          # Push the branch
+          git push origin "${{ steps.create_branch.outputs.branch_name }}"
+
+          # Get the last commit message as PR title
+          pr_title=$(git log -1 --format=%s)
+
+          # Decode the implementation output
+          implementation_output=$(echo "${{ steps.implement_step.outputs.last_message }}" | base64 -d)
+
+          # Create PR body
+          pr_body_file=pr_body.txt
+
+          echo "## Implementation Output" > "$pr_body_file"
+          echo "" >> "$pr_body_file"
+          echo "$implementation_output" >> "$pr_body_file"
+          echo "" >> "$pr_body_file"
+
+          # Add work log if present
+          if [ -n "${{ steps.implement_step.outputs.stderr_log }}" ]; then
+            echo "## Process Log" >> "$pr_body_file"
+            echo "" >> "$pr_body_file"
+            echo "<details>" >> "$pr_body_file"
+            echo "<summary>Work log entries</summary>" >> "$pr_body_file"
+            echo "" >> "$pr_body_file"
+            echo "${{ steps.implement_step.outputs.stderr_log }}" | base64 -d >> "$pr_body_file"
+            echo "</details>" >> "$pr_body_file"
+            echo "" >> "$pr_body_file"
+          fi
+
+          # Add reference to original issue/PR
+          echo "---" >> "$pr_body_file"
+          echo "Requested in #${{ github.event.issue.number }}" >> "$pr_body_file"
+          echo "Automated by llmproc GitHub Action" >> "$pr_body_file"
+
+          # Create the PR using the last commit message as title
+          pr_url=$(gh pr create \
+            --title "$pr_title" \
+            --body-file "$pr_body_file" \
+            --base "${{ steps.context.outputs.base_branch }}" \
+            --head "${{ steps.create_branch.outputs.branch_name }}" \
+            --repo "${{ github.repository }}" \
+            | tail -1)
+
+          echo "pr_url=$pr_url" >> $GITHUB_OUTPUT
+
+      # -- 9. Update status comment ----------------------------------------
+      - name: Update status comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+          COMMENT_ID: ${{ steps.start_comment.outputs.id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          IMPLEMENT_SUCCESS: ${{ steps.implement_step.outputs.success }}
+          HAS_COMMITS: ${{ steps.check_commits.outputs.has_commits }}
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+        run: |
+          # Skip if we never created the start comment
+          [[ -z "$COMMENT_ID" ]] && exit 0
+
+          # Determine the status message
+          if [[ "$IMPLEMENT_SUCCESS" != "true" ]]; then
+            body="❌ **Failed to process code request** — [View logs]($RUN_URL)"
+          elif [[ "$HAS_COMMITS" == "true" ]] && [[ -n "$PR_URL" ]]; then
+            body="✅ **Code implemented successfully!** — [View PR]($PR_URL) | [View logs]($RUN_URL)"
+          elif [[ "$HAS_COMMITS" != "true" ]]; then
+            # Decode the full response to show why no changes were made
+            response=$(echo "${{ steps.implement_step.outputs.last_message }}" | base64 -d)
+            body="ℹ️ **No changes needed**
+
+            $response
+
+            [View logs]($RUN_URL)"
+          else
+            body="⚠️ **Changes made but PR creation failed** — [View logs]($RUN_URL)"
+          fi
+
+          # Update the comment
+          gh api --method PATCH \
+            "/repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+            --field body="$body"

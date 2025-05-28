@@ -132,6 +132,7 @@ flowchart TB
   - `system_prompt`: Base system prompt for the model
   - `parameters`: API parameters dictionary
   - `preload_files`: List of files to preload into context
+  - `preload_relative_to`: Whether preload paths are relative to the program file or CWD
   - `linked_programs`: Dictionary of linked programs
   - `tool_manager`: Manager for all tool operations
   - `compiled`: Flag indicating if the program has been validated
@@ -279,6 +280,7 @@ def get_enriched_system_prompt(self, process_instance=None, include_env: bool = 
 - `linked_programs`: Dictionary of linked programs
 - `tools`: List of tool functions (or dict with aliases)
 - `preload_files`: List of files to preload
+- `preload_relative_to`: Whether preload paths are relative to the program file or CWD
 - `base_dir`: Base directory for resolving paths
 - `tool_manager`: Manager for all tool operations
 

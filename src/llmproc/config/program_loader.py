@@ -9,7 +9,7 @@ from typing import Any, Optional, Union
 import yaml
 from pydantic import ValidationError
 
-from llmproc.config.schema import LLMProgramConfig
+from llmproc.config.schema import EnvInfoConfig, LLMProgramConfig
 from llmproc.config.tool import ToolConfig
 from llmproc.config.utils import resolve_path
 from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
@@ -32,10 +32,15 @@ def normalize_base_dir(base_dir: Optional[Union[str, Path]] = None) -> Path:
     return base_dir
 
 
-def resolve_preload_files(config: LLMProgramConfig, base_dir: Path) -> list[str]:
-    """Return resolved preload file paths or ``None`` if not specified."""
+def resolve_preload_files(config: LLMProgramConfig, base_dir: Path) -> tuple[list[str] | None, str]:
+    """Return resolved preload file paths and relative mode."""
     if not config.preload or not config.preload.files:
-        return None
+        return None, "program"
+
+    relative_to = getattr(config.preload, "relative_to", "program")
+
+    if relative_to == "cwd":
+        return list(config.preload.files), "cwd"
 
     preload_files = []
     for file_path in config.preload.files:
@@ -46,7 +51,7 @@ def resolve_preload_files(config: LLMProgramConfig, base_dir: Path) -> list[str]
             preload_files.append(str(resolved_path))
         except Exception as e:
             warnings.warn(f"Error resolving path '{file_path}': {str(e)}", stacklevel=2)
-    return preload_files
+    return preload_files, "program"
 
 
 def resolve_mcp_config(config: LLMProgramConfig, base_dir: Path) -> str:
@@ -255,51 +260,29 @@ class ProgramLoader:
             # For backward compatibility with older TOML files
             display_name = config.model.display_name
 
-        # Extract tools and aliases from config
+        # Extract tools from config
         tools_list = config.tools.builtin if config.tools else []
-        tool_aliases: dict[str, str] = {}
-        if config.tools:
-            for item in config.tools.builtin:
-                if isinstance(item, ToolConfig) and item.alias:
-                    tool_aliases[item.alias] = item.name
 
         # Incorporate MCP tool descriptors from [tools.mcp]
         if config.tools and config.tools.mcp:
             tools_list.extend(config.tools.mcp.build_mcp_tools())
-            for server, entry in config.tools.mcp.root.items():
-                if entry == "all":
-                    continue
-                if isinstance(entry, list):
-                    for item in entry:
-                        if isinstance(item, ToolConfig) and item.alias:
-                            tool_aliases[item.alias] = f"{server}{MCP_TOOL_SEPARATOR}{item.name}"
-                        elif isinstance(item, dict) and item.get("alias"):
-                            tool_aliases[item["alias"]] = f"{server}{MCP_TOOL_SEPARATOR}{item.get('name')}"
-                elif isinstance(entry, dict):
-                    for name, val in entry.items():
-                        alias = None
-                        if isinstance(val, dict):
-                            alias = val.get("alias")
-                        elif isinstance(val, ToolConfig):
-                            alias = val.alias
-                        if alias:
-                            tool_aliases[alias] = f"{server}{MCP_TOOL_SEPARATOR}{name}"
 
         # Create the program instance
+        preload_files, preload_relative_to = resolve_preload_files(config, base_dir)
         program = LLMProgram(
             model_name=config.model.name,
             provider=config.model.provider,
             system_prompt=system_prompt,
             parameters=config.parameters,
             display_name=display_name,
-            preload_files=resolve_preload_files(config, base_dir),
+            preload_files=preload_files,
+            preload_relative_to=preload_relative_to,
             mcp_config_path=resolve_mcp_config(config, base_dir),
             mcp_servers=resolve_mcp_servers(config),
             tools=tools_list,
-            tool_aliases=tool_aliases,
             linked_programs=linked_programs,
             linked_program_descriptions=linked_program_descriptions,
-            env_info=config.env_info.model_dump() if config.env_info else {"variables": []},
+            env_info=config.env_info or EnvInfoConfig(),
             file_descriptor=config.file_descriptor.model_dump() if config.file_descriptor else None,
             base_dir=base_dir,
             disable_automatic_caching=config.model.disable_automatic_caching,

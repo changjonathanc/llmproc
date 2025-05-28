@@ -1,15 +1,23 @@
-# .github/workflows/llmproc-resolve.yml
+# .github/workflows/llmproc-resolve-pr-conflict.yml
 #
 # This workflow automatically resolves merge conflicts in pull requests using Claude.
 #
+# Required secrets:
+# - ANTHROPIC_API_KEY: API key for Claude
+# - LLMPROC_WRITE_TOKEN: GitHub personal access token with write permissions (contents, pull-requests)
+#
 # How it works:
-# 1. When someone comments "@llmproc" on a PR with merge conflicts
+# 1. When someone comments "@llmproc /resolve" on a PR with merge conflicts
 # 2. This workflow posts an initial status comment on the PR
 # 3. It creates a new branch from the PR head
 # 4. It merges the base branch, which generates conflicts
 # 5. It uses llmproc with Claude to automatically resolve those conflicts
 # 6. It commits the changes and creates a new PR with the resolved conflicts
 # 7. It updates the status comment with the final result (success/failure/skipped)
+#
+# The created PR includes:
+# - Resolution Output: Claude's final response explaining what was resolved
+# - Process Log: Work log (stderr) showing step-by-step actions taken
 #
 # Technical Specification:
 #
@@ -19,7 +27,7 @@
 #   RESOLUTION_BRANCH: A new branch created to resolve conflicts
 #
 # A. Trigger conditions:
-#    - Comment on a PR containing "@llmproc" mention
+#    - Comment on a PR containing "@llmproc /resolve" mention
 #
 # B. Main workflow steps:
 #    1. Fetch PR metadata to determine:
@@ -33,12 +41,16 @@
 #    6. Run llmproc with Claude to resolve conflicts
 #       - Install required dependencies (Node.js, Bun, Claude Code package)
 #       - Execute llmproc with Claude Code MCP server for tools
+#       - Capture both the final response and work log (stderr) for the PR body
 #    7. Verify resolution success with these checks:
 #       - Verify working tree is clean (all changes committed)
 #       - Verify RESOLUTION_BRANCH contains all commits from PR_BRANCH
 #       - Verify RESOLUTION_BRANCH has merge commit from TARGET_BRANCH
 #       - Verify RESOLUTION_BRANCH can be merged into TARGET_BRANCH without conflicts
 #    8. Push RESOLUTION_BRANCH and create a new PR targeting TARGET_BRANCH
+#       - PR body includes Resolution Output (Claude's final response)
+#       - PR body includes Process Log (work log entries as markdown bullets)
+#       - Shows clear message when no work log was generated
 #    9. Update the initial status comment with the final result
 #
 # Resolution is successful if:
@@ -50,8 +62,12 @@
 # The human reviewer should verify:
 # - Logical correctness of conflict resolutions
 # - Preservation of intended functionality
+#
+# Usage:
+# - Production mode (uses llmproc from PyPI): @llmproc /resolve
+# - Development mode (uses llmproc from source): @llmproc dev /resolve
 
-name: Resolve merge conflicts via llmproc
+name: LLMProc /resolve
 
 on:
   issue_comment: # top-level PR comments
@@ -68,14 +84,16 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
 
-    # Fire only when someone @-mentions llmproc in a PR comment
+    # Fire only when someone @-mentions llmproc /resolve in a PR comment
     if: >
       (
         (github.event_name == 'issue_comment' &&
         github.event.issue.pull_request != null &&
-        contains(github.event.comment.body, '@llmproc')) ||
+        (contains(github.event.comment.body, '@llmproc /resolve') ||
+         contains(github.event.comment.body, '@llmproc dev /resolve'))) ||
         (github.event_name == 'pull_request_review_comment' &&
-        contains(github.event.comment.body, '@llmproc'))
+        (contains(github.event.comment.body, '@llmproc /resolve') ||
+         contains(github.event.comment.body, '@llmproc dev /resolve')))
       ) &&
       (
         github.event.comment.author_association == 'OWNER'  ||
@@ -88,7 +106,7 @@ jobs:
       - name: Fetch PR JSON
         id: pr
         env:
-          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
           URL: ${{ github.event.issue.pull_request.url || github.event.comment.pull_request_url }}
         run: |
           gh api "$URL" > pr.json
@@ -101,7 +119,7 @@ jobs:
       - name: "Post initial status comment"
         id: start_comment
         env:
-          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
           PR_NUM: ${{ steps.pr.outputs.num }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -132,7 +150,7 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.head }}
           fetch-depth: 0
-          token: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          token: ${{ secrets.LLMPROC_WRITE_TOKEN }}
 
       - name: Prepare resolve branch
         if: steps.abort_check.outputs.skip != 'true'
@@ -161,24 +179,42 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@1.0.2
 
       - name: Claude resolves conflicts using llmproc
+        id: resolve_step
         if: steps.abort_check.outputs.skip != 'true'
         run: |
-          # Install uv for Python dependency management
+          # Always install uv for Python dependency management
           python -m pip install uv
-          uv venv
-          source .venv/bin/activate
-          uv sync --all-extras
 
-          # Verify Claude is working and available
-          claude --version
+          # Check if the comment contains "@llmproc dev /resolve"
+          if echo "${{ github.event.comment.body }}" | grep -q "@llmproc dev /resolve"; then
+            echo "Using llmproc from source"
+            uv venv
+            source .venv/bin/activate
+            uv sync --all-extras
+            claude --version
+            output=$(llmproc .github/config/llmproc-resolve-claude.yaml --json)
+          else
+            echo "Using llmproc from PyPI"
+            claude --version
+            output=$(uvx llmproc .github/config/llmproc-resolve-claude.yaml --json)
+          fi
+          echo "$output" > llmproc_result.json
+          last_message=$(jq -r '.last_message' llmproc_result.json)
+          last_message_b64=$(echo "$last_message" | base64 | tr -d '\n')
+          echo "last_message=$last_message_b64" >> $GITHUB_OUTPUT
 
-          # Run llmproc with improved MCP configuration
-          llmproc .github/config/claude_resolve_pr_conflict.yaml
+          # Extract and encode stderr log as markdown bullets
+          stderr_log=$(jq -r '.stderr | if length > 0 then map("- " + .) | join("\n") else empty end' llmproc_result.json)
+          if [ -n "$stderr_log" ]; then
+            stderr_log_b64=$(echo "$stderr_log" | base64 | tr -d '\n')
+          else
+            stderr_log_b64=""
+          fi
+          echo "stderr_log=$stderr_log_b64" >> $GITHUB_OUTPUT
         env:
-          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          LLMPROC_TOOL_FETCH_TIMEOUT: 180
-          LLMPROC_MCP_TRANSIENT: true
+          LLMPROC_TOOL_FETCH_TIMEOUT: 10
 
       # -- 7a. Verify resolution success with comprehensive checks -----------
       - name: Verify successful conflict resolution
@@ -249,38 +285,55 @@ jobs:
         if: steps.abort_check.outputs.skip != 'true' && steps.diff_check.outputs.skip != 'true' && steps.conflict_check.outputs.failed != 'true'
         id: newpr
         env:
-          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          body_file=pr_body.txt
+          printf "This PR resolves merge conflicts in #${{ steps.pr.outputs.num }} using llmproc. [View logs]($RUN_URL)\n\n" > "$body_file"
+
+          printf "## Resolution Output\n\n" >> "$body_file"
+          echo "${{ steps.resolve_step.outputs.last_message }}" | base64 -d >> "$body_file"
+
+          printf "\n\n## Process Log\n\n" >> "$body_file"
+
+          # Handle stderr log
+          if [ -n "${{ steps.resolve_step.outputs.stderr_log }}" ]; then
+            echo "${{ steps.resolve_step.outputs.stderr_log }}" | base64 -d >> "$body_file"
+          else
+            printf "_No work log was generated during this resolution._\n" >> "$body_file"
+          fi
+
           url=$(gh pr create \
                   --head "${{ steps.vars.outputs.branch }}" \
                   --base "${{ steps.pr.outputs.base }}" \
                   --title "Auto-resolved conflicts for #${{ steps.pr.outputs.num }}" \
-                  --body  "This PR resolves merge conflicts in #${{ steps.pr.outputs.num }} using Claude.")
+                  --body-file "$body_file")
           echo "url=$url" >> $GITHUB_OUTPUT
 
       # -- 9. Update the initial status comment with final result ------------
       - name: "Update status comment with final result"
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.CONFLICT_RESOLVER_TOKEN }}
+          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
           COMMENT_ID: ${{ steps.start_comment.outputs.id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           NEW_PR_URL: ${{ steps.newpr.outputs.url }}
           FAILED: ${{ steps.conflict_check.outputs.failed }}
           SKIPPED: ${{ steps.diff_check.outputs.skip }}
           NO_CONFLICTS: ${{ steps.abort_check.outputs.skip }}
+          RESOLVE_OUTCOME: ${{ steps.resolve_step.outcome }}
         run: |
           # If, for some reason, we never created the start comment, bail quietly
           [[ -z "$COMMENT_ID" ]] && exit 0
 
           if [[ "$NO_CONFLICTS" == 'true' ]]; then
             body="✅ **No conflicts detected** — PR is already mergeable. [View logs]($RUN_URL)"
-          elif [[ "$FAILED" == 'true' ]]; then
+          elif [[ "$FAILED" == 'true' || "$RESOLVE_OUTCOME" != 'success' ]]; then
             body="❌ **Conflict resolution failed** — Claude was unable to resolve all conflict markers. [View logs]($RUN_URL)"
           elif [[ "$SKIPPED" == 'true' ]]; then
             body="⚠️ **Conflict resolution did not produce any changes** compared to the base branch. [View logs]($RUN_URL)"
           elif [[ -n "$NEW_PR_URL" ]]; then
-            body="✅ **Conflicts resolved** — Follow-up PR: $NEW_PR_URL"
+            body="✅ **Conflicts resolved** — Follow-up PR: $NEW_PR_URL — [View logs]($RUN_URL)"
           else
             body="✅ **Conflicts resolved** — [View logs]($RUN_URL)"
           fi

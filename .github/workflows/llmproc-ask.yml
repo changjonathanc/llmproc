@@ -1,0 +1,258 @@
+# .github/workflows/llmproc-ask.yml
+#
+# This workflow answers questions posted in GitHub issues and PRs using Claude.
+#
+# Required secrets:
+# - ANTHROPIC_API_KEY: API key for Claude
+# Note: Uses the default GITHUB_TOKEN provided by GitHub Actions (no additional token setup needed)
+#
+# How it works:
+# 1. Triggered when someone comments "@llmproc /ask <query>" on an issue or PR
+# 2. Posts an initial status comment indicating processing has started
+# 3. Extracts the query from the comment (supports multi-line queries)
+# 4. Gathers context based on whether it's an issue or PR
+# 5. Runs llmproc with Claude to answer the question
+# 6. Updates the initial status comment with the complete response
+#
+# Security:
+# - Only responds to comments from repository owners, members, and collaborators
+# - Uses GitHub token for posting/updating comments
+#
+# Query format:
+# - Single line: @llmproc /ask What is the purpose of this file?
+# - Multi-line:
+#   @llmproc /ask Can you explain how this works?
+#   Please include details about the implementation.
+#
+# Development mode (uses llmproc from source):
+# - @llmproc dev /ask What is the purpose of this file?
+
+name: LLMProc /ask
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  answer:
+    runs-on: ubuntu-latest
+
+    # Only run when comment contains "@llmproc /ask" and is from a trusted user
+    if: >
+      (contains(github.event.comment.body, '@llmproc /ask') ||
+       contains(github.event.comment.body, '@llmproc dev /ask')) &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
+
+    steps:
+      # -- 1. Extract command and context using github-script --------------
+      - name: Extract command and context
+        id: extract
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = context.payload.comment.body;
+            const issue = context.payload.issue;
+
+            // Check if this is dev mode
+            const isDev = comment.includes('@llmproc dev');
+
+            // Extract query after @llmproc /ask
+            const pattern = isDev ? /@llmproc\s+dev\s+\/ask\s+([\s\S]*)/ : /@llmproc\s+\/ask\s+([\s\S]*)/;
+            const match = comment.match(pattern);
+
+            if (!match || !match[1]) {
+              core.setFailed('Could not extract query from comment');
+              return;
+            }
+
+            const query = match[1].trim();
+
+            // Set outputs
+            core.setOutput('is_dev', isDev);
+            core.setOutput('query', query);
+            core.setOutput('issue_number', issue.number);
+            core.setOutput('issue_title', issue.title);
+            core.setOutput('issue_body', issue.body || '(No description provided)');
+            core.setOutput('is_pr', !!issue.pull_request);
+
+            // Log for debugging
+            console.log('Extracted query:', query);
+            console.log('Is PR:', !!issue.pull_request);
+            console.log('Is dev mode:', isDev);
+
+      # -- 2. Create initial status comment --------------------------------
+      - name: Create status comment
+        id: status_comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const { data: comment } = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.extract.outputs.issue_number }},
+              body: `🤔 **Processing your question...** — [View logs](${runUrl})`
+            });
+
+            core.setOutput('comment_id', comment.id);
+
+      # -- 3. Get PR details if applicable --------------------------------
+      - name: Get PR details
+        id: pr_details
+        if: steps.extract.outputs.is_pr == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: ${{ steps.extract.outputs.issue_number }}
+              });
+
+              core.setOutput('base_branch', pr.base.ref);
+              core.setOutput('head_branch', pr.head.ref);
+              console.log(`PR branches: ${pr.head.ref} -> ${pr.base.ref}`);
+            } catch (error) {
+              console.log('Failed to get PR details:', error.message);
+              core.setOutput('base_branch', '');
+              core.setOutput('head_branch', '');
+            }
+
+      # -- 4. Checkout repository ------------------------------------------
+      - uses: actions/checkout@v4
+
+      # -- 5. Setup Claude Code MCP server ---------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Install Claude Code globally
+        run: npm install -g @anthropic-ai/claude-code@1.0.2
+
+      # -- 6. Setup Python and llmproc ------------------------------------
+      - name: Setup Python and dependencies
+        run: |
+          python -m pip install uv
+          if [ "${{ steps.extract.outputs.is_dev }}" = "true" ]; then
+            uv venv
+            source .venv/bin/activate
+            uv sync --all-extras
+          fi
+
+      # -- 7. Create prompt file -------------------------------------------
+      - name: Create prompt file
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const query = ${{ toJSON(steps.extract.outputs.query) }};
+            const title = ${{ toJSON(steps.extract.outputs.issue_title) }};
+            const body = ${{ toJSON(steps.extract.outputs.issue_body) }};
+            const isPR = ${{ steps.extract.outputs.is_pr }};
+
+            let prompt;
+            if (isPR) {
+              const baseBranch = ${{ toJSON(steps.pr_details.outputs.base_branch) }};
+              const headBranch = ${{ toJSON(steps.pr_details.outputs.head_branch) }};
+
+              prompt = "I'm in a pull request titled: " + title + "\n\n" +
+                      "PR Description:\n" + body + "\n\n" +
+                      "Source branch: " + headBranch + "\n" +
+                      "Target branch: " + baseBranch + "\n\n" +
+                      "Question: " + query;
+            } else {
+              prompt = "I'm in an issue titled: " + title + "\n\n" +
+                      "Issue Description:\n" + body + "\n\n" +
+                      "Question: " + query;
+            }
+
+            fs.writeFileSync('prompt.txt', prompt);
+            console.log('Created prompt file');
+
+      # -- 8. Run llmproc to answer question -------------------------------
+      - name: Run llmproc
+        id: run_llmproc
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ "${{ steps.extract.outputs.is_dev }}" = "true" ]; then
+            echo "Using llmproc from source"
+            source .venv/bin/activate
+            llmproc .github/config/llmproc-ask-claude.yaml -f prompt.txt --json > llmproc_result.json
+          else
+            echo "Using llmproc from PyPI"
+            uvx llmproc .github/config/llmproc-ask-claude.yaml -f prompt.txt --json > llmproc_result.json
+          fi
+
+          # Validate JSON output
+          if ! jq empty llmproc_result.json 2>/dev/null; then
+            echo "Invalid JSON output from llmproc"
+            exit 1
+          fi
+
+      # -- 9. Update status comment with answer ----------------------------
+      - name: Update status comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let body;
+            const outcome = '${{ steps.run_llmproc.outcome }}';
+
+            if (outcome === 'success') {
+              try {
+                // Read and parse llmproc output
+                const output = JSON.parse(fs.readFileSync('llmproc_result.json', 'utf8'));
+                const response = output.last_message || 'No response generated';
+
+                // Format stderr as work log
+                const workLog = output.stderr && output.stderr.length > 0
+                  ? output.stderr.map(line => `- ${line}`).join('\n')
+                  : null;
+
+                // Build response body
+                body = `✅ **Question answered**\n\n${response}`;
+
+                if (workLog) {
+                  body += `\n\n<details>\n<summary>Work log</summary>\n\n${workLog}\n</details>`;
+                }
+
+                body += `\n\n[View run](${runUrl})`;
+              } catch (error) {
+                console.error('Error parsing llmproc output:', error);
+                body = `❌ **Failed to parse response** — [View logs](${runUrl})`;
+              }
+            } else {
+              body = `❌ **Failed to answer question** — [View logs](${runUrl})`;
+            }
+
+            // Update the comment
+            try {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: ${{ steps.status_comment.outputs.comment_id }},
+                body: body
+              });
+            } catch (error) {
+              console.error('Failed to update comment:', error);
+            }

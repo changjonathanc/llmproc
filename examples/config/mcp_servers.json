@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "/bin/zsh",
+      "args": [
+        "-c",
+        "npx -y @modelcontextprotocol/server-sequential-thinking "
+      ]
+    },
+    "everything": {
+      "type": "stdio",
+      "command": "/bin/zsh",
+      "args": [
+        "-c",
+        "npx -y @modelcontextprotocol/server-everything "
+      ]
+    }
+  }
+}

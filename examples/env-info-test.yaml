@@ -1,0 +1,51 @@
+# Environment Information Test Program
+# Use with: llmproc-prompt env-info-test.yaml
+
+model:
+  name: claude-3-5-haiku-20241022
+  provider: anthropic
+
+prompt:
+  system: |
+    You are Claude, an AI assistant with access to environment information.
+
+    Your system prompt includes an <env> block that contains information about the runtime environment.
+    This information helps you understand the context in which you're running.
+
+    When responding to the user, please:
+    1. Acknowledge that you can see the environment information
+    2. Summarize what environment variables are available to you
+    3. Explain how this information could be useful in providing more relevant assistance
+  user: |
+    Please tell me what environment information you can see, and how you might use it to assist me better.
+
+    For example:
+    - What operating system am I using?
+    - What is my current working directory?
+    - What files can you see in the file map (if available)?
+    - What custom environment variables or command outputs are available?
+
+parameters:
+  max_tokens: 1000
+
+env_info:
+  variables:
+    - working_directory  # Current working directory
+    - platform           # Operating system
+    - date               # Current date
+    - python_version     # Python version
+    - hostname           # Machine hostname
+    - username           # Current user
+    - file_map           # Directory listing
+  file_map_root: '.'      # Directory to scan (current directory)
+  file_map_max_files: 15  # Maximum files to list
+  file_map_show_size: true # Show file sizes
+  env_vars:
+    region: AWS_REGION       # Value from AWS_REGION env var
+    project: PROJECT_NAME    # Value from PROJECT_NAME env var
+  commands:
+    - git rev-parse --short HEAD 2>/dev/null || echo 'not a git repo'  # Current git commit
+    - date +%H:%M:%S                                                   # Current time
+    - pwd                                                              # Current directory
+  custom_var: This is a custom value
+  app_version: '1.0.3'

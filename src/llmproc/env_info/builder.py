@@ -1,14 +1,14 @@
 """Environment information builder for LLM programs."""
 
-import datetime
-import getpass
 import logging
 import os
-import platform
+import subprocess
 import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
+from llmproc.config import EnvInfoConfig
+from llmproc.env_info.constants import STANDARD_VAR_FUNCTIONS
 from llmproc.tools import (
     fd_user_input_instructions,
     file_descriptor_instructions,
@@ -18,77 +18,130 @@ from llmproc.tools import (
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_command(cmd: str) -> str:
+    """Sanitize a shell command name for use as a tag."""
+    return cmd.replace(" ", "_").replace("/", "_").replace("\t", "_")
+
+
 class EnvInfoBuilder:
     """Builder for environment information in system prompts."""
 
+    # ------------------------------------------------------------------
+    # Helper methods
+    # ------------------------------------------------------------------
+
     @staticmethod
-    def build_env_info(env_config: dict, include_env: bool = True) -> str:
-        """Build environment information string based on configuration.
+    def _build_file_map_lines(env_config: EnvInfoConfig) -> list[str]:
+        """Build file map lines for the environment info block."""
+        root_dir = Path(env_config.file_map_root or ".").resolve()
+        show_size = bool(env_config.file_map_show_size)
+        max_files = int(env_config.file_map_max_files)
+        if not root_dir.exists() or not root_dir.is_dir():
+            warnings.warn(
+                f"file_map_root does not exist or is not a directory: {root_dir}",
+                stacklevel=2,
+            )
+            return []
 
-        Args:
-            env_config: Environment configuration dictionary
-            include_env: Whether to include environment info
+        files = [p for p in root_dir.rglob("*") if p.is_file()]
+        lines = ["file_map:"]
+        for path in files[:max_files]:
+            rel = path.relative_to(root_dir)
+            size_part = ""
+            if show_size:
+                try:
+                    size_part = f" ({path.stat().st_size} bytes)"
+                except OSError:
+                    size_part = ""
+            lines.append(f"  {rel}{size_part}")
+        if len(files) > max_files:
+            lines.append(f"  ... ({len(files) - max_files} more files)")
+        return lines
 
-        Returns:
-            Formatted environment information string
-        """
-        # Skip if environment info is disabled
+    @staticmethod
+    def _build_variable_lines(variables: list[str], env_config: EnvInfoConfig) -> list[str]:
+        """Build lines for standard variables."""
+        lines: list[str] = []
+        for var in variables:
+            if var in STANDARD_VAR_FUNCTIONS:
+                lines.append(f"{var}: {STANDARD_VAR_FUNCTIONS[var]()}")
+            elif var == "file_map":
+                lines.extend(EnvInfoBuilder._build_file_map_lines(env_config))
+        return lines
+
+    @staticmethod
+    def _build_custom_var_lines(env_config: EnvInfoConfig) -> list[str]:
+        """Build lines for custom variables in the config."""
+        return [f"{k}: {v}" for k, v in (env_config.model_extra or {}).items() if isinstance(v, str)]
+
+    @staticmethod
+    def _build_env_var_lines(env_config: EnvInfoConfig) -> list[str]:
+        """Build lines for values pulled from actual environment variables."""
+        lines = []
+        for label, var_name in env_config.env_vars.items():
+            env_value = os.getenv(var_name)
+            if env_value:
+                lines.append(f"{label}: {env_value.rstrip()}")
+        return lines
+
+    @staticmethod
+    def _build_command_lines(commands: list[str]) -> list[str]:
+        """Build lines for command outputs."""
+        lines: list[str] = []
+        for i, cmd in enumerate(commands):
+            lines.append(f"> {cmd}")
+            try:
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                output = result.stdout.strip()
+                if output:
+                    lines.extend(output.splitlines())
+                if result.returncode != 0:
+                    lines.append(f"error({result.returncode})")
+            except Exception as e:  # Catch unexpected errors
+                logger.warning("Unexpected error running env_info command '%s': %s", cmd, e)
+                lines.append("error")
+            if i < len(commands) - 1:
+                lines.append("")
+        return lines
+
+    @staticmethod
+    def _resolve_path(base_dir: Path, file_path_str: str) -> Path:
+        """Resolve ``file_path_str`` relative to ``base_dir``."""
+        path = Path(file_path_str)
+        if not path.is_absolute():
+            return (base_dir / path).resolve()
+        return path.resolve()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def build_env_info(env_config: EnvInfoConfig, include_env: bool = True) -> str:
+        """Build environment information string from ``EnvInfoConfig``."""
         if not include_env:
             return ""
 
-        variables = env_config.get("variables", [])
-
-        # Skip if no variables are specified
-        if not variables:
+        if not env_config.variables and not env_config.commands:
             return ""
 
-        # Start the env section
-        env_info = "<env>\n"
-
-        # Handle standard variables based on the requested list or "all"
-        all_variables = variables == "all"
-        var_list = (
-            [
-                "working_directory",
-                "platform",
-                "date",
-                "python_version",
-                "hostname",
-                "username",
-            ]
-            if all_variables
-            else variables
+        lines = (
+            EnvInfoBuilder._build_variable_lines(env_config.variables, env_config)
+            + EnvInfoBuilder._build_custom_var_lines(env_config)
+            + EnvInfoBuilder._build_env_var_lines(env_config)
+            + EnvInfoBuilder._build_command_lines(env_config.commands)
         )
 
-        # Add standard environment information if requested
-        if "working_directory" in var_list:
-            env_info += f"working_directory: {os.getcwd()}\n"
+        if not lines:
+            return ""
 
-        if "platform" in var_list:
-            env_info += f"platform: {platform.system().lower()}\n"
-
-        if "date" in var_list:
-            env_info += f"date: {datetime.datetime.now().strftime('%Y-%m-%d')}\n"
-
-        if "python_version" in var_list:
-            env_info += f"python_version: {platform.python_version()}\n"
-
-        if "hostname" in var_list:
-            env_info += f"hostname: {platform.node()}\n"
-
-        if "username" in var_list:
-            env_info += f"username: {getpass.getuser()}\n"
-
-        # Add any custom environment variables
-        for key, value in env_config.items():
-            # Skip the variables key and any non-string values
-            if key == "variables" or not isinstance(value, str):
-                continue
-            env_info += f"{key}: {value}\n"
-
-        # Close the env section
-        env_info += "</env>"
-
+        env_info = "<env>\n" + "\n".join(lines) + "\n</env>"
         return env_info
 
     @staticmethod
@@ -129,24 +182,17 @@ class EnvInfoBuilder:
         content_dict = {}
 
         for file_path_str in file_paths:
-            # Resolve relative paths against the base directory
-            path = Path(file_path_str)
-            if not path.is_absolute():
-                path = (base_dir / path).resolve()
-            else:
-                path = path.resolve()  # Resolve absolute paths too
-
+            path = EnvInfoBuilder._resolve_path(base_dir, file_path_str)
             try:
                 if not path.exists():
                     EnvInfoBuilder._warn_preload("Preload file not found", file_path_str, path)
-                    continue  # Skip missing files
+                    continue
 
                 if not path.is_file():
                     EnvInfoBuilder._warn_preload("Preload path is not a file", file_path_str, path)
-                    continue  # Skip non-files
+                    continue
 
-                content = path.read_text()
-                content_dict[str(path)] = content
+                content_dict[str(path)] = path.read_text()
                 logger.debug(f"Successfully preloaded content from: {path}")
 
             except OSError as e:
@@ -169,18 +215,16 @@ class EnvInfoBuilder:
         if not preloaded_content:
             return ""
 
-        preload_content = "<preload>\n"
-        for file_path, content in preloaded_content.items():
-            filename = Path(file_path).name
-            preload_content += f'<file path="{filename}">\n{content}\n</file>\n'
-        preload_content += "</preload>"
-
-        return preload_content
+        files = [
+            f'<file path="{Path(file_path).name}">\n{content}\n</file>'
+            for file_path, content in preloaded_content.items()
+        ]
+        return "<preload>\n" + "\n".join(files) + "\n</preload>"
 
     @staticmethod
     def get_enriched_system_prompt(
         base_prompt: str,
-        env_config: dict,
+        env_config: EnvInfoConfig,
         preloaded_content: Optional[dict[str, str]] = None,
         preload_files: Optional[list[str]] = None,
         base_dir: Optional[Path] = None,
@@ -193,8 +237,8 @@ class EnvInfoBuilder:
 
         Args:
             base_prompt: Base system prompt
-            env_config: Environment configuration dictionary
-            preloaded_content: Dictionary mapping file paths to content (deprecated, prefer preload_files)
+            env_config: Environment configuration object
+            preloaded_content: Dictionary mapping file paths to content (deprecated, prefer ``preload_files``)
             preload_files: List of file paths to preload
             base_dir: Base directory for resolving relative paths in preload_files
             include_env: Whether to include environment information

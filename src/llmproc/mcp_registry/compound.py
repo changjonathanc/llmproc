@@ -719,8 +719,39 @@ class MCPAggregator:
         def process_result(result) -> CallToolResult:
             # If the call returns an error result, propagate it.
             if getattr(result, "isError", False):
-                err_msg = f"Server '{actual_server}' returned error: {getattr(result, 'message', '')}"
-                return error_result(err_msg)
+                # Extract detailed error information
+                error_message = getattr(result, "message", "")
+                error_content = getattr(result, "content", [])
+
+                # Build comprehensive error message for logging
+                detailed_msg = f"MCP server '{actual_server}' returned error for tool '{actual_tool}'"
+                if error_message:
+                    detailed_msg += f": {error_message}"
+
+                # Add content information if available
+                if error_content:
+                    content_texts = []
+                    for item in error_content:
+                        if hasattr(item, "text"):
+                            content_texts.append(item.text)
+                        elif isinstance(item, dict) and "text" in item:
+                            content_texts.append(item["text"])
+                    if content_texts:
+                        detailed_msg += f" | Content: {' | '.join(content_texts)}"
+
+                # Add result object structure for debugging if no useful message found
+                if not error_message and not error_content:
+                    available_attrs = [attr for attr in dir(result) if not attr.startswith("_")]
+                    detailed_msg += f" | Available attributes: {available_attrs}"
+
+                logger.error(detailed_msg)
+
+                # Return simplified error message for tool result (keeping it clean for now)
+                simple_msg = f"Server '{actual_server}' returned error"
+                if error_message:
+                    simple_msg += f": {error_message}"
+
+                return error_result(simple_msg)
 
             # Process returned content into a proper list of content objects.
             content = []

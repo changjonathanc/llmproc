@@ -13,6 +13,7 @@ def test_program_compile_with_env_info():
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create a temporary TOML file with env_info section
         toml_path = Path(temp_dir) / "test_program.toml"
+        os.environ["EXTRA_INFO"] = "region: us-east"
         with open(toml_path, "w") as f:
             f.write(
                 """
@@ -26,6 +27,7 @@ def test_program_compile_with_env_info():
             [env_info]
             variables = ["working_directory", "date"]
             custom_var = "custom value"
+            env_vars = { region = "EXTRA_INFO" }
             """
             )
 
@@ -33,8 +35,33 @@ def test_program_compile_with_env_info():
         program = LLMProgram.from_toml(toml_path)
 
         # Verify env_info was properly loaded
-        assert program.env_info["variables"] == ["working_directory", "date"]
-        assert program.env_info["custom_var"] == "custom value"
+        assert program.env_info.variables == ["working_directory", "date"]
+        assert program.env_info.model_extra["custom_var"] == "custom value"
+        assert program.env_info.env_vars == {"region": "EXTRA_INFO"}
+
+
+def test_program_compile_with_env_commands():
+    """Test env_info commands are loaded from TOML."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        toml_path = Path(temp_dir) / "program.toml"
+        with open(toml_path, "w") as f:
+            f.write(
+                """
+            [model]
+            name = "cmd-model"
+            provider = "anthropic"
+
+            [prompt]
+            system_prompt = "Cmd prompt"
+
+            [env_info]
+            commands = ["echo hi"]
+            """
+            )
+
+        program = LLMProgram.from_toml(toml_path)
+
+        assert program.env_info.commands == ["echo hi"]
 
 
 def test_program_linking_with_env_info():
@@ -84,7 +111,7 @@ def test_program_linking_with_env_info():
         assert "test_program" in program.linked_programs
         assert program.linked_programs["test_program"].model_name == "linked-model"
         assert program.linked_programs["test_program"].provider == "anthropic"
-        assert program.env_info["variables"] == ["working_directory"]
+        assert program.env_info.variables == ["working_directory"]
 
 
 # Original tests from the file

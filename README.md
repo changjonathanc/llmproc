@@ -11,47 +11,44 @@ LLMProc: A Unix-inspired operating system for language models. Like processes in
 
 ## Table of Contents
 
+- [Why LLMProc over Claude Code?](#why-llmproc-over-claude-code)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Features](#features)
-- [Demo Tools](#demo-tools)
 - [Documentation](#documentation)
 - [Design Philosophy](#design-philosophy)
-- [Roadmap](#roadmap)
 - [License](#license)
+
+## Why LLMProc over Claude Code?
+
+| Feature                     | **LLMProc**                                                     | **Claude Code**                        |
+| -------------------------------- | ---------------------------------------------------------- | -------------------------------------- |
+| **License / openness**      | ✅ Apache-2.0                     | ❌ Closed, minified JS                      |
+| **Token overhead**                    | ✅ Zero. You send exactly what you want                     | ❌ 12-13k tokens (system prompt + builtin tools) |
+| **Custom system prompt**         | ✅ Yes                                        | 🟡 Append-only (via CLAUDE.md)         |
+| **Tool selection**               | ✅ Opt-in; pick only the tools you need           | 🟡 Opt-out via `--disallowedTools`* |
+| **Tool schema override**       | ✅ Supports alias, description overrides | ❌ Not possible                           |
+| **Configuration**                | ✅ Single YAML/TOML "LLM Program"              | 🟡 Limited config options       |
+| **Scripting / SDK**         | ✅ Python SDK with function tools    | ❌ JS-only CLI       |
+
+> *`--disallowedTools` allows removing builtin tools, but not MCP tools.
 
 ## Installation
 
 ### For Users
 
 ```bash
-# Install base package
+# Basic install - includes Anthropic support
 pip install llmproc
 
-# Install with specific provider support
-pip install "llmproc[openai]"        # For OpenAI models
-pip install "llmproc[anthropic]"     # For Anthropic models  
-pip install "llmproc[vertex]"        # For Vertex AI
-pip install "llmproc[gemini]"        # For Google Gemini
+# Install with all providers: openai/gemini/vertex/anthropic
+pip install "llmproc[all]" # other supported extras: openai/gemini/vertex/anthropic
 
-# Install with all providers
-pip install "llmproc[all]"
+# Or run without installing (requires uv) and run the CLI
+uvx llmproc --help
 ```
 
-### For Developers
-
-If you're contributing to llmproc, clone the repository and use:
-
-```bash
-# Create virtual environment
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install everything (package + all providers + dev tools)
-uv sync --all-extras --all-groups
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete developer setup guide.
+> **Note**: Only Anthropic models currently support full tool calling. OpenAI and Gemini models have limited feature parity. For development setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Quick Start
 
@@ -86,156 +83,80 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Configuration Options (TOML, YAML, or Dict)
+### Configuration
 
-Load program configuration in multiple ways:
+LLMProc supports TOML, YAML, and dictionary-based configurations. See [examples](./examples/) for various configuration patterns and the [YAML Configuration Schema](docs/yaml_config_schema.md) for all available options.
 
-```python
-# Load from TOML (traditional)
-program = LLMProgram.from_toml("config.toml")
+### CLI Usage
 
-# Or load from YAML
-program = LLMProgram.from_yaml("config.yaml")
+- **[llmproc](./src/llmproc/cli/run.py)** - Execute an LLM program. Use `--json` mode to pipe output for automation (see GitHub Actions examples)
+- **[llmproc-demo](./src/llmproc/cli/demo.py)** - Interactive debugger for LLM programs/processes
 
-# Format auto-detection
-program = LLMProgram.from_file("config.yaml")  # Detects YAML from extension
-
-# Dictionary-based configuration
-program = LLMProgram.from_dict({
-    "model": {"name": "claude-3-7-sonnet", "provider": "anthropic"},
-    "prompt": {"system_prompt": "You are a helpful assistant."},
-    "parameters": {"max_tokens": 1000}
-})
-
-# Extract subsections from configuration files
-with open("multi_agent.yaml") as f:
-    config = yaml.safe_load(f)
-agent_config = config["agents"]["assistant"]  # Extract a specific subsection
-program = LLMProgram.from_dict(agent_config)  # Create program from subsection
-```
-
-See [examples/projects/swe-agent](./examples/projects/swe-agent) for a complete YAML configuration example with dictionary-based configuration and subsection extraction.
-For a full reference of available fields, see [YAML Configuration Schema](docs/yaml_config_schema.md).
-
-### CLI usage
-
+Run with `--help` for full usage details:
 ```bash
-# Start interactive session
-llmproc-demo ./examples/anthropic.toml  # or ./examples/openai.yaml ... or any other config file
-
-# Single prompt
-llmproc ./examples/openai.toml -p "What is Python?"  # non-interactive
-llmproc ./examples/openai.toml -p "add details" -a  # append to config prompt
-
-# Read from stdin
-cat questions.txt | llmproc ./examples/anthropic.toml
-
-# List available builtin tools
-llmproc ./examples/min_claude_code_read_only.yaml -p 'give me a list of builtin tools in llmproc'
+llmproc --help
+llmproc-demo --help
 ```
 
 ## Features
 
-### Supported Model Providers
-- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-4.5, GPT-4.1, o1, o3, o4-mini, etc
-- **Anthropic**: Claude 3 Haiku, Claude 3.5/3.7 Sonnet, Claude 4 Sonnet/Opus (direct API and Vertex AI)
-- **Google**: Gemini 1.5 Flash/Pro, Gemini 2.0 Flash, Gemini 2.5 Pro (direct API and Vertex AI)
+### Production Ready
+- **Claude 3.7/4 models** with full tool calling support
+- **Python SDK** - Register functions as tools with automatic schema generation
+- **Async and sync APIs** - Use `await program.start()` or `program.start_sync()`
+- **TOML/YAML configuration** - Define LLM programs declaratively
+- **MCP protocol** - Connect to external tool servers
+- **Built-in tools** - File operations, calculator, spawning processes
+- **Tool customization** - Aliases, description overrides, parameter descriptions
+- **Automatic optimizations** - Prompt caching, retry logic with exponential backoff
 
-LLMProc offers a Unix-inspired toolkit for building sophisticated LLM applications:
+### GitHub Actions Examples
 
-### Process Management - Unix-like LLM Orchestration
-- **[Program Linking](./examples/program-linking/main.toml)** - Spawn specialized LLM processes for delegated tasks
-- **[Fork Tool](./examples/fork.toml)** - Create process copies with shared conversation state
-- **[GOTO (Time Travel)](./examples/goto.toml)** - Reset conversations to previous points with [context compaction demo](./examples/scripts/goto_context_compaction_demo.py)
-- **[Tool Access Control](./docs/tool-access-control.md)** - Secure multi-process environments with READ/WRITE/ADMIN permissions
+Real-world automation using LLMProc:
 
-### Large Content Handling - Sophisticated I/O Management
-- **[File Descriptor System](./examples/file-descriptor/main.toml)** - Unix-like pagination for large outputs
-- **Reference ID System** - Mark up and reference specific pieces of content
-- **Smart Content Pagination** - Optimized line-aware chunking for content too large for context windows
+> **Setup**: To use these actions, you'll need the workflow files and LLM program configs (linked below), plus these secrets in your repository settings:
+> - `ANTHROPIC_API_KEY`: API key for Claude
+> - `LLMPROC_WRITE_TOKEN`: GitHub personal access token with write permissions (contents, pull-requests)
 
-### Usage Examples
-- See the [Python SDK](./docs/python-sdk.md) documentation for the fluent API
-- Use [Function-Based Tools](./docs/function-based-tools.md) to register Python functions as tools
-- Create [Context-Aware Meta-Tools](./examples/scripts/temperature_sdk_demo.py) to let LLMs modify their own runtime parameters
-- Start with a [simple configuration](./examples/anthropic.yaml) (or TOML equivalent) for quick experimentation
+- **`@llmproc /resolve`** - Automatically resolve merge conflicts
+  [Workflow](.github/workflows/llmproc-resolve.yml) | [LLM Program (yaml)](.github/config/llmproc-resolve-claude.yaml)
 
-### Additional Features
-- **File Preloading** - Enhance context by [loading files](./examples/basic-features.toml) into system prompts
-- **Environment Info** - Add [runtime context](./examples/basic-features.toml) like working directory
-- **Prompt Caching** - Automatic 90% token savings for Claude models (enabled by default)
-- **Reasoning/Thinking models** - Claude 3.7 Thinking and OpenAI Reasoning models (configured in anthropic.yaml or openai.yaml)
-- **Token-efficient tools** - Claude 3.7 optimized tool calling (configured in anthropic.yaml)
-- **[MCP Protocol](./examples/mcp.toml)** - Standardized interface for tool usage
-- **[Tool Aliases](./examples/basic-features.toml)** - Provide simpler, intuitive names for tools
-- **[Dictionary-based Configuration](./examples/projects/swe-agent)** - Create programs from dictionaries for subsection extraction
-- **YAML configuration support** - Use `.yaml` files with the same structure as TOML
-- **Cross-provider support** - Currently supports Anthropic, OpenAI, and Google Gemini
-- **New CLI tools** - `llmproc` for single prompts and `llmproc-demo` for interactive sessions
-- **Synchronous API** - Create blocking processes with `program.start_sync()`
-- **Standard error logging** - Use the `write_stderr` tool and `LLMProcess.get_stderr_log()`
-- **Flexible callbacks** - Callback functions and methods may be synchronous or asynchronous
-- **Instance methods as tools** - Register object methods directly for stateful tools
-- **API retry configuration** - Exponential backoff settings via environment variables
-- **Spawn the current program** - Leave `program_name` blank in the spawn tool
-- **Unified tool configuration** - Built-in and MCP tools share the same `ToolConfig`
+- **`@llmproc /ask <question>`** - Answer questions on issues/PRs
+  [Workflow](.github/workflows/llmproc-ask.yml) | [LLM Program (yaml)](.github/config/llmproc-ask-claude.yaml)
 
-## Demo Tools
+- **`@llmproc /code <request>`** - Implement features from comments
+  [Workflow](.github/workflows/llmproc-code.yml) | [LLM Program (yaml)](.github/config/llmproc-code-claude.yaml)
 
-LLMProc includes demo command-line tools for quick experimentation:
+### In Development
+- **OpenAI/Gemini models** - Basic support, tool calling not yet implemented
+- **Streaming API** - Real-time token streaming (planned)
+- **Process persistence** - Save/restore conversation state
 
-### llmproc-demo
+### Experimental Features
 
-Interactive CLI for testing LLM configurations:
+These cutting-edge features bring Unix-inspired process management to LLMs:
 
-```bash
-llmproc-demo ./config.yaml  # Interactive session
-```
+- **[Process Forking](./docs/fork-feature.md)** - Create copies of running LLM processes with full conversation history, enabling parallel exploration of different solution paths
 
-Commands: `exit` or `quit` to end the session
+- **[Program Linking](./docs/program-linking.md)** - Connect multiple LLM programs together, allowing specialized models to collaborate (e.g., a coding expert delegating to a debugging specialist)
 
-### llmproc
+- **[GOTO/Time Travel](./docs/goto-feature.md)** - Reset conversations to previous states, perfect for backtracking when the LLM goes down the wrong path or for exploring alternative approaches
 
-Non-interactive CLI for running a single prompt:
+- **[File Descriptor System](./docs/file-descriptor-system.md)** - Handle massive outputs elegantly with Unix-like pagination, reference IDs, and smart chunking - no more truncated responses
 
-```bash
-llmproc ./config.yaml -p "What is Python?"      # Single prompt
-cat questions.txt | llmproc ./config.yaml       # Read from stdin
-llmproc ./config.yaml -p "extra" -a             # Append on top of config
-```
+- **[Tool Access Control](./docs/tool-access-control.md)** - Fine-grained permissions (READ/WRITE/ADMIN) for multi-process environments, ensuring security when multiple LLMs collaborate
 
-### llmproc-prompt
-
-View the compiled system prompt without making API calls:
-
-```bash
-llmproc-prompt ./config.yaml                 # Display to stdout
-llmproc-prompt ./config.yaml -o prompt.txt   # Save to file
-llmproc-prompt ./config.yaml -E              # Without environment info
-```
-
-## Use Cases
-- **[Claude Code](./examples/claude-code.toml)** - A minimal Claude Code implementation, with support for preloading CLAUDE.md, spawning, MCP
+- **[Meta-Tools](./examples/scripts/temperature_sdk_demo.py)** - LLMs can modify their own runtime parameters! Create tools that let models adjust temperature, max_tokens, or other settings on the fly for adaptive behavior
 
 ## Documentation
 
-**[Documentation Index](./docs/index.md)**: Start here for guided learning paths
+**[📚 Documentation Index](./docs/index.md)** - Comprehensive guides and API reference
 
-- [Examples](./examples/README.md): Sample configurations and use cases
-- [API Docs](./docs/api/index.md): Detailed API documentation
-- [Python SDK](./docs/python-sdk.md): Fluent API and program creation
-- [Function-Based Tools](./docs/function-based-tools.md): Register Python functions as tools with automatic schema generation
-- [File Descriptor System](./docs/file-descriptor-system.md): Handling large outputs
-- [Program Linking](./docs/program-linking.md): LLM-to-LLM communication
-- [GOTO (Time Travel)](./docs/goto-feature.md): Conversation time travel
-- [MCP Feature](./docs/mcp-feature.md): Model Context Protocol for tools
-- [Tool Aliases](./docs/tool-aliases.md): Using simpler names for tools
-- [Gemini Integration](./docs/gemini.md): Google Gemini models usage guide
-- [Testing Guide](./docs/testing.md): Testing and validation
-- For a tutorial with all options, see [tutorial-config.toml](./examples/tutorial-config.toml)
-- For the formal specification, see [yaml_config_schema.yaml](./docs/yaml_config_schema.yaml)
-
-For advanced usage and implementation details, see [MISC.md](MISC.md). For design rationales and API decisions, see [FAQ.md](FAQ.md).
+**[🔧 Key Resources](./docs/api/index.md)**:
+- [Python SDK Guide](./docs/python-sdk.md) - Fluent API for building LLM applications
+- [YAML Configuration Schema](./docs/yaml_config_schema.yaml) - Complete configuration reference
+- [FAQ](./FAQ.md) - Design rationales and common questions
+- [Examples](./examples/) - Sample configurations and tutorials
 
 ## Design Philosophy
 
@@ -243,18 +164,10 @@ LLMProc treats LLMs as processes in a Unix-inspired operating system framework:
 
 - LLMs function as processes that execute prompts and make tool calls
 - Tools operate at both user and kernel levels, with system tools able to modify process state
-- The Process abstraction naturally maps to Unix concepts like spawn, fork, goto, and IPC
+- The Process abstraction naturally maps to Unix concepts like spawn, fork, goto, IPC, file descriptors, and more
 - This architecture provides a foundation for evolving toward a more complete LLM operating system
 
 For in-depth explanations of these design decisions, see our [API Design FAQ](./FAQ.md).
-
-## Roadmap
-
-- Persistent children & inter-process communication
-- llmproc mcp server
-- Streaming api support
-- Process State Serialization & Restoration
-- Feature parity for openai/gemini models
 
 ## License
 

@@ -4,7 +4,7 @@ import asyncio
 import os
 import uuid
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -168,6 +168,89 @@ async def test_preload_at_initialization(mock_env, mock_get_provider_client):
 
     finally:
         os.unlink(temp_path)
+
+
+@pytest.mark.asyncio
+async def test_preload_relative_to_cwd(mock_env, mock_get_provider_client, create_test_process):
+    """Preload paths can be resolved relative to the working directory."""
+    from llmproc.program import LLMProgram
+    with TemporaryDirectory() as program_dir, TemporaryDirectory() as run_dir:
+        preload_file = Path(run_dir) / "pre.txt"
+        preload_file.write_text("dynamic")
+
+        program_path = Path(program_dir) / "prog.toml"
+        program_path.write_text(
+            """
+[model]
+name = "test-model"
+provider = "openai"
+
+[prompt]
+system_prompt = "Base"
+
+[preload]
+files = ["pre.txt"]
+relative_to = "cwd"
+"""
+        )
+
+        program = LLMProgram.from_toml(program_path)
+
+        with patch("llmproc.env_info.builder.EnvInfoBuilder.load_files") as mock_load:
+            mock_load.return_value = {str(preload_file): "dynamic"}
+
+            current = os.getcwd()
+            os.chdir(run_dir)
+            try:
+                await create_test_process(program)
+            finally:
+                os.chdir(current)
+
+        mock_load.assert_called_once()
+        args = mock_load.call_args.args
+        assert args[0] == ["pre.txt"]
+        assert args[1] == Path(run_dir)
+
+
+@pytest.mark.asyncio
+async def test_preload_relative_to_program(mock_env, mock_get_provider_client, create_test_process):
+    """Preload paths default to being relative to the program file."""
+    from llmproc.program import LLMProgram
+    with TemporaryDirectory() as program_dir, TemporaryDirectory() as run_dir:
+        preload_file = Path(program_dir) / "pre.txt"
+        preload_file.write_text("static")
+
+        program_path = Path(program_dir) / "prog.toml"
+        program_path.write_text(
+            """
+[model]
+name = "test-model"
+provider = "openai"
+
+[prompt]
+system_prompt = "Base"
+
+[preload]
+files = ["pre.txt"]
+"""
+        )
+
+        program = LLMProgram.from_toml(program_path)
+
+        with patch("llmproc.env_info.builder.EnvInfoBuilder.load_files") as mock_load:
+            mock_load.return_value = {str(preload_file): "static"}
+
+            current = os.getcwd()
+            os.chdir(run_dir)
+            try:
+                await create_test_process(program)
+            finally:
+                os.chdir(current)
+
+        mock_load.assert_called_once()
+        args = mock_load.call_args.args
+        assert args[0] == [str(preload_file.resolve())]
+        assert args[1] == Path(program_dir)
 
 
 @pytest.mark.llm_api

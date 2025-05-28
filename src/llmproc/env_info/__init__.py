@@ -1,3 +1,3 @@
-"""Environment information for LLM system prompts."""
+"""Environment information package."""
 
-from llmproc.env_info.builder import EnvInfoBuilder
+__all__: list[str] = []

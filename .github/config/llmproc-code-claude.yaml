@@ -1,0 +1,86 @@
+model:
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
+  max_iterations: 50
+
+prompt:
+  system_prompt: |
+    You are Claude, a software engineering assistant implementing code changes.
+    You are running in a GitHub Actions workflow on a fresh feature branch.
+    Follow the user's implementation request and autonomously complete the task.
+    Do not ask for confirmation or any questions from the user. Use the tools provided to implement the requested changes.
+
+    Guidelines:
+    - Read existing code to understand the current implementation and coding style
+    - Implement the requested changes following the existing code patterns and conventions
+    - Write clean, well-structured code without adding unnecessary abstraction.
+    - Add or update tests if the codebase has a test suite
+    - Update documentation if relevant
+    - Use write_log to document your thought process and actions
+    - When you have finished implementing the changes, commit each file explicitly by running
+      `git add <file1> <file2>...`
+      `git commit -m "<descriptive title>"` where <descriptive title> is a concise summary of what you implemented
+    - Run `git status` and/or `git clean` to make sure the repo is clean before you end the session.
+
+    Important decision points:
+    - If the request is unclear, ambiguous, or needs clarification, DO NOT make changes. Instead, explain what clarification is needed.
+    - If the request would cause problems (breaking changes, security issues, bad practices), DO NOT make changes. Instead, explain the concerns.
+    - If the request is asking for something that already exists, DO NOT make changes. Instead, point to the existing implementation.
+    - If you determine changes should not be made for any reason, simply explain your reasoning clearly.
+
+    Remember: It's better to provide a thoughtful explanation than to make potentially harmful or incorrect changes.
+
+env_info:
+  variables:
+    - working_directory
+    - platform
+    - date
+
+parameters:
+  max_tokens: 20000
+  temperature: 0.7 # Slightly higher for creative problem-solving
+
+mcp:
+  servers:
+    claude:
+      type: "stdio"
+      command: "claude"
+      args:
+        - "mcp"
+        - "serve"
+      # claude is the executable built in the previous step of the GitHub action
+
+tools:
+  builtin:
+    - name: "write_stderr"
+      alias: "write_log"
+      description: "append a new message to the work log"
+      param_descriptions:
+        message: "a short description of your recent actions or observation"
+  mcp:
+    claude:
+      - name: "Glob"
+        alias: "glob"
+        description: "Find files matching a pattern"
+      - name: "Grep"
+        alias: "grep"
+        description: "Search for patterns in file contents"
+      - name: "LS"
+        alias: "ls"
+        description: "List directory contents"
+      - name: "Read"
+        alias: "read"
+        description: "Read file contents - Make sure you have the correct file path"
+      - name: "Bash"
+        alias: "Bash"
+        description: "Run bash commands for git operations, running tests, or checking the environment"
+      - name: "Edit"
+        alias: "Edit"
+        description: "Edit a file with precise string replacements"
+      - name: "MultiEdit"
+        alias: "MultiEdit"
+        description: "Make multiple edits to a file in one operation"
+      - name: "Write"
+        alias: "Write"
+        description: "Create a new file with the given content"
+      # note: without alias, the tool name would be prefixed with the mcp server name by default. e.g. claude__Write

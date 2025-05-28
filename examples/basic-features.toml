@@ -37,6 +37,7 @@ files = [
   "../README.md",  # Project overview
   "../pyproject.toml"  # Package configuration
 ]
+relative_to = "program"
 
 # Environment info: Add runtime context to system prompt
 [env_info]
@@ -45,6 +46,9 @@ variables = [
   "platform",          # Operating system
   "date"               # Current date
 ]
+# Additional info from environment variables
+env_vars = { region = "MY_ENV_INFO" }
+commands = ["echo example"]
 
 # Enable tools with their original names
 [tools]

@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
+from llmproc.config import EnvInfoConfig
 from llmproc.env_info.builder import EnvInfoBuilder
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.program_exec import (
@@ -132,7 +133,7 @@ class TestEnvInfoBuilder:
             "file2.txt": "File 2 content",
         }
         base_prompt = "Base prompt"
-        env_config = {"variables": []}
+        env_config = EnvInfoConfig(variables=[])
         preload_files = ["file1.txt", "file2.txt"]
         base_dir = Path("/test/dir")
 
@@ -313,7 +314,7 @@ class TestPrepareProcessState:
 
         program = MagicMock()
         program.preload_files = ["file1.txt"]
-        program.env_info = {"variables": []}
+        program.env_info = EnvInfoConfig()
 
         # Act
         result = prepare_process_state(program)

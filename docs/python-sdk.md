@@ -153,6 +153,17 @@ program.configure_env_info("all")
 
 # Explicitly disable environment information
 program.configure_env_info([])
+
+# Append additional info from environment variables
+program.configure_env_info(env_vars={"region": "MY_ENV_INFO"})
+```
+
+```python
+# Include a directory file map
+program.configure_env_info(["file_map"])
+program.env_info["file_map_root"] = "src"
+program.env_info["file_map_max_files"] = 5
+program.env_info["file_map_show_size"] = False
 ```
 
 ### File Descriptor System

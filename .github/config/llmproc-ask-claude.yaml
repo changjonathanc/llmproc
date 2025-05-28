@@ -1,0 +1,62 @@
+model:
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
+  max_iterations: 30
+
+prompt:
+  system_prompt: |
+    You are Claude, a helpful software engineering assistant.
+    You are answering questions about a GitHub repository.
+
+    Guidelines:
+    - Provide clear, concise, and accurate answers
+    - If you need to examine code or files, use the available tools
+    - Focus on being helpful and informative
+    - If you're unsure about something, say so
+    - Use the write_log tool to document your reasoning process when appropriate
+
+env_info:
+  variables:
+    - working_directory
+    - platform
+    - date
+
+parameters:
+  max_tokens: 8000
+  temperature: 0.7
+
+mcp:
+  servers:
+    claude:
+      type: "stdio"
+      command: "claude"
+      args:
+        - "mcp"
+        - "serve"
+      # claude is the executable built in the previous step of the GitHub action
+
+tools:
+  builtin:
+    - name: "write_stderr"
+      alias: "write_log"
+      description: "Document your reasoning process or observations"
+      param_descriptions:
+        message: "A log message about what you're doing or thinking"
+    - name: "read_file"
+      alias: "read"
+      description: "Read the contents of a file"
+    - name: "list_dir"
+      alias: "ls"
+      description: "List files and directories"
+  mcp:
+    claude:
+      - name: "Glob"
+        alias: "glob"
+        description: "Find files matching a pattern"
+      - name: "Grep"
+        alias: "grep"
+        description: "Search for patterns in file contents"
+      - name: "Bash"
+        alias: "bash"
+        description: "Run a bash command, use this for git operations"
+      # note: without alias, the tool name would be prefixed with the mcp server name by default. e.g. claude__Glob

@@ -5,13 +5,15 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
+from llmproc.config import EnvInfoConfig
 from llmproc.env_info.builder import EnvInfoBuilder
 
 
 def test_build_env_info_with_variables():
     """Test that build_env_info correctly formats environment variables."""
     # Test with specific variables
-    env_config = {"variables": ["working_directory", "platform"]}
+    env_config = EnvInfoConfig(variables=["working_directory", "platform"])
     env_info = EnvInfoBuilder.build_env_info(env_config)
 
     # Verify the output format contains the requested variables
@@ -27,7 +29,7 @@ def test_build_env_info_with_variables():
 
 def test_build_env_info_with_all_variables():
     """Test that build_env_info handles 'all' variables correctly."""
-    env_config = {"variables": "all"}
+    env_config = EnvInfoConfig(variables="all")
     env_info = EnvInfoBuilder.build_env_info(env_config)
 
     # Verify all standard variables are included
@@ -43,7 +45,7 @@ def test_build_env_info_with_all_variables():
 
 def test_build_env_info_with_custom_variables():
     """Test that build_env_info correctly includes custom variables."""
-    env_config = {"variables": ["working_directory"], "custom_var": "custom value"}
+    env_config = EnvInfoConfig(variables=["working_directory"], custom_var="custom value")
     env_info = EnvInfoBuilder.build_env_info(env_config)
 
     # Verify standard and custom variables
@@ -53,17 +55,69 @@ def test_build_env_info_with_custom_variables():
     assert "</env>" in env_info
 
 
+def test_build_env_info_with_env_vars(monkeypatch):
+    """Test that build_env_info includes values from environment variables."""
+    monkeypatch.setenv("EXTRA_INFO", "us-east")
+    env_config = EnvInfoConfig(variables=["working_directory"], env_vars={"region": "EXTRA_INFO"})
+    env_info = EnvInfoBuilder.build_env_info(env_config)
+
+    assert "region: us-east" in env_info
+
+
+def test_build_env_info_with_commands():
+    """Test that build_env_info includes command outputs."""
+    env_config = EnvInfoConfig(commands=["echo test"])
+    env_info = EnvInfoBuilder.build_env_info(env_config)
+
+    assert "<env>" in env_info
+    assert "> echo test" in env_info
+    assert "test" in env_info
+    assert "</env>" in env_info
+
+
+def test_build_env_info_with_command_error():
+    """Test command errors are captured."""
+    env_config = EnvInfoConfig(commands=["python -c 'import sys; sys.exit(1)'"])
+    env_info = EnvInfoBuilder.build_env_info(env_config)
+
+    assert "error(1)" in env_info
+
+
 def test_build_env_info_disabled():
     """Test that build_env_info returns empty string when disabled."""
     # Test with include_env=False
-    env_config = {"variables": ["working_directory"]}
+    env_config = EnvInfoConfig(variables=["working_directory"])
     env_info = EnvInfoBuilder.build_env_info(env_config, include_env=False)
     assert env_info == ""
 
     # Test with empty variables list
-    env_config = {"variables": []}
+    env_config = EnvInfoConfig(variables=[])
     env_info = EnvInfoBuilder.build_env_info(env_config)
     assert env_info == ""
+
+
+def test_build_env_info_file_map(tmp_path):
+    """Test file_map variable lists directory contents."""
+    (tmp_path / "a.txt").write_text("a")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "b.txt").write_text("b")
+
+    env_config = EnvInfoConfig(variables=["file_map"], file_map_root=str(tmp_path))
+    env_info = EnvInfoBuilder.build_env_info(env_config)
+
+    assert "file_map:" in env_info
+    assert "a.txt" in env_info
+    assert "sub/b.txt" in env_info
+
+
+def test_build_env_info_file_map_limit(tmp_path):
+    """Test file_map respects max file limit."""
+    for i in range(5):
+        (tmp_path / f"{i}.txt").write_text(str(i))
+    env_config = EnvInfoConfig(variables=["file_map"], file_map_root=str(tmp_path), file_map_max_files=3)
+    env_info = EnvInfoBuilder.build_env_info(env_config)
+    assert "... (" in env_info
 
 
 def test_load_files():
@@ -115,7 +169,7 @@ def test_build_preload_content():
 def test_get_enriched_system_prompt_with_env_info():
     """Test get_enriched_system_prompt with environment info."""
     base_prompt = "Test system prompt"
-    env_config = {"variables": ["working_directory"]}
+    env_config = EnvInfoConfig(variables=["working_directory"])
 
     # Get enriched prompt with environment info
     enriched_prompt = EnvInfoBuilder.get_enriched_system_prompt(
@@ -141,7 +195,7 @@ def test_get_enriched_system_prompt_with_env_info():
 def test_get_enriched_system_prompt_with_preloaded_content():
     """Test get_enriched_system_prompt with preloaded content."""
     base_prompt = "Test system prompt"
-    env_config = {}
+    env_config = EnvInfoConfig()
     preloaded_content = {"/path/to/file1.txt": "Content of file1"}
 
     # Get enriched prompt with preloaded content
@@ -163,7 +217,7 @@ def test_get_enriched_system_prompt_with_preloaded_content():
 def test_get_enriched_system_prompt_with_fd_features():
     """Test get_enriched_system_prompt with file descriptor features."""
     base_prompt = "Test system prompt"
-    env_config = {}
+    env_config = EnvInfoConfig()
 
     # Get enriched prompt with file descriptor enabled
     enriched_prompt = EnvInfoBuilder.get_enriched_system_prompt(
@@ -200,7 +254,7 @@ def test_get_enriched_system_prompt_with_fd_features():
 def test_get_enriched_system_prompt_with_everything():
     """Test get_enriched_system_prompt with all features enabled."""
     base_prompt = "Test system prompt"
-    env_config = {"variables": ["working_directory"], "custom_var": "custom value"}
+    env_config = EnvInfoConfig(variables=["working_directory"], custom_var="custom value")
     preloaded_content = {"/path/to/file1.txt": "Content of file1"}
 
     # Get enriched prompt with all features

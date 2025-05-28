@@ -1,0 +1,73 @@
+model:
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
+  max_iterations: 50
+
+prompt:
+  system_prompt: |
+    You are Claude, a software engineering assistant.
+    You are running in a GitHub Actions workflow.
+    Follow the user's instructions and autonomously complete the task.
+    Do not ask for confirmation or any question from user. Use the tools provided to you to solve the problem.
+
+  user: |
+    Please resolve the merge conflict in the current repo.
+    Start by running `pwd && git status` to see the conflicts.
+    1. read each file containing conflicts, and understand the context of the changes.
+    2. If needed, read related files, or git history to understand the context of the changes.
+    Once you know how to resolve the conflicts, use tools to perform the changes.
+    3. Proof-read each file that had conflicts and you edited, and make sure the changes are correct.
+    4. When you're ready to commit, run `git add -u && git commit -m "Resolve conflicts via llmproc"`.
+    5. At the end, summarize the changes you made in a single sentence.
+
+    If you encounter any issues, or ambiguous situations, abort the task and summarize the issues in the end.
+    If you don't see any conflicts, don't do anything; abort the task and describe what you see.
+    When appropriate, log your work or observation using write_log tool.
+
+env_info:
+  variables:
+    - working_directory
+    - platform
+    - date
+
+parameters:
+  max_tokens: 20000
+  temperature: 0.5 # set lower temperature for more deterministic pr conflict resolution
+
+mcp:
+  servers:
+    claude:
+      type: "stdio"
+      command: "claude"
+      args:
+        - "mcp"
+        - "serve"
+      # claude is the executable built in the previous step of the GitHub action
+
+tools:
+  builtin:
+    - name: "write_stderr"
+      alias: "write_log"
+      description: "append a new message to the work log"
+      param_descriptions:
+        message: "a message to be logged"
+  mcp:
+    claude:
+      - name: "Glob"
+        alias: "glob"
+      - name: "Grep"
+        alias: "grep"
+      - name: "LS"
+        alias: "ls"
+      - name: "Read"
+        alias: "read"
+        description: "Read file contents - Make sure you have the correct file path."
+      - name: "Bash"
+        alias: "Bash"
+        description: "Run a bash command, only use this for git commands."
+      - name: "Edit"
+        alias: "Edit"
+      - name: "MultiEdit"
+        alias: "MultiEdit"
+      # note: Write tool is intentionally excluded to prevent creating new files during conflict resolution
+      # note: without alias, the tool name would be prefixed with the mcp server name by default. e.g. claude__Write

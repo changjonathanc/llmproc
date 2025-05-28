@@ -22,9 +22,12 @@ files = [
   "path/to/file2.md",
   "path/to/another/file3.json"
 ]
+relative_to = "program"  # or "cwd" to resolve at runtime
 ```
 
-File paths are relative to the location of the TOML file.
+By default, paths are resolved relative to the program file. Set
+`relative_to = "cwd"` to resolve them relative to the current working
+directory when the program starts.
 
 ## Examples
 
@@ -136,7 +139,10 @@ This structure helps the model understand the source of the information and main
 - For child processes created with `spawn`, additional files can be preloaded via the `additional_preload_files` parameter
 - The preloaded content is immutable after process creation
 - Missing files generate warnings but won't cause the initialization to fail
-- File paths are resolved relative to the TOML file's location
+- File paths are resolved relative to the program file unless
+  `relative_to = "cwd"` is specified
+
+> **⚠️ API Stability Note:** The `reset_state()` method in LLMProcess is considered experimental and not yet ready for general use. It may be changed or removed in future releases as we refine the process lifecycle management. For now, consider the preloaded content and system prompt to be immutable after process creation.
 
 > **⚠️ API Stability Note:** The `reset_state()` method in LLMProcess is considered experimental and not yet ready for general use. It may be changed or removed in future releases as we refine the process lifecycle management. For now, consider the preloaded content and system prompt to be immutable after process creation.
 

@@ -26,13 +26,15 @@ from llmproc._program_docs import (
 )
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.metadata import attach_meta, get_tool_meta
+from llmproc.config import EnvInfoConfig
 from llmproc.config.tool import ToolConfig
-from llmproc.env_info import EnvInfoBuilder
+from llmproc.env_info.builder import EnvInfoBuilder
 from llmproc.file_descriptors.constants import FD_RELATED_TOOLS
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.tools import ToolManager
 from llmproc.tools.builtin import BUILTIN_TOOLS
 from llmproc.tools.mcp import MCPServerTools
+from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
 
 
 def convert_to_callables(tools: list[Union[str, Callable, MCPServerTools, ToolConfig]]) -> list[Callable]:
@@ -120,13 +122,13 @@ class LLMProgram:
         parameters: dict[str, Any] = None,
         display_name: str | None = None,
         preload_files: list[str] | None = None,
+        preload_relative_to: str = "program",
         mcp_config_path: str | None = None,
         mcp_servers: dict[str, dict] | None = None,
         tools: list[Any] = None,
-        tool_aliases: dict[str, str] = None,
         linked_programs: dict[str, Union[str, "LLMProgram"]] | None = None,
         linked_program_descriptions: dict[str, str] | None = None,
-        env_info: dict[str, Any] | None = None,
+        env_info: EnvInfoConfig | dict[str, Any] | None = None,
         file_descriptor: dict[str, Any] | None = None,
         base_dir: Path | None = None,
         disable_automatic_caching: bool = False,
@@ -153,6 +155,7 @@ class LLMProgram:
         self.parameters = parameters or {}
         self.display_name = display_name or f"{provider.title()} {model_name}"
         self.preload_files = preload_files or []
+        self.preload_relative_to = preload_relative_to
         self.mcp_config_path = mcp_config_path
         self.mcp_servers = mcp_servers
         self.disable_automatic_caching = disable_automatic_caching
@@ -171,13 +174,9 @@ class LLMProgram:
             # Register all tools with the tool manager
             self.register_tools(raw_tools)
 
-        # Process aliases separately if provided
-        if tool_aliases:
-            self.set_tool_aliases(tool_aliases)
-
         self.linked_programs = linked_programs or {}
         self.linked_program_descriptions = linked_program_descriptions or {}
-        self.env_info = env_info or {"variables": []}  # Default to empty list (disabled)
+        self.env_info = EnvInfoConfig.model_validate(env_info or {})
         self.file_descriptor = file_descriptor or {}
         self.base_dir = base_dir
 
@@ -308,12 +307,14 @@ class LLMProgram:
         self.preload_files.append(file_path)
         return self
 
-    def configure_env_info(self, variables: list[str] | str = "all") -> "LLMProgram":
+    def configure_env_info(
+        self, variables: list[str] | str = "all", env_vars: dict[str, str] | None = None
+    ) -> "LLMProgram":
         """Configure environment information sharing."""
-        if variables == "all":
-            self.env_info = {"variables": "all"}
-        else:
-            self.env_info = {"variables": variables}
+        parsed = EnvInfoConfig(variables=variables)
+        self.env_info.variables = parsed.variables
+        if env_vars:
+            self.env_info.env_vars.update(env_vars)
         return self
 
     def configure_file_descriptor(
@@ -386,12 +387,19 @@ class LLMProgram:
         # Split tools into MCPServerTools descriptors and other tools
         mcp_tools = []
         other_tools = []
+        alias_map: dict[str, str] = {}
 
         for tool in tools:
             if isinstance(tool, MCPServerTools):
                 mcp_tools.append(tool)
+                if tool.tools != "all" and isinstance(tool.tools, list):
+                    for item in tool.tools:
+                        if isinstance(item, ToolConfig) and item.alias:
+                            alias_map[item.alias] = f"{tool.server}{MCP_TOOL_SEPARATOR}{item.name}"
             else:
                 other_tools.append(tool)
+                if isinstance(tool, ToolConfig) and tool.alias:
+                    alias_map[tool.alias] = tool.name
 
         # Convert string names to callables for consistent handling
         if other_tools:
@@ -402,6 +410,9 @@ class LLMProgram:
         # Register MCPServerTools descriptors separately
         if mcp_tools:
             self.tool_manager.register_tools(mcp_tools)
+
+        if alias_map:
+            self.set_tool_aliases(alias_map)
 
         return self
 

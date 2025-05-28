@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 import pytest
@@ -63,3 +64,52 @@ def test_call_tool_basic():
 
     result2 = asyncio.run(aggregator.call_tool("a", server_name="s1"))
     assert result2.content[0].text == "A result"
+
+
+def test_call_tool_error_logging(caplog):
+    """Test that MCP server errors are logged with detailed information."""
+    tool_a = Tool(name="a", inputSchema={})
+
+    # Test error with message
+    error_result_with_message = CallToolResult(
+        isError=True, message="Test error message", content=[TextContent(type="text", text="Error details")]
+    )
+
+    # Test error without message
+    error_result_without_message = CallToolResult(
+        isError=True, message="", content=[TextContent(type="text", text="Some error content")]
+    )
+
+    # Test error with neither message nor content
+    error_result_empty = CallToolResult(isError=True, message="", content=[])
+
+    client1 = FakeClient(
+        [tool_a], {"a": error_result_with_message, "b": error_result_without_message, "c": error_result_empty}
+    )
+    registry = FakeRegistry({"testserver": client1})
+    aggregator = MCPAggregator(registry)
+
+    # Test error with message
+    with caplog.at_level(logging.ERROR):
+        result = asyncio.run(aggregator.call_tool("testserver__a"))
+        assert result.isError
+        assert "MCP server 'testserver' returned error for tool 'a': Test error message" in caplog.text
+        assert "Content: Error details" in caplog.text
+
+    caplog.clear()
+
+    # Test error without message but with content
+    with caplog.at_level(logging.ERROR):
+        result = asyncio.run(aggregator.call_tool("b", server_name="testserver"))
+        assert result.isError
+        assert "MCP server 'testserver' returned error for tool 'b'" in caplog.text
+        assert "Content: Some error content" in caplog.text
+
+    caplog.clear()
+
+    # Test error with neither message nor content
+    with caplog.at_level(logging.ERROR):
+        result = asyncio.run(aggregator.call_tool("c", server_name="testserver"))
+        assert result.isError
+        assert "MCP server 'testserver' returned error for tool 'c'" in caplog.text
+        assert "Available attributes:" in caplog.text

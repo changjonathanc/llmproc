@@ -19,6 +19,7 @@ Args:
     parameters: Dictionary of API parameters
     display_name: User-facing name for the process in CLI interfaces
     preload_files: List of file paths to preload into the system prompt as context
+    preload_relative_to: Whether preload paths are relative to the program file or CWD
     mcp_config_path: Path to MCP servers configuration file
     mcp_tools: Dictionary mapping server names to tools to enable
     tools: Dictionary from the [tools] section, or list of function-based tools
@@ -71,7 +72,8 @@ system prompt for added context. For privacy/security, this is disabled by defau
 Args:
     variables: List of variables to include, or "all" to include all standard variables
               Standard variables include: "working_directory", "platform", "date",
-              "python_version", "hostname", "username"
+              "python_version", "hostname", "username", "file_map"
+    env_vars: Optional mapping of labels to environment variable names
 
 Returns:
     self (for method chaining)
@@ -86,6 +88,9 @@ Examples:
 
     # Explicitly disable environment information (default)
     program.configure_env_info([])
+
+    # Append additional info from environment variables
+    program.configure_env_info(env_vars={"region": "MY_ENV_INFO"})
     ```
 """
 
