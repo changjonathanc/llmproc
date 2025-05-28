@@ -119,13 +119,16 @@ Real-world automation using LLMProc:
 > - `LLMPROC_WRITE_TOKEN`: GitHub personal access token with write permissions (contents, pull-requests)
 
 - **`@llmproc /resolve`** - Automatically resolve merge conflicts
-  [Workflow](.github/workflows/llmproc-resolve.yml) | [LLM Program (yaml)](.github/config/llmproc-resolve-claude.yaml)
+  [Workflow](.github/workflows/llmproc-resolve.yml) | [LLM Program (yaml)](.github/config/llmproc-resolve-claude.yaml) | 
+  [Example Usage](https://github.com/cccntu/llmproc/pull/7#issuecomment-2916710226) | [Result PR](https://github.com/cccntu/llmproc/pull/8)
 
 - **`@llmproc /ask <question>`** - Answer questions on issues/PRs
-  [Workflow](.github/workflows/llmproc-ask.yml) | [LLM Program (yaml)](.github/config/llmproc-ask-claude.yaml)
+  [Workflow](.github/workflows/llmproc-ask.yml) | [LLM Program (yaml)](.github/config/llmproc-ask-claude.yaml) | 
+  [Example Usage](https://github.com/cccntu/llmproc/issues/5#issuecomment-2916673202)
 
 - **`@llmproc /code <request>`** - Implement features from comments
-  [Workflow](.github/workflows/llmproc-code.yml) | [LLM Program (yaml)](.github/config/llmproc-code-claude.yaml)
+  [Workflow](.github/workflows/llmproc-code.yml) | [LLM Program (yaml)](.github/config/llmproc-code-claude.yaml) | 
+  [Example Usage](https://github.com/cccntu/llmproc/issues/4#issuecomment-2916695626) | [Result PR](https://github.com/cccntu/llmproc/pull/6)
 
 ### In Development
 - **OpenAI/Gemini models** - Basic support, tool calling not yet implemented
