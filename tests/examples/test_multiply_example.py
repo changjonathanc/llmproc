@@ -23,7 +23,7 @@ async def multiply_process():
         parameters={"max_tokens": 1024},
     )
 
-    program.register_tools([multiply])
+    program.set_enabled_tools([multiply])
 
     process = await program.start()
     yield process

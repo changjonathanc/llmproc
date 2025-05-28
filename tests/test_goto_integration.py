@@ -29,8 +29,8 @@ logger = logging.getLogger("test_goto_integration")
 @pytest.fixture
 async def goto_process():
     """Create an LLM process with GOTO tool enabled."""
-    program = LLMProgram.from_toml("./examples/goto.toml")
-    program.register_tools([handle_goto])
+    program = LLMProgram.from_toml("./examples/features/goto.toml")
+    program.set_enabled_tools([handle_goto])
     process = await program.start()
     yield process
 

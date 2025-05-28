@@ -36,7 +36,7 @@ async def goto_process():
             "max_tokens": 1000,
         },
     )
-    program.register_tools([handle_goto])
+    program.set_enabled_tools([handle_goto])
     process = await program.start()
     yield process
 
