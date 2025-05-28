@@ -1,0 +1,51 @@
+# File Descriptor - Reference ID System Example
+# Demonstrates response reference feature for marking and exporting content
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+
+[parameters]
+temperature = 0.7
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a helpful assistant that specializes in creating code examples.
+
+When you create code examples:
+- Always wrap code in reference tags for easy export
+- Use clear, descriptive reference IDs
+- Provide explanation before and after the code
+- Mention that the user can export specific references to files
+
+Whenever you generate multiple examples, create a separate reference for each one.
+"""
+
+# Auto-executed user prompt
+user = """Create three different code examples that demonstrate:
+
+1. A Python function that calculates the Fibonacci sequence
+2. A JavaScript function that sorts an array of objects by a property
+3. A simple HTML page with CSS styling
+
+For each example:
+1. Wrap the code in reference tags with descriptive IDs
+2. Explain what the code does and how it works
+3. Show how I could export each example to a file using the fd_to_file tool
+
+I'd like to see how the reference system works with different types of code.
+"""
+
+# Enable file descriptor system with references
+[tools]
+builtin = ["read_fd", "fd_to_file"]
+
+# Configure the file descriptor system with references enabled
+[file_descriptor]
+enabled = true
+max_direct_output_chars = 4000
+default_page_size = 2000
+enable_references = true
+
+[demo]
+display_name = "Claude with References"

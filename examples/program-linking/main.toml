@@ -1,0 +1,31 @@
+# Program Linking - connecting specialized LLMs
+[model]
+name = "claude-3-5-haiku@20241022"
+provider = "anthropic_vertex"
+
+region = "us-east5"  # Specify your preferred region based on GCP documentation
+
+[prompt]
+system_prompt = """You are Claude with access to specialized experts via the 'spawn' tool:
+- 'repo_expert' knows about the LLMProc project
+- 'thinking_expert' handles complex reasoning tasks
+
+Use these experts when appropriate and summarize their responses for the user."""
+
+[parameters]
+max_tokens = 1000
+
+[tools]
+builtin = ["spawn"]
+
+# Connect to specialized models with descriptive metadata
+[linked_programs.repo_expert]
+path = "./repo_expert.toml"
+description = "Expert on the LLMProc project codebase and documentation"
+
+[linked_programs.thinking_expert]
+path = "../anthropic.toml"
+description = "Claude model as expert for complex reasoning"
+
+[demo]
+display_name = "Claude with Experts"

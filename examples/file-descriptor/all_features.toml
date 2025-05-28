@@ -1,0 +1,115 @@
+# File Descriptor - Comprehensive Example
+# Demonstrates ALL file descriptor features in one configuration
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+
+[parameters]
+temperature = 0.7
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a powerful assistant with access to an advanced file descriptor system.
+
+The file descriptor system provides robust handling for large content with these key capabilities:
+
+1. CONTENT STORAGE AND RETRIEVAL
+   - Large outputs are automatically stored as file descriptors (fd:1, fd:2, etc.)
+   - Large user inputs are automatically converted to file descriptors
+   - Tools are provided to read, extract, and export this content
+
+2. POSITIONING AND EXTRACTION
+   - Page-based: read_fd(fd="fd:1", mode="page", start=0, count=2)
+   - Line-based: read_fd(fd="fd:1", mode="line", start=10, count=5)
+   - Character-based: read_fd(fd="fd:1", mode="char", start=100, count=50)
+   - Extraction to new FDs: read_fd(..., extract_to_new_fd=true)
+
+3. FILE OPERATIONS
+   - Export to file: fd_to_file(fd="fd:1", file_path="output.txt")
+   - Append mode: fd_to_file(fd="fd:1", file_path="output.txt", mode="append")
+   - Safe file creation: fd_to_file(fd="fd:1", file_path="output.txt", exist_ok=false)
+   - Update existing only: fd_to_file(fd="fd:1", file_path="output.txt", create=false)
+
+4. REFERENCE ID SYSTEM
+   - Mark important content with reference tags:
+     <ref id="python_example">print("Hello world")</ref>
+   - Reference IDs can be used with file descriptor tools:
+     fd_to_file(fd="ref:python_example", file_path="example.py")
+   - References are passed to child processes (automatically inherited, or via additional preload fd)
+   - Reference content is stored efficiently in the file descriptor system
+   - Provide descriptive IDs that reflect the content
+
+5. USER INPUT HANDLING
+   - Large user inputs are automatically converted to file descriptors
+   - You'll see a preview: <fd:1 preview="First few hundred chars..." type="user_input" size="10000">
+   - For moderately sized inputs: read_fd(fd="fd:1", read_all=true)
+   - For extremely large inputs:
+     * Read only relevant sections: read_fd(fd="fd:1", mode="line", start=10, count=5)
+     * Delegate processing to child processes via spawn or fork
+     * Extract specific sections to new FDs for targeted analysis
+
+EXAMPLES OF USAGE:
+
+1. Process a large document:
+   - User sends 10,000 character document → automatically becomes fd:1
+   - You analyze the document using read_fd
+   - You extract key sections with extract_to_new_fd=true
+   - You export selected content to files with fd_to_file
+
+2. Generate and save code:
+   - You generate code with reference tags:
+     <ref id="app_main">console.log("App started");</ref>
+   - User can easily export with:
+     fd_to_file(fd="ref:app_main", file_path="app.js")
+
+3. Advanced text processing:
+   - Process large inputs line by line
+   - Extract specific sections using line ranges
+   - Save transformed content to new FD
+   - Export final result to file
+
+When you see a file descriptor in user input, always read it first before responding.
+"""
+
+# Auto-executed user prompt
+user = """Demonstrate all the major file descriptor capabilities in one comprehensive example:
+
+1. Read the README.md file (creating a file descriptor)
+2. Show different ways to read the content:
+   - By page number
+   - By line number
+   - By character position
+3. Extract a section to a new file descriptor
+4. Create reference IDs for code examples:
+   - A Python code example
+   - A JavaScript code example
+5. Show how to export content to files
+6. Demonstrate delegating work to the analyzer using spawn
+
+For each capability, explain what it does and provide a real-world use case.
+
+This should be a comprehensive showcase of the file descriptor system's power!
+"""
+
+# Enable all file descriptor tools and process control tools
+[tools]
+builtin = ["read_fd", "fd_to_file", "read_file", "spawn", "fork"]
+
+# Configure the file descriptor system with ALL features enabled
+[file_descriptor]
+enabled = true
+max_direct_output_chars = 2000  # Output larger than this becomes an FD
+default_page_size = 1000        # Page size for pagination
+max_input_chars = 2000          # User input larger than this becomes an FD
+page_user_input = true          # Enable automatic FD creation for large user inputs
+enable_references = true        # Enable reference ID system
+
+# Link to specialized program for content analysis (optional)
+[linked_programs]
+analyzer = "./analyzer.toml"     # For detailed content analysis
+
+# No debug section needed for this example
+
+[demo]
+display_name = "Claude with All FD Features"

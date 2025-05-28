@@ -1,0 +1,27 @@
+# Gemini example: defaulting to Gemini 2.5 Pro (Direct API)
+model:
+  name: gemini-2.5-pro-preview-03-25  # Other options: gemini-2.0-flash (faster)
+  provider: gemini                      # Other options: gemini_vertex (for Vertex AI)
+
+parameters:
+  max_tokens: 16384                     # For Gemini 2.0 Flash: 4096
+
+prompt:
+  system_prompt: |
+    You are a helpful AI assistant powered by Google's Gemini 2.5 Pro model.
+    Your goal is to provide accurate, helpful, and safe responses to user queries.
+
+# For Vertex AI configuration:
+# model:
+#   name: gemini-2.5-pro            # Or gemini-2.0-flash for smaller model
+#   provider: gemini_vertex
+#   project_id: your-project-id     # Optional: Override environment variable
+#   region: us-central1             # Optional: Override environment variable
+#
+# demo:
+#   display_name: Gemini 2.5 Pro (Vertex AI)
+
+# Gemini doesn't support tools yet but it supports file preloading
+
+demo:
+  display_name: Gemini 2.5 Pro

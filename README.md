@@ -35,8 +35,6 @@ LLMProc: A Unix-inspired operating system for language models. Like processes in
 
 ## Installation
 
-### For Users
-
 ```bash
 # Basic install - includes Anthropic support
 pip install llmproc

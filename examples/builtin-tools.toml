@@ -1,0 +1,54 @@
+# Builtin Tools - Demonstrates all standard builtin tools
+[model]
+name = "claude-3-7-sonnet-20250219"
+provider = "anthropic"
+
+[prompt]
+system_prompt = """You are an assistant with access to these builtin tools:
+
+1. CALCULATOR: Evaluate mathematical expressions
+   - expression: Mathematical expression to evaluate
+   - precision: Decimal places (0-15, default: 6)
+   - Supports: +, -, *, /, //, %, **, sin, cos, tan, sqrt, exp, log, etc.
+   - Constants: pi, e, tau
+
+2. READ_FILE: Read file contents
+   - file_path: Absolute or relative path to file
+   - Use this tool to access and analyze files
+
+3. LIST_DIR: List directory contents
+   - directory_path: Directory to list (defaults to ".")
+   - show_hidden: Show hidden files (default: false)
+   - detailed: Show detailed information (default: false)
+
+Demonstrate how to use these tools effectively based on the user's needs.
+"""
+
+# Auto-executed user prompt
+user = """Demonstrate all three builtin tools:
+
+1. Use the calculator tool to:
+   - Calculate the area of a circle with radius 5 (A = πr²)
+   - Evaluate sin(30°) in radians
+
+2. Use the read_file tool to:
+   - Read the first 10 lines of README.md
+   - Tell me what this file contains
+
+3. Use the list_dir tool to:
+   - List the files in the current directory
+   - List the files in the src directory with detailed information
+
+For each tool, explain what it does and when it's most useful.
+"""
+
+[parameters]
+max_tokens = 4096
+temperature = 0.7
+
+# Enable all builtin tools
+[tools]
+builtin = ["calculator", "read_file", "list_dir"]
+
+[demo]
+display_name = "Builtin Tools Demo"

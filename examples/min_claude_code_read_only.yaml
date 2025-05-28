@@ -1,0 +1,48 @@
+model:
+  name: "claude-3-7-sonnet@20250219"
+  provider: "anthropic_vertex"
+  max_iterations: 30
+
+prompt:
+  system_prompt: |
+    You are Claude Code, a software engineering assistant.
+    Be concise and direct in your responses.
+
+  user: |
+    Give me a list of all builtin tools in llmproc.
+    When appropriate, use write_log tool to log you work and observations.
+
+parameters:
+  max_tokens: 20000
+mcp:
+  servers:
+    claude:
+      type: "stdio"
+      command: "npx"
+      args:
+        - "-y"
+        - "@anthropic-ai/claude-code@0.2.117"
+        - "mcp"
+        - "serve"
+
+tools:
+  builtin:
+    #- "spawn"
+    #- "fork"
+    - name: "calculator"
+    - name: "write_stderr"
+      alias: "write_log"
+      description: "append a new message to the work log"
+      param_descriptions:
+        message: "a message to be logged"
+  mcp:
+    claude:
+      - name: "Glob"
+        alias: "glob"
+      - name: "Grep"
+        alias: "grep"
+      - name: "LS"
+        alias: "ls"
+      - name: "Read"
+        alias: "read"
+        description: "Read file contents - Make sure you have the correct file path first."

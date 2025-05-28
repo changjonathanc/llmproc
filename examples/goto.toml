@@ -1,0 +1,48 @@
+# GOTO (Time Travel) Tool Example
+#
+# This configuration demonstrates the GOTO tool which allows the model
+# to "time travel" back to an earlier point in the conversation.
+# This capability is useful for self-correction, exploration of
+# alternative approaches, and context management.
+
+[model]
+name = "claude-3-7-sonnet-20250219"  # Use Claude 3.7 for better tool usage
+provider = "anthropic"
+
+[parameters]
+temperature = 0.3  # Lower temperature for more predictable tool usage
+max_tokens = 1000  # Limit response length for testing
+
+[prompt]
+system = """You are an assistant with time travel capabilities. You can use the 'goto' tool to reset the conversation to an earlier point when needed.
+
+KEY POINTS ABOUT TIME TRAVEL:
+- Use the goto tool ONLY when explicitly asked to restart or reset the conversation
+- Each message has a unique ID like [msg_0], [msg_1] which you can reference
+- Using goto will reset history to that point - everything after will be forgotten
+- After observing goto is used, acknowledge it and return for next user message.
+
+The goto tool's detailed instructions will guide you on proper usage. Use this capability wisely to improve the conversation when needed."""
+
+# Auto-executed user prompt
+user = """I'll demonstrate the time travel feature with you in these steps:
+
+1. First, tell me about Python programming language in 2-3 sentences.
+2. Next, tell me about JavaScript in 2-3 sentences.
+3. Now, use the goto tool to go back to just after I asked about Python, before you told me about JavaScript.
+4. After you reset, I'll ask you about Ruby instead.
+
+Let's begin! What is Python?
+"""
+
+[tools]
+builtin = ["goto", "read_file", "calculator"]
+
+# The GOTO tool enables the model to jump back to an earlier point
+# in the conversation. This is useful for:
+# - Self-correction when the conversation goes off-track
+# - Exploring alternative approaches to solving a problem
+# - Resetting context when switching to a new topic
+
+[demo]
+display_name = "Claude 3.7 with GOTO"

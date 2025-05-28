@@ -1,0 +1,42 @@
+# File Descriptor System - Unix-like pagination for large outputs
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+
+[parameters]
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You have access to a file descriptor system for handling large content.
+
+Core operations:
+- Read by page: read_fd(fd="fd:1", start=0)
+- Read all: read_fd(fd="fd:1", read_all=true)
+- Export: fd_to_file(fd="fd:1", file_path="output.txt")
+
+Try reading large files like README.md to see the system in action."""
+
+# Auto-executed user prompt
+user = """Demonstrate the basic file descriptor operations:
+
+1. Use read_file to read the README.md file, which will create a file descriptor
+2. Show how to read the first page of the file descriptor
+3. Show how to read the entire file descriptor content
+4. Explain how you would export the file descriptor to a text file
+
+Explain what the file descriptor system is and why it's useful for handling large content.
+"""
+
+# Enable the file descriptor system and tools
+[tools]
+builtin = ["read_fd", "fd_to_file", "read_file"]
+
+# Configure the file descriptor system
+[file_descriptor]
+enabled = true
+max_direct_output_chars = 2000  # Store larger outputs as FDs
+default_page_size = 1000        # Characters per page
+page_user_input = true          # Also page large user inputs
+
+[demo]
+display_name = "Claude with FD"

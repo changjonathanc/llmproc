@@ -1,0 +1,27 @@
+# Fork Tool - Create process copies with shared conversation state
+[model]
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+
+[prompt]
+system_prompt = """You can use the 'fork' tool to create copies of yourself with the same conversation history.
+
+Use fork to delegate tasks like reading large files, then summarize results for the user."""
+
+# Auto-executed user prompt
+user = """Demonstrate how the fork tool works:
+
+1. Create a fork that reads the README.md file and summarizes it in 3 bullet points
+2. Create another fork that reads the pyproject.toml file and tells me what dependencies the project has
+
+Explain what happened in each fork and how this feature is useful.
+"""
+
+[parameters]
+max_tokens = 1000
+
+[tools]
+builtin = ["fork", "read_file"]
+
+[demo]
+display_name = "Claude with Fork"

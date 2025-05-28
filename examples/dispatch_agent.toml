@@ -1,0 +1,36 @@
+# Dispatch Agent - For code exploration
+[model]
+name = "claude-3-7-sonnet-20250219"
+provider = "anthropic"
+
+[prompt]
+system_prompt_file = "prompts/claude-code-dispatch-agent-system-prompt.md"
+
+[parameters]
+temperature = 1
+max_tokens = 20000
+
+[demo]
+display_name = "Claude Code Dispatch Agent"
+
+# Enable token-efficient tool use for reduced token usage and lower latency
+[parameters.extra_headers]
+anthropic-beta = "token-efficient-tools-2025-02-19"
+
+# Enable medium thinking capacity for balanced search performance
+[parameters.thinking]
+type = "enabled"
+budget_tokens = 4000
+
+[tools]
+builtin = ["read_file"]
+
+[mcp]
+config_path = "config/mcp_servers.json"
+
+# MCP tools for the dispatch agent
+[tools.mcp]
+# Use the sequential-thinking tool which provides reasoning capabilities
+sequential-thinking = "all"
+# Use the add tool for precise calculations
+everything = ["add"]

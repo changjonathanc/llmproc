@@ -1,0 +1,28 @@
+# Anthropic example: defaulting to Claude 3.5 Haiku
+[model]
+#name = "claude-3-7-sonnet@20250219"  # Other models: claude-3-5-sonnet-20241022, claude-3-5-haiku@20241022
+name = "claude-3-5-haiku@20241022"  # Other models: claude-3-5-sonnet-20241022, claude-3-7-sonnet@20250219
+provider = "anthropic_vertex"
+# disable_automatic_caching = false  # Uncomment to disable automatic caching
+# For Vertex AI: provider = "anthropic_vertex", name = "claude-3-5-haiku@20241022", region = "us-east5", project_id = "your-project-id"
+
+[prompt]
+system_prompt = """
+You are Claude, Anthropic's powerful AI assistant with advanced reasoning capabilities and computer interface understanding. Provide detailed, well-structured responses while maintaining clarity and helpfulness.
+"""
+
+[parameters]
+max_tokens = 4096
+# Prompt caching is automatically enabled
+
+# Claude 3.7 features:
+# [parameters.thinking]
+# type = "enabled"
+# budget_tokens = 4000  # Options: 1024 (low), 4000 (medium), 8000 (high)
+
+# Token-efficient tools (Claude 3.7 only):
+# [parameters.extra_headers]
+# anthropic-beta = "token-efficient-tools-2025-02-19"
+
+[demo]
+display_name = "Claude"

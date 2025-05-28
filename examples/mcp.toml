@@ -1,0 +1,48 @@
+[model]
+name = "claude-3-5-haiku-20241022"
+provider = "anthropic"
+
+[parameters]
+temperature = 0.7
+max_tokens = 300
+
+[prompt]
+system_prompt = """You are a helpful assistant with access to MCP (Model Context Protocol) tools.
+These tools are provided by external servers and extend your capabilities beyond built-in tools.
+
+You currently have access to the 'add' tool from the 'everything' server, which can perform addition.
+This tool is accessed using the MCP naming convention: everything__add.
+
+MCP tools are useful for specialized capabilities that aren't available in the built-in toolset.
+"""
+
+# Auto-executed user prompt
+user = """Demonstrate how MCP tools work by using the everything__add tool to:
+
+1. Add the numbers 42 and 7
+2. Add 3.14159 and 2.71828
+
+Explain what MCP is and why it's useful for expanding assistant capabilities.
+"""
+
+# Enable built-in tools if needed
+#[tools]
+#builtin = ["read_file"]
+
+[mcp]
+config_path = "config/mcp_servers.json"
+
+# MCP tools are now defined in the [tools.mcp] section for better organization
+[tools.mcp]
+# Only configure servers that are available in your config/mcp_servers.json
+# This server is available in the default config
+# Added the everything server with the add tool
+everything = ["add"]
+# use "all" to enable all tools in a server, or ["tool1", "tool2"] for specific tools in a server
+
+# NOTE: If you add servers or tools that aren't available in the configuration,
+# an error will be raised. For example, this line would cause an error:
+# invalid-server = ["some-tool"]
+
+[demo]
+display_name = "Claude MCP Assistant"

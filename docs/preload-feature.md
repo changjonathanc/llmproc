@@ -144,8 +144,6 @@ This structure helps the model understand the source of the information and main
 
 > **⚠️ API Stability Note:** The `reset_state()` method in LLMProcess is considered experimental and not yet ready for general use. It may be changed or removed in future releases as we refine the process lifecycle management. For now, consider the preloaded content and system prompt to be immutable after process creation.
 
-> **⚠️ API Stability Note:** The `reset_state()` method in LLMProcess is considered experimental and not yet ready for general use. It may be changed or removed in future releases as we refine the process lifecycle management. For now, consider the preloaded content and system prompt to be immutable after process creation.
-
 ## Best Practices
 
 1. **Selective Loading**: Only preload files that are essential for the assistant's knowledge

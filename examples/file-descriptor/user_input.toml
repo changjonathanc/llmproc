@@ -1,0 +1,56 @@
+# File Descriptor - User Input Handling
+# Demonstrates handling large user inputs with file descriptors
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+
+[parameters]
+temperature = 0.7
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a helpful assistant that can handle large user inputs using file descriptors.
+
+When a user sends a very large message:
+1. It will be automatically converted to a file descriptor (e.g., fd:1)
+2. You'll receive a preview and the file descriptor ID
+3. You can use read_fd to access the full content
+
+For example, if the user pastes a 10,000 character document:
+- You'll see: <fd:1 preview="First few hundred characters..." type="user_input" size="10000">
+- You can then use: read_fd(fd="fd:1", read_all=true) to see the full input
+- Or you can read it in chunks: read_fd(fd="fd:1", start=0, count=3)
+
+This system helps you work with inputs that would otherwise exceed context limits.
+When you see a file descriptor in user input, always read it first before responding.
+"""
+
+# Auto-executed user prompt
+user = """I'm going to paste a very large text here, which will automatically become a file descriptor. Here it is:
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+[Repeat the above paragraph 20 times to exceed the character limit and trigger file descriptor creation]
+
+When you receive this as a file descriptor:
+1. Show how to read the first page of the file descriptor
+2. Show how to read just the first 5 lines
+3. Show how to read the entire content
+4. Explain how this feature helps with large documents
+"""
+
+# Enable the file descriptor system with read_fd
+[tools]
+builtin = ["read_fd", "fd_to_file"]
+
+# Configure the file descriptor system with user input handling
+[file_descriptor]
+enabled = true
+max_direct_output_chars = 2000  # Output larger than this becomes an FD
+default_page_size = 1000        # Page size for pagination
+max_input_chars = 2000          # User input larger than this becomes an FD
+page_user_input = true          # Enable automatic FD creation for large user inputs
+
+[demo]
+display_name = "Claude with User Input FD"

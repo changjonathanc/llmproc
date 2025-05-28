@@ -1,0 +1,58 @@
+# Content Analyzer - Child Process
+# Used with spawn_integration.toml for file descriptor sharing
+
+[model]
+name = "claude-3-5-sonnet-20240620"
+provider = "anthropic"
+
+[parameters]
+temperature = 0.5
+max_tokens = 4000
+
+[prompt]
+system_prompt = """You are a specialized content analyzer that examines text and provides insightful analysis.
+
+Your specialties include:
+1. Identifying key themes and concepts
+2. Extracting important facts and information
+3. Detecting patterns and relationships
+4. Summarizing complex content concisely
+
+When analyzing content:
+- Identify the main topics and themes
+- Extract the most important facts
+- Note any patterns or relationships
+- Provide a concise summary
+
+The content will be provided by your parent process via file descriptors.
+Focus on providing clear, structured analysis in this format:
+
+1. SUMMARY (2-3 sentences overview)
+2. KEY POINTS (bulleted list of 3-5 most important points)
+3. THEMES (main conceptual areas covered)
+4. NOTABLE INSIGHTS (anything particularly interesting or unexpected)
+"""
+
+# Auto-executed user prompt
+user = """You've been given a file descriptor containing content to analyze.
+
+1. First, read the entire content of the file descriptor
+2. Then provide a structured analysis following the format in your instructions:
+   - Summary (2-3 sentences)
+   - Key Points (3-5 bullet points)
+   - Themes (main conceptual areas)
+   - Notable Insights (interesting or unexpected aspects)
+
+Remember to read the file descriptor first before responding.
+"""
+
+# Only need read_fd for the child process
+[tools]
+builtin = ["read_fd"]
+
+# Configure file descriptor system
+[file_descriptor]
+enabled = true
+
+[demo]
+display_name = "Content Analyzer"
