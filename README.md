@@ -9,6 +9,8 @@
 
 LLMProc: A Unix-inspired operating system for language models. Like processes in an OS, LLMs execute instructions, make system calls, manage resources, and communicate with each other - enabling powerful multi-model applications with sophisticated I/O management.
 
+**🔥 Check out our [GitHub Actions examples](#github-actions-examples) to see LLMProc successfully automating code implementation, conflict resolution, and more!**
+
 ## Table of Contents
 
 - [Why LLMProc over Claude Code?](#why-llmproc-over-claude-code)
@@ -32,8 +34,6 @@ LLMProc: A Unix-inspired operating system for language models. Like processes in
 | **Scripting / SDK**         | ✅ Python SDK with function tools    | ❌ JS-only CLI       |
 
 > *`--disallowedTools` allows removing builtin tools, but not MCP tools.
-
-> **Check out our [GitHub Actions examples](#github-actions-examples) to see LLMProc in action!**
 
 ## Installation
 
