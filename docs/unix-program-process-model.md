@@ -1,6 +1,6 @@
 # Unix-Inspired Program/Process Model
 
-LLMProc implements a Unix-inspired operating system approach to separating program configuration from process execution. This document explains the design principles, architecture, and usage of this model.
+LLMProc implements a Unix-inspired runtime approach to separating program configuration from process execution. This document explains the design principles, architecture, and usage of this model.
 
 ## Core Concepts
 

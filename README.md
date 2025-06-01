@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Status](https://img.shields.io/badge/status-active-green)
 
-LLMProc: A Unix-inspired operating system for language models. Like processes in an OS, LLMs execute instructions, make system calls, manage resources, and communicate with each other - enabling powerful multi-model applications with sophisticated I/O management.
+LLMProc: Unix-inspired runtime that treats LLMs as processes. Build production-ready LLM programs with fully customizable YAML/TOML files. Or experiment with meta-tools via Python SDK - fork/spawn, goto, and more.
 
 **🔥 Check out our [GitHub Actions examples](#github-actions-examples) to see LLMProc successfully automating code implementation, conflict resolution, and more!**
 
@@ -160,12 +160,12 @@ These cutting-edge features bring Unix-inspired process management to LLMs:
 
 ## Design Philosophy
 
-LLMProc treats LLMs as processes in a Unix-inspired operating system framework:
+LLMProc treats LLMs as processes in a Unix-inspired runtime framework:
 
 - LLMs function as processes that execute prompts and make tool calls
 - Tools operate at both user and kernel levels, with system tools able to modify process state
 - The Process abstraction naturally maps to Unix concepts like spawn, fork, goto, IPC, file descriptors, and more
-- This architecture provides a foundation for evolving toward a more complete LLM operating system
+- This architecture provides a foundation for evolving toward a more complete LLM runtime
 
 For in-depth explanations of these design decisions, see our [API Design FAQ](./FAQ.md).
 

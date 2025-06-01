@@ -1,6 +1,6 @@
 # LLMProc Documentation
 
-Welcome to the LLMProc documentation. This guide will help you navigate the key concepts and features of LLMProc, a Unix-inspired operating system for language models. LLMProc treats LLMs as computational processes with their own lifecycle, I/O channels, and system calls.
+Welcome to the LLMProc documentation. This guide will help you navigate the key concepts and features of LLMProc, a Unix-inspired runtime for language models. LLMProc treats LLMs as computational processes with their own lifecycle, I/O channels, and system calls.
 
 For design rationales and API decisions, see the [API Design FAQ](../FAQ.md).
 

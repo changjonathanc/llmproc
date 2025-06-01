@@ -2,7 +2,7 @@
 
 LLMProc provides a fluent, Pythonic SDK interface for creating and configuring LLM programs. This guide describes how to use the Python SDK features.
 
-The SDK follows the Unix-inspired operating system model where programs (configuration) are distinct from processes (runtime instances). For the rationale behind this design, see the [API Design FAQ](../FAQ.md).
+The SDK follows the Unix-inspired runtime model where programs (configuration) are distinct from processes (runtime instances). For the rationale behind this design, see the [API Design FAQ](../FAQ.md).
 
 ## Fluent API
 
