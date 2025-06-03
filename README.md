@@ -8,6 +8,7 @@
 ![Status](https://img.shields.io/badge/status-active-green)
 
 LLMProc: Unix-inspired runtime that treats LLMs as processes. Build production-ready LLM programs with fully customizable YAML/TOML files. Or experiment with meta-tools via Python SDK - fork/spawn, goto, and more.
+Learn more at [llmproc.com](https://llmproc.com).
 
 **🔥 Check out our [GitHub Actions examples](#github-actions-examples) to see LLMProc successfully automating code implementation, conflict resolution, and more!**
 
@@ -44,8 +45,13 @@ pip install llmproc
 # Install with all providers: openai/gemini/vertex/anthropic
 pip install "llmproc[all]" # other supported extras: openai/gemini/vertex/anthropic
 
-# Or run without installing (requires uv) and run the CLI
+# Or run without installing (requires uv)
 uvx llmproc --help
+uvx llmproc-demo --help
+uvx llmproc-install-actions --help
+
+# Run GitHub Actions installer directly without installing llmproc
+uvx --from llmproc llmproc-install-actions
 ```
 
 > **Note**: Only Anthropic models currently support full tool calling. OpenAI and Gemini models have limited feature parity. For development setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -117,18 +123,28 @@ Real-world automation using LLMProc:
 > **Setup**: To use these actions, you'll need the workflow files and LLM program configs (linked below), plus these secrets in your repository settings:
 > - `ANTHROPIC_API_KEY`: API key for Claude
 > - `LLMPROC_WRITE_TOKEN`: GitHub personal access token with write permissions (contents, pull-requests)
+>
+> Run the installer in your repository root to download workflows automatically:
+> ```bash
+> # Option 1: If you have llmproc installed
+> llmproc-install-actions
+>
+> # Run non-interactively (answers yes to all prompts)
+> llmproc-install-actions --yes
+>
+> # Option 2: Run directly without installing (requires uv)
+> uvx --from llmproc llmproc-install-actions
+> ```
+> The installer will check you're in a git repository, show which files will be downloaded, warn about any existing files that will be overwritten, and provide step-by-step instructions for committing the files and setting up required secrets.
 
 - **`@llmproc /resolve`** - Automatically resolve merge conflicts
-  [Workflow](.github/workflows/llmproc-resolve.yml) | [LLM Program (yaml)](.github/config/llmproc-resolve-claude.yaml) | 
-  [Example Usage](https://github.com/cccntu/llmproc/pull/7#issuecomment-2916710226) | [Result PR](https://github.com/cccntu/llmproc/pull/8)
+  [Workflow](.github/workflows/llmproc-resolve.yml) | [LLM Program (yaml)](.github/config/llmproc-resolve-claude.yaml)
 
 - **`@llmproc /ask <question>`** - Answer questions on issues/PRs
-  [Workflow](.github/workflows/llmproc-ask.yml) | [LLM Program (yaml)](.github/config/llmproc-ask-claude.yaml) | 
-  [Example Usage](https://github.com/cccntu/llmproc/issues/5#issuecomment-2916673202)
+  [Workflow](.github/workflows/llmproc-ask.yml) | [LLM Program (yaml)](.github/config/llmproc-ask-claude.yaml)
 
 - **`@llmproc /code <request>`** - Implement features from comments
-  [Workflow](.github/workflows/llmproc-code.yml) | [LLM Program (yaml)](.github/config/llmproc-code-claude.yaml) | 
-  [Example Usage](https://github.com/cccntu/llmproc/issues/4#issuecomment-2916695626) | [Result PR](https://github.com/cccntu/llmproc/pull/6)
+  [Workflow](.github/workflows/llmproc-code.yml) | [LLM Program (yaml)](.github/config/llmproc-code-claude.yaml)
 
 ### In Development
 - **OpenAI/Gemini models** - Basic support, tool calling not yet implemented

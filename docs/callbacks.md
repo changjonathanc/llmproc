@@ -179,4 +179,4 @@ child = await parent.fork_process()
 # Child inherits callbacks automatically
 ```
 
-See `examples/scripts/callback_demo_new.py` for a complete demonstration.
+See `examples/scripts/callback_demo.py` for a complete demonstration.

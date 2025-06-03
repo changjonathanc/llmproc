@@ -87,9 +87,6 @@ def check_and_run_demo_mode(
             # Get demo configuration
             demo_prompts = config_data["demo"]["prompts"]
             pause_between = config_data["demo"].get("pause_between_prompts", True)
-            # If there's a display_name in the demo section, use it
-            if "display_name" in config_data["demo"]:
-                process.display_name = config_data["demo"]["display_name"]
 
             # Define demo mode function
             def run_demo_mode(prompts: list[str], pause: bool = True) -> bool:
@@ -97,7 +94,7 @@ def check_and_run_demo_mode(
                 logger.info(f"Starting demo mode with {len(prompts)} prompts")
 
                 # Prepare the demo
-                if not quiet_mode:
+                if not quiet:
                     click.echo("\n===== Demo Mode =====")
                     click.echo(f"Running {len(prompts)} prompts in sequence")
                     if pause:
@@ -107,7 +104,7 @@ def check_and_run_demo_mode(
                 # Run each prompt in sequence
                 for i, prompt in enumerate(prompts):
                     # Show prompt number and content
-                    if not quiet_mode:
+                    if not quiet:
                         click.echo(f"\n----- Prompt {i + 1}/{len(prompts)} -----")
                         click.echo(f"User: {prompt}")
 
@@ -119,7 +116,7 @@ def check_and_run_demo_mode(
                         click.echo("\nPress Enter to continue to the next prompt...", nl=False)
                         input()
 
-                if not quiet_mode:
+                if not quiet:
                     click.echo("\n===== Demo Complete =====")
 
                 return True

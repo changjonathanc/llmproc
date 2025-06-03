@@ -209,7 +209,7 @@ relative_to = "cwd"
         mock_load.assert_called_once()
         args = mock_load.call_args.args
         assert args[0] == ["pre.txt"]
-        assert args[1] == Path(run_dir)
+        assert args[1].resolve() == Path(run_dir).resolve()
 
 
 @pytest.mark.asyncio
@@ -250,7 +250,7 @@ files = ["pre.txt"]
         mock_load.assert_called_once()
         args = mock_load.call_args.args
         assert args[0] == [str(preload_file.resolve())]
-        assert args[1] == Path(program_dir)
+        assert args[1].resolve() == Path(program_dir).resolve()
 
 
 @pytest.mark.llm_api
