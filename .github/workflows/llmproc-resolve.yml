@@ -178,8 +178,7 @@ jobs:
         if: steps.abort_check.outputs.skip != 'true'
         run: npm install -g @anthropic-ai/claude-code@1.0.2
 
-      - name: Claude resolves conflicts using llmproc
-        id: resolve_step
+      - name: Run llmproc to resolve conflicts
         if: steps.abort_check.outputs.skip != 'true'
         run: |
           # Always install uv for Python dependency management
@@ -192,29 +191,50 @@ jobs:
             source .venv/bin/activate
             uv sync --all-extras
             claude --version
-            output=$(llmproc .github/config/llmproc-resolve-claude.yaml --json)
+            llmproc .github/config/llmproc-resolve-claude.yaml --cost-limit 1.0 --json > llmproc_result.json
           else
             echo "Using llmproc from PyPI"
             claude --version
-            output=$(uvx llmproc .github/config/llmproc-resolve-claude.yaml --json)
+            uvx llmproc .github/config/llmproc-resolve-claude.yaml --cost-limit 1.0 --json > llmproc_result.json
           fi
-          echo "$output" > llmproc_result.json
-          last_message=$(jq -r '.last_message' llmproc_result.json)
-          last_message_b64=$(echo "$last_message" | base64 | tr -d '\n')
-          echo "last_message=$last_message_b64" >> $GITHUB_OUTPUT
-
-          # Extract and encode stderr log as markdown bullets
-          stderr_log=$(jq -r '.stderr | if length > 0 then map("- " + .) | join("\n") else empty end' llmproc_result.json)
-          if [ -n "$stderr_log" ]; then
-            stderr_log_b64=$(echo "$stderr_log" | base64 | tr -d '\n')
-          else
-            stderr_log_b64=""
-          fi
-          echo "stderr_log=$stderr_log_b64" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           LLMPROC_TOOL_FETCH_TIMEOUT: 10
+
+      - name: Process llmproc output
+        id: resolve_step
+        if: steps.abort_check.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            try {
+              const output = JSON.parse(fs.readFileSync('llmproc_result.json', 'utf8'));
+
+              // Extract last message safely
+              const lastMessage = output.last_message || 'No response generated';
+              core.setOutput('last_message', lastMessage);
+
+              // Extract and format stderr log as markdown bullets
+              const stderrLog = output.stderr && output.stderr.length > 0
+                ? output.stderr.map(line => `- ${line}`).join('\n')
+                : '';
+              core.setOutput('stderr_log', stderrLog);
+
+              if (typeof output.usd_cost !== 'undefined') {
+                core.setOutput('usd_cost', output.usd_cost);
+              }
+
+              core.setOutput('success', 'true');
+              console.log('Successfully processed llmproc output');
+            } catch (error) {
+              console.error('Error processing llmproc output:', error);
+              core.setOutput('last_message', 'Error: Failed to parse llmproc output');
+              core.setOutput('stderr_log', '');
+              core.setOutput('success', 'false');
+            }
 
       # -- 7a. Verify resolution success with comprehensive checks -----------
       - name: Verify successful conflict resolution
@@ -284,31 +304,75 @@ jobs:
       - name: Open follow-up PR
         if: steps.abort_check.outputs.skip != 'true' && steps.diff_check.outputs.skip != 'true' && steps.conflict_check.outputs.failed != 'true'
         id: newpr
-        env:
-          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          body_file=pr_body.txt
-          printf "This PR resolves merge conflicts in #${{ steps.pr.outputs.num }} using llmproc. [View logs]($RUN_URL)\n\n" > "$body_file"
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+          script: |
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const lastMessage = ${{ toJSON(steps.resolve_step.outputs.last_message) }};
+            const stderrLog = ${{ toJSON(steps.resolve_step.outputs.stderr_log) }};
+            const usdCostRaw = '${{ steps.resolve_step.outputs.usd_cost }}';
+            const cost = parseFloat(usdCostRaw);
+            const costInfo = !isNaN(cost) ? ` (cost: ${cost.toFixed(2)} usd)` : '';
 
-          printf "## Resolution Output\n\n" >> "$body_file"
-          echo "${{ steps.resolve_step.outputs.last_message }}" | base64 -d >> "$body_file"
+            // Build PR body
+            let body = `This PR resolves merge conflicts in #${{ steps.pr.outputs.num }} using llmproc. [View logs](${runUrl})${costInfo}\n\n`;
 
-          printf "\n\n## Process Log\n\n" >> "$body_file"
+            body += `## Resolution Output\n\n${lastMessage}\n\n`;
 
-          # Handle stderr log
-          if [ -n "${{ steps.resolve_step.outputs.stderr_log }}" ]; then
-            echo "${{ steps.resolve_step.outputs.stderr_log }}" | base64 -d >> "$body_file"
-          else
-            printf "_No work log was generated during this resolution._\n" >> "$body_file"
-          fi
+            body += `## Process Log\n\n`;
+            if (stderrLog && stderrLog.trim()) {
+              body += stderrLog;
+            } else {
+              body += '_No work log was generated during this resolution._';
+            }
 
-          url=$(gh pr create \
-                  --head "${{ steps.vars.outputs.branch }}" \
-                  --base "${{ steps.pr.outputs.base }}" \
-                  --title "Auto-resolved conflicts for #${{ steps.pr.outputs.num }}" \
-                  --body-file "$body_file")
-          echo "url=$url" >> $GITHUB_OUTPUT
+            // Create the PR
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: '${{ steps.vars.outputs.branch }}',
+              base: '${{ steps.pr.outputs.base }}',
+              title: 'Auto-resolved conflicts for #${{ steps.pr.outputs.num }}',
+              body: body
+            });
+
+            // Ensure llmproc label exists, create if needed
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'llmproc'
+              });
+            } catch (error) {
+              if (error.status === 404) {
+                console.log('Creating llmproc label...');
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'llmproc',
+                  description: 'PRs created by llmproc GitHub Actions workflows',
+                  color: '1f77b4'
+                });
+                console.log('Created llmproc label');
+              }
+            }
+
+            // Add llmproc label to the PR
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['llmproc']
+              });
+              console.log('Added llmproc label to PR');
+            } catch (error) {
+              console.log('Warning: Could not add llmproc label:', error.message);
+            }
+
+            core.setOutput('url', pr.html_url);
+            console.log(`Created PR: ${pr.html_url}`);
 
       # -- 9. Update the initial status comment with final result ------------
       - name: "Update status comment with final result"
@@ -322,20 +386,26 @@ jobs:
           SKIPPED: ${{ steps.diff_check.outputs.skip }}
           NO_CONFLICTS: ${{ steps.abort_check.outputs.skip }}
           RESOLVE_OUTCOME: ${{ steps.resolve_step.outcome }}
+          USD_COST: ${{ steps.resolve_step.outputs.usd_cost }}
         run: |
           # If, for some reason, we never created the start comment, bail quietly
           [[ -z "$COMMENT_ID" ]] && exit 0
 
+          COST_SUFFIX=""
+          if [[ -n "$USD_COST" ]]; then
+            COST_SUFFIX=" (cost: $(printf '%.2f' "$USD_COST") usd)"
+          fi
+
           if [[ "$NO_CONFLICTS" == 'true' ]]; then
-            body="✅ **No conflicts detected** — PR is already mergeable. [View logs]($RUN_URL)"
+            body="✅ **No conflicts detected** — PR is already mergeable. [View logs]($RUN_URL)$COST_SUFFIX"
           elif [[ "$FAILED" == 'true' || "$RESOLVE_OUTCOME" != 'success' ]]; then
-            body="❌ **Conflict resolution failed** — Claude was unable to resolve all conflict markers. [View logs]($RUN_URL)"
+            body="❌ **Conflict resolution failed** — Claude was unable to resolve all conflict markers. [View logs]($RUN_URL)$COST_SUFFIX"
           elif [[ "$SKIPPED" == 'true' ]]; then
-            body="⚠️ **Conflict resolution did not produce any changes** compared to the base branch. [View logs]($RUN_URL)"
+            body="⚠️ **Conflict resolution did not produce any changes** compared to the base branch. [View logs]($RUN_URL)$COST_SUFFIX"
           elif [[ -n "$NEW_PR_URL" ]]; then
-            body="✅ **Conflicts resolved** — Follow-up PR: $NEW_PR_URL — [View logs]($RUN_URL)"
+            body="✅ **Conflicts resolved** — Follow-up PR: $NEW_PR_URL — [View logs]($RUN_URL)$COST_SUFFIX"
           else
-            body="✅ **Conflicts resolved** — [View logs]($RUN_URL)"
+            body="✅ **Conflicts resolved** — [View logs]($RUN_URL)$COST_SUFFIX"
           fi
 
           gh api --method PATCH \

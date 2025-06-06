@@ -10,10 +10,13 @@
 LLMProc: Unix-inspired runtime that treats LLMs as processes. Build production-ready LLM programs with fully customizable YAML/TOML files. Or experiment with meta-tools via Python SDK - fork/spawn, goto, and more.
 Learn more at [llmproc.com](https://llmproc.com).
 
-**🔥 Check out our [GitHub Actions examples](#github-actions-examples) to see LLMProc successfully automating code implementation, conflict resolution, and more!**
+**🔥 Check out our [LLMProc GitHub Actions](#llmproc-github-actions) to see LLMProc successfully automating code implementation, conflict resolution, and more!**
+
+**📋 Latest Updates: See [v0.9.3 Release Notes](docs/release_notes/RELEASE_NOTES_0.9.3.md) for cost control features, enhanced callbacks, and more.**
 
 ## Table of Contents
 
+- [LLMProc GitHub Actions](#llmproc-github-actions)
 - [Why LLMProc over Claude Code?](#why-llmproc-over-claude-code)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -21,6 +24,20 @@ Learn more at [llmproc.com](https://llmproc.com).
 - [Documentation](#documentation)
 - [Design Philosophy](#design-philosophy)
 - [License](#license)
+
+## LLMProc GitHub Actions
+
+Automate your development workflow with LLMProc-powered GitHub Actions:
+
+- **`@llmproc /resolve`** - Automatically resolve merge conflicts
+- **`@llmproc /ask <question>`** - Answer questions on issues/PRs  
+- **`@llmproc /code <request>`** - Implement features from comments
+
+> [!TIP]
+> **Quick Setup**: Run this command in your repository to automatically install workflows and get setup instructions:
+> ```bash
+> uvx --from llmproc llmproc-install-actions
+> ```
 
 ## Why LLMProc over Claude Code?
 
@@ -39,22 +56,18 @@ Learn more at [llmproc.com](https://llmproc.com).
 ## Installation
 
 ```bash
-# Basic install - includes Anthropic support
 pip install llmproc
-
-# Install with all providers: openai/gemini/vertex/anthropic
-pip install "llmproc[all]" # other supported extras: openai/gemini/vertex/anthropic
-
-# Or run without installing (requires uv)
-uvx llmproc --help
-uvx llmproc-demo --help
-uvx llmproc-install-actions --help
-
-# Run GitHub Actions installer directly without installing llmproc
-uvx --from llmproc llmproc-install-actions
 ```
 
-> **Note**: Only Anthropic models currently support full tool calling. OpenAI and Gemini models have limited feature parity. For development setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
+**Run without installing**
+
+```bash
+uvx llmproc
+```
+
+> [!IMPORTANT]
+> You'll need an API key from your chosen provider (Anthropic, OpenAI, etc.). Set it as an environment variable:
+> `export ANTHROPIC_API_KEY=your_key_here`
 
 ## Quick Start
 
@@ -91,18 +104,13 @@ if __name__ == "__main__":
 
 ### Configuration
 
-LLMProc supports TOML, YAML, and dictionary-based configurations. See [examples](./examples/) for various configuration patterns and the [YAML Configuration Schema](docs/yaml_config_schema.md) for all available options.
+> [!NOTE]
+> LLMProc supports TOML, YAML, and dictionary-based configurations. Check out the [examples directory](./examples/) for various configuration patterns and the [YAML Configuration Schema](docs/yaml_config_schema.md) for all available options.
 
 ### CLI Usage
 
 - **[llmproc](./src/llmproc/cli/run.py)** - Execute an LLM program. Use `--json` mode to pipe output for automation (see GitHub Actions examples)
 - **[llmproc-demo](./src/llmproc/cli/demo.py)** - Interactive debugger for LLM programs/processes
-
-Run with `--help` for full usage details:
-```bash
-llmproc --help
-llmproc-demo --help
-```
 
 ## Features
 
@@ -115,36 +123,6 @@ llmproc-demo --help
 - **Built-in tools** - File operations, calculator, spawning processes
 - **Tool customization** - Aliases, description overrides, parameter descriptions
 - **Automatic optimizations** - Prompt caching, retry logic with exponential backoff
-
-### GitHub Actions Examples
-
-Real-world automation using LLMProc:
-
-> **Setup**: To use these actions, you'll need the workflow files and LLM program configs (linked below), plus these secrets in your repository settings:
-> - `ANTHROPIC_API_KEY`: API key for Claude
-> - `LLMPROC_WRITE_TOKEN`: GitHub personal access token with write permissions (contents, pull-requests)
->
-> Run the installer in your repository root to download workflows automatically:
-> ```bash
-> # Option 1: If you have llmproc installed
-> llmproc-install-actions
->
-> # Run non-interactively (answers yes to all prompts)
-> llmproc-install-actions --yes
->
-> # Option 2: Run directly without installing (requires uv)
-> uvx --from llmproc llmproc-install-actions
-> ```
-> The installer will check you're in a git repository, show which files will be downloaded, warn about any existing files that will be overwritten, and provide step-by-step instructions for committing the files and setting up required secrets.
-
-- **`@llmproc /resolve`** - Automatically resolve merge conflicts
-  [Workflow](.github/workflows/llmproc-resolve.yml) | [LLM Program (yaml)](.github/config/llmproc-resolve-claude.yaml)
-
-- **`@llmproc /ask <question>`** - Answer questions on issues/PRs
-  [Workflow](.github/workflows/llmproc-ask.yml) | [LLM Program (yaml)](.github/config/llmproc-ask-claude.yaml)
-
-- **`@llmproc /code <request>`** - Implement features from comments
-  [Workflow](.github/workflows/llmproc-code.yml) | [LLM Program (yaml)](.github/config/llmproc-code-claude.yaml)
 
 ### In Development
 - **OpenAI/Gemini models** - Basic support, tool calling not yet implemented

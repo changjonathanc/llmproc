@@ -134,20 +134,43 @@ def register_tool(
         # Reuse the code path by calling the decorator with defaults
         return register_tool()(func)
 
+    def _finalize_registration(func: Callable, meta: ToolMeta) -> Callable:
+        """Finalize tool registration by attaching metadata and wrappers."""
+        if meta.requires_context:
+
+            @functools.wraps(func)
+            async def context_wrapper(*args, **kwargs):
+                if meta.required_context_keys and "runtime_context" in kwargs:
+                    valid, error = validate_context_has(kwargs["runtime_context"], *meta.required_context_keys)
+                    if not valid:
+                        error_msg = f"Tool '{meta.name or func.__name__}' error: {error}"
+                        logger.error(error_msg)
+                        return ToolResult.from_error(error_msg)
+
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:  # pragma: no cover - unexpected path
+                    error_msg = f"Tool '{meta.name or func.__name__}' error: {str(e)}"
+                    logger.error(error_msg, exc_info=True)
+                    return ToolResult.from_error(error_msg)
+
+            attach_meta(context_wrapper, meta)
+            return context_wrapper
+
+        attach_meta(func, meta)
+        return func
+
     def decorator(func):
-        # Handle instance methods by wrapping them first
-        if hasattr(func, "__self__") and func.__self__ is not None:
+        bound = hasattr(func, "__self__") and func.__self__ is not None
+        if bound:
             func = wrap_instance_method(func)
 
-        # Convert access level string to enum if needed
         access_level = access
         if isinstance(access, str):
             access_level = AccessLevel.from_string(access)
 
-        # Determine tool name (from parameter or function name)
         tool_name = name if name is not None else func.__name__
 
-        # Create the common metadata object
         meta_obj = ToolMeta(
             name=tool_name,
             description=description,
@@ -161,34 +184,15 @@ def register_tool(
             on_register=on_register,
         )
 
-        # If requires context, create a wrapper with context validation
-        if requires_context:
-            # Create the context wrapper
-            @functools.wraps(func)
-            async def context_wrapper(*args, **kwargs):
-                # Validate context if requirements specified
-                if required_context_keys and "runtime_context" in kwargs:
-                    valid, error = validate_context_has(kwargs["runtime_context"], *required_context_keys)
-                    if not valid:
-                        error_msg = f"Tool '{tool_name}' error: {error}"
-                        logger.error(error_msg)
-                        return ToolResult.from_error(error_msg)
+        attach_meta(func, meta_obj)
 
-                # Execute with simplified error handling
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    error_msg = f"Tool '{tool_name}' error: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    return ToolResult.from_error(error_msg)
+        if not bound and inspect.isfunction(func) and hasattr(func, "__qualname__") and "." in func.__qualname__:
+            parts = func.__qualname__.split(".")
+            if len(parts) >= 2 and parts[-2] != "<locals>":
+                func._deferred_tool_registration = True
+                return func
 
-            # Attach metadata to the wrapper
-            attach_meta(context_wrapper, meta_obj)
-            return context_wrapper
-        else:
-            # For non-context functions, just attach metadata to the original function
-            attach_meta(func, meta_obj)
-            return func
+        return _finalize_registration(func, meta_obj)
 
     return decorator
 

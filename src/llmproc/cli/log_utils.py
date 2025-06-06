@@ -6,6 +6,15 @@ import sys
 from typing import Any
 
 
+class CostLimitExceededError(Exception):
+    """Exception raised when cost limit is exceeded."""
+
+    def __init__(self, actual_cost: float, cost_limit: float):
+        self.actual_cost = actual_cost
+        self.cost_limit = cost_limit
+        super().__init__(f"Cost ${actual_cost:.4f} exceeds limit ${cost_limit:.2f}")
+
+
 class CleanFormatter(logging.Formatter):
     """Custom formatter that omits the WARNING: prefix for warning messages."""
 
@@ -58,9 +67,10 @@ def get_logger(log_level: str = "INFO") -> logging.Logger:
 class CliCallbackHandler:
     """Callback implementation for CLI output."""
 
-    def __init__(self, logger: logging.Logger) -> None:
+    def __init__(self, logger: logging.Logger, cost_limit: float | None = None) -> None:
         self.turn = 0
         self.logger = logger
+        self.cost_limit = cost_limit
 
     def tool_start(self, tool_name: str, args: Any) -> None:
         self.logger.info(json.dumps({"tool_start": {"tool_name": tool_name, "args": args}}, indent=2))
@@ -77,10 +87,15 @@ class CliCallbackHandler:
     def stderr_write(self, text: str) -> None:
         self.logger.warning(json.dumps({"STDERR": text}, indent=2))
 
-    async def turn_start(self, process: Any) -> None:
+    async def turn_start(self, process: Any, run_result=None) -> None:
+        # Check cost limit before proceeding with the turn
+        if self.cost_limit is not None and run_result is not None and run_result.usd_cost > self.cost_limit:
+            raise CostLimitExceededError(run_result.usd_cost, self.cost_limit)
+
         self.turn += 1
         info = await process.count_tokens()
-        self.logger.warning(f"--------- TURN {self.turn} start, token count {info['input_tokens']} --------")
+        cost_info = f", cost ${run_result.usd_cost:.4f}" if run_result else ""
+        self.logger.warning(f"--------- TURN {self.turn} start, token count {info['input_tokens']}{cost_info} --------")
 
     def turn_end(self, process: Any, response: Any, tool_results: Any) -> None:
         count = len(tool_results) if tool_results is not None else 0

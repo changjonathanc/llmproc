@@ -13,6 +13,7 @@ secrets. Use ``--yes`` to skip all confirmation prompts.
 from __future__ import annotations
 
 import asyncio
+import difflib
 import os
 import subprocess
 from pathlib import Path
@@ -43,8 +44,8 @@ async def _download_file(client: httpx.AsyncClient, url: str) -> bytes:
     return resp.content
 
 
-async def _install(repo: str, ref: str, dest: Path) -> None:
-    """Download workflow/config files and write them under *dest*."""
+async def _download_files(repo: str, ref: str) -> dict[str, bytes]:
+    """Return mapping of file paths to contents from *repo*@*ref*."""
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
     headers = {"Authorization": f"token {token}"} if token else {}
 
@@ -55,7 +56,15 @@ async def _install(repo: str, ref: str, dest: Path) -> None:
             tasks.append(_download_file(client, url))
         contents = await asyncio.gather(*tasks)
 
-    for rel, data in zip(WORKFLOW_FILES + CONFIG_FILES, contents, strict=True):
+    return dict(zip(WORKFLOW_FILES + CONFIG_FILES, contents, strict=True))
+
+
+async def _install(repo: str, ref: str, dest: Path, files: dict[str, bytes] | None = None) -> None:
+    """Download workflow/config files and write them under *dest*."""
+    if files is None:
+        files = await _download_files(repo, ref)
+
+    for rel, data in files.items():
         target = dest / rel
         target.write_bytes(data)
 
@@ -104,7 +113,12 @@ def _infer_repo_slug() -> str | None:
     is_flag=True,
     help="Automatically answer yes to all prompts for non-interactive use.",
 )
-def main(repo: str, ref: str, dest: Path, yes: bool) -> None:
+@click.option(
+    "--upgrade",
+    is_flag=True,
+    help="Show diff with remote files and update if approved.",
+)
+def main(repo: str, ref: str, dest: Path, yes: bool, upgrade: bool) -> None:
     """Download and install GitHub Actions workflows."""
     # Check if we're in a git repository
     if not _is_git_repo():
@@ -148,7 +162,30 @@ def main(repo: str, ref: str, dest: Path, yes: bool) -> None:
         for d in missing_dirs:
             d.mkdir(parents=True, exist_ok=True)
 
-    asyncio.run(_install(repo, ref, dest))
+    files = asyncio.run(_download_files(repo, ref))
+
+    if upgrade:
+        for rel, data in files.items():
+            target = dest / rel
+            old = target.read_bytes() if target.exists() else b""
+            diff = difflib.unified_diff(
+                old.decode(errors="ignore").splitlines(),
+                data.decode().splitlines(),
+                fromfile=str(target),
+                tofile=f"{repo}@{ref}/{rel}",
+                lineterm="",
+            )
+            diff_text = "\n".join(diff)
+            click.echo(f"\nDiff for {rel}:")
+            if diff_text:
+                click.echo(diff_text)
+            else:
+                click.echo("(no changes)")
+
+        if not yes and not click.confirm("\nApply updates?"):
+            raise SystemExit(0)
+
+    asyncio.run(_install(repo, ref, dest, files))
     click.echo(f"\n✅ Successfully installed GitHub Actions from {repo}@{ref}")
 
     # Provide git instructions
@@ -181,6 +218,10 @@ def main(repo: str, ref: str, dest: Path, yes: bool) -> None:
     click.echo(f"   https://github.com/{repo_slug}/settings/secrets/actions")
     click.echo("   - Add LLMPROC_WRITE_TOKEN (your GitHub personal access token)")
     click.echo("   - Add ANTHROPIC_API_KEY")
+
+    click.echo("\n4. Or use GitHub CLI to set secrets (if you have gh installed):")
+    click.echo(f"   echo $GITHUB_TOKEN      | gh secret set LLMPROC_WRITE_TOKEN -b- -R {repo_slug}")
+    click.echo(f"   echo $ANTHROPIC_API_KEY | gh secret set ANTHROPIC_API_KEY  -b- -R {repo_slug}")
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation

@@ -4,18 +4,22 @@ This module provides the ToolManager class, which is the central point for manag
 from different sources (function-based tools, system tools, and MCP tools).
 """
 
+import functools
 import logging
 from collections.abc import Callable
 from typing import Any, Optional
 
 # Import runtime context type definition from common package
 from llmproc.common.access_control import AccessLevel
-from llmproc.common.constants import TOOL_METADATA_ATTR
 from llmproc.common.context import RuntimeContext, validate_context_has
-from llmproc.common.metadata import get_tool_meta
+from llmproc.common.metadata import attach_meta, get_tool_meta
 from llmproc.common.results import ToolResult
 from llmproc.tools.builtin import BUILTIN_TOOLS
-from llmproc.tools.function_tools import create_tool_from_function, get_tool_access_level
+from llmproc.tools.function_tools import (
+    create_tool_from_function,
+    get_tool_access_level,
+    wrap_instance_method,
+)
 from llmproc.tools.mcp import MCPServerTools
 from llmproc.tools.registry_helpers import check_for_duplicate_schema_names
 from llmproc.tools.tool_registry import ToolRegistry
@@ -88,6 +92,30 @@ class ToolManager:
         if not isinstance(tools_config, list):
             tools_config = [tools_config]  # Convert single item to list
 
+        def _finalize_deferred(func: Callable, meta) -> Callable:
+            if meta.requires_context:
+
+                @functools.wraps(func)
+                async def context_wrapper(*args, **kwargs):
+                    if meta.required_context_keys and "runtime_context" in kwargs:
+                        valid, error = validate_context_has(kwargs["runtime_context"], *meta.required_context_keys)
+                        if not valid:
+                            error_msg = f"Tool '{meta.name or func.__name__}' error: {error}"
+                            logger.error(error_msg)
+                            return ToolResult.from_error(error_msg)
+                    try:
+                        return await func(*args, **kwargs)
+                    except Exception as e:  # pragma: no cover - unexpected
+                        error_msg = f"Tool '{meta.name or func.__name__}' error: {str(e)}"
+                        logger.error(error_msg, exc_info=True)
+                        return ToolResult.from_error(error_msg)
+
+                attach_meta(context_wrapper, meta)
+                return context_wrapper
+
+            attach_meta(func, meta)
+            return func
+
         # Process each tool
         processed_tool_names = []
         for tool_item in tools_config:
@@ -107,12 +135,20 @@ class ToolManager:
                             tool_names.append(t.name)
                     processed_tool_names.append(f"{server}:{','.join(tool_names)}")
             elif callable(tool_item):
-                # Add the function for later processing
-                self.add_function_tool(tool_item)
-
-                # Extract the name from metadata (fallback to __name__)
-                meta = get_tool_meta(tool_item)
-                processed_tool_names.append(meta.name or tool_item.__name__)
+                if (
+                    hasattr(tool_item, "__self__")
+                    and hasattr(tool_item, "__func__")
+                    and getattr(tool_item.__func__, "_deferred_tool_registration", False)
+                ):
+                    meta = get_tool_meta(tool_item.__func__)
+                    wrapped = wrap_instance_method(tool_item)
+                    wrapped = _finalize_deferred(wrapped, meta)
+                    self.add_function_tool(wrapped)
+                    processed_tool_names.append(meta.name or wrapped.__name__)
+                else:
+                    self.add_function_tool(tool_item)
+                    meta = get_tool_meta(tool_item)
+                    processed_tool_names.append(meta.name or tool_item.__name__)
             else:
                 raise ValueError(f"Tools must be callables or MCPServerTools objects, got {type(tool_item)}")
 

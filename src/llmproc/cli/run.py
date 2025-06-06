@@ -18,6 +18,7 @@ import click
 from llmproc import LLMProgram
 from llmproc.cli.log_utils import (
     CliCallbackHandler,
+    CostLimitExceededError,
     get_logger,
     log_program_info,
     setup_logger,
@@ -149,6 +150,12 @@ def _resolve_prompt(
     is_flag=True,
     help="Output results as JSON for automation",
 )
+@click.option(
+    "--cost-limit",
+    type=float,
+    metavar="USD",
+    help="Stop execution when cost exceeds this limit in USD",
+)
 def main(
     program_path: str,
     prompt: str | None = None,
@@ -157,6 +164,7 @@ def main(
     quiet: bool = False,
     append: bool = False,
     json_output: bool = False,
+    cost_limit: float | None = None,
 ) -> None:
     """Run a single prompt using the given PROGRAM_PATH."""
     asyncio.run(
@@ -168,6 +176,7 @@ def main(
             quiet,
             append,
             json_output,
+            cost_limit,
         )
     )
 
@@ -180,6 +189,7 @@ async def _async_main(
     quiet: bool = False,
     append: bool = False,
     json_output: bool = False,
+    cost_limit: float | None = None,
 ) -> None:
     """Async implementation for running a single prompt."""
     logger = get_logger(log_level)
@@ -228,27 +238,62 @@ async def _async_main(
     prompt = _resolve_prompt(provided_prompt, embedded_prompt, append, logger)
 
     # Create callback handler and register it with the process
-    callback_handler = CliCallbackHandler(logger)
+    callback_handler = CliCallbackHandler(logger, cost_limit=cost_limit)
     process.add_callback(callback_handler)
 
     log_program_info(process, prompt, logger)
-    run_result = await run_with_prompt(
-        process,
-        prompt,
-        "command line",
-        logger,
-        callback_handler,
-        quiet_mode,
-        json_output=json_output,
-    )
 
-    if json_output:
-        output = {
-            "api_calls": run_result.api_calls,
-            "last_message": process.get_last_message(),
-            "stderr": process.get_stderr_log(),
-        }
-        click.echo(json.dumps(output))
+    try:
+        run_result = await run_with_prompt(
+            process,
+            prompt,
+            "command line",
+            logger,
+            callback_handler,
+            quiet_mode,
+            json_output=json_output,
+        )
+
+        if json_output:
+            output = {
+                "api_calls": run_result.api_calls,
+                "usd_cost": run_result.usd_cost,
+                "last_message": process.get_last_message(),
+                "stderr": process.get_stderr_log(),
+                "stop_reason": run_result.stop_reason,
+            }
+            click.echo(json.dumps(output))
+
+    except CostLimitExceededError as e:
+        # Handle cost limit exceeded gracefully
+        if json_output:
+            # Create a minimal result with cost limit information
+            current_result = RunResult()
+            current_result.set_stop_reason("cost_limit_exceeded")
+
+            # Try to get actual run state if available
+            try:
+                # Get the actual accumulated costs from the process if possible
+                if hasattr(process, "_run_result") and process._run_result:
+                    current_result = process._run_result
+                    current_result.set_stop_reason("cost_limit_exceeded")
+            except Exception:
+                pass
+
+            output = {
+                "api_calls": current_result.api_calls,
+                "usd_cost": e.actual_cost,  # Use the actual cost from exception
+                "last_message": process.get_last_message(),
+                "stderr": process.get_stderr_log(),
+                "stop_reason": current_result.stop_reason,
+                "cost_limit": e.cost_limit,
+            }
+            click.echo(json.dumps(output))
+        else:
+            click.echo(f"⚠️  Execution stopped: {e}", err=True)
+
+        # Exit with success code - this is user-requested behavior
+        sys.exit(0)
 
     # Ensure resources are cleaned up with strict timeout. We create a task so
     # the aclose coroutine is always awaited even if wait_for is mocked.

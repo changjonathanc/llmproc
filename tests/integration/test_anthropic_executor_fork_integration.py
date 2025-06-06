@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
@@ -37,7 +38,7 @@ class _FakeResponse(SimpleNamespace):
 
 
 @pytest.fixture()
-def mock_process():
+def mock_process(monkeypatch):
     proc = MagicMock()
 
     # Core identifiers and settings
@@ -72,10 +73,12 @@ def mock_process():
     class _DummyRunResult:
         api_calls: int
         last_message: str
+        stop_reason: str | None
 
         def __init__(self):
             self.api_calls = 0
             self.last_message = ""
+            self.stop_reason = None
 
         def add_api_call(self, info):  # noqa: D401
             self.api_calls += 1
@@ -87,14 +90,23 @@ def mock_process():
             self.last_message = text
             return self
 
+        def set_stop_reason(self, reason):  # noqa: D401
+            self.stop_reason = reason
+            return self
+
         def complete(self):  # noqa: D401
             return self
 
-    _results_module.RunResult = _DummyRunResult  # type: ignore[attr-defined]
+    monkeypatch.setattr(_results_module, "RunResult", _DummyRunResult, raising=False)
 
     import llmproc.providers.anthropic_process_executor as _exec_mod  # type: ignore
 
-    _exec_mod.RunResult = _DummyRunResult  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        _exec_mod,
+        "RunResult",
+        _DummyRunResult,
+        raising=False,
+    )
 
     # Stub FD manager so executor's FD logic does not fail
     fd_manager = MagicMock()
@@ -117,6 +129,7 @@ def mock_process():
 
 @pytest.mark.asyncio
 async def test_msg_prefix_contains_reasoning_and_tool_use(mock_process):
+    """Ensure msg_prefix captures reasoning text and tool_use blocks."""
     captured_prefix: list | None = None
 
     # Fake provider response: reasoning followed by tool_use
@@ -171,6 +184,7 @@ async def test_msg_prefix_contains_reasoning_and_tool_use(mock_process):
 
 @pytest.mark.asyncio
 async def test_runtime_context_restored(mock_process):
+    """Verify runtime_context is reset after executing a tool."""
     original_context = mock_process.tool_manager.runtime_context
 
     tool_block = _ToolUseBlock("fork", "abc", {})
@@ -197,6 +211,7 @@ async def test_runtime_context_restored(mock_process):
 
 @pytest.mark.asyncio
 async def test_fork_process_called_with_write_access(mock_process):
+    """Check fork_process is invoked with WRITE access when forking."""
     tool_block = _ToolUseBlock("fork", "abc", {})
     mock_process.client.messages.create = AsyncMock(return_value=_FakeResponse([tool_block]))
 

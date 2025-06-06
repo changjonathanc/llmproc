@@ -1,7 +1,7 @@
 model:
   name: "claude-3-7-sonnet-20250219"
   provider: "anthropic"
-  max_iterations: 50
+  max_iterations: 100
 
 prompt:
   system_prompt: |

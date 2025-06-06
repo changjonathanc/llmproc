@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.3] - 2025-06-06
+
+See [detailed release notes](docs/release_notes/RELEASE_NOTES_0.9.3.md) for complete information.
+
+### Added
+- **Cost Control**: New `--cost-limit` option for both CLIs with proactive cost management
+- **Enhanced Callbacks**: Smart parameter passing and RunResult support for budget checking
+- **Improved Tool Registration**: Enhanced class method and instance method support
+
+### Improved
+- GitHub Actions security fixes and workflow enhancements
+- CLI: Added `--upgrade` option to `llmproc-install-actions`
+- Documentation and tool registration examples
+
+### Breaking Changes
+- **Stop Reason API**: `process.run_stop_reason` deprecated in favor of `run_result.stop_reason`
+
 ## [0.9.0] - 2025-05-28
 
 See [detailed release notes](docs/release_notes/RELEASE_NOTES_0.9.0.md) for complete information.

@@ -226,6 +226,8 @@ def test_cli_json_output():
 
     run_result = MagicMock()
     run_result.api_calls = 2
+    run_result.usd_cost = 0.0
+    run_result.stop_reason = "end_turn"
     mock_process.run = AsyncMock(return_value=run_result)
 
     with (
@@ -248,5 +250,7 @@ def test_cli_json_output():
 
         data = json.loads(result.output)
         assert data["api_calls"] == 2
+        assert "usd_cost" in data
         assert data["last_message"] == "Test response"
         assert data["stderr"] == []
+        assert data["stop_reason"] == "end_turn"

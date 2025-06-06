@@ -345,6 +345,7 @@ def complete(self) -> "RunResult":
 - `start_time`: When the run started
 - `end_time`: When the run completed
 - `duration_ms`: Duration of the run in milliseconds
+- `usd_cost`: Estimated cost of the run in USD (Anthropic models only)
 
 ## ToolRegistry
 

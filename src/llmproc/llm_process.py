@@ -12,13 +12,19 @@ from typing import Any, Optional
 
 from dotenv import load_dotenv
 
+from llmproc import providers as _providers
 from llmproc.callbacks import CallbackEvent
+from llmproc.callbacks.callback_utils import (
+    add_callback as utils_add_callback,
+)
+from llmproc.callbacks.callback_utils import (
+    trigger_event as utils_trigger_event,
+)
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.file_descriptors.manager import FileDescriptorManager
 from llmproc.process_snapshot import ProcessSnapshot
 from llmproc.program import LLMProgram
-from llmproc.providers import EXECUTOR_MAP
 from llmproc.providers.utils import choose_provider_executor
 from llmproc.tools import ToolManager
 
@@ -151,7 +157,7 @@ class LLMProcess:
         self.client = client
 
         # Initialize provider-specific executor
-        executor_cls = EXECUTOR_MAP.get(provider)
+        executor_cls = _providers.EXECUTOR_MAP.get(provider)
         if executor_cls is None:
             logger.warning(
                 "Unknown provider '%s' requested; falling back to default executor",
@@ -220,7 +226,7 @@ class LLMProcess:
         Returns:
             Self for method chaining
         """
-        self.callbacks.append(callback)
+        utils_add_callback(self, callback)
         return self
 
     # ------------------------------------------------------------------
@@ -251,58 +257,8 @@ class LLMProcess:
         return asyncio.run_coroutine_threadsafe(coro, self._loop)
 
     def trigger_event(self, event: CallbackEvent, *args, **kwargs) -> None:
-        """Trigger an event to all registered callbacks.
-
-        Args:
-            event: The CallbackEvent enum value
-            *args: Positional arguments to pass to the callback
-            **kwargs: Keyword arguments to pass to the callback
-        """
-        if not self.callbacks:
-            return
-
-        event_name = event.value  # Get string value from enum
-
-        for callback in self.callbacks:
-            try:
-                method = None
-                pass_event = False
-
-                # Class-based callback with method matching event name
-                if hasattr(callback, event_name):
-                    method = getattr(callback, event_name)
-                elif callable(callback):
-                    method = callback
-                    pass_event = True
-
-                if method is None:
-                    continue
-
-                if inspect.iscoroutinefunction(method):
-                    if pass_event:
-                        fut = self._submit_to_loop(method(event, *args, **kwargs))
-                    else:
-                        fut = self._submit_to_loop(method(*args, **kwargs))
-                    fut.add_done_callback(
-                        lambda f, en=event.name: logger.warning(f"Error in {en} callback: {f.exception()}")
-                        if f.exception()
-                        else None
-                    )
-                else:
-                    if pass_event:
-                        result = method(event, *args, **kwargs)
-                    else:
-                        result = method(*args, **kwargs)
-
-                    if inspect.isawaitable(result):
-                        fut = self._submit_to_loop(result)
-                        fut.add_done_callback(
-                            lambda f, en=event.name: logger.warning(f"Error in {en} callback: {f.exception()}")
-                            if f.exception()
-                            else None
-                        )
-            except Exception as e:
-                logger.warning(f"Error in {event.name} callback: {e}")
+        """Trigger an event to all registered callbacks."""
+        utils_trigger_event(self, event, *args, **kwargs)
 
     def _process_user_input(self, user_input: str) -> str:
         """Process user input through the file descriptor system if enabled."""
@@ -738,6 +694,34 @@ class LLMProcess:
         self.state = snapshot.state
         if snapshot.enriched_system_prompt is not None:
             self.enriched_system_prompt = snapshot.enriched_system_prompt
+
+    @property
+    def run_stop_reason(self) -> str | None:
+        """Deprecated: Use RunResult.stop_reason instead.
+
+        This property provides backward compatibility but will be removed in a future version.
+        Stop reasons are now tracked per-run in RunResult objects rather than on the process.
+
+        Returns:
+            None (stop reasons are no longer stored on the process)
+        """
+        warnings.warn(
+            "process.run_stop_reason is deprecated. Use run_result.stop_reason instead. "
+            "Stop reasons are now tracked per-run in RunResult objects.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return None
+
+    @run_stop_reason.setter
+    def run_stop_reason(self, value: str | None) -> None:
+        """Deprecated: Use RunResult.set_stop_reason() instead."""
+        warnings.warn(
+            "Setting process.run_stop_reason is deprecated. Use run_result.set_stop_reason() instead. "
+            "Stop reasons are now tracked per-run in RunResult objects.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
 
 # Create AsyncLLMProcess alias for more explicit API usage

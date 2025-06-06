@@ -17,6 +17,7 @@ import click
 from llmproc import LLMProgram
 from llmproc.cli.log_utils import (
     CliCallbackHandler,
+    CostLimitExceededError,
     get_logger,
     log_program_info,
 )
@@ -46,7 +47,15 @@ def run_with_prompt(
     start_time = time.time()
 
     # Execute the process with the given prompt
-    run_result = process.run(user_prompt, max_iterations=process.max_iterations)
+    try:
+        run_result = process.run(user_prompt, max_iterations=process.max_iterations)
+    except CostLimitExceededError as e:
+        if not quiet:
+            click.echo(f"\n⚠️  Session stopped: {e}", err=True)
+        # Return a minimal result to indicate cost limit was exceeded
+        run_result = RunResult()
+        run_result.cost_limit_exceeded = True
+        return run_result
 
     # Get the elapsed time
     elapsed = time.time() - start_time
@@ -109,7 +118,13 @@ def check_and_run_demo_mode(
                         click.echo(f"User: {prompt}")
 
                     # Run the prompt
-                    run_prompt_func(prompt, source=f"demo prompt {i + 1}/{len(prompts)}")
+                    result = run_prompt_func(prompt, source=f"demo prompt {i + 1}/{len(prompts)}")
+
+                    # Check if cost limit was exceeded
+                    if hasattr(result, "cost_limit_exceeded") and result.cost_limit_exceeded:
+                        if not quiet:
+                            click.echo("\n⚠️  Demo stopped due to cost limit")
+                        return True  # Indicates demo mode completed (with early termination)
 
                     # Pause for user input if configured, except after the last prompt
                     if pause and i < len(prompts) - 1:
@@ -152,7 +167,15 @@ def check_and_run_demo_mode(
     flag_value="",  # When -p is used without value, use empty string
     help="Override embedded prompt with custom prompt. Use -p alone to skip embedded prompt.",
 )
-def main(program_path, log_level: str = "INFO", quiet: bool = False, prompt: str = None) -> None:
+@click.option(
+    "--cost-limit",
+    type=float,
+    metavar="USD",
+    help="Stop execution when cost exceeds this limit in USD",
+)
+def main(
+    program_path, log_level: str = "INFO", quiet: bool = False, prompt: str = None, cost_limit: float | None = None
+) -> None:
     """Run an interactive CLI for LLMProc.
 
     PROGRAM_PATH is the path to a TOML or YAML program file. The command always
@@ -241,7 +264,7 @@ def main(program_path, log_level: str = "INFO", quiet: bool = False, prompt: str
                 raise
 
         # Create callback handler and register it with the process
-        callback_handler = CliCallbackHandler(cli_logger)
+        callback_handler = CliCallbackHandler(cli_logger, cost_limit=cost_limit)
         process.add_callback(callback_handler)
 
         # Use the helper function to run prompts
@@ -328,7 +351,12 @@ def main(program_path, log_level: str = "INFO", quiet: bool = False, prompt: str
             if not getattr(process, "state", []):
                 log_program_info(process, user_input, cli_logger)
             # Run the process without passing callbacks (already registered above)
-            run_result = process.run(user_input)
+            try:
+                run_result = process.run(user_input)
+            except CostLimitExceededError as e:
+                if not quiet_mode:
+                    click.echo(f"\n⚠️  Session stopped: {e}", err=True)
+                break  # Exit the interactive loop
 
             # Get the elapsed time
             elapsed = time.time() - start_time

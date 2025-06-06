@@ -194,10 +194,10 @@ jobs:
           if [ "${{ steps.extract.outputs.is_dev }}" = "true" ]; then
             echo "Using llmproc from source"
             source .venv/bin/activate
-            llmproc .github/config/llmproc-ask-claude.yaml -f prompt.txt --json > llmproc_result.json
+            llmproc .github/config/llmproc-ask-claude.yaml -f prompt.txt --cost-limit 1.0 --json > llmproc_result.json
           else
             echo "Using llmproc from PyPI"
-            uvx llmproc .github/config/llmproc-ask-claude.yaml -f prompt.txt --json > llmproc_result.json
+            uvx llmproc .github/config/llmproc-ask-claude.yaml -f prompt.txt --cost-limit 1.0 --json > llmproc_result.json
           fi
 
           # Validate JSON output
@@ -223,6 +223,9 @@ jobs:
                 // Read and parse llmproc output
                 const output = JSON.parse(fs.readFileSync('llmproc_result.json', 'utf8'));
                 const response = output.last_message || 'No response generated';
+                const costInfo = typeof output.usd_cost !== 'undefined'
+                  ? ` (cost: ${output.usd_cost.toFixed(2)} usd)`
+                  : '';
 
                 // Format stderr as work log
                 const workLog = output.stderr && output.stderr.length > 0
@@ -236,7 +239,7 @@ jobs:
                   body += `\n\n<details>\n<summary>Work log</summary>\n\n${workLog}\n</details>`;
                 }
 
-                body += `\n\n[View run](${runUrl})`;
+                body += `\n\n[View run](${runUrl})${costInfo}`;
               } catch (error) {
                 console.error('Error parsing llmproc output:', error);
                 body = `❌ **Failed to parse response** — [View logs](${runUrl})`;

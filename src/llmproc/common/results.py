@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from llmproc.providers.pricing import get_claude_pricing
+
 
 class ToolResult:
     """A standardized result from tool execution.
@@ -148,6 +150,9 @@ class RunResult:
     _cached_tokens: int = 0
     _cache_write_tokens: int = 0
 
+    # Run outcome information
+    stop_reason: str | None = None
+
     @property
     def api_calls(self) -> int:
         """Get number of API calls made."""
@@ -243,6 +248,18 @@ class RunResult:
         """
         return self.complete()
 
+    def set_stop_reason(self, reason: str | None) -> "RunResult":
+        """Set the reason why the run stopped.
+
+        Args:
+            reason: The stop reason (e.g., "end_turn", "max_iterations", "cost_limit_exceeded")
+
+        Returns:
+            self for method chaining
+        """
+        self.stop_reason = reason
+        return self
+
     @property
     def cached_tokens(self) -> int:
         """Return the total number of tokens retrieved from cache."""
@@ -281,6 +298,46 @@ class RunResult:
     def total_tokens(self) -> int:
         """Return the total number of tokens used."""
         return self._input_tokens + self._output_tokens
+
+    @property
+    def usd_cost(self) -> float:
+        """Return the estimated cost of the run in USD."""
+
+        def _get_value(obj: Any, key: str) -> int:
+            if hasattr(obj, key):
+                return getattr(obj, key, 0) or 0
+            if isinstance(obj, dict):
+                return obj.get(key, 0) or 0
+            return 0
+
+        total = 0.0
+        for info in self.api_call_infos:
+            model = info.get("model")
+            usage = info.get("usage", {})
+            pricing = get_claude_pricing(model)
+            if not pricing:
+                continue
+
+            total += (
+                _get_value(usage, "input_tokens") * pricing.get("input_tokens", 0)
+                + _get_value(usage, "output_tokens") * pricing.get("output_tokens", 0)
+                + _get_value(usage, "cache_creation_input_tokens") * pricing.get("cache_creation_input_tokens", 0)
+                + _get_value(usage, "cache_read_input_tokens") * pricing.get("cache_read_input_tokens", 0)
+            ) / 1_000_000
+
+            cache_creation = None
+            if hasattr(usage, "cache_creation"):
+                cache_creation = getattr(usage, "cache_creation", None)
+            elif isinstance(usage, dict):
+                cache_creation = usage.get("cache_creation")
+
+            if isinstance(cache_creation, dict):
+                for ttl_key, tokens in cache_creation.items():
+                    price = pricing.get("cache_creation", {}).get(ttl_key)
+                    if price is not None:
+                        total += tokens * price / 1_000_000
+
+        return total
 
     def __repr__(self) -> str:
         """Create a string representation of the run result."""

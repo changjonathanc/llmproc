@@ -107,9 +107,53 @@ Each event type passes specific arguments to callbacks:
 - `RESPONSE` - `(text)`
 - `API_REQUEST` - `(payload_dict)`
 - `API_RESPONSE` - `(response_obj)`
-- `TURN_START` - `(process)`
+- `TURN_START` - `(process, run_result=None)` **(Enhanced in v0.9.3)**
 - `TURN_END` - `(process, response_obj, tool_results)`
 - `STDERR_WRITE` - `(text)`
+
+## Smart Parameter Passing (v0.9.3+)
+
+LLMProc now supports intelligent parameter filtering based on callback method signatures. This means:
+
+- **Backward Compatibility**: Existing callbacks continue to work unchanged
+- **Smart Filtering**: Callbacks only receive parameters they can accept
+- **Enhanced Features**: New parameters like `run_result` can be used for advanced functionality
+
+### TURN_START with RunResult Support
+
+The `TURN_START` event now supports an optional `run_result` parameter for real-time cost monitoring:
+
+```python
+class CostMonitoringCallback:
+    def __init__(self, cost_limit=5.0):
+        self.cost_limit = cost_limit
+
+    def turn_start(self, process, run_result=None):
+        """Monitor costs before each turn starts."""
+        if run_result and run_result.usd_cost > self.cost_limit:
+            raise Exception(f"Cost ${run_result.usd_cost:.4f} exceeds limit ${self.cost_limit:.2f}")
+
+        if run_result:
+            print(f"Current cost: ${run_result.usd_cost:.4f}")
+
+    # Old-style callback still works
+    def turn_end(self, process, response_obj, tool_results):
+        print("Turn completed")
+```
+
+### Legacy Compatibility
+
+Existing callbacks continue to work without modification:
+
+```python
+# This old-style callback still works perfectly
+def old_turn_start(process):
+    print("Starting new turn")
+
+# This new-style callback gets additional features
+def new_turn_start(process, run_result=None):
+    print(f"Starting turn, cost so far: ${run_result.usd_cost if run_result else 0:.4f}")
+```
 
 ## Example: Timing Callback
 

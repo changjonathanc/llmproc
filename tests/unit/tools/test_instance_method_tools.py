@@ -6,6 +6,7 @@ from typing import Any
 
 from llmproc.common.metadata import get_tool_meta
 from llmproc.tools.function_tools import register_tool, wrap_instance_method
+from llmproc.tools.tool_manager import ToolManager
 
 
 class TestInstanceMethodTools(unittest.TestCase):
@@ -77,6 +78,24 @@ class TestInstanceMethodTools(unittest.TestCase):
         result = decorated("users")
         self.assertEqual(result["key"], "users")
         self.assertEqual(result["access_count"], 1)
+
+    def test_register_tool_on_unbound_method(self):
+        """Test using register_tool directly on a class method."""
+
+        class MyTools:
+            @register_tool(name="hello")
+            def greet(self, name: str) -> str:
+                return f"hi {name}"
+
+        tools = MyTools()
+        manager = ToolManager()
+        manager.register_tools([tools.greet])
+        manager.process_function_tools()
+
+        self.assertIn("hello", manager.runtime_registry.tool_handlers)
+        handler = manager.runtime_registry.get_handler("hello")
+        result = asyncio.run(handler(name="Tom"))
+        self.assertEqual(result.content, "hi Tom")
 
 
 class DataProvider:

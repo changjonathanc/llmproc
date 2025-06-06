@@ -38,8 +38,11 @@ class _FakeClient:
         return _FakeResponse(self.file_map[path])
 
 
-async def _run_cli(runner: CliRunner) -> tuple[int, str]:
-    result = await asyncio.to_thread(runner.invoke, main, ["--yes"])
+async def _run_cli(runner: CliRunner, extra_args: list[str] | None = None) -> tuple[int, str]:
+    args = ["--yes"]
+    if extra_args:
+        args.extend(extra_args)
+    result = await asyncio.to_thread(runner.invoke, main, args)
     return result.exit_code, result.output
 
 
@@ -173,3 +176,32 @@ def test_install_actions_cli() -> None:
             assert "https://github.com/test/repo/settings/secrets/actions" in output
             assert "LLMPROC_WRITE_TOKEN" in output
             assert "ANTHROPIC_API_KEY" in output
+
+
+def test_install_actions_upgrade_diff() -> None:
+    """Verify that upgrade mode prints diffs."""
+    runner = CliRunner()
+    file_map = {
+        ".github/workflows/test.yml": b"name: Test",
+    }
+
+    def fake_client(*args, **kwargs) -> _FakeClient:
+        return _FakeClient(file_map)
+
+    with (
+        patch("httpx.AsyncClient", fake_client),
+        patch("llmproc.cli.install_actions.WORKFLOW_FILES", [
+            ".github/workflows/test.yml",
+        ]),
+        patch("llmproc.cli.install_actions.CONFIG_FILES", []),
+        patch("llmproc.cli.install_actions._is_git_repo", return_value=True),
+    ):
+        with runner.isolated_filesystem():
+            Path(".github/workflows").mkdir(parents=True)
+            Path(".github/workflows/test.yml").write_text("old")
+
+            exit_code, output = asyncio.run(_run_cli(runner, ["--upgrade", "--yes"]))
+            assert exit_code == 0
+            assert "Diff for .github/workflows/test.yml" in output
+            assert "-old" in output
+            assert "+name: Test" in output

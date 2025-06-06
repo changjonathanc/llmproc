@@ -1,6 +1,6 @@
 [project]
 name = "llmproc"
-version = "0.9.2"
+version = "0.9.3"
 description = "A simple framework for LLM-powered applications"
 readme = "README.md"
 requires-python = ">=3.11"

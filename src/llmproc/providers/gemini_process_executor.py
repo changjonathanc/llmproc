@@ -122,7 +122,7 @@ class GeminiProcessExecutor:
             process.state.append({"role": "user", "content": user_prompt})
 
         # Trigger TURN_START event
-        process.trigger_event(CallbackEvent.TURN_START, process)
+        process.trigger_event(CallbackEvent.TURN_START, process, run_result)
 
         # Prepare messages for the API - convert internal state format to Gemini format
         contents = self.format_state_to_api_messages(process.state)
@@ -180,7 +180,7 @@ class GeminiProcessExecutor:
         process.trigger_event(CallbackEvent.TURN_END, process, response, [])
 
         # Set the stop reason (consistent with other providers)
-        process.run_stop_reason = "end_turn"
+        run_result.set_stop_reason("end_turn")
 
         # Create a new RunResult if one wasn't provided
         if run_result is None:

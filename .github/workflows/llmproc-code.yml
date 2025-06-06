@@ -34,6 +34,7 @@
 #   @llmproc /code Implement the following:
 #   - Add feature X
 #   - Update documentation
+# - Empty comment on an issue (not PR) uses the issue body as the request
 #
 # Development mode (uses llmproc from source):
 # - @llmproc dev /code <request>
@@ -90,6 +91,7 @@ jobs:
         with:
           script: |
             const comment = context.payload.comment.body;
+            const issue = context.payload.issue;
 
             // Check if this is dev mode
             const isDev = comment.includes('@llmproc dev');
@@ -98,12 +100,16 @@ jobs:
             const pattern = isDev ? /@llmproc\s+dev\s+\/code\s+([\s\S]*)/ : /@llmproc\s+\/code\s+([\s\S]*)/;
             const match = comment.match(pattern);
 
-            if (!match || !match[1]) {
-              core.setFailed('Could not extract request from comment');
-              return;
-            }
+            let request = match && match[1] ? match[1].trim() : '';
 
-            const request = match[1].trim();
+            if (!request) {
+              if (!issue.pull_request && issue.body && issue.body.trim()) {
+                request = issue.body.trim();
+              } else {
+                core.setFailed('Could not extract request from comment');
+                return;
+              }
+            }
 
             // Set outputs
             core.setOutput('is_dev', isDev);
@@ -116,29 +122,39 @@ jobs:
       # -- 3. Get context details ------------------------------------------
       - name: Get issue/PR context
         id: context
-        env:
-          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
-        run: |
-          # Check if this is a PR
-          if [ -n "${{ github.event.issue.pull_request }}" ]; then
-            echo "is_pr=true" >> $GITHUB_OUTPUT
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
 
-            # Get PR details
-            gh api "/repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" > pr.json
-            echo "base_branch=$(jq -r .base.ref pr.json)" >> $GITHUB_OUTPUT
-          else
-            echo "is_pr=false" >> $GITHUB_OUTPUT
-            # For issues, use the default branch
-            echo "base_branch=$(gh api /repos/${{ github.repository }} --jq .default_branch)" >> $GITHUB_OUTPUT
-          fi
+            // Check if this is a PR
+            if (issue.pull_request) {
+              core.setOutput('is_pr', 'true');
 
-          # Get title and body
-          echo "title_b64=$(echo "${{ github.event.issue.title }}" | base64 | tr -d '\n')" >> $GITHUB_OUTPUT
-          body="${{ github.event.issue.body }}"
-          if [ -z "$body" ]; then
-            body="(No description provided)"
-          fi
-          echo "body_b64=$(echo "$body" | base64 | tr -d '\n')" >> $GITHUB_OUTPUT
+              // Get PR details
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: issue.number
+              });
+
+              core.setOutput('base_branch', pr.base.ref);
+            } else {
+              core.setOutput('is_pr', 'false');
+
+              // For issues, use the default branch
+              const { data: repo } = await github.rest.repos.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+
+              core.setOutput('base_branch', repo.default_branch);
+            }
+
+            // Get title and body safely
+            core.setOutput('title', issue.title);
+            core.setOutput('body', issue.body || '(No description provided)');
 
       # -- 4. Checkout and setup -------------------------------------------
       - uses: actions/checkout@v4
@@ -188,26 +204,28 @@ jobs:
 
       - name: Create implementation prompt
         id: create_prompt
-        run: |
-          request="${{ steps.extract_request.outputs.request }}"
-          title=$(echo "${{ steps.context.outputs.title_b64 }}" | base64 -d)
-          body=$(echo "${{ steps.context.outputs.body_b64 }}" | base64 -d)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
 
-          if [ "${{ steps.context.outputs.is_pr }}" = "true" ]; then
-            printf '%s\n\nPR Description:\n%s\n\nImplementation Request:\n%s\n' \
-              "Context: This request is from a pull request titled: $title" \
-              "$body" \
-              "$request" > prompt.txt
-          else
-            printf '%s\n\nIssue Description:\n%s\n\nImplementation Request:\n%s\n' \
-              "Context: This request is from an issue titled: $title" \
-              "$body" \
-              "$request" > prompt.txt
-          fi
+            const request = ${{ toJSON(steps.extract_request.outputs.request) }};
+            const title = ${{ toJSON(steps.context.outputs.title) }};
+            const body = ${{ toJSON(steps.context.outputs.body) }};
+            const isPR = ${{ steps.context.outputs.is_pr }};
+
+            let prompt;
+            if (isPR === 'true') {
+              prompt = `Context: This request is from a pull request titled: ${title}\n\nPR Description:\n${body}\n\nImplementation Request:\n${request}`;
+            } else {
+              prompt = `Context: This request is from an issue titled: ${title}\n\nIssue Description:\n${body}\n\nImplementation Request:\n${request}`;
+            }
+
+            fs.writeFileSync('prompt.txt', prompt);
+            console.log('Created prompt file successfully');
 
       # -- 7. Run llmproc to implement changes -----------------------------
       - name: Run llmproc to implement changes
-        id: implement_step
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -215,36 +233,45 @@ jobs:
           if [ "${{ steps.extract_request.outputs.is_dev }}" = "true" ]; then
             echo "Using llmproc from source"
             source .venv/bin/activate
-            output=$(llmproc .github/config/llmproc-code-claude.yaml -f prompt.txt --json)
+            llmproc .github/config/llmproc-code-claude.yaml -f prompt.txt --cost-limit 1.0 --json > llmproc_result.json
           else
             echo "Using llmproc from PyPI"
-            output=$(uvx llmproc .github/config/llmproc-code-claude.yaml -f prompt.txt --json)
+            uvx llmproc .github/config/llmproc-code-claude.yaml -f prompt.txt --cost-limit 1.0 --json > llmproc_result.json
           fi
 
-          # Save output for debugging
-          echo "$output" > llmproc_result.json
+      - name: Process implementation output
+        id: implement_step
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
 
-          # Extract and encode results
-          if jq -e . llmproc_result.json >/dev/null 2>&1; then
-            last_message=$(jq -r '.last_message // "Error: No message in output"' llmproc_result.json)
-            last_message_b64=$(echo "$last_message" | base64 | tr -d '\n')
-            echo "last_message=$last_message_b64" >> $GITHUB_OUTPUT
+            try {
+              const output = JSON.parse(fs.readFileSync('llmproc_result.json', 'utf8'));
 
-            # Extract and encode stderr log as markdown bullets
-            stderr_log=$(jq -r '.stderr | if length > 0 then map("- " + .) | join("\n") else empty end' llmproc_result.json)
-            if [ -n "$stderr_log" ]; then
-              stderr_log_b64=$(echo "$stderr_log" | base64 | tr -d '\n')
-            else
-              stderr_log_b64=""
-            fi
-            echo "stderr_log=$stderr_log_b64" >> $GITHUB_OUTPUT
-            echo "success=true" >> $GITHUB_OUTPUT
-          else
-            # Handle non-JSON output
-            echo "last_message=$(echo 'Error: Failed to parse llmproc output' | base64 | tr -d '\n')" >> $GITHUB_OUTPUT
-            echo "stderr_log=" >> $GITHUB_OUTPUT
-            echo "success=false" >> $GITHUB_OUTPUT
-          fi
+              // Extract last message safely
+              const lastMessage = output.last_message || 'No response generated';
+              core.setOutput('last_message', lastMessage);
+
+              // Extract and format stderr log as markdown bullets
+              const stderrLog = output.stderr && output.stderr.length > 0
+                ? output.stderr.map(line => `- ${line}`).join('\n')
+                : '';
+              core.setOutput('stderr_log', stderrLog);
+
+              // Expose cost if provided
+              if (typeof output.usd_cost !== 'undefined') {
+                core.setOutput('usd_cost', output.usd_cost);
+              }
+
+              core.setOutput('success', 'true');
+              console.log('Successfully processed implementation output');
+            } catch (error) {
+              console.error('Error processing implementation output:', error);
+              core.setOutput('last_message', 'Error: Failed to parse llmproc output');
+              core.setOutput('stderr_log', '');
+              core.setOutput('success', 'false');
+            }
 
       # -- 8. Detect commits and create PR if needed ----------------------
       - name: Detect new commits
@@ -266,86 +293,127 @@ jobs:
       - name: Push branch and create PR
         id: create_pr
         if: steps.check_commits.outputs.has_commits == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
-        run: |
-          # Push the branch
-          git push origin "${{ steps.create_branch.outputs.branch_name }}"
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+          script: |
+            const { execSync } = require('child_process');
 
-          # Get the last commit message as PR title
-          pr_title=$(git log -1 --format=%s)
+            // Push the branch
+            execSync('git push origin "${{ steps.create_branch.outputs.branch_name }}"');
 
-          # Decode the implementation output
-          implementation_output=$(echo "${{ steps.implement_step.outputs.last_message }}" | base64 -d)
+            // Get the last commit message as PR title
+            const prTitle = execSync('git log -1 --format=%s', { encoding: 'utf8' }).trim();
 
-          # Create PR body
-          pr_body_file=pr_body.txt
+            // Get implementation output safely
+            const implementationOutput = ${{ toJSON(steps.implement_step.outputs.last_message) }};
+            const stderrLog = ${{ toJSON(steps.implement_step.outputs.stderr_log) }};
 
-          echo "## Implementation Output" > "$pr_body_file"
-          echo "" >> "$pr_body_file"
-          echo "$implementation_output" >> "$pr_body_file"
-          echo "" >> "$pr_body_file"
+            // Build PR body
+            let body = `## Implementation Output\n\n${implementationOutput}\n\n`;
 
-          # Add work log if present
-          if [ -n "${{ steps.implement_step.outputs.stderr_log }}" ]; then
-            echo "## Process Log" >> "$pr_body_file"
-            echo "" >> "$pr_body_file"
-            echo "<details>" >> "$pr_body_file"
-            echo "<summary>Work log entries</summary>" >> "$pr_body_file"
-            echo "" >> "$pr_body_file"
-            echo "${{ steps.implement_step.outputs.stderr_log }}" | base64 -d >> "$pr_body_file"
-            echo "</details>" >> "$pr_body_file"
-            echo "" >> "$pr_body_file"
-          fi
+            // Add work log if present
+            if (stderrLog && stderrLog.trim()) {
+              body += `## Process Log\n\n<details>\n<summary>Work log entries</summary>\n\n${stderrLog}\n</details>\n\n`;
+            }
 
-          # Add reference to original issue/PR
-          echo "---" >> "$pr_body_file"
-          echo "Requested in #${{ github.event.issue.number }}" >> "$pr_body_file"
-          echo "Automated by llmproc GitHub Action" >> "$pr_body_file"
+            // Add reference to original issue/PR
+            body += `---\nRequested in #${{ github.event.issue.number }}\nAutomated by llmproc GitHub Action`;
 
-          # Create the PR using the last commit message as title
-          pr_url=$(gh pr create \
-            --title "$pr_title" \
-            --body-file "$pr_body_file" \
-            --base "${{ steps.context.outputs.base_branch }}" \
-            --head "${{ steps.create_branch.outputs.branch_name }}" \
-            --repo "${{ github.repository }}" \
-            | tail -1)
+            // Create the PR
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: prTitle,
+              body: body,
+              base: '${{ steps.context.outputs.base_branch }}',
+              head: '${{ steps.create_branch.outputs.branch_name }}'
+            });
 
-          echo "pr_url=$pr_url" >> $GITHUB_OUTPUT
+            // Ensure llmproc label exists, create if needed
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'llmproc'
+              });
+            } catch (error) {
+              if (error.status === 404) {
+                console.log('Creating llmproc label...');
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'llmproc',
+                  description: 'PRs created by llmproc GitHub Actions workflows',
+                  color: '1f77b4'
+                });
+                console.log('Created llmproc label');
+              }
+            }
+
+            // Add llmproc label to the PR
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['llmproc']
+              });
+              console.log('Added llmproc label to PR');
+            } catch (error) {
+              console.log('Warning: Could not add llmproc label:', error.message);
+            }
+
+            core.setOutput('pr_url', pr.html_url);
+            console.log(`Created PR: ${pr.html_url}`);
 
       # -- 9. Update status comment ----------------------------------------
       - name: Update status comment
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.LLMPROC_WRITE_TOKEN }}
-          COMMENT_ID: ${{ steps.start_comment.outputs.id }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          IMPLEMENT_SUCCESS: ${{ steps.implement_step.outputs.success }}
-          HAS_COMMITS: ${{ steps.check_commits.outputs.has_commits }}
-          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
-        run: |
-          # Skip if we never created the start comment
-          [[ -z "$COMMENT_ID" ]] && exit 0
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.LLMPROC_WRITE_TOKEN }}
+          script: |
+            const commentId = '${{ steps.start_comment.outputs.id }}';
 
-          # Determine the status message
-          if [[ "$IMPLEMENT_SUCCESS" != "true" ]]; then
-            body="❌ **Failed to process code request** — [View logs]($RUN_URL)"
-          elif [[ "$HAS_COMMITS" == "true" ]] && [[ -n "$PR_URL" ]]; then
-            body="✅ **Code implemented successfully!** — [View PR]($PR_URL) | [View logs]($RUN_URL)"
-          elif [[ "$HAS_COMMITS" != "true" ]]; then
-            # Decode the full response to show why no changes were made
-            response=$(echo "${{ steps.implement_step.outputs.last_message }}" | base64 -d)
-            body="ℹ️ **No changes needed**
+            // Skip if we never created the start comment
+            if (!commentId) {
+              console.log('No comment ID found, skipping update');
+              return;
+            }
 
-            $response
+            const runUrl = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            const implementSuccess = '${{ steps.implement_step.outputs.success }}';
+            const hasCommits = '${{ steps.check_commits.outputs.has_commits }}';
+            const prUrl = '${{ steps.create_pr.outputs.pr_url }}';
+            const usdCostRaw = '${{ steps.implement_step.outputs.usd_cost }}';
+            const cost = parseFloat(usdCostRaw);
+            const costInfo = !isNaN(cost) ? ` (cost: ${cost.toFixed(2)} usd)` : '';
 
-            [View logs]($RUN_URL)"
-          else
-            body="⚠️ **Changes made but PR creation failed** — [View logs]($RUN_URL)"
-          fi
+            let body;
 
-          # Update the comment
-          gh api --method PATCH \
-            "/repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
-            --field body="$body"
+            // Determine the status message
+            if (implementSuccess !== 'true') {
+              body = `❌ **Failed to process code request** — [View logs](${runUrl})${costInfo}`;
+            } else if (hasCommits === 'true' && prUrl) {
+              body = `✅ **Code implemented successfully!** — [View PR](${prUrl}) | [View logs](${runUrl})${costInfo}`;
+            } else if (hasCommits !== 'true') {
+              // Get the full response to show why no changes were made
+              const response = ${{ toJSON(steps.implement_step.outputs.last_message) }};
+              body = `ℹ️ **No changes needed**\n\n${response}\n\n[View logs](${runUrl})${costInfo}`;
+            } else {
+              body = `⚠️ **Changes made but PR creation failed** — [View logs](${runUrl})${costInfo}`;
+            }
+
+            // Update the comment
+            try {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+                body: body
+              });
+              console.log('Successfully updated status comment');
+            } catch (error) {
+              console.error('Failed to update comment:', error);
+            }

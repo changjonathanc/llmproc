@@ -135,7 +135,7 @@ class AnthropicProcessExecutor:
             # Add user message with GOTO ID
             append_message_with_id(process, "user", user_prompt)
 
-        process.run_stop_reason = None
+        run_result.set_stop_reason(None)
         iterations = 0
 
         while iterations < max_iterations:
@@ -144,7 +144,7 @@ class AnthropicProcessExecutor:
             self.tool_results_prefix = []
 
             # Trigger TURN_START event
-            process.trigger_event(CallbackEvent.TURN_START, process)
+            process.trigger_event(CallbackEvent.TURN_START, process, run_result)
 
             # Set up runtime context with live references to our buffers
             ctx = process.tool_manager.runtime_context
@@ -287,13 +287,13 @@ class AnthropicProcessExecutor:
             if not response.content or not tool_invoked:
                 # Get out of the tool loop as there are no more tools to execute
                 # Note: response.content could be empty in rare cases, which we handle gracefully
-                process.run_stop_reason = stop_reason
+                run_result.set_stop_reason(stop_reason)
                 break
 
             iterations += 1
 
         if iterations >= max_iterations:
-            process.run_stop_reason = "max_iterations"
+            run_result.set_stop_reason("max_iterations")
 
         # Create a new RunResult if one wasn't provided
         if run_result is None:

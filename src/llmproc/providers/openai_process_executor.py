@@ -58,7 +58,7 @@ class OpenAIProcessExecutor:
         process.state.append({"role": "user", "content": user_prompt})
 
         # Trigger TURN_START event
-        process.trigger_event(CallbackEvent.TURN_START, process)
+        process.trigger_event(CallbackEvent.TURN_START, process, run_result)
 
         # Set up messages for OpenAI format
         formatted_messages = []
@@ -135,7 +135,7 @@ class OpenAIProcessExecutor:
             finish_reason = response.choices[0].finish_reason
 
             # Set stop reason
-            process.run_stop_reason = finish_reason
+            run_result.set_stop_reason(finish_reason)
 
             # Add assistant response to conversation history
             process.state.append({"role": "assistant", "content": message_content})
@@ -151,7 +151,7 @@ class OpenAIProcessExecutor:
             logger.error(f"Error in OpenAI API call: {str(e)}")
             # Add error to run result
             run_result.add_api_call({"type": "error", "error": str(e)})
-            process.run_stop_reason = "error"
+            run_result.set_stop_reason("error")
             raise
 
         # Set the last_message in the RunResult to ensure it's available
