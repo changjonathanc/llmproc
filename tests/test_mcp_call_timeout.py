@@ -51,23 +51,23 @@ class TestMCPCallTimeout:
         with patch.object(aggregator, '_get_or_create_client', return_value=mock_client), \
              patch('asyncio.timeout') as mock_timeout, \
              patch('logging.Logger.error') as mock_error:
-            
+
             # Make asyncio.timeout context manager raise TimeoutError
             mock_cm = MagicMock()
             mock_cm.__aenter__.return_value = None
             mock_cm.__aexit__.side_effect = asyncio.TimeoutError()
             mock_timeout.return_value = mock_cm
-            
+
             # Call tool that will timeout
             result = await aggregator.call_tool("stdio_server__test_tool", {"arg": "value"})
-            
+
             # Verify error message
             assert result.isError is True
             assert "timeout" in result.message.lower()
             assert "stdio_server" in result.message
             assert "test_tool" in result.message
             assert str(MCP_DEFAULT_TOOL_CALL_TIMEOUT) in result.message
-            
+
             # Since there are multiple error log calls, check for our specific one
             found_timeout_log = False
             for call in mock_error.call_args_list:
@@ -76,32 +76,32 @@ class TestMCPCallTimeout:
                     if "timeout" in error_msg.lower() and "stdio_server" in error_msg and "test_tool" in error_msg:
                         found_timeout_log = True
                         break
-            
+
             assert found_timeout_log, "Did not find expected timeout error log message"
 
     @pytest.mark.asyncio
     async def test_call_tool_timeout_custom_env(self, aggregator):
         """Test timeout error message with custom environment variable."""
         custom_timeout = 45.0
-        
+
         # Setup mock client that raises TimeoutError
         mock_client = AsyncMock()
         with patch.dict(os.environ, {'LLMPROC_TOOL_CALL_TIMEOUT': str(custom_timeout)}), \
              patch.object(aggregator, '_get_or_create_client', return_value=mock_client), \
              patch('asyncio.timeout') as mock_timeout:
-            
+
             # Make asyncio.timeout context manager raise TimeoutError
             mock_cm = MagicMock()
             mock_cm.__aenter__.return_value = None
             mock_cm.__aexit__.side_effect = asyncio.TimeoutError()
             mock_timeout.return_value = mock_cm
-            
+
             # Call tool that will timeout
             result = await aggregator.call_tool("stdio_server__test_tool", {"arg": "value"})
-            
+
             # Verify timeout is set from environment variable
             mock_timeout.assert_called_with(custom_timeout)
-            
+
             # Verify error message includes custom timeout
             assert str(custom_timeout) in result.message
 
@@ -111,33 +111,33 @@ class TestMCPCallTimeout:
         # Test with stdio server
         with patch.object(aggregator, '_get_or_create_client'), \
              patch('asyncio.timeout') as mock_timeout:
-            
+
             # Make asyncio.timeout context manager raise TimeoutError
             mock_cm = MagicMock()
             mock_cm.__aenter__.return_value = None
             mock_cm.__aexit__.side_effect = asyncio.TimeoutError()
             mock_timeout.return_value = mock_cm
-            
+
             # Call tool on stdio server
             result = await aggregator.call_tool("stdio_server__test_tool")
-            
+
             # Verify error includes server info
             assert "Server type: stdio" in result.message
             assert "Command: test_command" in result.message
-        
+
         # Test with SSE server
         with patch.object(aggregator, '_get_or_create_client'), \
              patch('asyncio.timeout') as mock_timeout:
-            
+
             # Make asyncio.timeout context manager raise TimeoutError
             mock_cm = MagicMock()
             mock_cm.__aenter__.return_value = None
             mock_cm.__aexit__.side_effect = asyncio.TimeoutError()
             mock_timeout.return_value = mock_cm
-            
+
             # Call tool on SSE server
             result = await aggregator.call_tool("sse_server__test_tool")
-            
+
             # Verify error includes server info
             assert "Server type: sse" in result.message
             assert "URL: https://test-server.example" in result.message

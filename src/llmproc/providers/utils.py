@@ -8,6 +8,8 @@ import logging
 from collections.abc import Callable
 from typing import Any, Optional
 
+from llmproc import providers as _providers
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,20 +57,23 @@ def get_context_window_size(model_name: str, window_sizes: dict[str, int], defau
     return default_size
 
 
-def choose_provider_executor(process: "Any") -> "Any":
+def choose_provider_executor(provider: str) -> "Any":
     """
+
     Choose the appropriate process executor based on provider.
 
-    This function selects and returns the appropriate executor based on the process provider.
-    It's used by tools like fork to work with any provider.
+    This function selects and returns the appropriate executor class for the
+    given provider. It's used by tools like ``fork`` to work with any provider.
 
     Args:
-        process: The LLMProcess instance
+        provider: Name of the provider
 
     Returns:
         A provider-specific process executor instance
     """
-    provider = getattr(process, "provider", "")
+    executor_cls = _providers.EXECUTOR_MAP.get(provider)
+    if executor_cls is not None:
+        return executor_cls()
 
     # Anthropic (direct API)
     if provider == "anthropic":
@@ -77,19 +82,28 @@ def choose_provider_executor(process: "Any") -> "Any":
         return AnthropicProcessExecutor()
 
     # Anthropic through Vertex AI
-    elif provider == "anthropic_vertex":
+    if provider == "anthropic_vertex":
         from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 
         return AnthropicProcessExecutor()
 
     # OpenAI / Azure
-    elif provider in ("openai", "azure_openai"):
+    if provider in ("openai", "azure_openai"):
         from llmproc.providers.openai_process_executor import OpenAIProcessExecutor
 
         return OpenAIProcessExecutor()
 
+    # Gemini (direct or Vertex)
+    if provider in ("gemini", "gemini_vertex"):
+        from llmproc.providers.gemini_process_executor import GeminiProcessExecutor
+
+        return GeminiProcessExecutor()
+
     # Default to Anthropic executor as fallback
-    logger.warning(f"Unknown provider: {provider}. Using AnthropicProcessExecutor as fallback.")
+    logger.warning(
+        "Unknown provider '%s'. Using AnthropicProcessExecutor as fallback.",
+        provider,
+    )
     from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 
     return AnthropicProcessExecutor()

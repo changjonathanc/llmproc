@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from llmproc.callbacks import CallbackEvent
+from llmproc.event_loop_mixin import EventLoopMixin
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +43,9 @@ def filter_callback_parameters(method: Callable, available_params: dict[str, Any
                     method.__name__,
                 )
 
-        if not has_var_keyword and len(available_params) > len(filtered_params):
-            extra_params = set(available_params.keys()) - set(filtered_params.keys()) - {"self"}
-            if extra_params:
-                logger.warning(
-                    "Callback %s should accept **kwargs for forward compatibility. Ignoring parameters: %s",
-                    method.__name__,
-                    extra_params,
-                )
+        # Note: We used to warn about callbacks not accepting **kwargs for forward compatibility,
+        # but this was causing unnecessary warnings during normal operation. The parameter
+        # filtering system handles mismatched parameters gracefully without requiring **kwargs.
 
         return filtered_params
     except Exception as e:  # pylint: disable=broad-except
@@ -57,12 +53,12 @@ def filter_callback_parameters(method: Callable, available_params: dict[str, Any
         return {}
 
 
-def add_callback(process: Any, callback: Callable) -> None:
+def add_callback(process: EventLoopMixin, callback: Callable) -> None:
     """Add a callback to the process."""
     process.callbacks.append(callback)
 
 
-def trigger_event(process: Any, event: CallbackEvent, *args, **kwargs) -> None:
+def trigger_event(process: EventLoopMixin, event: CallbackEvent, *args, **kwargs) -> None:
     """Trigger an event to all registered callbacks."""
     if not process.callbacks:
         return

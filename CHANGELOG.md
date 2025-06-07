@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.4] - 2025-06-07
+
+### Improved
+- **Code Organization**: Refactors in LLMProcess and LLMProgram
+- **Configuration Flexibility**: Allow extra fields in program config
+- **Test Infrastructure**: Moved pytest configs to pyproject.toml
+- **Callback warning**: Removed unnecesary warnings
+
 ## [0.9.3] - 2025-06-06
 
 See [detailed release notes](docs/release_notes/RELEASE_NOTES_0.9.3.md) for complete information.

@@ -2,7 +2,6 @@
 """Generate YAML schema for LLMProgram configuration."""
 
 import yaml
-
 from llmproc.config.schema import LLMProgramConfig
 
 

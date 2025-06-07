@@ -305,3 +305,74 @@ relying on the schema's validation to issue warnings for unknown parameters.
 Returns:
     Dictionary of API parameters for LLM API calls
 """
+
+FROM_DICT = """Create a program from a configuration dictionary, primarily for in-memory YAML.
+
+Args:
+    config: Dictionary containing program configuration
+    base_dir: Optional base directory for resolving relative paths
+
+Returns:
+    An initialized LLMProgram instance
+
+Useful for extracting subsections from YAML configurations:
+```python
+with open("config.yaml") as f:
+    config = yaml.safe_load(f)
+program = LLMProgram.from_dict(config["agents"]["assistant"])
+```
+"""
+
+
+START = """Create and fully initialize an LLMProcess from this program.
+
+✅ THIS IS THE CORRECT WAY TO CREATE AN LLMPROCESS ✅
+
+```python
+program = LLMProgram.from_toml("config.toml")
+process = await program.start()  # Default ADMIN access
+
+# Or with specific access level:
+process = await program.start(access_level=AccessLevel.READ)  # Read-only process
+
+# Register callbacks after creation:
+timer = TimingCallback()
+process = await program.start().add_callback(timer)
+```
+
+This method delegates the entire program-to-process creation logic
+to the `llmproc.program_exec.create_process` function, which handles
+compilation, tool initialization, process instantiation, and runtime
+context setup in a modular way.
+
+Args:
+    access_level: Optional access level for the process (READ, WRITE, or ADMIN).
+                  Defaults to ADMIN for root processes.
+
+⚠️ IMPORTANT: Never use direct constructor `LLMProcess(program=...)` ⚠️
+Direct instantiation will result in broken context-aware tools (spawn, goto, fd_tools, etc.)
+and bypass the proper tool initialization sequence.
+
+Returns:
+    A fully initialized LLMProcess ready for execution with properly configured tools
+"""
+
+START_SYNC = """Synchronously create and initialize a :class:`SyncLLMProcess`.
+
+This method creates a synchronous process that can be used in non-async code.
+It provides synchronous versions of all the async methods in LLMProcess.
+
+Args:
+    access_level: Optional access level for the process.
+
+Returns:
+    A fully initialized :class:`SyncLLMProcess`.
+
+Example:
+```python
+program = LLMProgram.from_toml("config.toml")
+process = program.start_sync()  # Returns SyncLLMProcess
+result = process.run("Hello")   # Blocking call
+process.close()                 # Blocking cleanup
+```
+"""

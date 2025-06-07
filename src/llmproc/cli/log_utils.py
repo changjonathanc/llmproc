@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import warnings
 from typing import Any
 
 
@@ -52,8 +53,6 @@ def setup_logger(log_level: str = "INFO") -> logging.Logger:
     logging.getLogger("llmproc.llm_process").setLevel(level)
 
     if level >= logging.ERROR:
-        import warnings
-
         warnings.filterwarnings("ignore", module="pydantic")
 
     return logger
@@ -118,16 +117,16 @@ def log_program_info(process: Any, user_message: str | None = None, logger: logg
         tools_dump = json.dumps(tools, indent=2)
     except Exception:
         tools_dump = str(tools)
-    logger.info("Tools:\n%s", tools_dump)
+    logger.info(f"Tools:\n{tools_dump}")
 
     # Enriched system prompt
     system_prompt = getattr(process, "enriched_system_prompt", "")
     if system_prompt:
-        logger.info("Enriched System Prompt:\n%s", system_prompt)
+        logger.info(f"Enriched System Prompt:\n{system_prompt}")
 
     # First user message if provided
     if user_message:
-        logger.info("First User Message:\n%s", user_message)
+        logger.info(f"First User Message:\n{user_message}")
 
     # Request payload (model + API params)
     payload = {"model": getattr(process, "model_name", "")}
@@ -138,4 +137,4 @@ def log_program_info(process: Any, user_message: str | None = None, logger: logg
         payload_dump = json.dumps(payload, indent=2)
     except Exception:
         payload_dump = str(payload)
-    logger.info("Request Payload:\n%s", payload_dump)
+    logger.info(f"Request Payload:\n{payload_dump}")

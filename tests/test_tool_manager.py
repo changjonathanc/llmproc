@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 from llmproc.common.results import ToolResult
 from llmproc.tools import ToolManager, ToolRegistry
+from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.tools.builtin import calculator, fd_to_file_tool, fork_tool, read_fd_tool, read_file, spawn_tool
 from llmproc.tools.function_tools import register_tool
 
@@ -164,6 +165,33 @@ async def test_call_tool():
     assert result.is_error
     # The specific error message could come directly from the tool if it returns a ToolResult
     # or be wrapped by our error handler, so we just check that it exists
+
+
+@pytest.mark.asyncio
+async def test_call_tool_creates_fd_when_enabled():
+    """Test that call_tool wraps large results in a file descriptor."""
+    manager = ToolManager()
+
+    async def long_tool(**kwargs):
+        return ToolResult.from_success("x" * 60)
+
+    schema = {"name": "long_tool", "description": "Long output tool"}
+    manager.runtime_registry.register_tool("long_tool", long_tool, schema)
+    manager.register_tools([long_tool])
+
+    fd_manager = FileDescriptorManager(max_direct_output_chars=50)
+    runtime_context = {
+        "process": object(),
+        "fd_manager": fd_manager,
+        "file_descriptor_enabled": True,
+    }
+    manager.set_runtime_context(runtime_context)
+
+    result = await manager.call_tool("long_tool", {})
+
+    assert isinstance(result, ToolResult)
+    assert "<fd_result fd=" in result.content
+
 
 
 @pytest.mark.asyncio

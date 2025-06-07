@@ -299,6 +299,8 @@ def setup_runtime_context(
         context["stderr"] = getattr(process, "stderr_log", [])
         if hasattr(process, "fd_manager"):
             context["fd_manager"] = process.fd_manager
+        if hasattr(process, "file_descriptor_enabled"):
+            context["file_descriptor_enabled"] = process.file_descriptor_enabled
         if hasattr(process, "linked_programs") and process.linked_programs:
             context["linked_programs"] = process.linked_programs
         if hasattr(process, "linked_program_descriptions") and process.linked_program_descriptions:

@@ -207,9 +207,7 @@ class LLMProgramConfig(BaseModel):
     file_descriptor: FileDescriptorConfig | None = None
     demo: DemoConfig | None = None
 
-    model_config = {
-        "extra": "forbid"  # Forbid extra fields
-    }
+    model_config = {"extra": "allow"}
 
     @field_validator("parameters")
     @classmethod

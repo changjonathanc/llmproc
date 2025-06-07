@@ -1,7 +1,6 @@
 """LLMProcess class for executing LLM programs and handling interactions."""
 
 import asyncio
-import copy
 import inspect
 import logging
 import threading
@@ -12,7 +11,6 @@ from typing import Any, Optional
 
 from dotenv import load_dotenv
 
-from llmproc import providers as _providers
 from llmproc.callbacks import CallbackEvent
 from llmproc.callbacks.callback_utils import (
     add_callback as utils_add_callback,
@@ -22,8 +20,9 @@ from llmproc.callbacks.callback_utils import (
 )
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import RunResult, ToolResult
+from llmproc.event_loop_mixin import EventLoopMixin
 from llmproc.file_descriptors.manager import FileDescriptorManager
-from llmproc.process_snapshot import ProcessSnapshot
+from llmproc.process_forking import ProcessForkingMixin
 from llmproc.program import LLMProgram
 from llmproc.providers.utils import choose_provider_executor
 from llmproc.tools import ToolManager
@@ -34,7 +33,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-class LLMProcess:
+class LLMProcess(EventLoopMixin, ProcessForkingMixin):
     """Process for interacting with LLMs using standardized program definitions."""
 
     def __init__(
@@ -128,15 +127,8 @@ class LLMProcess:
         if not model_name or not provider:
             raise ValueError("model_name and provider are required for LLMProcess initialization")
 
-        # --------------------------------------------------------------
-        # Event-loop bookkeeping – store loop reference supplied by
-        # program_exec (async path) or leave as *None* (will be created on
-        # first synchronous call).
-        # --------------------------------------------------------------
-
-        self._loop: asyncio.AbstractEventLoop | None = loop
-        self._loop_thread: threading.Thread | None = None
-        self._own_loop: bool = False
+        # Initialize event loop handling
+        EventLoopMixin.__init__(self, loop)
 
         # Store all provided state attributes
         self.program = program
@@ -157,15 +149,7 @@ class LLMProcess:
         self.client = client
 
         # Initialize provider-specific executor
-        executor_cls = _providers.EXECUTOR_MAP.get(provider)
-        if executor_cls is None:
-            logger.warning(
-                "Unknown provider '%s' requested; falling back to default executor",
-                provider,
-            )
-            self.executor = choose_provider_executor(self)
-        else:
-            self.executor = executor_cls()
+        self.executor = choose_provider_executor(provider)
 
         # File descriptor system
         self.fd_manager = fd_manager
@@ -202,59 +186,14 @@ class LLMProcess:
         # Callback system - initialize empty list
         self.callbacks = []
 
-        # Thread that drives the private event loop when one is created via
-        # _ensure_loop_thread().  This is *not* started when an external loop
-        # is supplied.
-        self._loop_thread: threading.Thread | None = None
-        self._own_loop: bool = False
-
     def add_callback(self, callback: Callable) -> "LLMProcess":
-        """Register a callback function or object.
-
-        You can pass either:
-        1. A function that accepts ``(event, *args, **kwargs)``
-        2. An object with methods matching event names (``tool_start``,
-           ``tool_end``, ``response``)
-
-        Callbacks may be ``async`` or regular functions. ``async`` callbacks are
-        automatically scheduled on the process event loop. Callback objects may
-        freely mix synchronous and asynchronous methods.
-
-        Args:
-            callback: The callback function or object
-
-        Returns:
-            Self for method chaining
-        """
+        """Register a callback function or object."""
         utils_add_callback(self, callback)
         return self
 
     # ------------------------------------------------------------------
     # Private event-loop helpers
     # ------------------------------------------------------------------
-
-    def _ensure_loop_thread(self) -> None:
-        """Create and start a dedicated event loop thread if necessary."""
-        if self._loop is not None:
-            return
-
-        self._loop = asyncio.new_event_loop()
-        self._own_loop = True
-
-        def _runner() -> None:  # runs in background thread
-            asyncio.set_event_loop(self._loop)  # type: ignore[arg-type]
-            self._loop.run_forever()
-
-        # Use unique process identifier in thread name for easier debugging
-        thread_name = f"LLMProcessLoop-{id(self):x}"
-        self._loop_thread = threading.Thread(target=_runner, name=thread_name, daemon=True)
-        self._loop_thread.start()
-
-    def _submit_to_loop(self, coro):  # type: ignore[valid-type]
-        """Schedule coroutine *coro* on the process loop and return a Future."""
-        self._ensure_loop_thread()
-        assert self._loop is not None
-        return asyncio.run_coroutine_threadsafe(coro, self._loop)
 
     def trigger_event(self, event: CallbackEvent, *args, **kwargs) -> None:
         """Trigger an event to all registered callbacks."""
@@ -434,51 +373,24 @@ class LLMProcess:
             if self._loop_thread and self._loop_thread.is_alive():
                 self._loop_thread.join(timeout=timeout)
 
-    # Internal helper – used by LLMProgram.start_sync
-    def _set_loop(self, loop: asyncio.AbstractEventLoop, thread: threading.Thread | None, own: bool = False) -> None:  # noqa: D401,E501
-        """Assign an existing event loop & thread to this process."""
-        self._loop = loop
-        self._loop_thread = thread
-        self._own_loop = own
-
-    async def call_tool(self, tool_name: str, args_dict: dict) -> Any:
+    async def call_tool(self, tool_name: str, args_dict: dict[str, Any]) -> ToolResult:
         """Call a tool by name with the given arguments dictionary.
 
-        This method provides a unified interface for calling any registered tool,
-        whether it's an MCP tool, a system tool, or a function-based tool.
-        It delegates to the ToolManager which handles all tool calling details
-        and performs file descriptor processing if needed.
+        Internal helper used by ``LLMProgram.start_sync`` and the async API.
+
+        This delegates to :class:`ToolManager` for execution.
 
         Args:
-            tool_name: The name of the tool to call
-            args_dict: Dictionary of arguments to pass to the tool
+            tool_name: Name of the tool to call.
+            args_dict: Arguments dictionary for the tool.
 
         Returns:
-            The result of the tool execution or an error ToolResult
+            The result from the tool or an error ``ToolResult`` instance.
         """
         try:
-            # Call the tool through tool manager
-            result = await self.tool_manager.call_tool(tool_name, args_dict)
-
-            # Log any errors that were returned
-            if hasattr(result, "is_error") and result.is_error:
-                logger.error(f"Tool '{tool_name}' returned error: {result.content}")
-                return result
-
-            # Process result for file descriptors if needed
-            if self.file_descriptor_enabled and self.fd_manager and hasattr(result, "content"):
-                processed_result, used_fd = self.fd_manager.create_fd_from_tool_result(result.content, tool_name)
-
-                if used_fd:
-                    logger.info(
-                        f"Tool result from '{tool_name}' exceeds {self.fd_manager.max_direct_output_chars} chars, creating file descriptor"
-                    )
-                    result = processed_result
-                    logger.debug(f"Created file descriptor for tool result from '{tool_name}'")
-
-            return result
-        except Exception as e:
-            error_msg = f"Error calling tool '{tool_name}': {str(e)}"
+            return await self.tool_manager.call_tool(tool_name, args_dict)
+        except Exception as exc:  # noqa: BLE001
+            error_msg = f"Error calling tool '{tool_name}': {exc}"
             logger.error(error_msg, exc_info=True)
             return ToolResult.from_error(error_msg)
 
@@ -552,12 +464,12 @@ class LLMProcess:
         """Return the accumulated stderr log entries."""
         return self.stderr_log.copy()
 
-    async def _fork_process(self, access_level: AccessLevel = AccessLevel.WRITE) -> "LLMProcess":
-        """Create a deep copy of this process with preserved state.
+    @property
+    def run_stop_reason(self) -> str | None:
+        """Deprecated: Use RunResult.stop_reason instead.
 
-        This implements the fork system call semantics where a copy of the
-        process is created with the same state and configuration. The forked
-        process is completely independent and can run separate tasks.
+        This property provides backward compatibility but will be removed in a future version.
+        Stop reasons are now tracked per-run in RunResult objects rather than on the process.
 
         This method follows the standard Unix pattern where:
         1. A new base process is created through the standard program_exec.create_process path
@@ -663,44 +575,6 @@ class LLMProcess:
 
         Args:
             access_level: Access level to set for the child process (defaults to WRITE)
-
-        Returns:
-            A new LLMProcess instance that is a deep copy of this one
-        """
-        warnings.warn(
-            "fork_process is deprecated and will be removed in a future version. Use _fork_process instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return await self._fork_process(access_level)
-
-    # ------------------------------------------------------------------
-    # Snapshot helpers (internal)
-    # ------------------------------------------------------------------
-
-    def _apply_snapshot(self, snapshot: "ProcessSnapshot") -> None:
-        """Replace this process's conversation state with *snapshot*.
-
-        Intended for use by fork_process; not part of the public API.
-
-        This is part of the fork tool implementation and helps maintain proper
-        state isolation between parent and child processes by applying a
-        snapshot of the parent's state to the child process.
-
-        Args:
-            snapshot: An immutable snapshot containing the conversation state to apply
-        """
-        # Shallow assignment is safe – snapshot already deep‑copied lists.
-        self.state = snapshot.state
-        if snapshot.enriched_system_prompt is not None:
-            self.enriched_system_prompt = snapshot.enriched_system_prompt
-
-    @property
-    def run_stop_reason(self) -> str | None:
-        """Deprecated: Use RunResult.stop_reason instead.
-
-        This property provides backward compatibility but will be removed in a future version.
-        Stop reasons are now tracked per-run in RunResult objects rather than on the process.
 
         Returns:
             None (stop reasons are no longer stored on the process)

@@ -285,7 +285,28 @@ class ToolManager:
                 args = {**args, "runtime_context": self.runtime_context}
 
             # Delegate execution to registry (will resolve alias, call handler, stamp alias_info)
-            return await self.runtime_registry.call_tool(name, args)
+            result = await self.runtime_registry.call_tool(name, args)
+
+            if hasattr(result, "is_error") and result.is_error:
+                logger.error("Tool '%s' returned error: %s", name, result.content)
+                return result
+
+            fd_manager = self.runtime_context.get("fd_manager")
+            if self.runtime_context.get("file_descriptor_enabled") and fd_manager and hasattr(result, "content"):
+                processed_result, used_fd = fd_manager.create_fd_from_tool_result(result.content, name)
+                if used_fd:
+                    logger.info(
+                        "Tool result from '%s' exceeds %s chars, creating file descriptor",
+                        name,
+                        fd_manager.max_direct_output_chars,
+                    )
+                    result = processed_result
+                    logger.debug(
+                        "Created file descriptor for tool result from '%s'",
+                        name,
+                    )
+
+            return result
 
         except ValueError:
             # Tool not found in registry
