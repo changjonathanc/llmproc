@@ -28,9 +28,6 @@ program = LLMProgram(
     tools=[add_numbers]  # Simply pass your function
 )
 
-# Or set tools after creation
-# program.register_tools([calculator, get_calculator, "read_file"])
-
 # Start the LLM process
 process = await program.start()
 ```

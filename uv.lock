@@ -646,7 +646,7 @@ wheels = [
 
 [[package]]
 name = "llmproc"
-version = "0.9.4"
+version = "0.9.3"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
