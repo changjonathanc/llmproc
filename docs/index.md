@@ -118,3 +118,6 @@ Detailed release notes for each version are available in the release_notes direc
 Additional provider guides are located in the [external-references](external-references/) directory.
 
 - [Anthropic API Guide](external-references/anthropic-api.md)
+
+---
+[← Back to Documentation Index](index.md)

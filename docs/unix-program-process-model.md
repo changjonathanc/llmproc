@@ -337,3 +337,6 @@ async def tool_handler(args, runtime_context=None):
 ## Conclusion
 
 The Unix-inspired program/process model creates a cleaner architecture with clear separation of concerns, making the codebase more maintainable, testable, and extensible. By explicitly marking runtime dependencies with the context-aware pattern, we eliminate circular dependencies and improve the overall design.
+
+---
+[← Back to Documentation Index](index.md)

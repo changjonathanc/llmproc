@@ -125,3 +125,6 @@ The context is validated in:
 
 1. The wrapper created by `register_tool` for tools with explicit requirements
 2. The `ToolManager.call_tool()` method for all context-aware tools
+
+---
+[← Back to Documentation Index](index.md)

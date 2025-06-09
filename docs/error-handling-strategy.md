@@ -313,3 +313,6 @@ async def run(self, process, user_prompt, max_iterations=10, callbacks=None, run
 ## Conclusion
 
 By focusing on standardization, better context preservation, and consistent logging, we can significantly improve error handling in LLMProc without introducing new error classes. These pragmatic improvements can be implemented incrementally while providing immediate benefits in terms of diagnostics, reliability, and developer experience.
+
+---
+[← Back to Documentation Index](index.md)

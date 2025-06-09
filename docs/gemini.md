@@ -227,3 +227,6 @@ If token counting isn't available (e.g., API issues or client limitations), the 
 - Includes a note explaining the estimation is being used
 
 This ensures robustness across different environments and configurations.
+
+---
+[← Back to Documentation Index](index.md)

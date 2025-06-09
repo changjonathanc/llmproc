@@ -13,3 +13,6 @@ make yaml-schema
 The generated file `yaml_config_schema.yaml` can be used as a reference for
 building your own YAML configuration files. All fields shown are supported by
 `LLMProgram.from_yaml` and have the same structure when using TOML.
+
+---
+[← Back to Documentation Index](index.md)

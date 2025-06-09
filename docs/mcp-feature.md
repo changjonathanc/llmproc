@@ -176,3 +176,6 @@ logging.getLogger("llmproc.mcp").setLevel(logging.DEBUG)
 - [Tool Aliases](tool-aliases.md) - Simplify tool names
 - [Python SDK](python-sdk.md) - Programmatic usage
 - Example: `examples/mcp.toml`
+
+---
+[← Back to Documentation Index](index.md)

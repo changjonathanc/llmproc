@@ -5,20 +5,20 @@
 ### New Synchronous API
 - Added `program.start_sync()` method for synchronous process creation
 - Returns `SyncLLMProcess` with blocking calls instead of async/await
-- See [Persistent Event Loop documentation](docs/persistent-event-loop.md) for examples
+- See [Persistent Event Loop documentation](../persistent-event-loop.md) for examples
 
 ### YAML and Dictionary Configuration Support
 - Full YAML configuration support alongside TOML format
 - New `from_dict()` method for creating programs from Python dictionaries
 - Dynamic configuration generation without files
-- See [YAML Configuration Schema](docs/yaml_config_schema.md) for details
+- See [YAML Configuration Schema](../yaml_config_schema.md) for details
 
 ### Enhanced MCP (Model Context Protocol) Support
 - **New `MCPServerTools` class** replaces previous MCP tool registration
 - Embedded MCP server configurations directly in TOML/YAML files
 - Tool description override support for customizing tool descriptions
 - No longer requires separate `mcp_servers.json` files
-- See [MCP Feature documentation](docs/mcp-feature.md) for configuration examples
+- See [MCP Feature documentation](../mcp-feature.md) for configuration examples
 
 ## 🚀 New Features
 
@@ -29,12 +29,12 @@
 
 ### Instance Methods as Tools
 - Register instance methods directly as tools for stateful implementations
-- See [Function-Based Tools documentation](docs/function-based-tools.md#instance-methods-as-tools)
+- See [Function-Based Tools documentation](../function-based-tools.md#instance-methods-as-tools)
 
 ### API Retry Configuration
 - Configurable retry logic for Anthropic API calls via environment variables
 - Automatic retry with exponential backoff
-- See [Environment Variables documentation](docs/environment-variables.md#retry-configuration)
+- See [Environment Variables documentation](../environment-variables.md#retry-configuration)
 
 ### Spawn Tool Self-Spawning
 - Spawn tool now supports spawning the current program without linked programs
@@ -47,7 +47,7 @@
 - **New support for async callback methods** alongside synchronous functions
 - Transparently handles both async and sync callbacks in the same implementation
 - Callback classes can freely mix sync and async methods
-- See [Callbacks documentation](docs/callbacks.md) for usage examples
+- See [Callbacks documentation](../callbacks.md) for usage examples
 
 ### New Tool: Write to Standard Error
 - New built-in `write_stderr` tool allows LLMProcess to have stderr output
@@ -138,3 +138,6 @@ While v0.8.0 maintains backward compatibility for most features, the MCP tool re
 ---
 
 For detailed API documentation and more examples, visit the [documentation](https://github.com/cccntu/llmproc/tree/main/docs).
+
+---
+[← Back to Documentation Index](../index.md)

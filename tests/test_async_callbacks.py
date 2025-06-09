@@ -18,7 +18,7 @@ async def test_async_callbacks_supported():
         func_called.set()
 
     class ObjCb:
-        async def response(self, text):
+        async def response(self, content):
             method_called.set()
 
     process.add_callback(func_cb)
@@ -39,10 +39,10 @@ async def test_mixed_sync_async_methods_supported():
     async_called = asyncio.Event()
 
     class MixedCb:
-        def tool_start(self, tool_name, tool_args):
+        def tool_start(self, tool_name, args):
             sync_called.set()
 
-        async def response(self, text):
+        async def response(self, content):
             async_called.set()
 
     process.add_callback(MixedCb())

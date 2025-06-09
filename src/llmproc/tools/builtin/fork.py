@@ -180,7 +180,7 @@ async def fork_tool(
     # Process all forks in parallel
     try:
         results = await asyncio.gather(*(run_child(i, p) for i, p in enumerate(prompts)))
-        return ToolResult.from_success(json.dumps(results))
+        return ToolResult.from_success(json.dumps(results, ensure_ascii=False))
     except Exception as e:
         logger.error(f"Error during fork execution: {str(e)}", exc_info=True)
         return ToolResult.from_error(f"Fork error: {str(e)}")

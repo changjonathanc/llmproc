@@ -326,3 +326,6 @@ print(f"Requires context: {meta.requires_context}")
 3. **Explicit Parameter Descriptions**: For complex parameters, use `param_descriptions` in the decorator
 4. **Handle Errors Gracefully**: Catch and handle exceptions in your tool functions
 5. **Keep Tools Focused**: Design tools to do one thing well rather than multiple operations
+
+---
+[← Back to Documentation Index](index.md)

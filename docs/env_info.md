@@ -304,3 +304,6 @@ The format used is deliberately simple and consistent to make it easy for models
 - **System Prompts**: Environment information is added to system prompts
 - **Preloaded Files**: Similar to file preloading, environment information enhances context
 - **Program Compiler**: Handles validation of environment information configuration
+
+---
+[← Back to Documentation Index](index.md)

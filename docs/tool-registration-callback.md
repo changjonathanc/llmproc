@@ -34,3 +34,6 @@ async def handle_goto(position: str, message: str, runtime_context: dict | None 
 When `ToolManager.process_function_tools()` registers `handle_goto`, the callback sets `message_ids_enabled` on the manager. This eliminates the need for a global feature flag or additional configuration steps.
 
 Use `on_register` whenever a tool needs to perform one-time initialization or customize the tool manager during setup.
+
+---
+[← Back to Documentation Index](index.md)

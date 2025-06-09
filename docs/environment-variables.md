@@ -129,3 +129,6 @@ export LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT=false
 - [Gemini Documentation](gemini.md) - Gemini-specific configuration
 - [MCP Feature](mcp-feature.md) - MCP server configuration
 - [API Testing](api_testing.md) - Testing with API keys
+
+---
+[← Back to Documentation Index](index.md)

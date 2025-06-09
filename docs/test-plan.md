@@ -472,3 +472,6 @@ For each new test:
 3. **Week 3**: Implement tool integration and cross-provider tests
 4. **Week 4**: Implement configuration validation and documentation tests
 5. **Ongoing**: Performance testing and benchmarking
+
+---
+[← Back to Documentation Index](index.md)

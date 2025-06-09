@@ -129,3 +129,6 @@ As Anthropic continues to develop this feature, we expect:
 - Integration with other efficiency-focused features
 
 For more examples and information, check the [Python SDK documentation](./python-sdk.md) which provides details on all available configuration options.
+
+---
+[← Back to Documentation Index](index.md)

@@ -150,3 +150,6 @@ This structure helps the model understand the source of the information and main
 2. **File Size**: Keep individual files relatively small to avoid context overload
 3. **Format Selection**: Use text-based formats (Markdown, code, plain text) for best results
 4. **Spawn Tool**: Use the spawn tool with `additional_preload_files` to provide context to child processes dynamically
+
+---
+[← Back to Documentation Index](index.md)

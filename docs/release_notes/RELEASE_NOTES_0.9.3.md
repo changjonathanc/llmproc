@@ -29,3 +29,6 @@
 ---
 
 For detailed documentation, visit the [docs](https://github.com/cccntu/llmproc/tree/main/docs).
+
+---
+[← Back to Documentation Index](../index.md)

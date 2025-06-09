@@ -70,3 +70,6 @@ The `SyncLLMProcess`:
 - **Use Sync API** (`program.start_sync()`) when working in synchronous code contexts like scripts, notebooks, or classic applications
 
 The persistent event loop mechanism is only used by the synchronous API. The async API expects you to manage your own event loop.
+
+---
+[← Back to Documentation Index](index.md)

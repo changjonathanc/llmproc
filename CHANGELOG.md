@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.5]
+
+### Fixed
+- Fixed callback parameter name mismatch and added unit tests
+- Improved Unicode support in JSON outputs
+
+### Improved
+- Added cost information to CLI run logs for better usage tracking
+- Enhanced documentation with navigation links and fixed broken references
+
 ## [0.9.4] - 2025-06-07
 
 ### Improved

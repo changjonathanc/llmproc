@@ -53,7 +53,7 @@ async def run_with_prompt(
     start_time = asyncio.get_event_loop().time()
     run_result = await process.run(user_prompt, max_iterations=process.max_iterations)
     elapsed = asyncio.get_event_loop().time() - start_time
-    logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s")
+    logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s, cost ${run_result.usd_cost:.4f}")
     if not json_output:
         stderr_log = process.get_stderr_log()
         print("\n".join(stderr_log), file=sys.stderr)
@@ -262,7 +262,7 @@ async def _async_main(
                 "stderr": process.get_stderr_log(),
                 "stop_reason": run_result.stop_reason,
             }
-            click.echo(json.dumps(output))
+            click.echo(json.dumps(output, ensure_ascii=False))
 
     except CostLimitExceededError as e:
         # Handle cost limit exceeded gracefully
@@ -288,7 +288,7 @@ async def _async_main(
                 "stop_reason": current_result.stop_reason,
                 "cost_limit": e.cost_limit,
             }
-            click.echo(json.dumps(output))
+            click.echo(json.dumps(output, ensure_ascii=False))
         else:
             click.echo(f"⚠️  Execution stopped: {e}", err=True)
 

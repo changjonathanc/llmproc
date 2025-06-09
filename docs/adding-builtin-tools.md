@@ -243,3 +243,6 @@ enabled = ["list_dir"]
 ```
 
 That's it! The tool_manager.py now automatically discovers and uses the registered tool from the central registry.
+
+---
+[← Back to Documentation Index](index.md)

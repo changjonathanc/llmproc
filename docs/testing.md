@@ -176,3 +176,6 @@ The test suite runs in CI with these settings:
 1. **Regular tests** run on every PR and commit
 2. **API tests** are skipped in CI to avoid requiring credentials
 3. **Coverage reports** are generated to track test quality
+
+---
+[← Back to Documentation Index](index.md)

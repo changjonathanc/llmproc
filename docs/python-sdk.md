@@ -350,3 +350,6 @@ print(f"Currently registered tools: {registered_tools}")
 ```
 
 The `get_registered_tools()` method returns the string names of all registered tools.
+
+---
+[← Back to Documentation Index](index.md)

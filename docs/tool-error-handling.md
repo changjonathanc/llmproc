@@ -153,3 +153,6 @@ This approach is designed to work with planned tool runtime status management fe
 2. **Reduced Confusion**: Internal errors don't expose implementation details
 3. **Consistent Experience**: Same error patterns across all tools
 4. **Focused Information**: Only information relevant to the LLM's task
+
+---
+[← Back to Documentation Index](index.md)

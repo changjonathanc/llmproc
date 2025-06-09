@@ -139,3 +139,6 @@ Enabled Tools:
    - Generate examples of what prompts look like for different configurations
    - Help users understand how TOML configuration maps to the system prompt
    - Create documentation for specific configurations
+
+---
+[← Back to Documentation Index](index.md)

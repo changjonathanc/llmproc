@@ -61,7 +61,7 @@ def run_with_prompt(
     elapsed = time.time() - start_time
 
     # Log run result information
-    logger.info(f"Used {run_result.api_calls} in {elapsed:.2f}s")
+    logger.info(f"Used {run_result.api_calls} in {elapsed:.2f}s, cost ${run_result.usd_cost:.4f}")
 
     # Get the last assistant message and print the response
     response = process.get_last_message()
@@ -370,7 +370,7 @@ def main(
             # Log basic info
             if run_result.api_calls > 0:
                 cli_logger.info(
-                    f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s"
+                    f"Used {run_result.api_calls} API calls and {run_result.tool_calls} tool calls in {elapsed:.2f}s, cost ${run_result.usd_cost:.4f}"
                 )
 
             # Get the last assistant message

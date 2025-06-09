@@ -33,3 +33,6 @@
 ---
 
 For detailed API documentation and more examples, visit the [documentation](https://github.com/cccntu/llmproc/tree/main/docs).
+
+---
+[← Back to Documentation Index](../index.md)

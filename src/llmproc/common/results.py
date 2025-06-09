@@ -58,7 +58,7 @@ class ToolResult:
         # Handle dictionary and list by JSON serializing
         elif isinstance(content_value, dict | list):
             try:
-                content_value = json.dumps(content_value)
+                content_value = json.dumps(content_value, ensure_ascii=False)
             except (TypeError, ValueError):
                 # If JSON serialization fails, use string representation
                 content_value = str(content_value)

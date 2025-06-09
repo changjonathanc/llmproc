@@ -170,3 +170,6 @@ formatter = "formatter.toml"
 ## Conclusion
 
 The enhanced program compilation and linking system provides a solid foundation for building complex agent hierarchies. By efficiently compiling and linking programs, it enables more sophisticated patterns of agent specialization and collaboration while maintaining performance and reliability.
+
+---
+[← Back to Documentation Index](index.md)

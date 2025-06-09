@@ -294,3 +294,6 @@ Each tool should:
 6. **Proper Error Handling**: Ensure all async operations have proper error handling.
 7. **Type Annotations**: Use proper type annotations for all public methods.
 8. **Documentation**: Update this reference when changing core interfaces.
+
+---
+[← Back to Documentation Index](../index.md)

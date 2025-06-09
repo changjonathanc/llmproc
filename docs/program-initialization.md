@@ -353,3 +353,6 @@ result = await process.run("How does the file descriptor system work?")
 ```
 
 Using these features, you can build sophisticated LLM applications with automatic execution and complex interaction patterns.
+
+---
+[← Back to Documentation Index](index.md)

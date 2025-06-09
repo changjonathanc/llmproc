@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 # Mapping of callback events to their expected parameter names
 CALLBACK_EVENT_PARAMETERS = {
-    CallbackEvent.TOOL_START: ["tool_name", "tool_args"],
+    CallbackEvent.TOOL_START: ["tool_name", "args"],
     CallbackEvent.TOOL_END: ["tool_name", "result"],
     CallbackEvent.TURN_START: ["process", "run_result"],
     CallbackEvent.TURN_END: ["process", "response", "tool_results"],
     CallbackEvent.API_REQUEST: ["api_request"],
     CallbackEvent.API_RESPONSE: ["response"],
-    CallbackEvent.RESPONSE: ["text"],
+    CallbackEvent.RESPONSE: ["content"],
     CallbackEvent.STDERR_WRITE: ["message"],
 }
 

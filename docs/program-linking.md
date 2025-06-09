@@ -177,3 +177,6 @@ These metrics are also aggregated in the main process's `RunResult` object.
 3. **Appropriate Delegation**: Train the main LLM to delegate only relevant queries to the specialized programs
 4. **Metrics Monitoring**: Use the RunResult object to track API usage across the entire program graph
 5. **Real-time Monitoring**: Use callbacks to get insights into tool execution as it happens
+
+---
+[← Back to Documentation Index](index.md)

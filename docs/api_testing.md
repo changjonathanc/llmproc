@@ -141,3 +141,6 @@ When adding new example programs, consider:
 2. Creating specific tests for any unique features
 3. Ensuring all tests skip properly when API keys aren't available
 4. Adding appropriate timeout values for potentially slow operations
+
+---
+[← Back to Documentation Index](index.md)

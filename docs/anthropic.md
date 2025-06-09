@@ -117,3 +117,6 @@ Both Anthropic API and Anthropic on Vertex AI support the full range of tools av
 ## Further Reading
 
 - [Anthropic API Guide](external-references/anthropic-api.md)
+
+---
+[← Back to Documentation Index](index.md)

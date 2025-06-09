@@ -234,3 +234,6 @@ The file descriptor system is implemented in the following files:
   - `tests/test_reference_system.py`: Tests for reference ID system
   - `tests/test_fd_spawn_integration.py`: Tests for spawn integration
   - `tests/test_fd_all_features.py`: Tests for all FD features combined
+
+---
+[← Back to Documentation Index](index.md)

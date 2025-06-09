@@ -72,19 +72,23 @@ class CliCallbackHandler:
         self.cost_limit = cost_limit
 
     def tool_start(self, tool_name: str, args: Any) -> None:
-        self.logger.info(json.dumps({"tool_start": {"tool_name": tool_name, "args": args}}, indent=2))
+        self.logger.info(
+            json.dumps({"tool_start": {"tool_name": tool_name, "args": args}}, indent=2, ensure_ascii=False)
+        )
 
     def tool_end(self, tool_name: str, result: Any) -> None:
-        self.logger.info(json.dumps({"tool_end": {"tool_name": tool_name, "result": result.to_dict()}}, indent=2))
+        self.logger.info(
+            json.dumps({"tool_end": {"tool_name": tool_name, "result": result.to_dict()}}, indent=2, ensure_ascii=False)
+        )
 
     def response(self, content: str) -> None:
-        self.logger.info(json.dumps({"text response": content}, indent=2))
+        self.logger.info(json.dumps({"text response": content}, indent=2, ensure_ascii=False))
 
     def api_response(self, response: Any) -> None:
-        self.logger.info(json.dumps({"api response usage": response.usage.model_dump()}, indent=2))
+        self.logger.info(json.dumps({"api response usage": response.usage.model_dump()}, indent=2, ensure_ascii=False))
 
     def stderr_write(self, text: str) -> None:
-        self.logger.warning(json.dumps({"STDERR": text}, indent=2))
+        self.logger.warning(json.dumps({"STDERR": text}, indent=2, ensure_ascii=False))
 
     async def turn_start(self, process: Any, run_result=None) -> None:
         # Check cost limit before proceeding with the turn
@@ -114,7 +118,7 @@ def log_program_info(process: Any, user_message: str | None = None, logger: logg
     # Tools configuration
     tools = getattr(process, "tools", [])
     try:
-        tools_dump = json.dumps(tools, indent=2)
+        tools_dump = json.dumps(tools, indent=2, ensure_ascii=False)
     except Exception:
         tools_dump = str(tools)
     logger.info(f"Tools:\n{tools_dump}")
@@ -134,7 +138,7 @@ def log_program_info(process: Any, user_message: str | None = None, logger: logg
     if isinstance(api_params, dict):
         payload.update(api_params)
     try:
-        payload_dump = json.dumps(payload, indent=2)
+        payload_dump = json.dumps(payload, indent=2, ensure_ascii=False)
     except Exception:
         payload_dump = str(payload)
     logger.info(f"Request Payload:\n{payload_dump}")

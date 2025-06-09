@@ -125,3 +125,6 @@ See `examples/fork.toml` for a complete example program configuration that demon
   - More sophisticated process management and job control features
   - Implementation of the Unix Fork-Exec pattern by combining fork with system prompt or tool modifications
   - Performance optimizations for large state handling
+
+---
+[← Back to Documentation Index](index.md)

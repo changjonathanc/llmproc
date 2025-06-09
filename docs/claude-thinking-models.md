@@ -144,3 +144,6 @@ Future versions may include support for:
 - Accessing thinking blocks in model responses
 - The 128K output token capability via beta header
 - Batch processing for very high thinking budgets
+
+---
+[← Back to Documentation Index](index.md)

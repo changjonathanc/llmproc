@@ -79,3 +79,6 @@ Aliases are registered during program compilation and are automatically applied 
 - Aliases must form a one-to-one mapping (no duplicate aliases pointing to the same tool)
 - When a tool is called using its alias, error messages will include both the alias and the resolved tool name
 - Aliases can be used for both built-in tools and MCP tools
+
+---
+[← Back to Documentation Index](index.md)

@@ -154,3 +154,6 @@ Potential enhancements to the GOTO feature:
 - **[Fork Tool](./fork-feature.md)**: Creates process copies, complementary to GOTO
 - **[File Descriptor System](./file-descriptor-system.md)**: Handles large outputs
 - **[Program Linking](./program-linking.md)**: Multi-agent collaboration
+
+---
+[← Back to Documentation Index](index.md)

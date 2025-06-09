@@ -59,7 +59,7 @@ def test_tool_result_to_dict():
     # Dictionary content - should be JSON serialized
     dict_content = {"key": "value"}
     result = ToolResult(dict_content)
-    assert result.to_dict() == {"content": json.dumps(dict_content), "is_error": False}
+    assert result.to_dict() == {"content": json.dumps(dict_content, ensure_ascii=False), "is_error": False}
 
     # Error result
     error_result = ToolResult.from_error("Error message")
