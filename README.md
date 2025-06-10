@@ -6,6 +6,7 @@
 
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Status](https://img.shields.io/badge/status-active-green)
+[![DOI](https://zenodo.org/badge/947976007.svg)](https://doi.org/10.5281/zenodo.15633191)
 
 LLMProc: Unix-inspired runtime that treats LLMs as processes. Build production-ready LLM programs with fully customizable YAML/TOML files. Or experiment with meta-tools via Python SDK - fork/spawn, goto, and more.
 Learn more at [llmproc.com](https://llmproc.com).
