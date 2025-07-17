@@ -39,7 +39,6 @@ The llmproc codebase includes several test files that make real API calls to LLM
 - **Tests**:
   - `test_caching_integration`: Tests prompt caching with real API calls, verifying cache write and read metrics
   - `test_multi_turn_caching`: Tests caching with multi-turn conversations
-  - `test_disable_automatic_caching`: Tests explicit disabling of automatic caching
 
 ### 6. `test_program_linking_descriptions_specific.py`
 - **Purpose**: Tests program linking descriptions feature with specific examples
@@ -121,6 +120,12 @@ The llmproc codebase includes several test files that make real API calls to LLM
   - `test_tool_usage_direct_command`: Tests commands that trigger tool usage
   - `test_program_linking_direct_command`: Tests commands with program linking
   - `test_stdin_pipe_with_n_flag`: Tests piping input to CLI with -n flag
+
+### 16. `test_claude_code_minimal_api.py`
+- **Purpose**: Basic OAuth test for the Claude Code provider
+- **API Calls**: Makes calls using cached Claude Code OAuth tokens
+- **Tests**:
+  - `test_claude_code_hello_world`: Simple hello world interaction
 
 ## API Usage Patterns
 

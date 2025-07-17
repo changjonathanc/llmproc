@@ -17,7 +17,7 @@ import pytest
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
-from llmproc.tools.builtin.spawn import spawn_tool
+from llmproc.plugins.spawn import SpawnPlugin, spawn_tool
 
 from tests.conftest import create_test_llmprocess_directly
 
@@ -47,9 +47,8 @@ def mock_linked_programs(temp_dir):
         [tools]
         builtin = ["spawn"]
 
-        [linked_programs]
-        helper = "helper.toml"
-        expert = "expert.toml"
+        [plugins.spawn]
+        linked_programs = { helper = "helper.toml", expert = "expert.toml" }
         """
         )
 
@@ -106,9 +105,9 @@ def mock_linked_programs_with_descriptions(temp_dir):
         [tools]
         builtin = ["spawn"]
 
-        [linked_programs]
-        helper = { path = "helper_with_desc.toml", description = "A helper program that provides assistance" }
-        expert = { path = "expert_with_desc.toml", description = "An expert program with specialized knowledge" }
+        [plugins.spawn]
+        linked_programs = { helper = "helper_with_desc.toml", expert = "expert_with_desc.toml" }
+        linked_program_descriptions = { helper = "A helper program that provides assistance", expert = "An expert program with specialized knowledge" }
         """
         )
 
@@ -165,9 +164,8 @@ def mock_nested_linked_programs(temp_dir):
         [tools]
         builtin = ["spawn"]
 
-        [linked_programs]
-        helper = "helper_nested.toml"
-        expert = "expert_nested.toml"
+        [plugins.spawn]
+        linked_programs = { helper = "helper_nested.toml", expert = "expert_nested.toml" }
         """
         )
 
@@ -183,8 +181,8 @@ def mock_nested_linked_programs(temp_dir):
         [prompt]
         system_prompt = "Helper program"
 
-        [linked_programs]
-        utility = "utility.toml"
+        [plugins.spawn]
+        linked_programs = { utility = "utility.toml" }
         """
         )
 
@@ -231,18 +229,22 @@ def test_compile_basic_program_linking(mock_linked_programs):
     program.compile()
 
     # Verify linked programs were loaded
-    assert "helper" in program.linked_programs
-    assert "expert" in program.linked_programs
+    from llmproc.plugins.spawn import SpawnPlugin
+
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "helper" in spawn_plugin.linked_programs
+    assert "expert" in spawn_plugin.linked_programs
 
     # Verify linked programs are LLMProgram instances
-    assert isinstance(program.linked_programs["helper"], LLMProgram)
-    assert isinstance(program.linked_programs["expert"], LLMProgram)
+    assert isinstance(spawn_plugin.linked_programs["helper"], LLMProgram)
+    assert isinstance(spawn_plugin.linked_programs["expert"], LLMProgram)
 
     # Verify linked program attributes
-    assert program.linked_programs["helper"].model_name == "helper-model"
-    assert program.linked_programs["expert"].model_name == "expert-model"
-    assert program.linked_programs["helper"].system_prompt == "Helper program"
-    assert program.linked_programs["expert"].system_prompt == "Expert program"
+    assert spawn_plugin.linked_programs["helper"].model_name == "helper-model"
+    assert spawn_plugin.linked_programs["expert"].model_name == "expert-model"
+    assert spawn_plugin.linked_programs["helper"].system_prompt == "Helper program"
+    assert spawn_plugin.linked_programs["expert"].system_prompt == "Expert program"
 
 
 def test_compile_nested_programs(mock_nested_linked_programs):
@@ -252,16 +254,20 @@ def test_compile_nested_programs(mock_nested_linked_programs):
     program.compile()
 
     # Verify first level linked programs were loaded
-    assert "helper" in program.linked_programs
-    assert "expert" in program.linked_programs
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "helper" in spawn_plugin.linked_programs
+    assert "expert" in spawn_plugin.linked_programs
 
     # Verify nested linked programs
-    helper_program = program.linked_programs["helper"]
-    assert "utility" in helper_program.linked_programs
-    assert helper_program.linked_programs["utility"].model_name == "utility-model"
+    helper_program = spawn_plugin.linked_programs["helper"]
+    nested_spawn = next((p for p in helper_program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert nested_spawn is not None
+    assert "utility" in nested_spawn.linked_programs
+    assert nested_spawn.linked_programs["utility"].model_name == "utility-model"
 
     # Verify proper nesting structure
-    assert program.linked_programs["helper"].linked_programs["utility"].system_prompt == "Utility program"
+    assert nested_spawn.linked_programs["utility"].system_prompt == "Utility program"
 
 
 def test_program_linking_descriptions(mock_linked_programs_with_descriptions):
@@ -271,13 +277,14 @@ def test_program_linking_descriptions(mock_linked_programs_with_descriptions):
     program.compile()
 
     # Verify descriptions were loaded
-    assert hasattr(program, "linked_program_descriptions")
-    assert "helper" in program.linked_program_descriptions
-    assert "expert" in program.linked_program_descriptions
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "helper" in spawn_plugin.linked_program_descriptions
+    assert "expert" in spawn_plugin.linked_program_descriptions
 
     # Verify description content
-    assert program.linked_program_descriptions["helper"] == "A helper program that provides assistance"
-    assert program.linked_program_descriptions["expert"] == "An expert program with specialized knowledge"
+    assert spawn_plugin.linked_program_descriptions["helper"] == "A helper program that provides assistance"
+    assert spawn_plugin.linked_program_descriptions["expert"] == "An expert program with specialized knowledge"
 
 
 def test_program_linking_paths(temp_dir):
@@ -298,8 +305,8 @@ def test_program_linking_paths(temp_dir):
         [prompt]
         system_prompt = "Main program"
 
-        [linked_programs]
-        subdir_expert = "subdir/expert_path.toml"
+        [plugins.spawn]
+        linked_programs = { subdir_expert = "subdir/expert_path.toml" }
         """
         )
 
@@ -322,8 +329,10 @@ def test_program_linking_paths(temp_dir):
     program.compile()
 
     # Verify linked program was found despite being in a subdirectory
-    assert "subdir_expert" in program.linked_programs
-    assert program.linked_programs["subdir_expert"].model_name == "expert-model"
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "subdir_expert" in spawn_plugin.linked_programs
+    assert spawn_plugin.linked_programs["subdir_expert"].model_name == "expert-model"
 
 
 @pytest.mark.asyncio
@@ -345,10 +354,11 @@ async def test_program_start_with_linked_programs(mock_linked_programs):
             # Start the process
             process = await program.start()
 
-            # Verify process has linked programs
-            assert hasattr(process, "linked_programs")
-            assert "helper" in process.linked_programs
-            assert "expert" in process.linked_programs
+            # Verify process has linked programs via the SpawnPlugin
+            spawn_plugin = process.get_plugin(SpawnPlugin)
+            assert spawn_plugin is not None
+            assert "helper" in spawn_plugin.linked_programs
+            assert "expert" in spawn_plugin.linked_programs
 
 
 @pytest.mark.asyncio
@@ -382,19 +392,16 @@ async def test_spawn_tool_in_linked_programs():
 
         # Create mock parent process with our test helper
         process = create_test_llmprocess_directly(
-            program=parent_program, linked_programs={"expert": child_program}, has_linked_programs=True
+            program=parent_program, linked_programs={"expert": child_program}
         )
 
         # Test spawn_tool with runtime_context
-        from llmproc.tools.builtin.spawn import spawn_tool
+        from llmproc.plugins.spawn import spawn_tool
 
         result = await spawn_tool(
             program_name="expert",
             prompt="Test message",
-            runtime_context={
-                "process": process,
-                "linked_programs": process.linked_programs,
-            },
+            runtime_context={"process": process},
         )
 
         # Verify the spawn tool worked correctly
@@ -433,7 +440,9 @@ async def test_process_with_linked_programs():
         process = await program.start()
 
         # Verify that the process has the linked program
-        assert "child" in process.linked_programs
+        spawn_plugin = process.get_plugin(SpawnPlugin)
+        assert spawn_plugin is not None
+        assert "child" in spawn_plugin.linked_programs
 
         # Verify access to the parent and child system prompts
         assert program.system_prompt == "Parent system prompt"
@@ -442,4 +451,4 @@ async def test_process_with_linked_programs():
         # We can't check process.linked_programs["child"].system_prompt directly
         # because linked_programs contains the program instances, not process instances
         # Instead, verify that the linked program reference is correct
-        assert process.linked_programs["child"] == linked_program
+        assert spawn_plugin.linked_programs["child"] == linked_program

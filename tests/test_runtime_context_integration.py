@@ -7,10 +7,11 @@ from llmproc.common.results import RunResult, ToolResult
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
 from llmproc.tools.function_tools import register_tool
+from llmproc.tools.core import Tool
 
 
 # Define a context-aware tool (note: name doesn't start with "test_" to avoid pytest collection)
-@register_tool(requires_context=True, required_context_keys=["process"])
+@register_tool(requires_context=True)
 async def context_tool_example(args, runtime_context=None):
     """A tool that requires runtime context for testing."""
     # The decorator will handle validation of the required context keys
@@ -36,12 +37,14 @@ class TestIntegration:
         process = MagicMock(spec=LLMProcess)
         process.model_name = "test-model"
         process.provider = "test-provider"
+        process.plugins = []
 
         # Create runtime context
         runtime_context = {"process": process}
 
         # Call the context-aware tool directly with runtime context
-        result = await context_tool_example({}, runtime_context=runtime_context)
+        tool = Tool.from_callable(context_tool_example)
+        result = await tool.execute({"args": {}}, runtime_context=runtime_context)
 
         # Verify the tool received and used the runtime context
         assert isinstance(result, ToolResult)

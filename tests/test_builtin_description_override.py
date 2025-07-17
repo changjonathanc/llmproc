@@ -1,9 +1,9 @@
 """Test builtin tool description override using ToolConfig."""
 
-from llmproc.program import convert_to_callables
+from llmproc.common.metadata import attach_meta, get_tool_meta
 from llmproc.config.tool import ToolConfig
 from llmproc.tools.builtin import calculator
-from llmproc.common.metadata import attach_meta, get_tool_meta
+from llmproc.tools.utils import convert_to_callables
 
 
 def test_builtin_description_override():
@@ -17,9 +17,7 @@ def test_builtin_description_override():
 def test_builtin_param_description_override():
     """Overriding one param keeps other builtin descriptions."""
     original = dict(get_tool_meta(calculator).param_descriptions)
-    funcs = convert_to_callables(
-        [ToolConfig(name="calculator", param_descriptions={"expression": "expr"})]
-    )
+    funcs = convert_to_callables([ToolConfig(name="calculator", param_descriptions={"expression": "expr"})])
     func = funcs[0]
     meta = get_tool_meta(func)
     assert meta.param_descriptions["expression"] == "expr"

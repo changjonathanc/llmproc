@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+from dotenv import load_dotenv
 
 from llmproc import LLMProgram
 from llmproc.cli.log_utils import (
@@ -21,9 +22,10 @@ from llmproc.cli.log_utils import (
     CostLimitExceededError,
     get_logger,
     log_program_info,
-    setup_logger,
+    setup_logger,  # noqa: F401 - used indirectly by tests
 )
 from llmproc.common.results import RunResult
+from llmproc.plugins.stderr import StderrPlugin
 
 
 async def run_with_prompt(
@@ -50,12 +52,13 @@ async def run_with_prompt(
         RunResult with the execution results.
     """
     logger.info(f"Running with {source} prompt")
-    start_time = asyncio.get_event_loop().time()
+    start_time = asyncio.get_running_loop().time()
     run_result = await process.run(user_prompt, max_iterations=process.max_iterations)
-    elapsed = asyncio.get_event_loop().time() - start_time
-    logger.info(f"Used {run_result.api_calls} API calls in {elapsed:.2f}s, cost ${run_result.usd_cost:.4f}")
+    elapsed = asyncio.get_running_loop().time() - start_time
+    logger.info(f"Used {run_result.api_call_count} API calls in {elapsed:.2f}s, cost ${run_result.usd_cost:.4f}")
     if not json_output:
-        stderr_log = process.get_stderr_log()
+        plugin = process.get_plugin(StderrPlugin)
+        stderr_log = plugin.get_log() if plugin else []
         print("\n".join(stderr_log), file=sys.stderr)
         response = process.get_last_message()
         click.echo(response)
@@ -121,6 +124,83 @@ def _resolve_prompt(
     return prompt
 
 
+def _load_program(path: Path, logger: logging.Logger) -> LLMProgram:
+    """Return program loaded from *path* or exit on error."""
+    try:
+        return LLMProgram.from_file(path)
+    except Exception as exc:  # pragma: no cover - pass through to user
+        click.echo(f"Error loading program file: {exc}", err=True)
+        sys.exit(1)
+
+
+async def _start_process(program: LLMProgram, logger: logging.Logger):
+    """Return process started from *program* or exit on error."""
+    try:
+        return await program.start()
+    except RuntimeError as exc:
+        if "Global timeout fetching tools from MCP servers" in str(exc):
+            lines = str(exc).strip().split("\n")
+            click.echo(f"ERROR: {lines[0]}", err=True)
+            click.echo("\nThis error occurs when MCP tool servers fail to initialize.", err=True)
+            click.echo("Possible solutions:", err=True)
+            click.echo("1. Increase the timeout: export LLMPROC_TOOL_FETCH_TIMEOUT=300", err=True)
+            click.echo("2. Check if the MCP server is running properly", err=True)
+            click.echo(
+                "3. If you're using npx to run an MCP server, make sure the package exists and is accessible",
+                err=True,
+            )
+            click.echo("4. To run without requiring MCP tools: export LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT=false", err=True)
+            sys.exit(2)
+        else:
+            click.echo(f"Error initializing process: {exc}", err=True)
+            sys.exit(1)
+
+
+def _print_json_result(run_result: RunResult, process: Any) -> None:
+    """Output execution details in JSON format."""
+    output = {
+        "api_calls": run_result.api_call_count,
+        "usd_cost": run_result.usd_cost,
+        "last_message": process.get_last_message(),
+        "stderr": (process.get_plugin(StderrPlugin).get_log() if process.get_plugin(StderrPlugin) else []),
+        "stop_reason": run_result.stop_reason,
+    }
+    click.echo(json.dumps(output, ensure_ascii=False))
+
+
+def _handle_cost_limit(exc: CostLimitExceededError, process: Any, json_output: bool) -> None:
+    """Handle ``CostLimitExceededError`` consistently."""
+    if json_output:
+        current_result = getattr(process, "_run_result", RunResult())
+        current_result.set_stop_reason("cost_limit_exceeded")
+        output = {
+            "api_calls": current_result.api_call_count,
+            "usd_cost": exc.actual_cost,
+            "last_message": process.get_last_message(),
+            "stderr": (process.get_plugin(StderrPlugin).get_log() if process.get_plugin(StderrPlugin) else []),
+            "stop_reason": current_result.stop_reason,
+            "cost_limit": exc.cost_limit,
+        }
+        click.echo(json.dumps(output, ensure_ascii=False))
+    else:
+        click.echo(f"⚠️  Execution stopped: {exc}", err=True)
+    sys.exit(0)
+
+
+async def _cleanup_process(process: Any, logger: logging.Logger) -> None:
+    """Clean up the process with a strict timeout."""
+    close_task = asyncio.create_task(process.aclose())
+    try:
+        await asyncio.wait_for(close_task, timeout=2.0)
+    except TimeoutError:
+        logger.warning("Process cleanup timed out after 2.0 seconds - forcing exit")
+        close_task.cancel()
+        with contextlib.suppress(BaseException):
+            await close_task
+    except Exception as exc:  # pragma: no cover - best effort cleanup
+        logger.warning(f"Error during process cleanup: {exc}")
+
+
 @click.command()
 @click.argument("program_path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--prompt", "-p", help="Prompt text. If omitted, read from stdin")
@@ -167,6 +247,8 @@ def main(
     cost_limit: float | None = None,
 ) -> None:
     """Run a single prompt using the given PROGRAM_PATH."""
+    # Load environment variables from .env if present
+    load_dotenv()
     asyncio.run(
         _async_main(
             program_path,
@@ -197,37 +279,8 @@ async def _async_main(
     quiet_mode = quiet or level_num >= logging.ERROR
 
     path = Path(program_path)
-
-    try:
-        program = LLMProgram.from_file(path)
-    except Exception as e:  # pragma: no cover - pass through to user
-        click.echo(f"Error loading program file: {e}", err=True)
-        sys.exit(1)
-
-    try:
-        process = await program.start()
-    except RuntimeError as e:
-        if "Global timeout fetching tools from MCP servers" in str(e):
-            # Extract the server names and timeout from the error message for cleaner display
-            error_lines = str(e).strip().split("\n")
-            click.echo(f"ERROR: {error_lines[0]}", err=True)
-            click.echo("\nThis error occurs when MCP tool servers fail to initialize.", err=True)
-            click.echo("Possible solutions:", err=True)
-            click.echo("1. Increase the timeout: export LLMPROC_TOOL_FETCH_TIMEOUT=300", err=True)
-            click.echo("2. Check if the MCP server is running properly", err=True)
-            click.echo(
-                "3. If you're using npx to run an MCP server, make sure the package exists and is accessible", err=True
-            )
-            click.echo("4. To run without requiring MCP tools: export LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT=false", err=True)
-            sys.exit(2)
-        else:
-            click.echo(f"Error initializing process: {e}", err=True)
-            sys.exit(1)
-
-    # Priority for prompt sources:
-    # 1. Command-line argument (-p/--prompt)
-    # 2. Non-empty stdin
-    # 3. Embedded user prompt in configuration
+    program = _load_program(path, logger)
+    process = await _start_process(program, logger)
 
     logger.info(f"Process user_prompt exists: {hasattr(process, 'user_prompt')}")
     if hasattr(process, "user_prompt"):
@@ -235,78 +288,28 @@ async def _async_main(
 
     provided_prompt = _get_provided_prompt(prompt, prompt_file, logger)
     embedded_prompt = getattr(process, "user_prompt", "")
-    prompt = _resolve_prompt(provided_prompt, embedded_prompt, append, logger)
+    prompt_text = _resolve_prompt(provided_prompt, embedded_prompt, append, logger)
 
-    # Create callback handler and register it with the process
     callback_handler = CliCallbackHandler(logger, cost_limit=cost_limit)
-    process.add_callback(callback_handler)
-
-    log_program_info(process, prompt, logger)
+    process.add_plugins(callback_handler)
+    log_program_info(process, prompt_text, logger)
 
     try:
         run_result = await run_with_prompt(
             process,
-            prompt,
+            prompt_text,
             "command line",
             logger,
             callback_handler,
             quiet_mode,
             json_output=json_output,
         )
-
         if json_output:
-            output = {
-                "api_calls": run_result.api_calls,
-                "usd_cost": run_result.usd_cost,
-                "last_message": process.get_last_message(),
-                "stderr": process.get_stderr_log(),
-                "stop_reason": run_result.stop_reason,
-            }
-            click.echo(json.dumps(output, ensure_ascii=False))
-
-    except CostLimitExceededError as e:
-        # Handle cost limit exceeded gracefully
-        if json_output:
-            # Create a minimal result with cost limit information
-            current_result = RunResult()
-            current_result.set_stop_reason("cost_limit_exceeded")
-
-            # Try to get actual run state if available
-            try:
-                # Get the actual accumulated costs from the process if possible
-                if hasattr(process, "_run_result") and process._run_result:
-                    current_result = process._run_result
-                    current_result.set_stop_reason("cost_limit_exceeded")
-            except Exception:
-                pass
-
-            output = {
-                "api_calls": current_result.api_calls,
-                "usd_cost": e.actual_cost,  # Use the actual cost from exception
-                "last_message": process.get_last_message(),
-                "stderr": process.get_stderr_log(),
-                "stop_reason": current_result.stop_reason,
-                "cost_limit": e.cost_limit,
-            }
-            click.echo(json.dumps(output, ensure_ascii=False))
-        else:
-            click.echo(f"⚠️  Execution stopped: {e}", err=True)
-
-        # Exit with success code - this is user-requested behavior
-        sys.exit(0)
-
-    # Ensure resources are cleaned up with strict timeout. We create a task so
-    # the aclose coroutine is always awaited even if wait_for is mocked.
-    close_task = asyncio.create_task(process.aclose())
-    try:
-        await asyncio.wait_for(close_task, timeout=2.0)
-    except TimeoutError:
-        logger.warning("Process cleanup timed out after 2.0 seconds - forcing exit")
-        close_task.cancel()
-        with contextlib.suppress(BaseException):
-            await close_task
-    except Exception as e:
-        logger.warning(f"Error during process cleanup: {e}")
+            _print_json_result(run_result, process)
+    except CostLimitExceededError as exc:
+        _handle_cost_limit(exc, process, json_output)
+    finally:
+        await _cleanup_process(process, logger)
 
 
 if __name__ == "__main__":

@@ -9,14 +9,13 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from llmproc.common.results import ToolResult
-from llmproc.file_descriptors import FileDescriptorManager
+from llmproc.plugins.file_descriptor import FileDescriptorManager
 
 # File descriptor XML tag constants - defined here since they're internal
 FD_RESULT_OPENING_TAG = "<fd_result"
 FD_RESULT_CLOSING_TAG = "</fd_result>"
 FD_CONTENT_OPENING_TAG = "<fd_content"
 FD_CONTENT_CLOSING_TAG = "</fd_content>"
-from llmproc.tools.builtin.fd_tools import read_fd_tool
 
 # =============================================================================
 # FileDescriptorManager - Basic Functionality Tests

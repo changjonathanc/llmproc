@@ -140,3 +140,17 @@ class TestReadFileTool:
         finally:
             # Restore original directory
             os.chdir(original_dir)
+
+    @pytest.mark.asyncio
+    async def test_read_file_non_text_file(self, tmp_path: Path):
+        """Test that reading a non-text file returns an error."""
+
+        # Arrange - create a binary file
+        binary_path = tmp_path / "image.png"
+        binary_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+        # Act
+        result = await read_file(str(binary_path))
+
+        # Assert
+        assert_error_response(result, "Unsupported file type")

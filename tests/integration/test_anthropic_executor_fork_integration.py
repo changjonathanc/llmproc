@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from llmproc.common.access_control import AccessLevel
-from llmproc.common.results import ToolResult
+from llmproc.common.results import RunResult, ToolResult
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
 
 # ---------------------------------------------------------------------------
@@ -49,13 +50,16 @@ def mock_process(monkeypatch):
 
     # Tool manager mock with runtime_context tracking
     tool_manager = MagicMock()
-    tool_manager.runtime_context = {}
+    tool_manager.runtime_context = {"process": proc}
 
     def _set_runtime(ctx):
         tool_manager.runtime_context = ctx
+        if "process" not in tool_manager.runtime_context:
+            tool_manager.runtime_context["process"] = proc
 
     tool_manager.set_runtime_context.side_effect = _set_runtime
     proc.tool_manager = tool_manager
+    proc.iteration_state = None
 
     proc.api_params = {}
 
@@ -63,6 +67,7 @@ def mock_process(monkeypatch):
     messages = MagicMock()
     client = MagicMock(messages=messages)
     proc.client = client
+    proc.trigger_event = AsyncMock()
 
     # ------------------------------------------------------------------
     # Provide a lightweight RunResult implementation to satisfy executor
@@ -83,7 +88,7 @@ def mock_process(monkeypatch):
         def add_api_call(self, info):  # noqa: D401
             self.api_calls += 1
 
-        def add_tool_call(self, name, args=None):  # noqa: D401
+        def add_tool_call(self, tool_name, tool_args=None):  # noqa: D401
             pass
 
         def set_last_message(self, text):  # noqa: D401
@@ -116,8 +121,15 @@ def mock_process(monkeypatch):
 
     fd_manager.create_fd_from_tool_result.side_effect = _create_fd_from_tool_result
     fd_manager.max_direct_output_chars = 8000
-    proc.fd_manager = fd_manager
-    proc.file_descriptor_enabled = False
+    proc.get_plugin(FileDescriptorPlugin).fd_manager = fd_manager
+    proc.get_plugin(FileDescriptorPlugin).enabled = False
+
+    # Response hooks - provide real PluginEventRunner with no plugins
+    from llmproc.plugin.plugin_event_runner import PluginEventRunner
+
+    runner = PluginEventRunner(proc._submit_to_loop, ())
+    proc.plugins = runner
+    proc.hooks = runner
 
     return proc
 
@@ -140,8 +152,9 @@ async def test_msg_prefix_contains_reasoning_and_tool_use(mock_process):
     # Stub call_tool to capture the runtime_context the executor sets
     async def _call_tool(name, args_dict):
         nonlocal captured_prefix
-        # Capture the msg_prefix buffer directly
-        captured_prefix = mock_process.tool_manager.runtime_context.get("msg_prefix", [])
+        # Capture msg_prefix from iteration_state
+        if mock_process.iteration_state:
+            captured_prefix = mock_process.iteration_state.msg_prefix
         return ToolResult.from_success("ok")
 
     mock_process.call_tool = AsyncMock(side_effect=_call_tool)
@@ -192,7 +205,7 @@ async def test_runtime_context_restored(mock_process):
 
     async def _call_tool(name, args_dict):
         ctx = mock_process.tool_manager.runtime_context
-        assert "tool_id" in ctx and "msg_prefix" in ctx and "tool_results_prefix" in ctx
+        assert ctx == original_context
         return ToolResult.from_success("ok")
 
     mock_process.call_tool = AsyncMock(side_effect=_call_tool)
@@ -200,8 +213,8 @@ async def test_runtime_context_restored(mock_process):
     executor = AnthropicProcessExecutor()
     await executor.run(mock_process, "hi", max_iterations=1)
 
-    # Context is cleaned (no extended keys)
-    assert "tool_id" not in mock_process.tool_manager.runtime_context
+    # Context is unchanged after execution
+    assert mock_process.tool_manager.runtime_context == original_context
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +224,7 @@ async def test_runtime_context_restored(mock_process):
 
 @pytest.mark.asyncio
 async def test_fork_process_called_with_write_access(mock_process):
-    """Check fork_process is invoked with WRITE access when forking."""
+    """Check _fork_process is invoked with WRITE access when forking."""
     tool_block = _ToolUseBlock("fork", "abc", {})
     mock_process.client.messages.create = AsyncMock(return_value=_FakeResponse([tool_block]))
 
@@ -223,11 +236,11 @@ async def test_fork_process_called_with_write_access(mock_process):
         child.tool_manager = MagicMock()
         return child
 
-    mock_process.fork_process = AsyncMock(side_effect=_fake_fork)
+    mock_process._fork_process = AsyncMock(side_effect=_fake_fork)
 
     async def _call_tool(name, args_dict):
-        # Simulate fork tool calling fork_process
-        await mock_process.fork_process()
+        # Simulate fork tool calling _fork_process
+        await mock_process._fork_process()
         return ToolResult.from_success("ok")
 
     mock_process.call_tool = AsyncMock(side_effect=_call_tool)

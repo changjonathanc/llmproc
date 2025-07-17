@@ -14,30 +14,30 @@ The file descriptor system enables:
 
 ## Examples
 
-- `all_features.toml`: Comprehensive example with all FD features enabled
-- `main.toml`: Core file descriptor features (read_fd, fd_to_file, read_file)
-- `spawn_integration.toml`: Sharing file descriptors between processes
-- `analyzer.toml`: Child process for content analysis (used with spawn_integration)
-- `user_input.toml`: Handling large user inputs with automatic FD creation
-- `references.toml`: Response reference ID system for marking and exporting content
+- `all_features.yaml`: Comprehensive example with all FD features enabled
+- `main.yaml`: Core file descriptor features (read_fd, fd_to_file, read_file)
+- `spawn_integration.yaml`: Sharing file descriptors between processes
+- `analyzer.yaml`: Child process for content analysis (used with spawn_integration)
+- `user_input.yaml`: Handling large user inputs with automatic FD creation
+- `references.yaml`: Response reference ID system for marking and exporting content
 
 ## Running Examples
 
 ```bash
 # All features combined (comprehensive example)
-llmproc-demo ./examples/file_descriptor/all_features.toml
+llmproc-demo ./examples/file_descriptor/all_features.yaml
 
 # Basic file descriptor features
-llmproc-demo ./examples/file_descriptor/main.toml
+llmproc-demo ./examples/file_descriptor/main.yaml
 
 # File descriptor with spawn integration
-llmproc-demo ./examples/file_descriptor/spawn_integration.toml
+llmproc-demo ./examples/file_descriptor/spawn_integration.yaml
 
 # User input handling
-llmproc-demo ./examples/file_descriptor/user_input.toml
+llmproc-demo ./examples/file_descriptor/user_input.yaml
 
 # Response reference ID system
-llmproc-demo ./examples/file_descriptor/references.toml
+llmproc-demo ./examples/file_descriptor/references.yaml
 ```
 
 ## Key Features Demonstrated

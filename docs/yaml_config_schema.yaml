@@ -10,6 +10,59 @@ $defs:
     - admin
     title: AccessLevel
     type: string
+  AnthropicToolsConfig:
+    description: Anthropic provider-specific tools configuration.
+    properties:
+      web_search:
+        anyOf:
+        - $ref: '#/$defs/AnthropicWebSearchConfig'
+        - type: 'null'
+        default: null
+    title: AnthropicToolsConfig
+    type: object
+  AnthropicWebSearchConfig:
+    description: Anthropic web search tool configuration.
+    properties:
+      enabled:
+        default: false
+        title: Enabled
+        type: boolean
+      max_uses:
+        anyOf:
+        - maximum: 50
+          minimum: 1
+          type: integer
+        - type: 'null'
+        default: null
+        description: Max searches per request
+        title: Max Uses
+      allowed_domains:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: 'null'
+        default: null
+        description: Whitelist of allowed domains
+        title: Allowed Domains
+      blocked_domains:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: 'null'
+        default: null
+        description: Blacklist of blocked domains
+        title: Blocked Domains
+      user_location:
+        anyOf:
+        - additionalProperties: true
+          type: object
+        - type: 'null'
+        default: null
+        title: User Location
+    title: AnthropicWebSearchConfig
+    type: object
   DemoConfig:
     description: Demo configuration for multi-turn demonstrations.
     properties:
@@ -23,55 +76,22 @@ $defs:
         default: true
         title: Pause Between Prompts
         type: boolean
-      display_name:
-        anyOf:
-        - type: string
-        - type: 'null'
-        default: null
-        title: Display Name
     title: DemoConfig
     type: object
-  EnvInfoConfig:
+  EnvInfoPluginConfig:
     additionalProperties: true
-    description: Environment information configuration section.
+    description: Configuration for the environment info plugin.
     properties:
       variables:
-        anyOf:
-        - items:
-            type: string
-          type: array
-        - type: string
-        default: []
-        title: Variables
-      env_vars:
-        additionalProperties:
+        items:
           type: string
-        type: object
-        title: Env Vars
-        description: Mapping of labels to environment variable names
-      file_map_root:
-        anyOf:
-        - type: string
-        - type: 'null'
-        default: null
-        title: File Map Root
-      file_map_max_files:
-        default: 50
-        title: File Map Max Files
-        type: integer
-      file_map_show_size:
-        default: true
-        title: File Map Show Size
-        type: boolean
-    title: EnvInfoConfig
+        title: Variables
+        type: array
+    title: EnvInfoPluginConfig
     type: object
-  FileDescriptorConfig:
-    description: File descriptor configuration section.
+  FileDescriptorPluginConfig:
+    description: Configuration for the file descriptor plugin.
     properties:
-      enabled:
-        default: false
-        title: Enabled
-        type: boolean
       max_direct_output_chars:
         default: 8000
         title: Max Direct Output Chars
@@ -92,30 +112,14 @@ $defs:
         default: false
         title: Enable References
         type: boolean
-    title: FileDescriptorConfig
-    type: object
-  LinkedProgramItem:
-    description: Configuration for a single linked program.
-    properties:
-      path:
-        title: Path
-        type: string
-      description:
-        default: ''
-        title: Description
-        type: string
-    required:
-    - path
-    title: LinkedProgramItem
-    type: object
-  LinkedProgramsConfig:
-    additionalProperties:
-      anyOf:
-      - type: string
-      - $ref: '#/$defs/LinkedProgramItem'
-    default: {}
-    description: Linked programs configuration section.
-    title: LinkedProgramsConfig
+      tools:
+        items:
+          anyOf:
+          - type: string
+          - $ref: '#/$defs/ToolConfig'
+        title: Tools
+        type: array
+    title: FileDescriptorPluginConfig
     type: object
   MCPConfig:
     description: MCP configuration section.
@@ -162,6 +166,22 @@ $defs:
       \ desc\"}\n   }"
     title: MCPToolsConfig
     type: object
+  MessageIDPluginConfig:
+    description: Configuration for the message ID plugin.
+    properties:
+      enable_goto:
+        default: true
+        title: Enable Goto
+        type: boolean
+      tools:
+        items:
+          anyOf:
+          - type: string
+          - $ref: '#/$defs/ToolConfig'
+        title: Tools
+        type: array
+    title: MessageIDPluginConfig
+    type: object
   ModelConfig:
     description: Model configuration section.
     properties:
@@ -171,10 +191,6 @@ $defs:
       provider:
         title: Provider
         type: string
-      disable_automatic_caching:
-        default: false
-        title: Disable Automatic Caching
-        type: boolean
       project_id:
         anyOf:
         - type: string
@@ -196,11 +212,167 @@ $defs:
     - provider
     title: ModelConfig
     type: object
-  PreloadConfig:
-    description: Preload configuration section.
+  OpenAIToolsConfig:
+    description: OpenAI provider-specific tools configuration.
+    properties:
+      web_search:
+        anyOf:
+        - $ref: '#/$defs/OpenAIWebSearchConfig'
+        - type: 'null'
+        default: null
+    title: OpenAIToolsConfig
+    type: object
+  OpenAIWebSearchConfig:
+    description: OpenAI web search tool configuration.
+    properties:
+      enabled:
+        default: false
+        title: Enabled
+        type: boolean
+      search_context_size:
+        default: medium
+        description: How much context to include in search (low/medium/high)
+        title: Search Context Size
+        type: string
+      user_location:
+        anyOf:
+        - additionalProperties: true
+          type: object
+        - type: 'null'
+        default: null
+        title: User Location
+    title: OpenAIWebSearchConfig
+    type: object
+  ParameterConfig:
+    additionalProperties: true
+    description: Validated LLM API parameters.
+    properties:
+      temperature:
+        anyOf:
+        - type: number
+        - type: 'null'
+        default: null
+        title: Temperature
+      max_tokens:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Max Tokens
+      top_p:
+        anyOf:
+        - type: number
+        - type: 'null'
+        default: null
+        title: Top P
+      frequency_penalty:
+        anyOf:
+        - type: number
+        - type: 'null'
+        default: null
+        title: Frequency Penalty
+      presence_penalty:
+        anyOf:
+        - type: number
+        - type: 'null'
+        default: null
+        title: Presence Penalty
+      top_k:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Top K
+      stop:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: string
+        - type: 'null'
+        default: null
+        title: Stop
+      reasoning_effort:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Reasoning Effort
+      max_completion_tokens:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Max Completion Tokens
+      max_tokens_to_sample:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Max Tokens To Sample
+      stop_sequences:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: string
+        - type: 'null'
+        default: null
+        title: Stop Sequences
+      thinking:
+        anyOf:
+        - $ref: '#/$defs/ThinkingConfig'
+        - type: 'null'
+        default: null
+      extra_headers:
+        anyOf:
+        - additionalProperties: true
+          type: object
+        - type: 'null'
+        default: null
+        title: Extra Headers
+    title: ParameterConfig
+    type: object
+  PluginsConfig:
+    additionalProperties: true
+    description: Root model for plugin configurations.
+    properties:
+      file_descriptor:
+        anyOf:
+        - $ref: '#/$defs/FileDescriptorPluginConfig'
+        - type: 'null'
+        default: null
+      message_id:
+        anyOf:
+        - $ref: '#/$defs/MessageIDPluginConfig'
+        - type: 'null'
+        default: null
+      spawn:
+        anyOf:
+        - $ref: '#/$defs/SpawnPluginConfig'
+        - type: 'null'
+        default: null
+      stderr:
+        anyOf:
+        - $ref: '#/$defs/StderrPluginConfig'
+        - type: 'null'
+        default: null
+      preload_files:
+        anyOf:
+        - $ref: '#/$defs/PreloadFilesPluginConfig'
+        - type: 'null'
+        default: null
+      env_info:
+        anyOf:
+        - $ref: '#/$defs/EnvInfoPluginConfig'
+        - type: 'null'
+        default: null
+    title: PluginsConfig
+    type: object
+  PreloadFilesPluginConfig:
+    description: Configuration for the preload files plugin.
     properties:
       files:
-        default: []
         items:
           type: string
         title: Files
@@ -212,7 +384,7 @@ $defs:
         - cwd
         title: Relative To
         type: string
-    title: PreloadConfig
+    title: PreloadFilesPluginConfig
     type: object
   PromptConfig:
     description: Prompt configuration section.
@@ -236,6 +408,58 @@ $defs:
         default: null
         title: User Prompt
     title: PromptConfig
+    type: object
+  SpawnPluginConfig:
+    description: Configuration for the spawn plugin.
+    properties:
+      linked_programs:
+        additionalProperties:
+          type: string
+        title: Linked Programs
+        type: object
+      linked_program_descriptions:
+        additionalProperties:
+          type: string
+        title: Linked Program Descriptions
+        type: object
+      tools:
+        items:
+          anyOf:
+          - type: string
+          - $ref: '#/$defs/ToolConfig'
+        title: Tools
+        type: array
+    title: SpawnPluginConfig
+    type: object
+  StderrPluginConfig:
+    description: Configuration for the stderr logging plugin.
+    properties:
+      tools:
+        items:
+          anyOf:
+          - type: string
+          - $ref: '#/$defs/ToolConfig'
+        title: Tools
+        type: array
+    title: StderrPluginConfig
+    type: object
+  ThinkingConfig:
+    description: Configuration for Claude 3.7 thinking capability.
+    properties:
+      type:
+        default: enabled
+        enum:
+        - enabled
+        - disabled
+        title: Type
+        type: string
+      budget_tokens:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Budget Tokens
+    title: ThinkingConfig
     type: object
   ToolConfig:
     description: Configuration item for a tool.
@@ -273,21 +497,31 @@ $defs:
   ToolsConfig:
     description: Tools configuration section.
     properties:
-      enabled:
+      builtin:
         items:
           anyOf:
           - type: string
           - $ref: '#/$defs/ToolConfig'
-        title: Enabled
+        title: Builtin
         type: array
       mcp:
         anyOf:
         - $ref: '#/$defs/MCPToolsConfig'
         - type: 'null'
         default: null
+      anthropic:
+        anyOf:
+        - $ref: '#/$defs/AnthropicToolsConfig'
+        - type: 'null'
+        default: null
+      openai:
+        anyOf:
+        - $ref: '#/$defs/OpenAIToolsConfig'
+        - type: 'null'
+        default: null
     title: ToolsConfig
     type: object
-additionalProperties: false
+additionalProperties: true
 description: Full LLM program configuration.
 properties:
   model:
@@ -299,16 +533,7 @@ properties:
       system_prompt_file: null
       user_prompt: null
   parameters:
-    additionalProperties: true
-    default: {}
-    title: Parameters
-    type: object
-  preload:
-    anyOf:
-    - $ref: '#/$defs/PreloadConfig'
-    - type: 'null'
-    default:
-      files: []
+    $ref: '#/$defs/ParameterConfig'
   mcp:
     anyOf:
     - $ref: '#/$defs/MCPConfig'
@@ -319,26 +544,13 @@ properties:
     - $ref: '#/$defs/ToolsConfig'
     - type: 'null'
     default:
-      enabled: []
+      builtin: []
       mcp: null
-  env_info:
+      anthropic: null
+      openai: null
+  plugins:
     anyOf:
-    - $ref: '#/$defs/EnvInfoConfig'
-    - type: 'null'
-    default:
-      variables: []
-      env_vars: {}
-      file_map_root: null
-      file_map_max_files: 50
-      file_map_show_size: true
-  linked_programs:
-    anyOf:
-    - $ref: '#/$defs/LinkedProgramsConfig'
-    - type: 'null'
-    default: {}
-  file_descriptor:
-    anyOf:
-    - $ref: '#/$defs/FileDescriptorConfig'
+    - $ref: '#/$defs/PluginsConfig'
     - type: 'null'
     default: null
   demo:

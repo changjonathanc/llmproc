@@ -45,15 +45,21 @@ async def main():
     # Start the process
     process = await program.start()
 
-    # Define callbacks for monitoring
-    callbacks = {
-        "on_tool_start": lambda tool_name, args: print(f"Starting tool: {tool_name}"),
-        "on_tool_end": lambda tool_name, result: print(f"Tool completed: {tool_name}"),
-        "on_response": lambda content: print(f"Response: {content[:30]}...")
-    }
+    # Register a callback object for monitoring
+    class Monitor:
+        def tool_start(self, tool_name, tool_args, *, process):
+            print(f"Starting tool: {tool_name}")
+
+        def tool_end(self, tool_name, result, *, process):
+            print(f"Tool completed: {tool_name}")
+
+        def response(self, content, *, process):
+            print(f"Response: {content[:30]}...")
+
+    process.add_plugins(Monitor())
 
     # Run with user input
-    run_result = await process.run("Hello, how can you help me?", callbacks=callbacks)
+    run_result = await process.run("Hello, how can you help me?")
 
     # Get and display response
     response = process.get_last_message()
@@ -61,7 +67,7 @@ async def main():
 
     # Show metrics
     print(f"Run completed in {run_result.duration_ms}ms")
-    print(f"API calls: {run_result.api_calls}")
+    print(f"API calls: {run_result.api_call_count}")
 
 # Run the async function
 asyncio.run(main())

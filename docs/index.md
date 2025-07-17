@@ -47,6 +47,7 @@ Documentation for specific model providers:
 
 - [Anthropic Models](anthropic.md) - Claude models usage
 - [Claude Thinking Models](claude-thinking-models.md) - Using Claude's thinking capabilities
+- [OpenAI Models](openai.md) - GPT models and tool calling
 - [OpenAI Reasoning Models](openai-reasoning-models.md) - Using OpenAI's reasoning capabilities
 - [Gemini Models](gemini.md) - Google Gemini models usage
 
@@ -55,15 +56,15 @@ Documentation for specific model providers:
 For users looking to extend and optimize LLMProc:
 
 - [Program Initialization](program-initialization.md) - How programs are initialized and validated
-- [Callbacks System](callbacks.md) - Monitor execution events
-- [Tool Registration Callback](tool-registration-callback.md) - Customize tool initialization during registration
+- [Plugin System](plugin-system.md) - Unified hooks and callbacks
+- [Response Hook Redesign](response-hook-redesign.md) - Unified hook/callback model
 - [Error Handling Strategy](error-handling-strategy.md) - How errors are managed
 - [Testing](testing.md) - Testing approach and API testing
 
 - [Program Compiler](program-compiler.md) - Compile and cache programs for reuse
 - [Runtime Context Management](runtime-context.md) - Dependency injection for tools
-- [System Prompt Examination Tool](system-prompt-tool.md) - Inspect enriched prompts
 - [Tool Error Handling Guidelines](tool-error-handling.md) - Error handling patterns
+- [Plugin Organization](plugin-organization.md) - Where plugins and extensions live
 - [Test Plan](test-plan.md) - Outline of planned tests
 - [YAML Configuration Schema](yaml_config_schema.md) - Auto-generated configuration reference
 
@@ -110,6 +111,7 @@ For details on the full API, see:
 
 Detailed release notes for each version are available in the release_notes directory:
 
+- [Release Notes 0.10.0](release_notes/RELEASE_NOTES_0.10.0.md)
 - [Release Notes 0.9.0](release_notes/RELEASE_NOTES_0.9.0.md)
 - [Release Notes 0.8.0](release_notes/RELEASE_NOTES_0.8.0.md)
 

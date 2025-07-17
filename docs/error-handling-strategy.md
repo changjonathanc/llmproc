@@ -251,9 +251,8 @@ This approach offers several benefits:
 Here's how these improvements might look in the Anthropic process executor:
 
 ```python
-async def run(self, process, user_prompt, max_iterations=10, callbacks=None, run_result=None):
+async def run(self, process, user_prompt, max_iterations=10, run_result=None):
     """Execute a conversation with the Anthropic API."""
-    callbacks = callbacks or {}
     run_result = run_result or RunResult()
     request_id = generate_request_id()
 

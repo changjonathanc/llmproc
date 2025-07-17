@@ -12,6 +12,7 @@ from tempfile import NamedTemporaryFile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from llmproc.program import LLMProgram
 from llmproc.tools.mcp import MCPServerTools
 from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
@@ -25,8 +26,8 @@ def test_mcptool_descriptor_validation():
     assert MCPServerTools(server="server", tools=["tool1", "tool2"]).tools == ["tool1", "tool2"]
 
     # Access level tests
-    assert MCPServerTools(server="server", access="read").default_access.value == "read"
-    assert MCPServerTools(server="server", tools=["tool1"], access="admin").default_access.value == "admin"
+    assert MCPServerTools(server="server", default_access="read").default_access.value == "read"
+    assert MCPServerTools(server="server", tools=["tool1"], default_access="admin").default_access.value == "admin"
 
     # Dictionary form
     tool_dict = MCPServerTools(server="server", tools={"tool1": "read", "tool2": "write"})
@@ -47,9 +48,6 @@ def test_mcptool_descriptor_validation():
 
     with pytest.raises(ValueError, match="Unsupported tools specification type"):
         MCPServerTools(server="server", tools=123)  # Invalid tool name type
-
-    with pytest.raises(ValueError, match="Cannot specify both tools dictionary and access parameter"):
-        MCPServerTools(server="server", tools={"tool1": "read"}, access="write")  # Conflicting access specifications
 
     with pytest.raises(ValueError, match="Tool names cannot be empty"):
         MCPServerTools(server="server", tools=["valid", ""])  # Mix of valid and invalid tool names
@@ -90,13 +88,14 @@ def time_mcp_config():
 
 @pytest.mark.asyncio
 @patch("llmproc.providers.providers.AsyncAnthropic")
-@patch("llmproc.tools.mcp.manager.MCPManager.initialize")
+@patch("llmproc.tools.mcp.MCPAggregator.initialize", return_value=[])
 async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, time_mcp_config):
     """Test program configuration with ``MCPServerTools`` descriptors."""
     # Setup mocks
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
-    mock_initialize.return_value = True
+
+    from llmproc.tools.mcp import MCPServerTools
 
     # Create a program with MCPServerTools descriptors
     program = LLMProgram(
@@ -107,19 +106,17 @@ async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, ti
         tools=[MCPServerTools(server="time", tools=["current"])],  # Using MCPServerTools descriptor
     )
 
-    # Verify that the MCPServerTools descriptor was stored in the tool_manager
-    assert len(program.tool_manager.mcp_tools) == 1
-    assert program.tool_manager.mcp_tools[0].server == "time"
-    assert program.tool_manager.mcp_tools[0].tools == ["current"]
+    # Verify that the MCPServerTools descriptor was stored in the program config
+    mcp_tools = [t for t in program.tools if isinstance(t, MCPServerTools)]
+    assert len(mcp_tools) == 1
+    assert mcp_tools[0].server == "time"
+    assert mcp_tools[0].tools == ["current"]
 
     # Create a process
     process = await program.start()
 
-    # Verify the MCPManager is initialized with the config path
-    assert process.tool_manager.mcp_manager.config_path == time_mcp_config
-    assert process.tool_manager.mcp_manager.config_path == time_mcp_config
-
-    # Verify initialize was called
+    # Verify the MCPAggregator was initialized
+    assert process.tool_manager.mcp_aggregator is not None
     mock_initialize.assert_called_once()
 
     # Test with 'all' tools
@@ -132,9 +129,10 @@ async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, ti
     )
 
     # Verify the descriptor was stored correctly with "all"
-    assert len(program2.tool_manager.mcp_tools) == 1
-    assert program2.tool_manager.mcp_tools[0].server == "time"
-    assert program2.tool_manager.mcp_tools[0].tools == "all"
+    mcp_tools2 = [t for t in program2.tools if isinstance(t, MCPServerTools)]
+    assert len(mcp_tools2) == 1
+    assert mcp_tools2[0].server == "time"
+    assert mcp_tools2[0].tools == "all"
 
     # Test with multiple MCPServerTools descriptors
     program3 = LLMProgram(
@@ -149,5 +147,6 @@ async def test_mcptool_descriptors(mock_initialize, mock_anthropic, mock_env, ti
     )
 
     # Verify multiple descriptors are stored correctly
-    assert len(program3.tool_manager.mcp_tools) == 2
-    assert {d.server for d in program3.tool_manager.mcp_tools} == {"time", "calculator"}
+    mcp_tools3 = [t for t in program3.tools if isinstance(t, MCPServerTools)]
+    assert len(mcp_tools3) == 2
+    assert {d.server for d in mcp_tools3} == {"time", "calculator"}

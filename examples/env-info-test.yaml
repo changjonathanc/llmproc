@@ -1,5 +1,4 @@
 # Environment Information Test Program
-# Use with: llmproc-prompt env-info-test.yaml
 
 model:
   name: claude-3-5-haiku-20241022
@@ -28,24 +27,14 @@ prompt:
 parameters:
   max_tokens: 1000
 
-env_info:
-  variables:
-    - working_directory  # Current working directory
-    - platform           # Operating system
-    - date               # Current date
-    - python_version     # Python version
-    - hostname           # Machine hostname
-    - username           # Current user
-    - file_map           # Directory listing
-  file_map_root: '.'      # Directory to scan (current directory)
-  file_map_max_files: 15  # Maximum files to list
-  file_map_show_size: true # Show file sizes
-  env_vars:
-    region: AWS_REGION       # Value from AWS_REGION env var
-    project: PROJECT_NAME    # Value from PROJECT_NAME env var
-  commands:
-    - git rev-parse --short HEAD 2>/dev/null || echo 'not a git repo'  # Current git commit
-    - date +%H:%M:%S                                                   # Current time
-    - pwd                                                              # Current directory
-  custom_var: This is a custom value
-  app_version: '1.0.3'
+plugins:
+  env_info:
+    variables:
+      - working_directory  # Current working directory
+      - platform           # Operating system
+      - date               # Current date
+      - python_version     # Python version
+      - hostname           # Machine hostname
+      - username           # Current user
+    custom_var: This is a custom value
+    app_version: '1.0.3'

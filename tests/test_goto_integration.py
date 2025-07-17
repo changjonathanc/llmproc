@@ -9,10 +9,9 @@ import logging
 import time
 
 import pytest
-from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.common.results import ToolResult
 from llmproc.program import LLMProgram
-from llmproc.tools.builtin import handle_goto
+from llmproc.plugins.message_id import MessageIDPlugin
 
 # Set up logging
 logging.basicConfig(
@@ -29,8 +28,8 @@ logger = logging.getLogger("test_goto_integration")
 @pytest.fixture
 async def goto_process():
     """Create an LLM process with GOTO tool enabled."""
-    program = LLMProgram.from_toml("./examples/goto.toml")
-    program.register_tools([handle_goto])
+    program = LLMProgram.from_yaml("./examples/goto.yaml")
+    # The goto.yaml already has MessageIDPlugin configured, no need to add it manually
     process = await program.start()
     yield process
 
@@ -50,8 +49,8 @@ async def test_goto_basic_functionality(goto_process, goto_tracker):
     process = goto_process
     tracker = goto_tracker
 
-    # Register the tracker callback with the process
-    process.add_callback(tracker)
+    # Register the tracker plugin with the process
+    process.add_plugins(tracker)
 
     # Step 1: Ask a simple question to establish beginning state
     await process.run("What is your name?")
@@ -135,8 +134,7 @@ async def test_goto_basic_functionality(goto_process, goto_tracker):
     logger.debug(f"After GOTO: State length={len(process.state)}")
     for i, msg in enumerate(process.state):
         role = msg.get("role", "unknown")
-        msg_id = msg.get(LLMPROC_MSG_ID, "no-msg-id")
-        logger.debug(f"Message {i}: Role={role}, ID={msg_id}")
+        logger.debug(f"Message {i}: Role={role}")
 
     # Step 4: Verify we can continue conversation after GOTO
     last_prompt = "Can you tell me a brief joke?"

@@ -16,3 +16,10 @@ repos:
       - id: ruff
         args: [--fix, --exit-zero]  # Auto-fix and never fail
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: python-pycompile
+        name: py_compile
+        entry: python -m py_compile
+        language: system
+        types: [python]

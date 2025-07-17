@@ -33,7 +33,6 @@ def test_temperature_sdk_demo():
     assert script_path.exists(), f"Script not found at {script_path}"
 
     # Run the script as a subprocess and capture its output
-    print(f"\nRunning temperature SDK demo from: {script_path}")
     try:
         result = subprocess.run(
             [sys.executable, str(script_path)],
@@ -43,10 +42,7 @@ def test_temperature_sdk_demo():
             timeout=300,  # Add 5-minute timeout for safety
         )
 
-        # Print the script output (truncated if too long)
         output = result.stdout
-        print("\nDemo script output (truncated):")
-        print("\n".join(output.split("\n")[-20:]))  # Show the last 20 lines
 
         # Verify the script ran successfully
         assert (
@@ -61,18 +57,8 @@ def test_temperature_sdk_demo():
     success_markers = "✅ Tool result:"
     success_count = output.count(success_markers)
 
-    print("\nVerifying temperature tool usage...")
-    print(f"- Found {success_count} successful tool usages")
-
-    # We expect 2 tool results ideally
     if success_count == 0:
         pytest.fail("No successful tool results found in the output")
-    elif success_count == 1:
-        # Issue a warning but don't fail the test if only one tool use is found
-        pytest.warns(UserWarning, match="Only one temperature tool use detected")
-        print("⚠️ WARNING: Only found 1 tool use instead of the expected 2")
-    else:
-        print("✅ Found 2 or more tool usages as expected")
 
     # Verify at least one tool use occurred
     assert success_count >= 1, "Expected at least 1 successful tool result"
@@ -80,7 +66,6 @@ def test_temperature_sdk_demo():
     # Check for temperature changes in the output
     assert "Changing temperature to:" in output, "Expected to find temperature changes in output"
 
-    print("✅ All assertions passed: Temperature SDK demo verified!")
 
 
 if __name__ == "__main__":

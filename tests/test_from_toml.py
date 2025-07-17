@@ -10,6 +10,7 @@ This file follows the standardized configuration test patterns:
 import os
 from pathlib import Path
 from unittest.mock import patch
+import asyncio
 
 import pytest
 from llmproc import LLMProgram
@@ -208,16 +209,26 @@ class TestAdvancedConfigLoading:
         # Import the builtin tools
         from llmproc.tools.builtin import calculator, read_file
 
-        # Register them properly
+        # Register them properly and initialize
         program.register_tools([calculator, read_file])
-        # Process function tools to ensure they're registered in the registry
-        program.tool_manager.process_function_tools()
+        config = {
+            "fd_manager": None,
+            "linked_programs": {},
+            "linked_program_descriptions": {},
+            "has_linked_programs": False,
+            "provider": "test",
+            "mcp_enabled": False,
+        }
+        from llmproc.tools.tool_manager import ToolManager
+
+        tm = ToolManager()
+        asyncio.run(tm.register_tools(program.tools, config))
 
         # Now check the tools are registered
-        assert "calculator" in program.tool_manager.get_registered_tools()
-        assert "read_file" in program.tool_manager.get_registered_tools()
-        assert program.tool_manager.runtime_registry.tool_aliases.get("calc") == "calculator"
-        assert program.tool_manager.runtime_registry.tool_aliases.get("read") == "read_file"
+        assert "calc" in tm.registered_tools
+        assert "read" in tm.registered_tools
+        assert tm.runtime_registry.get_tool("calc").meta.name == "calc"
+        assert tm.runtime_registry.get_tool("read").meta.name == "read"
 
 
 class TestErrorHandling:

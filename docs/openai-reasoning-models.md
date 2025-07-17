@@ -10,22 +10,23 @@ OpenAI reasoning models (o1-mini, o1, o3-mini, o3) use explicit chain-of-thought
 - **Reasoning Effort Control**: Adjust how much reasoning the model performs
 - **STEM Capabilities**: Enhanced performance on math, science, and coding tasks
 - **Large Context Windows**: Support for up to 200,000 tokens of context
+- **Server-Hosted Web Search**: `o3` can access OpenAI's `web_search` tool for fresh information
 
 ## Configuration
 
 ### Basic Configuration
 
-```toml
-[model]
-name = "o3-mini"  # Use "o1-mini", "o1", "o3-mini", or "o3"
-provider = "openai"
+```yaml
+model:
+  name: "o3-mini"  # Use "o1-mini", "o1", "o3-mini", or "o3"
+  provider: "openai"
 
-[prompt]
-system_prompt = "You are a helpful assistant with reasoning capabilities."
+prompt:
+  system_prompt: "You are a helpful assistant with reasoning capabilities."
 
-[parameters]
-temperature = 0.7
-reasoning_effort = "medium"  # Options: "low", "medium", "high"
+parameters:
+  temperature: 0.7
+  reasoning_effort: "medium"  # Options: "low", "medium", "high"
 ```
 
 ### Reasoning Effort Parameter
@@ -47,7 +48,7 @@ import asyncio
 from llmproc import LLMProgram
 
 async def main():
-    program = LLMProgram.from_toml('examples/openai_reasoning.toml')
+    program = LLMProgram.from_yaml('examples/openai_reasoning.yaml')
     process = await program.start()
 
     # Math example
@@ -71,7 +72,7 @@ Reasoning models can generate and debug code with strong reasoning:
 
 ```python
 async def code_example():
-    program = LLMProgram.from_toml('examples/openai_reasoning.toml')
+    program = LLMProgram.from_yaml('examples/openai_reasoning.yaml')
     process = await program.start()
 
     # Code generation example
@@ -107,13 +108,13 @@ asyncio.run(code_example())
 
 ## Limitations
 
-- No tool use support in the current implementation
+- Tool use fully supported with all registered tools
 - Higher token usage compared to standard models
 - Slower response times with higher reasoning effort
 
 ## Examples
 
-See the example configuration options in [openai.toml](../examples/openai.toml), which includes commented sections for reasoning model configuration.
+See the example configuration options in [openai.yaml](../examples/openai.yaml), which includes commented sections for reasoning model configuration.
 
 ---
 [← Back to Documentation Index](index.md)

@@ -4,10 +4,12 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from llmproc.common.results import ToolResult
-from llmproc.file_descriptors.manager import FileDescriptorManager
+from llmproc.plugins.file_descriptor import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
 from llmproc.program import LLMProgram
-from llmproc.tools.builtin.fd_tools import fd_to_file_tool, read_fd_tool
+from llmproc.tools.core import Tool
+from llmproc.common.metadata import get_tool_meta
 
 
 class TestEnhancedFileDescriptorAPI:
@@ -162,22 +164,21 @@ async def test_read_fd_tool_with_extraction():
     """Test the read_fd tool function with extraction to new FD."""
     # Mock LLMProcess with fd_manager
     process = Mock()
-    process.fd_manager = Mock()
+    from llmproc.config.schema import FileDescriptorPluginConfig
+
+    plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    plugin.fd_manager = Mock()
+    process.get_plugin.return_value = plugin
 
     # Mock FD manager response for extraction
     # Mock FileDescriptorManager.read_fd_content to return proper content string
-    process.fd_manager.read_fd_content.return_value = '<fd_extraction source_fd="fd:1" new_fd="fd:2" page="1" content_size="100">\n  <message>Content from fd:1 has been extracted to fd:2</message>\n</fd_extraction>'
+    plugin.fd_manager.read_fd_content.return_value = '<fd_extraction source_fd="fd:1" new_fd="fd:2" mode="page" start="2" count="1" content_size="100">\n  <message>Content from fd:1 has been extracted to fd:2</message>\n</fd_extraction>'
 
-    # Call the tool with extract_to_new_fd=True
-    result = await read_fd_tool(
-        fd="fd:1",
-        start=2,
-        extract_to_new_fd=True,
-        runtime_context={"fd_manager": process.fd_manager},
-    )
+    tool = Tool.from_callable(plugin.read_fd_tool)
+    result = await tool.execute({"fd": "fd:1", "start": 2, "extract_to_new_fd": True})
 
     # Verify fd_manager.read_fd_content was called with correct args
-    process.fd_manager.read_fd_content.assert_called_once_with(
+    process.get_plugin(FileDescriptorPlugin).fd_manager.read_fd_content.assert_called_once_with(
         fd_id="fd:1",
         read_all=False,
         extract_to_new_fd=True,
@@ -198,24 +199,27 @@ async def test_fd_to_file_operations():
 
     # Mock process with FD manager
     process = Mock()
-    process.fd_manager = FileDescriptorManager()
-    process.file_descriptor_enabled = True
+    from llmproc.config.schema import FileDescriptorPluginConfig
+
+    plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    plugin.fd_manager = FileDescriptorManager()
+    process.get_plugin.return_value = plugin
 
     # Create test content
     test_content = "This is test content for fd_to_file operations"
 
     # Create a file descriptor
-    fd_xml = process.fd_manager.create_fd_content(test_content)
+    fd_xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(test_content)
     fd_id = fd_xml.split('fd="')[1].split('"')[0]
 
     # Use a temporary directory for all test files
     with tempfile.TemporaryDirectory() as temp_dir:
         # Test 1: Basic write mode (default)
         file_path_write = os.path.join(temp_dir, "test_write.txt")
-        write_result = await fd_to_file_tool(
+        plugin = process.get_plugin(FileDescriptorPlugin)
+        write_result = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_write,
-            runtime_context={"fd_manager": process.fd_manager},
         )
 
         # Verify content
@@ -227,18 +231,16 @@ async def test_fd_to_file_operations():
         file_path_append = os.path.join(temp_dir, "test_append.txt")
 
         # First write to create file
-        await fd_to_file_tool(
+        await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_append,
-            runtime_context={"fd_manager": process.fd_manager},
         )
 
         # Then append to it
-        append_result = await fd_to_file_tool(
+        append_result = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_append,
             mode="append",
-            runtime_context={"fd_manager": process.fd_manager},
         )
 
         # Verify appended content
@@ -249,10 +251,9 @@ async def test_fd_to_file_operations():
         # Test 3: File existence and creation parameters
         # 3.1: Default behavior - create=True, exist_ok=True (overwrite existing)
         file_path_default = os.path.join(temp_dir, "test_default.txt")
-        result_default = await fd_to_file_tool(
+        result_default = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_default,
-            runtime_context={"fd_manager": process.fd_manager},
         )
 
         assert os.path.exists(file_path_default)
@@ -261,63 +262,57 @@ async def test_fd_to_file_operations():
         assert 'exist_ok="true"' in result_default.content
 
         # 3.2: Overwrite existing with default params
-        result_overwrite = await fd_to_file_tool(
+        result_overwrite = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_default,  # Same file
-            runtime_context={"fd_manager": process.fd_manager},
         )
         assert 'success="true"' in result_overwrite.content
 
         # 3.3: Create only if doesn't exist - should fail if file exists
-        result_fail = await fd_to_file_tool(
+        result_fail = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_default,  # Same file (exists)
             exist_ok=False,
-            runtime_context={"fd_manager": process.fd_manager},
         )
         assert "<fd_error type=" in result_fail.content
         assert "already exists and exist_ok=False" in result_fail.content
 
         # 3.4: Create only if doesn't exist - should succeed with new file
         file_path_new = os.path.join(temp_dir, "test_new_only.txt")
-        result_new = await fd_to_file_tool(
+        result_new = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_new,
             exist_ok=False,
-            runtime_context={"fd_manager": process.fd_manager},
         )
         assert os.path.exists(file_path_new)
         assert 'success="true"' in result_new.content
 
         # 3.5: Update existing only (create=False) - should succeed with existing
-        result_update = await fd_to_file_tool(
+        result_update = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_default,  # Existing file
             create=False,
-            runtime_context={"fd_manager": process.fd_manager},
         )
         assert 'success="true"' in result_update.content
         assert 'create="false"' in result_update.content
 
         # 3.6: Update existing only (create=False) - should fail with non-existent
         file_path_nonexistent = os.path.join(temp_dir, "nonexistent.txt")
-        result_nonexistent = await fd_to_file_tool(
+        result_nonexistent = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_nonexistent,
             create=False,
-            runtime_context={"fd_manager": process.fd_manager},
         )
         assert "<fd_error type=" in result_nonexistent.content
         assert "doesn't exist and create=False" in result_nonexistent.content
 
         # 3.7: Append with create=True - should work even on non-existent file
         file_path_append_create = os.path.join(temp_dir, "append_create.txt")
-        result_append_create = await fd_to_file_tool(
+        result_append_create = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_append_create,
             mode="append",
             create=True,
-            runtime_context={"fd_manager": process.fd_manager},
         )
         assert os.path.exists(file_path_append_create)
         assert 'success="true"' in result_append_create.content
@@ -325,12 +320,11 @@ async def test_fd_to_file_operations():
 
         # 3.8: Append with create=False - should fail on non-existent file
         file_path_append_fail = os.path.join(temp_dir, "append_fail.txt")
-        result_append_fail = await fd_to_file_tool(
+        result_append_fail = await plugin.fd_to_file_tool(
             fd=fd_id,
             file_path=file_path_append_fail,
             mode="append",
             create=False,
-            runtime_context={"fd_manager": process.fd_manager},
         )
         assert "<fd_error type=" in result_append_fail.content
         assert "doesn't exist and create=False" in result_append_fail.content
@@ -351,33 +345,35 @@ async def test_fd_integration_workflows(mocked_llm_process):
     # Test 1: End-to-end integration with tool registry
     # Set up process with file descriptor support
     process = mocked_llm_process
-    process.file_descriptor_enabled = True
-    process.fd_manager = FileDescriptorManager()
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager()
 
     # Create test content and file descriptor
     test_content = "This is test content for fd operations\n" * 10
-    fd_xml = process.fd_manager.create_fd_content(test_content)
+    fd_xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(test_content)
     fd_id = fd_xml.split('fd="')[1].split('"')[0]
 
     # Create registry and handlers that use runtime_context
     registry = ToolRegistry()
 
     # Register read_fd handler
+    plugin = process.get_plugin(FileDescriptorPlugin)
+
     async def read_fd_handler(args):
-        return await read_fd_tool(
+        return await plugin.read_fd_tool(
             fd=args.get("fd"),
             start=args.get("start", 1),
             count=args.get("count", 1),
             read_all=args.get("read_all", False),
             extract_to_new_fd=args.get("extract_to_new_fd", False),
             mode=args.get("mode", "page"),
-            runtime_context={"fd_manager": process.fd_manager},
         )
 
-    registry.register_tool(
-        "read_fd",
-        read_fd_handler,
-        {"name": "read_fd", "description": "Read file descriptor", "parameters": {}},
+    registry.register_tool_obj(
+        Tool(
+            handler=read_fd_handler,
+            schema={"name": "read_fd", "description": "Read file descriptor", "parameters": {}},
+            meta=get_tool_meta(read_fd_handler),
+        )
     )
 
     # Extract content to new FD
@@ -388,43 +384,57 @@ async def test_fd_integration_workflows(mocked_llm_process):
     assert "<fd_extraction" in extract_result.content
     assert "new_fd" in extract_result.content
     new_fd_id = extract_result.content.split('new_fd="')[1].split('"')[0]
-    assert new_fd_id in process.fd_manager.file_descriptors
+    assert new_fd_id in process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
 
     # Test 2: Complete workflow with file operations
     with tempfile.TemporaryDirectory() as temp_dir:
         # Set up process and tools
         workflow_process = Mock()
-        workflow_process.fd_manager = FileDescriptorManager(default_page_size=1000)
-        workflow_process.file_descriptor_enabled = True
+        from llmproc.config.schema import FileDescriptorPluginConfig
+
+        plugin_workflow = FileDescriptorPlugin(FileDescriptorPluginConfig())
+        plugin_workflow.fd_manager = FileDescriptorManager(default_page_size=1000)
+        workflow_process.get_plugin.return_value = plugin_workflow
 
         # Create fresh registry for the workflow
         workflow_registry = ToolRegistry()
 
         # Register both tools needed for the workflow
+
         async def read_fd_workflow(args):
-            return await read_fd_tool(
+            return await plugin_workflow.read_fd_tool(
                 fd=args.get("fd"),
                 start=args.get("start", 1),
                 count=args.get("count", 1),
                 read_all=args.get("read_all", False),
                 extract_to_new_fd=args.get("extract_to_new_fd", False),
                 mode=args.get("mode", "page"),
-                runtime_context={"fd_manager": workflow_process.fd_manager},
             )
 
         async def fd_to_file_workflow(args):
-            return await fd_to_file_tool(
+            return await plugin_workflow.fd_to_file_tool(
                 fd=args.get("fd"),
                 file_path=args.get("file_path"),
                 mode=args.get("mode", "write"),
                 create=args.get("create", True),
                 exist_ok=args.get("exist_ok", True),
-                runtime_context={"fd_manager": workflow_process.fd_manager},
             )
 
         # Register both handlers
-        workflow_registry.register_tool("read_fd", read_fd_workflow, {"name": "read_fd"})
-        workflow_registry.register_tool("fd_to_file", fd_to_file_workflow, {"name": "fd_to_file"})
+        workflow_registry.register_tool_obj(
+            Tool(
+                handler=read_fd_workflow,
+                schema={"name": "read_fd"},
+                meta=get_tool_meta(read_fd_workflow),
+            )
+        )
+        workflow_registry.register_tool_obj(
+            Tool(
+                handler=fd_to_file_workflow,
+                schema={"name": "fd_to_file"},
+                meta=get_tool_meta(fd_to_file_workflow),
+            )
+        )
 
         # Get handlers
         read_handler = workflow_registry.get_handler("read_fd")
@@ -432,7 +442,7 @@ async def test_fd_integration_workflows(mocked_llm_process):
 
         # Create content and file descriptor
         workflow_content = "Content for workflow test\n" * 10
-        workflow_fd_xml = workflow_process.fd_manager.create_fd_content(workflow_content)
+        workflow_fd_xml = workflow_process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(workflow_content)
         workflow_fd_id = workflow_fd_xml.split('fd="')[1].split('"')[0]
 
         # Execute workflow steps
@@ -443,7 +453,7 @@ async def test_fd_integration_workflows(mocked_llm_process):
         # Step 2: Extract to new FD
         extract_result = await read_handler({"fd": workflow_fd_id, "extract_to_new_fd": True})
         extracted_fd_id = extract_result.content.split('new_fd="')[1].split('"')[0]
-        assert extracted_fd_id in workflow_process.fd_manager.file_descriptors
+        assert extracted_fd_id in workflow_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
 
         # Step 3: Write to file
         output_file = os.path.join(temp_dir, "output.txt")
@@ -458,7 +468,7 @@ async def test_fd_integration_workflows(mocked_llm_process):
         # Verify content was duplicated
         with open(output_file) as f:
             content = f.read()
-            original_size = len(workflow_process.fd_manager.file_descriptors[extracted_fd_id]["content"])
+            original_size = len(workflow_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors[extracted_fd_id]["content"])
             assert len(content) >= original_size * 2
 
         # Step 5: Try with exist_ok=False (should fail on existing file)

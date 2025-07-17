@@ -16,10 +16,10 @@ from textwrap import dedent
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.program import LLMProgram
 from llmproc.tools.builtin import spawn_tool
-
 from tests.conftest import create_test_llmprocess_directly
 
 # Constants for model names - use the smallest models possible for tests
@@ -69,21 +69,20 @@ def mock_api_with_tool_calls():
 def test_real_examples_compilation(program_linking_example_path):
     """Test that real example program linking files compile correctly."""
     # Test main program
-    main_path = program_linking_example_path / "main.toml"
+    main_path = program_linking_example_path / "main.yaml"
     if not main_path.exists():
         pytest.skip(f"Example file not found: {main_path}")
 
     # Compile the program
-    program = LLMProgram.from_toml(main_path)
+    program = LLMProgram.from_yaml(main_path)
     program.compile()
 
-    # Verify linked programs
-    assert hasattr(program, "linked_programs")
-    assert len(program.linked_programs) > 0
+    # Verify linked programs via SpawnPlugin
+    from llmproc.plugins.spawn import SpawnPlugin
 
-    # Check for descriptions if present
-    if hasattr(program, "linked_program_descriptions"):
-        assert len(program.linked_program_descriptions) > 0
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert spawn_plugin.linked_programs
 
 
 def test_program_linking_configuration(temp_dir):
@@ -103,9 +102,9 @@ def test_program_linking_configuration(temp_dir):
         [tools]
         builtin = ["spawn"]
 
-        [linked_programs]
-        helper = { path = "helper_config.toml", description = "Helper program description" }
-        expert = { path = "expert_config.toml", description = "Expert program description" }
+        [plugins.spawn]
+        linked_programs = { helper = "helper_config.toml", expert = "expert_config.toml" }
+        linked_program_descriptions = { helper = "Helper program description", expert = "Expert program description" }
         """
         )
 
@@ -140,16 +139,20 @@ def test_program_linking_configuration(temp_dir):
     # Load the program
     program = LLMProgram.from_toml(main_toml)
 
-    # Verify linked program configuration
-    assert "helper" in program.linked_programs
-    assert "expert" in program.linked_programs
-    assert program.linked_programs["helper"].model_name == "helper-model"
-    assert program.linked_programs["expert"].model_name == "expert-model"
+    # Verify linked program configuration via SpawnPlugin
+    from llmproc.plugins.spawn import SpawnPlugin
+
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "helper" in spawn_plugin.linked_programs
+    assert "expert" in spawn_plugin.linked_programs
+    assert spawn_plugin.linked_programs["helper"].model_name == "helper-model"
+    assert spawn_plugin.linked_programs["expert"].model_name == "expert-model"
 
     # Verify descriptions
-    assert hasattr(program, "linked_program_descriptions")
-    assert program.linked_program_descriptions["helper"] == "Helper program description"
-    assert program.linked_program_descriptions["expert"] == "Expert program description"
+    assert spawn_plugin.linked_program_descriptions["helper"] == "Helper program description"
+    assert spawn_plugin.linked_program_descriptions["expert"] == "Expert program description"
+
 
 def test_linked_program_descriptions():
     """Test program linking with descriptions."""
@@ -171,10 +174,19 @@ def test_linked_program_descriptions():
     parent.add_linked_program("code_expert", expert2, "A programming expert who specializes in Python code")
 
     # Verify descriptions were set correctly
-    assert "math_expert" in parent.linked_program_descriptions
-    assert "code_expert" in parent.linked_program_descriptions
-    assert parent.linked_program_descriptions["math_expert"] == "A mathematical expert who can solve complex equations"
-    assert parent.linked_program_descriptions["code_expert"] == "A programming expert who specializes in Python code"
+    from llmproc.plugins.spawn import SpawnPlugin
+
+    spawn_plugin = next((p for p in parent.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "math_expert" in spawn_plugin.linked_program_descriptions
+    assert "code_expert" in spawn_plugin.linked_program_descriptions
+    assert (
+        spawn_plugin.linked_program_descriptions["math_expert"]
+        == "A mathematical expert who can solve complex equations"
+    )
+    assert (
+        spawn_plugin.linked_program_descriptions["code_expert"] == "A programming expert who specializes in Python code"
+    )
 
 
 def test_linked_program_error_handling():
@@ -188,13 +200,26 @@ def test_linked_program_error_handling():
 
     program.register_tools([spawn_tool])
 
-    # No linked programs are added
-    assert len(program.linked_programs) == 0
+    # Explicitly add SpawnPlugin since register_tools no longer registers it
+    from llmproc.plugins.spawn import SpawnPlugin
 
-    # Verify that spawn tool function was recorded but no linked programs exist
-    function_names = [func.__name__ for func in program.tool_manager.function_tools]
-    assert "spawn_tool" in function_names
-    assert program.linked_programs == {}
+    program.add_plugins(SpawnPlugin())
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert spawn_plugin.linked_programs == {}
+
+    # Verify that spawn tool was recorded but no linked programs exist
+    from llmproc.tools.tool_manager import ToolManager
+
+    tm = ToolManager()
+    asyncio.run(tm.register_tools(program.tools, {}))
+    registered = tm.runtime_registry.get_tool_names()
+    assert "spawn" in registered
+    from llmproc.plugins.spawn import SpawnPlugin
+
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert spawn_plugin.linked_programs == {}
 
 
 # =================== API TESTS ===================
@@ -220,7 +245,7 @@ def api_temp_toml_files():
             provider = "anthropic"
 
             [prompt]
-            system_prompt = "You are an assistant with access to a knowledge expert. When asked about 'the secret code' or 'sky color', use the spawn tool to ask the expert."
+            system_prompt = "You are an assistant with access to an expert program. When asked about 'the secret code' or 'sky color', use the spawn tool to ask the expert."
 
             [parameters]
             max_tokens = 150
@@ -229,8 +254,9 @@ def api_temp_toml_files():
             [tools]
             builtin = ["spawn"]
 
-            [linked_programs]
-            expert = {{ path = "expert.toml", description = "A knowledge expert who knows secret information" }}
+            [plugins.spawn]
+            linked_programs = {{ expert = "expert.toml" }}
+            linked_program_descriptions = {{ expert = "A knowledge expert who knows secret information" }}
             """
                 )
             )
@@ -352,7 +378,6 @@ async def test_program_linking_descriptions_with_api():
         [model]
         name = "{CLAUDE_MODEL}"
         provider = "anthropic"
-        display_name = "Expert"
 
         [prompt]
         system_prompt = "You are an expert assistant. When asked about your role, explain that you are an expert with knowledge about program descriptions."
@@ -372,7 +397,6 @@ async def test_program_linking_descriptions_with_api():
         [model]
         name = "{CLAUDE_MODEL}"
         provider = "anthropic"
-        display_name = "Main"
 
         [prompt]
         system_prompt = "You are a helpful assistant with access to experts. For this test, when asked what experts you have access to, query the expert using the spawn tool."
@@ -384,8 +408,9 @@ async def test_program_linking_descriptions_with_api():
         [tools]
         builtin = ["spawn"]
 
-        [linked_programs]
-        expert = {{ path = "{expert_toml.name}", description = "Specialized expert with knowledge about program descriptions" }}
+        [plugins.spawn]
+        linked_programs = {{ expert = "{expert_toml.name}" }}
+        linked_program_descriptions = {{ expert = "Specialized expert with knowledge about program descriptions" }}
         """
         )
 
@@ -397,10 +422,13 @@ async def test_program_linking_descriptions_with_api():
         process = await program.start()
 
         # Check that the descriptions were parsed correctly
-        assert hasattr(program, "linked_program_descriptions")
-        assert "expert" in program.linked_program_descriptions
+        from llmproc.plugins.spawn import SpawnPlugin
+
+        spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+        assert spawn_plugin is not None
+        assert "expert" in spawn_plugin.linked_program_descriptions
         assert (
-            program.linked_program_descriptions["expert"]
+            spawn_plugin.linked_program_descriptions["expert"]
             == "Specialized expert with knowledge about program descriptions"
         )
 

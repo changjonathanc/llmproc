@@ -44,13 +44,16 @@ mcp:
         - "serve"
       # claude is the executable built in the previous step of the GitHub action
 
+plugins:
+  stderr:
+    tools:
+      - name: "write_stderr"
+        alias: "write_log"
+        description: "append a new message to the work log"
+        param_descriptions:
+          message: "a message to be logged"
 tools:
   builtin:
-    - name: "write_stderr"
-      alias: "write_log"
-      description: "append a new message to the work log"
-      param_descriptions:
-        message: "a message to be logged"
   mcp:
     claude:
       - name: "Glob"

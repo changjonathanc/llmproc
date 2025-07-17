@@ -80,8 +80,10 @@ Add your tool to the `__init__.py` file in the tools directory:
 # Add the import
 from .your_tool_name import your_tool_name
 
-# Register it in the central registry
-registry_data.register("your_tool_name", your_tool_name)
+# Register it as a builtin tool
+from llmproc.tools.builtin import add_builtin_tool
+
+add_builtin_tool("your_tool_name", your_tool_name)
 
 # Add to __all__ list
 __all__ = [
@@ -94,36 +96,36 @@ __all__ = [
 ]
 ```
 
-That's it! You don't need to modify `tool_manager.py` because it now automatically discovers and registers tools from the central registry.
+That's it! You don't need to modify `tool_manager.py` because it automatically discovers builtin tools from the `BUILTIN_TOOLS` mapping.
 
 ## Step 4: Create an Example Program
 
 Create an example TOML file in `examples/` to demonstrate your tool:
 
-```toml
+```yaml
 # Example program for testing the your_tool_name tool
 
-[model]
-name = "claude-3-7-sonnet-20250219"
-provider = "anthropic"
-display_name = "Your Tool Demo"
+model:
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
+  display_name: "Your Tool Demo"
 
-[prompt]
-system_prompt = """Tool demonstration prompt that explains:
-- What the tool does
-- What parameters it accepts
-- How it should be used
-"""
-# Add a user prompt for immediate testing
-user = "Please demonstrate how to use the your_tool_name tool with different parameters."
+prompt:
+  system_prompt: |
+    Tool demonstration prompt that explains:
+    - What the tool does
+    - What parameters it accepts
+    - How it should be used
+  user: "Please demonstrate how to use the your_tool_name tool with different parameters."
 
-[parameters]
-max_tokens = 4096
-temperature = 0.7
+parameters:
+  max_tokens: 4096
+  temperature: 0.7
 
 # Enable your tool
-[tools]
-enabled = ["your_tool_name"]
+tools:
+  builtin:
+    - your_tool_name
 ```
 
 ## Step 5: Add Tests
@@ -198,8 +200,10 @@ async def list_dir(
 # Add import
 from .list_dir import list_dir
 
-# Register in central registry
-registry_data.register("list_dir", list_dir)
+# Register as a builtin tool
+from llmproc.tools.builtin import add_builtin_tool
+
+add_builtin_tool("list_dir", list_dir)
 
 # Add to __all__ list
 __all__ = [
@@ -211,35 +215,36 @@ __all__ = [
 ]
 ```
 
-3. Create an example file in `examples/builtin-tools.toml`:
+3. Create an example file in `examples/builtin-tools.yaml`:
 
-```toml
+```yaml
 # Example program for testing the list_dir tool
 
-[model]
-name = "claude-3-7-sonnet-20250219"
-provider = "anthropic"
-display_name = "List Directory Tool Demo"
+model:
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
+  display_name: "List Directory Tool Demo"
 
-[prompt]
-system_prompt = """You are a helpful assistant that specializes in file system operations.
-You have access to a list_dir tool that can list directory contents with various options.
+prompt:
+  system_prompt: |
+    You are a helpful assistant that specializes in file system operations.
+    You have access to a list_dir tool that can list directory contents with various options.
 
-The list_dir tool accepts these parameters:
-- directory_path: Path to the directory to list (defaults to current directory ".")
-- show_hidden: Boolean flag to show hidden files (defaults to false)
-- detailed: Boolean flag to show detailed file information (defaults to false)
+    The list_dir tool accepts these parameters:
+    - directory_path: Path to the directory to list (defaults to current directory ".")
+    - show_hidden: Boolean flag to show hidden files (defaults to false)
+    - detailed: Boolean flag to show detailed file information (defaults to false)
 
-Demonstrate how to use this tool effectively with different parameter combinations.
-"""
+    Demonstrate how to use this tool effectively with different parameter combinations.
 
-[parameters]
-max_tokens = 4096
-temperature = 0.7
+parameters:
+  max_tokens: 4096
+  temperature: 0.7
 
 # Enable the list_dir tool
-[tools]
-enabled = ["list_dir"]
+tools:
+  builtin:
+    - list_dir
 ```
 
 That's it! The tool_manager.py now automatically discovers and uses the registered tool from the central registry.

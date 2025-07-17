@@ -14,7 +14,7 @@ from llmproc.providers.constants import PROVIDER_GEMINI, PROVIDER_GEMINI_VERTEX
         (PROVIDER_GEMINI, "gemini-2.0-flash"),
         (PROVIDER_GEMINI, "gemini-2.5-pro"),
         (PROVIDER_GEMINI_VERTEX, "gemini-2.0-flash"),
-        (PROVIDER_GEMINI_VERTEX, "gemini-2.5-pro"),
+        (PROVIDER_GEMINI_VERTEX, "gemini-2.5-pro-0605"),
     ],
 )
 def test_gemini_program_creation(provider, model_name):
@@ -38,7 +38,7 @@ def test_gemini_program_creation(provider, model_name):
     "provider,model_name",
     [
         (PROVIDER_GEMINI, "gemini-2.0-flash"),
-        (PROVIDER_GEMINI, "gemini-2.5-pro"),
+        (PROVIDER_GEMINI, "gemini-2.5-pro-preview-06-05"),
         # Commenting out Vertex API test for now
         # (PROVIDER_GEMINI_VERTEX, "gemini-2.0-flash"),
         # (PROVIDER_GEMINI_VERTEX, "gemini-2.5-pro"),

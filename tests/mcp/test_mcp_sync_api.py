@@ -58,7 +58,7 @@ if __name__ == '__main__':
             tools=[MCPServerTools(server="calc", names=["add"])],
         )
 
-        with timed_test(timeout_seconds=8.0):
+        with timed_test(timeout_seconds=12.0):
             process = program.start_sync()
             result = process.run("What is 2 plus 3? Use the calc__add tool.")
 

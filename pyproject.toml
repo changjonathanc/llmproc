@@ -1,6 +1,6 @@
 [project]
 name = "llmproc"
-version = "0.9.5"
+version = "0.10.0dev"
 description = "A simple framework for LLM-powered applications"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,6 +24,7 @@ dependencies = [
     "tomli>=2.2.1",
     "PyYAML>=6.0",
     "anthropic>=0.52.0",
+    "requests>=2.32.3",
 ]
 
 [project.optional-dependencies]
@@ -54,7 +55,12 @@ dev = [
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.0",
     "pytest-xdist>=3.0.0",
+    "python-dotenv>=1.1.0",
+    "radon>=6.0.1",
     "ruff>=0.9.9",
+]
+openai = [
+    "tiktoken>=0.9.0",
 ]
 
 [build-system]
@@ -132,6 +138,16 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
+[tool.mypy."mypy.plugins.numpy.*"]
+follow_imports = "skip"
+ignore_missing_imports = true
+
+[tool.mypy."openai.*"]
+ignore_missing_imports = true
+
+[tool.mypy."dotenv.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
@@ -149,6 +165,7 @@ markers = [
     "essential_api: minimal API tests for CI and daily development",
     "extended_api: extended API tests for regular validation",
     "release_api: comprehensive API tests for releases",
+    "unit: fast-running unit tests",
 ]
 
 [tool.coverage.report]
@@ -173,5 +190,4 @@ omit = [
 [project.scripts]
 llmproc = "llmproc.cli.run:main"
 llmproc-demo = "llmproc.cli.demo:main"
-llmproc-prompt = "llmproc.cli.print_system_prompt:main"
 llmproc-install-actions = "llmproc.cli.install_actions:main"

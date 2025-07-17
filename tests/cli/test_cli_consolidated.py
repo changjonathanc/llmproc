@@ -39,9 +39,9 @@ def api_keys_available():
 def get_available_program_path():
     """Get a path to an available program based on API keys."""
     if "ANTHROPIC_API_KEY" in os.environ and "None" not in os.environ["ANTHROPIC_API_KEY"]:
-        return Path(get_example_file_path("anthropic.toml"))
+        return Path(get_example_file_path("anthropic.yaml"))
     elif "OPENAI_API_KEY" in os.environ and "None" not in os.environ["OPENAI_API_KEY"]:
-        return Path(get_example_file_path("openai.toml"))
+        return Path(get_example_file_path("openai.yaml"))
     else:
         return None
 

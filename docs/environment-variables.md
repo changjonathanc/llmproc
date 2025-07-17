@@ -33,6 +33,16 @@ This page documents all environment variables used by llmproc.
 
 These variables control the exponential backoff retry mechanism for API calls.
 
+## Streaming Configuration
+
+### Streaming Mode
+
+| Variable | Description | Default | Type |
+|----------|-------------|---------|------|
+| `LLMPROC_USE_STREAMING` | Enable streaming mode for Anthropic API calls | `false` | Boolean (`true`, `1`, `yes` to enable) |
+
+When enabled, uses the Anthropic streaming API internally to avoid warnings when using high `max_tokens` values. The response is still returned as a complete message (no partial callbacks).
+
 ## MCP Configuration
 
 ### External Tool Servers
@@ -103,6 +113,16 @@ export LLMPROC_RETRY_INITIAL_WAIT=2
 export LLMPROC_RETRY_MAX_WAIT=120
 ```
 
+### Streaming Mode
+
+```bash
+# Enable streaming to handle high max_tokens values
+export LLMPROC_USE_STREAMING=true
+
+# Use with high max_tokens in your configuration
+llmproc-demo config.toml  # where config has max_tokens = 8192
+```
+
 ### MCP Tool Timeouts and Error Handling
 
 ```bash
@@ -121,6 +141,7 @@ export LLMPROC_FAIL_ON_MCP_INIT_TIMEOUT=false
 - Never commit API keys to version control
 - Use environment variables or secret management systems
 - Consider using `.env` files for local development (not included in git)
+- The `llmproc` and `llmproc-demo` CLIs automatically load variables from a `.env` file if present
 - For production, use proper secret management (e.g., AWS Secrets Manager, Google Secret Manager)
 
 ## See Also

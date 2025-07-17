@@ -9,7 +9,8 @@ import os
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 
-from llmproc.mcp_registry.compound import MCPAggregator, ServerRegistry, MCPServerSettings
+from llmproc.tools.mcp import MCPAggregator, MCPServerSettings, NamespacedTool
+from mcp.types import Tool
 from llmproc.tools.mcp.constants import MCP_DEFAULT_TOOL_CALL_TIMEOUT, MCP_ERROR_TOOL_CALL_TIMEOUT
 
 
@@ -18,30 +19,31 @@ class TestMCPCallTimeout:
     """Test suite for MCP tool call timeout handling."""
 
     @pytest.fixture
-    def mock_registry(self):
-        """Create a mock registry with test servers."""
-        servers = {
-            "stdio_server": MCPServerSettings(
-                type="stdio",
-                command="test_command",
-                args=["arg1", "arg2"],
-                description="Test stdio server"
-            ),
-            "sse_server": MCPServerSettings(
-                type="sse",
-                url="https://test-server.example",
-                description="Test SSE server"
-            )
+    def server_settings(self):
+        """Server settings used for tests."""
+        return {
+            "stdio_server": MCPServerSettings(type="stdio", command="test_command", args=["arg1", "arg2"], description="Test stdio server"),
+            "sse_server": MCPServerSettings(type="sse", url="https://test-server.example", description="Test SSE server"),
         }
-        registry = MagicMock(spec=ServerRegistry)
-        registry.registry = servers
-        registry.list_servers.return_value = list(servers.keys())
-        return registry
 
     @pytest.fixture
-    def aggregator(self, mock_registry):
-        """Create an MCPAggregator with a mock registry."""
-        return MCPAggregator(mock_registry)
+    def aggregator(self, server_settings):
+        """Create an MCPAggregator with a server settings."""
+        agg = MCPAggregator(server_settings)
+
+        async def _fake_load_servers(specific_servers=None):
+            servers = specific_servers or list(server_settings.keys())
+            for name in servers:
+                tool = Tool(name="test_tool", inputSchema={})
+                namespaced = tool.model_copy(update={"name": f"{name}__test_tool"})
+                agg._namespaced_tools[f"{name}__test_tool"] = NamespacedTool(
+                    tool=namespaced,
+                    server_name=name,
+                    original_name="test_tool",
+                )
+
+        agg.load_servers = AsyncMock(side_effect=_fake_load_servers)
+        return agg
 
     @pytest.mark.asyncio
     async def test_call_tool_timeout_default_message(self, aggregator):

@@ -10,13 +10,12 @@ LLMProgram
 ├── from_yaml()     # Load program from YAML
 ├── start()         # Create and initialize a process (handles validation automatically)
 ├── register_tools() # Configure tools (accepts strings and/or callables)
-├── set_tool_aliases() # Set LLM-friendly aliases for tools
 ├── set_user_prompt() # Set initial user prompt to execute automatically
 ├── set_max_iterations() # Set maximum iterations for tool calls
 └── tool_manager    # Central manager for all tools
 
 LLMProcess
-├── run()           # Run with user input and callbacks
+├── run()           # Run with user input
 ├── get_last_message() # Get response text
 ├── reset_state()   # Reset conversation state (⚠️ Experimental API)
 ├── call_tool()     # Call a tool by name
@@ -24,17 +23,17 @@ LLMProcess
 └── get_state()     # Get full conversation state
 
 RunResult
-├── api_call_infos  # Raw API response data
-├── api_calls       # Count of API calls
-├── duration_ms     # Duration in milliseconds
-├── tool_calls      # List of tool calls made
-└── complete()      # Complete and calculate timing
+├── api_call_infos   # Raw API response data
+├── api_call_count   # Count of API calls
+├── duration_ms      # Duration in milliseconds
+├── tool_calls       # List of tool calls made
+├── tool_call_count  # Count of tool calls
+└── complete()       # Complete and calculate timing
 
 ToolManager
-├── initialize_tools() # Set up all tools from configuration
+├── register_tools() # Configure and initialize tools
 ├── call_tool()     # Call a tool by name
-├── get_tool_schemas() # Get schemas for enabled tools
-└── register_tools() # Configure which tools are available
+└── get_tool_schemas() # Get schemas for enabled tools
 
 ToolRegistry
 ├── register_tool() # Register a tool
@@ -96,15 +95,51 @@ asyncio.run(main())
 
 ### Callback Interface
 
-```python
-callbacks = {
-    "on_tool_start": lambda tool_name, args: None,
-    "on_tool_end": lambda tool_name, result: None,
-    "on_response": lambda content: None
-}
+LLMProc provides **flexible callback signatures** using Flask/pytest-style parameter injection. Your callbacks can declare only the parameters they actually need:
 
-run_result = await process.run("User input", callbacks=callbacks)
+```python
+class FlexibleCallbacks:
+    # Basic patterns - minimal signatures
+    def tool_start(self, tool_name):                    # Just the tool name
+        print(f"🔧 Starting {tool_name}")
+
+    def tool_end(self, tool_name, result):              # Name and result
+        print(f"✅ {tool_name} completed")
+
+    # Advanced patterns - full context when needed
+    def response(self, content, process):               # Content and process
+        tokens = process.count_tokens()
+        print(f"💬 Response: {len(content)} chars, {tokens} tokens")
+
+    def turn_end(self, response, tool_results):         # Selective parameters
+        print(f"🔄 Turn: {len(tool_results)} tools")
+
+    # Legacy patterns - still work for backward compatibility
+    def api_request(self, api_request, *, process):     # Keyword-only process
+        print(f"📡 API request to {getattr(process, 'model_name', 'unknown')}")
+
+# Register callbacks
+process.add_plugins(FlexibleCallbacks())
+run_result = await process.run("User input")
 ```
+
+**Key Benefits:**
+- **Clean signatures** - Declare only what you need
+- **Performance** - No unnecessary parameter processing with caching
+- **Compatibility** - Legacy `*, process` signatures still work
+- **Flexibility** - Mix different styles freely
+
+**Available Parameters by Event:**
+- `tool_start`: `tool_name`, `tool_args`, `process`
+- `tool_end`: `tool_name`, `result`, `process`
+- `response`: `content`, `process`
+- `turn_start`: `process`, `run_result` (optional)
+- `turn_end`: `response`, `tool_results`, `process`
+- `api_request`: `api_request`, `process`
+- `api_response`: `response`, `process`
+- `run_end`: `run_result`, `process`
+
+See [flexible signatures cookbook](../../examples/callbacks/flexible_signatures_cookbook.py) for comprehensive examples.
 
 ### Tool Registration Interface
 
@@ -187,10 +222,8 @@ The library follows a carefully designed dependency structure to minimize circul
 - Tool alias resolution and mapping
 
 **Dependencies:**
-- Contains two **ToolRegistry** instances:
-  - `runtime_registry`: For active tool execution
-  - `mcp_registry`: For MCP tool definitions
-- May contain **MCPManager** for MCP tool registration
+- Maintains a single **ToolRegistry** for all tools
+- Uses **MCPAggregator** for MCP tool registration
 
 ### ToolRegistry
 
@@ -269,14 +302,13 @@ tools/
 ├── context_aware.py      # Context-aware tool decorator
 ├── builtin/
 │   ├── __init__.py       # Builtin tools public interface
-│   ├── spawn.py          # Spawn tool implementation
 │   ├── fork.py           # Fork tool implementation
 │   ├── goto.py           # Goto tool implementation
-│   └── fd_tools.py       # File descriptor tools
+│   └── file_descriptor.py    # File descriptor plugin with tools
 └── mcp/
     ├── __init__.py       # MCP public interface
-    ├── manager.py        # MCP server manager
-    └── integration.py    # MCP tools integration
+    ├── aggregator.py        # MCP aggregator
+    └── server_registry.py    # Server configuration helpers
 ```
 
 Each tool should:

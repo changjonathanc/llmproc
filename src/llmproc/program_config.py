@@ -8,106 +8,41 @@ into a mixin clarifies which methods only modify program settings.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from llmproc.common.access_control import AccessLevel  # noqa: F401 - used for docs
-from llmproc.common.metadata import attach_meta, get_tool_meta
-from llmproc.config import EnvInfoConfig
 from llmproc.config.tool import ToolConfig
-from llmproc.tools import ToolManager
-from llmproc.tools.builtin import BUILTIN_TOOLS
+from llmproc.plugin.events import CallbackEvent
+from llmproc.plugin.plugin_utils import call_plugin
+from llmproc.plugins.override_utils import apply_tool_overrides
 from llmproc.tools.mcp import MCPServerTools
-from llmproc.tools.mcp.constants import MCP_TOOL_SEPARATOR
+from llmproc.tools.utils import convert_to_callables
 
-
-def convert_to_callables(tools: list[str | Callable | MCPServerTools | ToolConfig]) -> list[Callable]:
-    """Return callable tools, ignoring ``MCPServerTools`` descriptors."""
-    if not isinstance(tools, list):
-        tools = [tools]
-
-    result: list[Callable] = []
-    for tool in tools:
-        if isinstance(tool, str):
-            if tool in BUILTIN_TOOLS:
-                result.append(BUILTIN_TOOLS[tool])
-            else:
-                raise ValueError(f"Unknown tool name: '{tool}'")
-        elif isinstance(tool, ToolConfig):
-            name = tool.name
-            if name in BUILTIN_TOOLS:
-                func = BUILTIN_TOOLS[name]
-                if tool.description is not None or tool.param_descriptions is not None:
-                    meta = get_tool_meta(func)
-                    if tool.description is not None:
-                        meta.description = tool.description
-                    if tool.param_descriptions is not None:
-                        existing = dict(meta.param_descriptions or {})
-                        existing.update(tool.param_descriptions)
-                        meta.param_descriptions = existing
-                    attach_meta(func, meta)
-                result.append(func)
-            else:
-                raise ValueError(f"Unknown tool name: '{name}'")
-        elif callable(tool):
-            result.append(tool)
-        elif isinstance(tool, MCPServerTools):
-            pass
-        else:
-            raise ValueError(f"Expected string, callable, or MCPServerTools, got {type(tool)}")
-    return result
+if TYPE_CHECKING:  # pragma: no cover - used for type hints only
+    from llmproc.program import LLMProgram
 
 
 class ProgramConfigMixin:
     """Mixin providing configuration helper methods."""
 
-    tool_manager: ToolManager
-    parameters: dict[str, Any] | None
-    file_descriptor: dict[str, Any] | None
-    mcp_config_path: str | None
-    mcp_servers: dict[str, dict] | None
-    env_info: EnvInfoConfig
-    user_prompt: str | None
-    max_iterations: int
+    plugins: list[Any]
 
     def add_linked_program(self, name: str, program: LLMProgram, description: str = "") -> LLMProgram:
         """Link another program to this one."""
-        self.linked_programs[name] = program
-        self.linked_program_descriptions[name] = description
-        return self
+        from llmproc.plugins.spawn import SpawnPlugin
 
-    def add_preload_file(self, file_path: str) -> LLMProgram:
-        """Add a file to preload into the system prompt."""
-        self.preload_files.append(file_path)
-        return self
+        plugin = None
+        for p in self.plugins:
+            if isinstance(p, SpawnPlugin):
+                plugin = p
+                break
 
-    def configure_env_info(
-        self, variables: list[str] | str = "all", env_vars: dict[str, str] | None = None
-    ) -> LLMProgram:
-        """Configure environment information sharing."""
-        parsed = EnvInfoConfig(variables=variables)
-        self.env_info.variables = parsed.variables
-        if env_vars:
-            self.env_info.env_vars.update(env_vars)
-        return self
+        if plugin is None:
+            plugin = SpawnPlugin()
+            self.plugins.append(plugin)
 
-    def configure_file_descriptor(
-        self,
-        enabled: bool = True,
-        max_direct_output_chars: int = 8000,
-        default_page_size: int = 4000,
-        max_input_chars: int = 8000,
-        page_user_input: bool = True,
-        enable_references: bool = True,
-    ) -> LLMProgram:
-        """Configure the file descriptor system."""
-        self.file_descriptor = {
-            "enabled": enabled,
-            "max_direct_output_chars": max_direct_output_chars,
-            "default_page_size": default_page_size,
-            "max_input_chars": max_input_chars,
-            "page_user_input": page_user_input,
-            "enable_references": enable_references,
-        }
+        plugin.linked_programs[name] = program
+        plugin.linked_program_descriptions[name] = description
         return self
 
     def configure_thinking(self, enabled: bool = True, budget_tokens: int = 4096) -> LLMProgram:
@@ -129,63 +64,82 @@ class ProgramConfigMixin:
         self.parameters["extra_headers"]["anthropic-beta"] = "token-efficient-tools-2025-02-19"
         return self
 
+    def add_plugins(self, *plugins: Any) -> LLMProgram:
+        """Register plugins for this program.
+
+        Plugins can be:
+        - Callable functions/objects
+        - Objects implementing hook_* methods (behavioral)
+        - Objects implementing callback methods (observational)
+        """
+        callback_methods = {event.value for event in CallbackEvent}
+
+        for plugin in plugins:
+            if not callable(plugin):
+                plugin_methods = set(dir(plugin))
+                has_hook = any(attr.startswith("hook_") for attr in plugin_methods)
+                has_callback = bool(plugin_methods & callback_methods)
+
+                if not has_hook and not has_callback:
+                    raise ValueError(
+                        f"Plugin {plugin} must be callable or implement a hook_* method "
+                        f"or callback method ({', '.join(sorted(callback_methods))})"
+                    )
+            self.plugins.append(plugin)
+        return self
+
     def register_tools(self, tools: list[str | Callable | MCPServerTools]) -> LLMProgram:
         """Register tools for use in the program."""
         if not isinstance(tools, list):
             tools = [tools]
 
+        # Gather additional tools from plugins
+        for plugin in self.plugins:
+            provided = call_plugin(plugin, "hook_provide_tools") or []
+            overrides = None
+            if hasattr(plugin, "config") and hasattr(plugin.config, "tools"):
+                overrides = plugin.config.tools
+            provided = apply_tool_overrides(list(provided), overrides)
+            tools.extend(provided)
+
         mcp_tools: list[MCPServerTools] = []
         other_tools: list[str | Callable | ToolConfig] = []
-        alias_map: dict[str, str] = {}
 
         for tool in tools:
             if isinstance(tool, MCPServerTools):
                 mcp_tools.append(tool)
-                if tool.tools != "all" and isinstance(tool.tools, list):
-                    for item in tool.tools:
-                        if isinstance(item, ToolConfig) and item.alias:
-                            alias_map[item.alias] = f"{tool.server}{MCP_TOOL_SEPARATOR}{item.name}"
             else:
                 other_tools.append(tool)
-                if isinstance(tool, ToolConfig) and tool.alias:
-                    alias_map[tool.alias] = tool.name
 
         if other_tools:
             callables = convert_to_callables(other_tools)
-            self.tool_manager.register_tools(callables)
+            if self.tools is None or any(not callable(t) and not isinstance(t, MCPServerTools) for t in self.tools):
+                self.tools = []
+            self.tools.extend(callables)
 
         if mcp_tools:
-            self.tool_manager.register_tools(mcp_tools)
-
-        if alias_map:
-            self.set_tool_aliases(alias_map)
+            if self.tools is None or any(not callable(t) and not isinstance(t, MCPServerTools) for t in self.tools):
+                self.tools = [] if self.tools is None else [t for t in self.tools if callable(t)]
+            self.tools.extend(mcp_tools)
 
         return self
 
     def get_registered_tools(self) -> list[str]:
         """Return the names of registered tools."""
-        return self.tool_manager.get_registered_tools()
-
-    def set_enabled_tools(self, tools: list[str | Callable]) -> LLMProgram:
-        """Alias for register_tools for backward compatibility."""
-        return self.register_tools(tools)
-
-    def set_tool_aliases(self, aliases: dict[str, str]) -> LLMProgram:
-        """Set tool aliases, merging with any existing aliases."""
-        if not isinstance(aliases, dict):
-            raise ValueError(f"Expected dictionary of aliases, got {type(aliases)}")
-
-        targets: dict[str, str] = {}
-        for alias, target in aliases.items():
-            if target in targets:
-                raise ValueError(
-                    f"Multiple aliases point to the same target tool '{target}': '{targets[target]}'"
-                    f" and '{alias}'. One-to-one mapping is required."
-                )
-            targets[target] = alias
-
-        self.tool_manager.register_aliases(aliases)
-        return self
+        names: list[str] = []
+        for item in self.tools or []:
+            if isinstance(item, MCPServerTools):
+                if item.tools == "all":
+                    names.append(f"{item.server}:all")
+                else:
+                    for t in item.tools:
+                        if isinstance(t, str):
+                            names.append(t)
+                        else:
+                            names.append(t.name)
+            elif callable(item):
+                names.append(getattr(item, "__name__", str(item)))
+        return names
 
     def set_user_prompt(self, prompt: str) -> LLMProgram:
         """Set a user prompt to be executed automatically when the program starts."""

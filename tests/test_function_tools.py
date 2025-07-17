@@ -9,12 +9,12 @@ import pytest
 from llmproc import LLMProgram, register_tool
 from llmproc.tools import ToolResult
 from llmproc.tools.function_tools import (
-    create_tool_from_function,
+    create_handler_from_function,
+    create_schema_from_callable,
     extract_docstring_params,
     function_to_tool_schema,
-    prepare_tool_handler,
-    type_to_json_schema,
 )
+from llmproc.tools.type_conversion import type_to_json_schema
 
 # Set up debug logging
 logging.basicConfig(level=logging.INFO)
@@ -36,12 +36,14 @@ def patch_process_for_tests():
 
     # Define patched version that supports both styles consistently
     async def patched_call_tool(self, tool_name, args=None, **kwargs):
+        registry = self.tool_manager.runtime_registry
         if args is not None and isinstance(args, dict):
             # Using original style: process.call_tool("tool", {"param": "value"})
-            handler = self.tool_handlers.get(tool_name)
-            if not handler:
+            try:
+                handler = registry.get_handler(tool_name)
+            except ValueError:
                 return ToolResult.from_error(
-                    f"Tool '{tool_name}' not found. Available: {list(self.tool_handlers.keys())}"
+                    f"Tool '{tool_name}' not found. Available: {registry.get_tool_names()}"
                 )
             try:
                 # Extract params from the dict and pass as kwargs
@@ -50,10 +52,11 @@ def patch_process_for_tests():
                 return ToolResult.from_error(f"Error in tool '{tool_name}': {str(e)}")
         else:
             # Using new style: process.call_tool("tool", param="value")
-            handler = self.tool_handlers.get(tool_name)
-            if not handler:
+            try:
+                handler = registry.get_handler(tool_name)
+            except ValueError:
                 return ToolResult.from_error(
-                    f"Tool '{tool_name}' not found. Available: {list(self.tool_handlers.keys())}"
+                    f"Tool '{tool_name}' not found. Available: {registry.get_tool_names()}"
                 )
             try:
                 return await handler(**kwargs)
@@ -69,11 +72,11 @@ def patch_process_for_tests():
 
 
 @pytest.fixture(autouse=True)
-def patch_initialize_client():
-    """Patch client initialization to avoid API key requirements."""
+def patch_get_provider_client():
+    """Patch provider client initialization to avoid API key requirements."""
     from unittest.mock import MagicMock, patch
 
-    with patch("llmproc.program_exec.initialize_client", return_value=MagicMock()):
+    with patch("llmproc.program_exec.get_provider_client", return_value=MagicMock()):
         yield
 
 
@@ -234,17 +237,17 @@ def test_function_with_custom_name():
 
 
 @pytest.mark.asyncio
-async def test_prepare_tool_handler():
-    """Test the tool handler preparation for both sync and async functions."""
+async def test_create_handler_from_function():
+    """Test creating handlers for sync and async functions."""
     # Test synchronous function
-    calc_handler = prepare_tool_handler(get_calculator)
+    calc_handler = create_handler_from_function(get_calculator)
     calc_result = await calc_handler(x=5, y=7)
     assert isinstance(calc_result, ToolResult)
     assert calc_result.is_error is False
     assert calc_result.content == 12
 
     # Test asynchronous function
-    async_handler = prepare_tool_handler(fetch_data)
+    async_handler = create_handler_from_function(fetch_data)
     async_result = await async_handler(url="https://example.com")
     assert isinstance(async_result, ToolResult)
     assert async_result.is_error is False
@@ -257,10 +260,11 @@ async def test_prepare_tool_handler():
     assert "Missing required parameter" in error_result.content
 
 
-def test_create_tool_from_function():
-    """Test creating a complete tool from a function."""
-    # Create a tool from the search function
-    handler, schema = create_tool_from_function(search_documents)
+def test_create_schema_from_callable():
+    """Test creating a schema from a prepared callable."""
+    # Create a handler then generate its schema
+    handler = create_handler_from_function(search_documents)
+    schema = create_schema_from_callable(handler)
 
     # Check the schema
     assert schema["name"] == "search_documents"
@@ -288,27 +292,25 @@ def test_program_with_function_tools():
     # Set enabled tools with function tools
     program.register_tools([get_calculator, search_documents])
 
-    # Check that tools were added to the function_tools list in the tool_manager
-    assert len(program.tool_manager.function_tools) == 2
+    from llmproc.tools.tool_manager import ToolManager
 
-    # Verify the tools are the ones we specified
-    function_tools = program.tool_manager.function_tools
-    assert any(func is get_calculator for func in function_tools)
-    assert any(func is search_documents for func in function_tools)
+    tm = ToolManager()
+    asyncio.run(tm.register_tools(program.tools, {}))
+    registered = tm.runtime_registry.get_tool_names()
+    assert "get_calculator" in registered
+    assert "search_documents" in registered
 
-    # Function tools are processed when the process is started
-
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
+    # Initialize tools by starting a sync process
+    process = program.start_sync()
 
     # Verify tools appear in the API-ready schema
-    tool_schemas = program.tool_manager.get_tool_schemas()
+    tool_schemas = process.tool_manager.get_tool_schemas()
     tool_names = [schema["name"] for schema in tool_schemas]
     assert "get_calculator" in tool_names
     assert "search_documents" in tool_names
 
     # Verify tools are registered (using the proper method for single source of truth)
-    registered_tools = program.get_registered_tools()
+    registered_tools = process.tool_manager.registered_tools
     assert "get_calculator" in registered_tools
     assert "search_documents" in registered_tools
 
@@ -331,19 +333,20 @@ async def test_tool_enabling_methods(basic_program):
     # Set directly with function references
     program.register_tools([get_weather, get_calculator, search_documents])
 
-    # Verify expected tools are in the function_tools list (converted from callables)
-    function_names = [func.__name__ for func in program.tool_manager.function_tools]
+    from llmproc.tools.tool_manager import ToolManager
 
-    # The decorated function get_weather is renamed to "weather_info" but its __name__ is still "get_weather"
-    assert "get_weather" in function_names
-    assert "get_calculator" in function_names
-    assert "search_documents" in function_names
+    tm = ToolManager()
+    await tm.register_tools(program.tools, {})
+    registered = tm.runtime_registry.get_tool_names()
+    assert "weather_info" in registered
+    assert "get_calculator" in registered
+    assert "search_documents" in registered
 
-    # Process function tools to register handlers and schemas
-    program.tool_manager.process_function_tools()
+    # Initialize tools by starting the async process
+    process = await program.start()
 
     # Verify custom name from decorator works
-    tool_schemas = program.tool_manager.get_tool_schemas()
+    tool_schemas = process.tool_manager.get_tool_schemas()
     has_weather_tool = any(schema["name"] == "weather_info" for schema in tool_schemas)
     assert has_weather_tool
 
@@ -370,11 +373,12 @@ async def test_tool_enabling_methods(basic_program):
     assert weather_schema is not None
     assert "Get weather information" in weather_schema["description"]
 
-    # Create a process to test actual tool execution
-    process = await program.start()
+    # We already have a process; use it to test execution
 
     # Check if the tool is registered as expected
-    assert "weather_info" in process.tool_handlers, "weather_info tool is not registered in handlers"
+    assert "weather_info" in process.tool_manager.runtime_registry.get_tool_names(), (
+        "weather_info tool is not registered"
+    )
 
     # Test weather tool with explicit parameters
     weather_result = await process.call_tool("weather_info", {"location": "New York"})
@@ -403,27 +407,14 @@ async def test_register_tools_with_function_tools(basic_program, create_program)
     # Register function tools
     program.register_tools([get_weather, get_calculator])
 
-    # Process function tools to register them in the registry
-    program.tool_manager.process_function_tools()
 
-    # Verify function tools are registered in function_tools list
-    # Function tools are processed during program.compile(), so we need to
-    # match the weather_info tool name against the metadata
-    tool_names = []
-    for func in program.tool_manager.function_tools:
-        from llmproc.common.metadata import get_tool_meta
+    from llmproc.tools.tool_manager import ToolManager
 
-        meta = get_tool_meta(func)
-        if meta.name:
-            tool_names.append(meta.name)
-        else:
-            tool_names.append(func.__name__)
-
-    # Make sure 'weather_info' is present in the list of tool names
-    assert "weather_info" in tool_names
-    # Check the actual function name is also present as a fallback
-    function_names = [func.__name__ for func in program.tool_manager.function_tools]
-    assert "get_calculator" in function_names
+    tm = ToolManager()
+    await tm.register_tools(program.tools, {})
+    registered = tm.runtime_registry.get_tool_names()
+    assert "weather_info" in registered
+    assert "get_calculator" in registered
 
     # Start the process to test actual tool execution
     process = await program.start()
@@ -435,14 +426,29 @@ async def test_register_tools_with_function_tools(basic_program, create_program)
 
     # Create a new program without adding function tools first
     program2 = create_program()
+    from llmproc.tools.builtin import calculator, read_file
+    from llmproc.common.metadata import get_tool_meta
+    get_tool_meta(calculator).name = None
+    get_tool_meta(read_file).name = None
 
     # Register specific tools using function references
     from llmproc.tools.builtin import calculator, read_file
 
     program2.register_tools([calculator, read_file])
+    from llmproc.tools.tool_manager import ToolManager
 
-    # Process the tools to register them
-    program2.tool_manager.process_function_tools()
+    tm2 = ToolManager()
+    await tm2.register_tools(
+        program2.tools,
+        {
+            "fd_manager": None,
+            "linked_programs": {},
+            "linked_program_descriptions": {},
+            "has_linked_programs": False,
+            "provider": "test",
+            "mcp_enabled": False,
+        },
+    )
 
     # Verify that built-in tools are registered in configuration
     registered_tools = program2.get_registered_tools()

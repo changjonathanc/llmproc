@@ -184,7 +184,7 @@ def test_reasoning_model_validation():
             model=ModelConfig(name="o3-mini", provider="openai"),
             parameters={"reasoning_effort": effort},
         )
-        assert config.parameters["reasoning_effort"] == effort
+        assert config.parameters.reasoning_effort == effort
 
     # Test conflicting max_tokens and max_completion_tokens
     with pytest.raises(ValueError) as excinfo:

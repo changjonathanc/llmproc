@@ -34,7 +34,7 @@ async def run_program_with_prompt(program_path, test_prompt="Hi"):
     """
     try:
         # Load and start the program
-        program = LLMProgram.from_toml(program_path, include_linked=False)
+        program = LLMProgram.from_yaml(program_path, include_linked=False)
         process = await program.start()
 
         # Run the process with the minimal test prompt
@@ -56,17 +56,17 @@ async def test_all_feature_programs():
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    # Get all TOML files from the features directory using the constant
-    toml_files = []
+    # Get all YAML files from the features directory using the constant
+    yaml_files = []
     for root, _, files in os.walk(FEATURES_DIR):
         for file in files:
-            if file.endswith(".toml"):
-                toml_files.append(Path(root) / file)
+            if file.endswith(".yaml"):
+                yaml_files.append(Path(root) / file)
 
     # Skip only files that absolutely cannot work in a test environment
     skip_files = [
         # Skip files that require registry configuration
-        "mcp.toml",  # Requires MCP registry integration and external dependencies
+        "mcp.yaml",  # Requires MCP registry integration and external dependencies
     ]
 
     # Track results
@@ -74,37 +74,37 @@ async def test_all_feature_programs():
     failed = []
 
     # Try each program
-    for toml_file in toml_files:
+    for yaml_file in yaml_files:
         # Skip files known to cause issues
-        if toml_file.name in skip_files:
-            print(f"Skipping {toml_file.name} (in skip list)")
+        if yaml_file.name in skip_files:
+            print(f"Skipping {yaml_file.name} (in skip list)")
             continue
 
-        print(f"Testing {toml_file}...", end=" ")
+        print(f"Testing {yaml_file}...", end=" ")
         sys.stdout.flush()
 
         # Run with a simple test prompt
-        success, response = await run_program_with_prompt(toml_file)
+        success, response = await run_program_with_prompt(yaml_file)
 
         if success:
             print("SUCCESS")
-            successful.append(toml_file)
+            successful.append(yaml_file)
             # Print the first 80 characters of the response
             print(f"  Response: {response[:80]}...")
         else:
             print("FAILED")
-            failed.append((toml_file, response))
+            failed.append((yaml_file, response))
             print(f"  Error: {response}")
 
     # Report results
-    print(f"\nSuccessfully ran {len(successful)} out of {len(toml_files)} files")
+    print(f"\nSuccessfully ran {len(successful)} out of {len(yaml_files)} files")
 
     # If any failed, report them
     if failed:
         for file, error in failed:
             print(f"Failed to run {file}: {error}")
 
-        pytest.fail(f"Failed to run {len(failed)} out of {len(toml_files)} files")
+        pytest.fail(f"Failed to run {len(failed)} out of {len(yaml_files)} files")
 
 
 if __name__ == "__main__":

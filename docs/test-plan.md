@@ -6,7 +6,7 @@ This document outlines additional tests needed to improve coverage and robustnes
 
 ### 1. CLI Interface Testing
 
-**Current Gap**: The CLI interface (`llmproc/src/llmproc/cli.py`) lacks comprehensive testing beyond basic echo tests.
+**Current Gap**: The CLI interface (`llmproc/src/llmproc/cli/run.py`) lacks comprehensive testing beyond basic echo tests.
 
 **Tests to Implement:**
 
@@ -53,7 +53,7 @@ def test_cli_reset_command():
 
         runner = CliRunner()
         # Simulate user entering "reset" then "exit"
-        result = runner.invoke(main, ["examples/openai/gpt-4o-mini.toml"],
+        result = runner.invoke(main, ["examples/openai/gpt-4o-mini.yaml"],
                               input="Hello\nreset\nexit\n")
 
         assert "Conversation state has been reset" in result.output
@@ -92,10 +92,15 @@ async def test_api_error_recovery():
             mock_response  # Second call succeeds
         ]
 
+        from llmproc.config import ProcessConfig
+
         process = LLMProcess(
-            model_name="gpt-4o-mini",
-            provider="openai",
-            system_prompt="Test assistant"
+            ProcessConfig(
+                program=MagicMock(),
+                model_name="gpt-4o-mini",
+                provider="openai",
+                system_prompt="Test assistant",
+            )
         )
 
         # Should retry and recover
@@ -122,8 +127,8 @@ async def test_api_error_recovery():
 async def test_concurrent_processes():
     """Test multiple processes running concurrently."""
     # Create multiple process instances with different programs
-    program1 = LLMProgram.from_toml("examples/openai/gpt-4o-mini.toml")
-    program2 = LLMProgram.from_toml("examples/anthropic/claude-3-5-haiku.toml")
+    program1 = LLMProgram.from_yaml("examples/openai/gpt-4o-mini.yaml")
+    program2 = LLMProgram.from_yaml("examples/anthropic/claude-3-5-haiku.yaml")
 
     # Start the processes
     process1 = await program1.start()
@@ -166,7 +171,7 @@ async def test_concurrent_processes():
 @pytest.mark.asyncio
 async def test_long_conversation():
     """Test a conversation with many turns."""
-    program = LLMProgram.from_toml("examples/openai/gpt-4o-mini.toml")
+    program = LLMProgram.from_yaml("examples/openai/gpt-4o-mini.yaml")
     process = await program.start()
 
     # Mock API responses
@@ -214,11 +219,16 @@ async def test_tool_error_handling():
     with patch.object(MCPAggregator, 'call_tool') as mock_call_tool:
         mock_call_tool.side_effect = failing_tool
 
+        from llmproc.config import ProcessConfig
+
         process = LLMProcess(
-            model_name="claude-3-haiku-20240307",
-            provider="anthropic",
-            system_prompt="Test assistant",
-            mcp_tools={"test_server": ["test_tool"]}
+            ProcessConfig(
+                program=MagicMock(),
+                model_name="claude-3-haiku-20240307",
+                provider="anthropic",
+                system_prompt="Test assistant",
+                mcp_tools={"test_server": ["test_tool"]},
+            )
         )
 
         # Should handle tool error gracefully
@@ -259,11 +269,16 @@ def test_provider_parameter_handling(provider):
             "top_p": 0.95
         }
 
+        from llmproc.config import ProcessConfig
+
         process = LLMProcess(
-            model_name="test-model",
-            provider=provider,
-            system_prompt="Test system prompt",
-            parameters=params
+            ProcessConfig(
+                program=MagicMock(),
+                model_name="test-model",
+                provider=provider,
+                system_prompt="Test system prompt",
+                parameters=params,
+            )
         )
 
         # Verify parameters correctly mapped to provider-specific format
@@ -365,12 +380,17 @@ def test_memory_usage():
 
     # Create 10 instances with different configurations
     processes = []
+    from llmproc.config import ProcessConfig
+
     for i in range(10):
         process = LLMProcess(
-            model_name=f"test-model-{i}",
-            provider="openai",
-            system_prompt=f"Test system prompt {i}" * 10,  # Larger prompt
-            parameters={"temperature": 0.5 + (i * 0.05)}
+            ProcessConfig(
+                program=MagicMock(),
+                model_name=f"test-model-{i}",
+                provider="openai",
+                system_prompt=f"Test system prompt {i}" * 10,  # Larger prompt
+                parameters={"temperature": 0.5 + (i * 0.05)},
+            )
         )
         processes.append(process)
 

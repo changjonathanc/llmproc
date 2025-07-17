@@ -1,9 +1,9 @@
 """Simple read_file tool for demonstration purposes."""
 
 import logging
+import mimetypes
 import os
 from pathlib import Path
-from typing import Any
 
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
@@ -42,7 +42,14 @@ async def read_file(file_path: str) -> str:
             logger.error(error_msg)
             return ToolResult.from_error(error_msg)
 
-        # Read the file
+        # Check MIME type using file extension metadata
+        mime_type, _ = mimetypes.guess_type(str(path))
+        if mime_type is None or not mime_type.startswith("text"):
+            error_msg = f"Unsupported file type: {mime_type or 'unknown'}. Only plain text files can be read."
+            logger.error(error_msg)
+            return ToolResult.from_error(error_msg)
+
+        # Read the file as text
         content = path.read_text()
 
         # Return the content

@@ -1,11 +1,11 @@
 """Tests for Gemini token counting functionality."""
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from llmproc.program import LLMProgram
-from llmproc.providers.constants import PROVIDER_GEMINI, PROVIDER_GEMINI_VERTEX
+from llmproc.providers.constants import PROVIDER_GEMINI
 
 
 @pytest.mark.llm_api
@@ -79,8 +79,8 @@ async def test_gemini_token_counting_api_parsing():
 
             # Mock token count response
             mock_token_response = MagicMock()
-            mock_token_response.total_tokens = this_will_be_the_token_count = 42
-            mock_token_response.cached_content_token_count = this_will_be_cached_count = 10
+            mock_token_response.total_tokens = 42
+            mock_token_response.cached_content_token_count = 10
 
             # Set the return value for count_tokens
             self.client.models.count_tokens.return_value = mock_token_response
@@ -102,7 +102,7 @@ async def test_gemini_token_counting_api_parsing():
 
     # Verify the count_tokens method was called with the correct model
     mock_process.client.models.count_tokens.assert_called_once()
-    args, kwargs = mock_process.client.models.count_tokens.call_args
+    kwargs = mock_process.client.models.count_tokens.call_args.kwargs
     assert kwargs.get("model") == "gemini-2.0-flash"
 
 

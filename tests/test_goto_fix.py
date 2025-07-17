@@ -9,10 +9,10 @@ import logging
 import time
 
 import pytest
-from llmproc.common.constants import LLMPROC_MSG_ID
+
 from llmproc.common.results import ToolResult
+from llmproc.plugins.message_id import MessageIDPlugin
 from llmproc.program import LLMProgram
-from llmproc.tools.builtin import handle_goto
 
 # Set up logging
 logging.basicConfig(
@@ -27,6 +27,8 @@ logger = logging.getLogger("test_goto_fix")
 async def goto_process():
     """Create an LLM process with GOTO tool enabled."""
     # Create the program with direct parameters instead of loading from TOML
+    from llmproc.config.schema import MessageIDPluginConfig
+
     program = LLMProgram(
         model_name="claude-3-7-sonnet-20250219",
         provider="anthropic",
@@ -36,7 +38,9 @@ async def goto_process():
             "max_tokens": 1000,
         },
     )
-    program.register_tools([handle_goto])
+    # Use plugin to provide goto tool
+    message_id_plugin = MessageIDPlugin(MessageIDPluginConfig(enable_goto=True))
+    program.add_plugins(message_id_plugin)
     process = await program.start()
     yield process
 
@@ -44,35 +48,23 @@ async def goto_process():
 @pytest.fixture
 def goto_tracker():
     """Create a tracker for GOTO tool usage."""
-    from llmproc.callbacks import CallbackEvent
+    from llmproc.plugin.events import CallbackEvent
 
     class GotoTracker:
         def __init__(self):
             self.goto_used = False
-            self.goto_position = None
-            self.goto_message = None
             self.tool_calls = []
-            self.goto_count = 0
-            self.single_run_count = 0  # Count per user message
 
-        def tool_start(self, tool_name, tool_args):
+        def tool_start(self, tool_name, tool_args, *, process):
             """Record when the GOTO tool is called."""
             self.tool_calls.append({"tool": tool_name, "args": tool_args, "status": "started"})
 
             if tool_name == "goto":
                 self.goto_used = True
-                self.goto_position = tool_args.get("position")
-                self.goto_message = tool_args.get("message")
-                self.goto_count += 1
-                self.single_run_count += 1
 
-        def tool_end(self, tool_name, result):
+        def tool_end(self, tool_name, result, *, process):
             """Record when the GOTO tool completes."""
             self.tool_calls.append({"tool": tool_name, "result": result, "status": "completed"})
-
-        def reset_for_new_message(self):
-            """Reset single run counter for a new user message."""
-            self.single_run_count = 0
 
     return GotoTracker()
 
@@ -92,8 +84,8 @@ async def test_goto_basic_functionality_fixed(goto_process, goto_tracker):
     process = goto_process
     tracker = goto_tracker
 
-    # Register the tracker callback
-    process.add_callback(tracker)
+    # Register the tracker plugin
+    process.add_plugins(tracker)
 
     # Step 1: Ask a simple question to establish beginning state
     await process.run("What is your name?")
@@ -103,8 +95,7 @@ async def test_goto_basic_functionality_fixed(goto_process, goto_tracker):
     logger.debug(f"After question 1 - State length: {initial_state_length}")
     for i, msg in enumerate(process.state):
         role = msg.get("role", "unknown")
-        msg_id = msg.get(LLMPROC_MSG_ID, "no-msg-id")
-        logger.debug(f"Message {i}: Role={role}, ID={msg_id}")
+        logger.debug(f"Message {i}: Role={role}")
 
     # Verify no GOTO use yet
     assert not tracker.goto_used, "GOTO should not be used for initial question"
@@ -117,8 +108,7 @@ async def test_goto_basic_functionality_fixed(goto_process, goto_tracker):
     logger.debug(f"After question 2 - State length: {mid_state_length}")
     for i, msg in enumerate(process.state):
         role = msg.get("role", "unknown")
-        msg_id = msg.get(LLMPROC_MSG_ID, "no-msg-id")
-        logger.debug(f"Message {i}: Role={role}, ID={msg_id}")
+        logger.debug(f"Message {i}: Role={role}")
 
     # Verify still no GOTO use and state is larger
     assert not tracker.goto_used, "GOTO should not be used for second question"
@@ -136,8 +126,7 @@ async def test_goto_basic_functionality_fixed(goto_process, goto_tracker):
     logger.debug(f"After GOTO - State length: {post_goto_state_length}")
     for i, msg in enumerate(process.state):
         role = msg.get("role", "unknown")
-        msg_id = msg.get(LLMPROC_MSG_ID, "no-msg-id")
-        logger.debug(f"Message {i}: Role={role}, ID={msg_id}")
+        logger.debug(f"Message {i}: Role={role}")
 
     # Verify GOTO was used
     assert tracker.goto_used, "GOTO tool should be used when explicitly requested"

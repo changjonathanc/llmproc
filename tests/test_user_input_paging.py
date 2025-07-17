@@ -4,11 +4,11 @@ import re
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from llmproc.common.results import RunResult, ToolResult
-from llmproc.file_descriptors import FileDescriptorManager
-from llmproc.llm_process import LLMProcess
-from llmproc.program import LLMProgram
 
+from llmproc.common.results import RunResult, ToolResult
+from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorManager, FileDescriptorPlugin
+from llmproc.program import LLMProgram
 from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
@@ -163,23 +163,23 @@ async def test_llm_process_user_input_paging(mock_get_provider_client):
     program.provider = "anthropic"
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"
-    program.display_name = "display"
     program.base_dir = None
     program.api_params = {}
-    program.get_enriched_system_prompt = Mock(return_value="enriched")
 
     # Create a process
     process = create_test_llmprocess_directly(program=program)
 
     # Enable file descriptors and user input paging
-    process.file_descriptor_enabled = True
+    process.get_plugin(FileDescriptorPlugin)
     process.page_user_input = True
-    process.fd_manager = FileDescriptorManager(max_input_chars=1000, page_user_input=True)
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager(
+        max_input_chars=1000, page_user_input=True
+    )
 
     # Since run is an async method, we need to properly mock it
     async def mock_async_run(user_input):
         # Call the real handle_user_input to see if it pages correctly
-        paged_input = process.fd_manager.handle_user_input(user_input)
+        paged_input = process.get_plugin(FileDescriptorPlugin).fd_manager.handle_user_input(user_input)
         return mock_response
 
     # Replace the run method with our async mock
@@ -192,7 +192,7 @@ async def test_llm_process_user_input_paging(mock_get_provider_client):
     result = await process.run(large_input)
 
     # Process the input directly to verify paging worked
-    paged_input = process.fd_manager.handle_user_input(large_input)
+    paged_input = process.get_plugin(FileDescriptorPlugin).fd_manager.handle_user_input(large_input)
 
     # Verify the input was paged
     assert "<fd:" in paged_input
@@ -208,8 +208,10 @@ async def test_llm_process_user_input_paging(mock_get_provider_client):
         fd_id = fd_id[3:]  # Remove the first "fd:"
 
     # Verify FD was created
-    assert fd_id in process.fd_manager.file_descriptors
-    assert len(process.fd_manager.file_descriptors[fd_id]["content"]) >= 1900  # Account for possible line breaks
+    assert fd_id in process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
+    assert (
+        len(process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors[fd_id]["content"]) >= 1900
+    )  # Account for possible line breaks
 
 
 @pytest.mark.asyncio
@@ -225,18 +227,18 @@ async def test_read_paged_user_input(mock_get_provider_client):
     program.provider = "anthropic"
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"
-    program.display_name = "display"
     program.base_dir = None
     program.api_params = {}
-    program.get_enriched_system_prompt = Mock(return_value="enriched")
 
     # Create a process
     process = create_test_llmprocess_directly(program=program)
 
     # Enable file descriptors and user input paging
-    process.file_descriptor_enabled = True
+    process.get_plugin(FileDescriptorPlugin)
     process.page_user_input = True
-    process.fd_manager = FileDescriptorManager(max_input_chars=1000, page_user_input=True)
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager(
+        max_input_chars=1000, page_user_input=True
+    )
 
     # Create a large structured user input
     large_input = """
@@ -256,7 +258,7 @@ async def test_read_paged_user_input(mock_get_provider_client):
     large_input += "A" * 1500
 
     # Process the user input
-    paged_input = process.fd_manager.handle_user_input(large_input)
+    paged_input = process.get_plugin(FileDescriptorPlugin).fd_manager.handle_user_input(large_input)
 
     # Extract the FD ID
     fd_match = re.search(r"<fd:(.*?) ", paged_input)
@@ -267,10 +269,9 @@ async def test_read_paged_user_input(mock_get_provider_client):
     if fd_id.startswith("fd:fd:"):
         fd_id = fd_id[3:]  # Remove the first "fd:"
 
-    # Use read_fd tool to read the entire content
-    from llmproc.tools.builtin.fd_tools import read_fd_tool
-
-    full_result = await read_fd_tool(fd=fd_id, read_all=True, runtime_context={"fd_manager": process.fd_manager})
+    # Use read_fd tool via the plugin to read the entire content
+    plugin = process.get_plugin(FileDescriptorPlugin)
+    full_result = await plugin.read_fd_tool(fd=fd_id, read_all=True)
 
     # Verify full content was returned
     assert not full_result.is_error
@@ -296,12 +297,11 @@ async def test_read_paged_user_input(mock_get_provider_client):
     assert section3_line > 0
 
     # Read just Section 2 content
-    section_result = await read_fd_tool(
+    section_result = await plugin.read_fd_tool(
         fd=fd_id,
         mode="line",
         start=section2_line,
         count=section3_line - section2_line,
-        runtime_context={"fd_manager": process.fd_manager},
     )
 
     # Verify Section 2 was returned without other sections
@@ -312,13 +312,12 @@ async def test_read_paged_user_input(mock_get_provider_client):
     assert "## Section 3" not in section_result.content
 
     # Extract Section 2 to a new file descriptor
-    extraction_result = await read_fd_tool(
+    extraction_result = await plugin.read_fd_tool(
         fd=fd_id,
         mode="line",
         start=section2_line,
         count=section3_line - section2_line,
         extract_to_new_fd=True,
-        runtime_context={"fd_manager": process.fd_manager},
     )
 
     # Verify extraction result
@@ -331,7 +330,7 @@ async def test_read_paged_user_input(mock_get_provider_client):
     new_fd_id = new_fd_match.group(1)
 
     # Read from the new FD to verify content
-    new_fd_result = await read_fd_tool(fd=new_fd_id, read_all=True, runtime_context={"fd_manager": process.fd_manager})
+    new_fd_result = await plugin.read_fd_tool(fd=new_fd_id, read_all=True)
 
     # Verify new FD content
     assert not new_fd_result.is_error

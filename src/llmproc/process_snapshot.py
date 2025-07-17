@@ -22,4 +22,3 @@ class ProcessSnapshot:
 
     state: list[Any] = field(default_factory=list)
     enriched_system_prompt: str | None = None
-    fd_manager_state: dict | None = None

@@ -12,6 +12,7 @@ These fixtures help standardize test setup and make tests more consistent.
 """
 
 import pytest
+import asyncio
 
 
 def test_base_program_fixture(base_program):
@@ -26,10 +27,18 @@ def test_base_program_fixture(base_program):
 def test_program_with_tools_fixture(program_with_tools):
     """Test the program_with_tools fixture configures tools correctly."""
     assert program_with_tools is not None
-    # Compile program to register tools
-    program_with_tools.compile()
-    assert "calculator" in program_with_tools.tool_manager.get_registered_tools()
-    assert "read_file" in program_with_tools.tool_manager.get_registered_tools()
+    # Initialize tools
+    config = {
+        "fd_manager": None,
+        "provider": "test",
+        "mcp_enabled": False,
+    }
+    from llmproc.tools.tool_manager import ToolManager
+
+    tm = ToolManager()
+    asyncio.run(tm.register_tools(program_with_tools.tools, config))
+    assert "calculator" in tm.registered_tools
+    assert "read_file" in tm.registered_tools
     assert program_with_tools.model_name == "test-fixture-model"
 
 

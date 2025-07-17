@@ -24,19 +24,18 @@ class ToolMeta:
     # Descriptive -----------------------------------------------------------
     name: str | None = None
     description: str | None = None
-    long_description: str | None = None
     param_descriptions: dict[str, str] | None = None
     required_params: tuple[str, ...] = ()
     custom_schema: dict[str, Any] | None = None
+    # Raw schema from external sources (e.g., MCP servers)
+    raw_schema: dict[str, Any] | None = None
 
     # Behavioural -----------------------------------------------------------
     access: AccessLevel = AccessLevel.WRITE
     requires_context: bool = False
-    required_context_keys: tuple[str, ...] = ()
 
     # Extensibility / callbacks --------------------------------------------
     schema_modifier: Callable[[dict, dict], dict] | None = None
-    on_register: Callable[[str, Any], None] | None = None
 
 
 def attach_meta(func: Callable, meta: ToolMeta) -> None:

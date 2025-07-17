@@ -10,6 +10,7 @@ The fluent API allows for method chaining to create and configure LLM programs:
 
 ```python
 from llmproc import LLMProgram
+from llmproc.plugins.preload_files import PreloadFilesPlugin
 
 program = (
     LLMProgram(
@@ -19,7 +20,7 @@ program = (
         parameters={"max_tokens": 1024}  # Required parameter
     )
     .register_tools([calculator, my_tool_function])  # Enable tools using function references
-    .add_preload_file("context.txt")
+    .add_plugins(PreloadFilesPlugin(["context.txt"]))
     .add_linked_program("expert", expert_program, "An expert program")
 )
 
@@ -50,11 +51,12 @@ All configuration methods return `self` to allow for method chaining:
 # Configure a program with method chaining
 program = (
     LLMProgram(...)
-    .add_preload_file("file1.md")
-    .add_preload_file("file2.md")
+    .add_plugins(
+        PreloadFilesPlugin(["file1.md", "file2.md"]),
+        EnvInfoPlugin(EnvInfoConfig(variables=["working_directory", "platform", "date"])),
+        FileDescriptorPlugin(FileDescriptorPluginConfig(max_direct_output_chars=10000)),
+    )
     .register_tools([calculator, "read_file", another_function])  # Accepts both strings and callables
-    .configure_env_info(["working_directory", "platform", "date"])
-    .configure_file_descriptor(max_direct_output_chars=10000)
     .configure_thinking(budget_tokens=8192)
 )
 ```
@@ -142,47 +144,41 @@ This is useful for:
 
 ### Environment Information
 
-Configure which environment variables are included in the system prompt:
+Configure which environment variables are included in the system prompt by registering
+the :class:`EnvInfoPlugin`:
 
 ```python
-# Include specific environment variables
-program.configure_env_info(["working_directory", "platform", "date"])
+from llmproc.plugins import EnvInfoPlugin
+from llmproc.config import EnvInfoConfig
 
-# Include all standard environment variables
-program.configure_env_info("all")
-
-# Explicitly disable environment information
-program.configure_env_info([])
-
-# Append additional info from environment variables
-program.configure_env_info(env_vars={"region": "MY_ENV_INFO"})
+program.add_plugins(
+    EnvInfoPlugin(EnvInfoConfig(variables=["working_directory", "platform", "date"]))
+)
 ```
 
-```python
-# Include a directory file map
-program.configure_env_info(["file_map"])
-program.env_info["file_map_root"] = "src"
-program.env_info["file_map_max_files"] = 5
-program.env_info["file_map_show_size"] = False
-```
 
 ### File Descriptor System
 
-Configure the file descriptor system for handling large outputs:
+Configure the file descriptor system for handling large outputs by registering
+the :class:`FileDescriptorPlugin`:
 
 ```python
+from llmproc.plugins import FileDescriptorPlugin
+from llmproc.config.schema import FileDescriptorPluginConfig
+
 # Enable with default settings
-program.configure_file_descriptor()
+program.add_plugins(FileDescriptorPlugin(FileDescriptorPluginConfig()))
 
 # Configure with custom settings
-program.configure_file_descriptor(
-    max_direct_output_chars=10000,
-    default_page_size=5000,
-    enable_references=True
+program.add_plugins(
+    FileDescriptorPlugin(
+        FileDescriptorPluginConfig(
+            max_direct_output_chars=10000,
+            default_page_size=5000,
+            enable_references=True,
+        )
+    )
 )
-
-# Disable file descriptor system
-program.configure_file_descriptor(enabled=False)
 ```
 
 ### Claude 3.7 Thinking Models
@@ -230,19 +226,26 @@ program.configure_mcp(servers={"calc": {"type": "stdio", "command": "echo"}})
 
 In your TOML configuration files, MCP server configuration is defined in the `[mcp]` section, and MCP tools are defined in the `[tools.mcp]` section:
 
-```toml
-[mcp]
-config_path = "config/mcp_servers.json"  # or use inline servers
-#servers = { calc = { type = "stdio", command = "echo", args = ["calc"] } }
+```yaml
+mcp:
+  config_path: "config/mcp_servers.json"  # or use inline servers
+  #servers:
+  #  calc:
+  #    type: stdio
+  #    command: echo
+  #    args: ["calc"]
 
 # MCP tools configuration
-[tools.mcp]
-sequential-thinking = "all"  # Use all tools from this server
-github = ["search_repositories", "get_file_contents"]  # Specific tools
-# Example with description override
-#github = [
-#    { name = "search_repositories", access = "read", description = "Search GitHub" }
-#]
+tools:
+  mcp:
+    sequential-thinking: "all"  # Use all tools from this server
+    github:
+      - search_repositories
+      - get_file_contents  # Specific tools
+    # Example with description override
+    # - name: search_repositories
+    #   access: read
+    #   description: Search GitHub
 ```
 
 #### Registering MCP Tools
@@ -345,11 +348,11 @@ from llmproc.tools.builtin import calculator, read_file
 program.register_tools([calculator, "read_file", my_custom_tool])
 
 # Get a list of all registered tool names
-registered_tools = program.get_registered_tools()
+registered_tools = program.registered_tools
 print(f"Currently registered tools: {registered_tools}")
 ```
 
-The `get_registered_tools()` method returns the string names of all registered tools.
+The `registered_tools` property returns the string names of all registered tools.
 
 ---
 [← Back to Documentation Index](index.md)

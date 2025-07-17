@@ -2,12 +2,9 @@
 """Tests for the CLI module."""
 
 import json
-import os
-import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from llmproc.cli.demo import main
@@ -23,7 +20,6 @@ def test_interactive_cli_session():
     # Mocks and patches
     mock_process = MagicMock()
     mock_program = MagicMock()
-    mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
     mock_process.tools = []
     mock_process.enriched_system_prompt = ""
@@ -36,7 +32,7 @@ def test_interactive_cli_session():
 
     # Configure RunResult mock for run (new API)
     run_result = MagicMock()
-    run_result.api_calls = 1
+    run_result.api_call_count = 1
     mock_process.run.return_value = run_result
 
     # Patch various functions and classes to avoid actual API calls
@@ -46,7 +42,7 @@ def test_interactive_cli_session():
         patch("llmproc.cli.demo.Path.suffix", new_callable=PropertyMock) as mock_suffix,
         patch("llmproc.cli.demo.Path.absolute") as mock_absolute,
         patch("click.prompt") as mock_prompt,
-        patch("llmproc.cli.demo.sys.exit") as mock_exit,
+        patch("llmproc.cli.demo.sys.exit"),
     ):
         # Set up the mocks
         mock_llm_program.from_file.return_value = mock_program
@@ -58,7 +54,7 @@ def test_interactive_cli_session():
         # Create a temporary example file
         with runner.isolated_filesystem():
             Path("test.toml").write_text("[model]\nname='test'\nprovider='x'")
-            result = runner.invoke(main, ["test.toml"])
+            runner.invoke(main, ["test.toml"])
 
         # Verify that the code ran as expected
         assert mock_llm_program.from_file.called
@@ -73,7 +69,6 @@ def test_cli_prompt_option():
     # Mocks and patches
     mock_process = MagicMock()
     mock_program = MagicMock()
-    mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
     mock_process.tools = []
     mock_process.enriched_system_prompt = ""
@@ -85,7 +80,7 @@ def test_cli_prompt_option():
 
     # Configure RunResult mock for run (new API)
     run_result = MagicMock()
-    run_result.api_calls = 1
+    run_result.api_call_count = 1
     mock_process.run = AsyncMock(return_value=run_result)
 
     # Patch various functions and classes to avoid actual API calls
@@ -94,8 +89,8 @@ def test_cli_prompt_option():
         patch("llmproc.cli.run.Path.exists") as mock_exists,
         patch("llmproc.cli.run.Path.suffix", new_callable=PropertyMock) as mock_suffix,
         patch("llmproc.cli.run.Path.absolute") as mock_absolute,
-        patch("llmproc.cli.run.click.echo") as mock_echo,
-        patch("llmproc.cli.run.sys.exit") as mock_exit,
+        patch("llmproc.cli.run.click.echo"),
+        patch("llmproc.cli.run.sys.exit"),
     ):
         # Set up the mocks
         mock_llm_program.from_file.return_value = mock_program
@@ -106,7 +101,7 @@ def test_cli_prompt_option():
         # Create a temporary example file
         with runner.isolated_filesystem():
             Path("test.toml").write_text("[model]\nname='test'\nprovider='x'")
-            result = runner.invoke(run_main, ["test.toml", "--prompt", "Hello world"])
+            runner.invoke(run_main, ["test.toml", "--prompt", "Hello world"])
 
         # Verify that the code ran as expected
         assert mock_llm_program.from_file.called
@@ -120,7 +115,6 @@ def test_cli_prompt_file_option():
 
     mock_process = MagicMock()
     mock_program = MagicMock()
-    mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
     mock_process.tools = []
     mock_process.enriched_system_prompt = ""
@@ -130,7 +124,7 @@ def test_cli_prompt_file_option():
     mock_program.start = AsyncMock(return_value=mock_process)
 
     run_result = MagicMock()
-    run_result.api_calls = 1
+    run_result.api_call_count = 1
     mock_process.run = AsyncMock(return_value=run_result)
 
     with (
@@ -138,8 +132,8 @@ def test_cli_prompt_file_option():
         patch("llmproc.cli.run.Path.exists") as mock_exists,
         patch("llmproc.cli.run.Path.suffix", new_callable=PropertyMock) as mock_suffix,
         patch("llmproc.cli.run.Path.absolute") as mock_absolute,
-        patch("llmproc.cli.run.click.echo") as mock_echo,
-        patch("llmproc.cli.run.sys.exit") as mock_exit,
+        patch("llmproc.cli.run.click.echo"),
+        patch("llmproc.cli.run.sys.exit"),
     ):
         mock_llm_program.from_file.return_value = mock_program
         mock_exists.return_value = True
@@ -149,7 +143,7 @@ def test_cli_prompt_file_option():
         with runner.isolated_filesystem():
             Path("test.toml").write_text("[model]\nname='test'\nprovider='x'")
             Path("prompt.txt").write_text("Hello from file")
-            result = runner.invoke(
+            runner.invoke(
                 run_main,
                 ["test.toml", "--prompt-file", "prompt.txt"],
             )
@@ -166,7 +160,6 @@ def test_cli_stdin_input_non_interactive():
     # Mocks and patches
     mock_process = MagicMock()
     mock_program = MagicMock()
-    mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
 
     mock_process.tools = []
@@ -178,7 +171,7 @@ def test_cli_stdin_input_non_interactive():
 
     # Configure RunResult mock for run (new API)
     run_result = MagicMock()
-    run_result.api_calls = 1
+    run_result.api_call_count = 1
     mock_process.run = AsyncMock(return_value=run_result)
 
     # Patch various functions and classes to avoid actual API calls
@@ -188,8 +181,8 @@ def test_cli_stdin_input_non_interactive():
         patch("llmproc.cli.run.Path.suffix", new_callable=PropertyMock) as mock_suffix,
         patch("llmproc.cli.run.Path.absolute") as mock_absolute,
         patch("llmproc.cli.run.sys.stdin.isatty") as mock_isatty,
-        patch("llmproc.cli.run.click.echo") as mock_echo,
-        patch("llmproc.cli.run.sys.exit") as mock_exit,
+        patch("llmproc.cli.run.click.echo"),
+        patch("llmproc.cli.run.sys.exit"),
     ):
         # Set up the mocks
         mock_llm_program.from_file.return_value = mock_program
@@ -201,7 +194,7 @@ def test_cli_stdin_input_non_interactive():
         # Create a temporary example file
         with runner.isolated_filesystem():
             Path("test.toml").write_text("[model]\nname='test'\nprovider='x'")
-            result = runner.invoke(run_main, ["test.toml"], input="Hello from stdin")
+            runner.invoke(run_main, ["test.toml"], input="Hello from stdin")
 
         # Verify that the code ran as expected
         assert mock_llm_program.from_file.called
@@ -215,9 +208,10 @@ def test_cli_json_output():
 
     mock_process = MagicMock()
     mock_program = MagicMock()
-    mock_process.display_name = "TestModel"
     mock_process.get_last_message.return_value = "Test response"
-    mock_process.get_stderr_log.return_value = []
+    mock_stderr_plugin = MagicMock()
+    mock_stderr_plugin.get_log.return_value = []
+    mock_process.get_plugin.return_value = mock_stderr_plugin
     mock_process.tools = []
     mock_process.enriched_system_prompt = ""
     mock_process.api_params = {}
@@ -225,7 +219,7 @@ def test_cli_json_output():
     mock_program.start = AsyncMock(return_value=mock_process)
 
     run_result = MagicMock()
-    run_result.api_calls = 2
+    run_result.api_call_count = 2
     run_result.usd_cost = 0.0
     run_result.stop_reason = "end_turn"
     mock_process.run = AsyncMock(return_value=run_result)
@@ -235,7 +229,7 @@ def test_cli_json_output():
         patch("llmproc.cli.run.Path.exists") as mock_exists,
         patch("llmproc.cli.run.Path.suffix", new_callable=PropertyMock) as mock_suffix,
         patch("llmproc.cli.run.Path.absolute") as mock_absolute,
-        patch("llmproc.cli.run.sys.exit") as mock_exit,
+        patch("llmproc.cli.run.sys.exit"),
         patch("llmproc.cli.run.setup_logger") as mock_setup_logger,
     ):
         mock_llm_program.from_file.return_value = mock_program

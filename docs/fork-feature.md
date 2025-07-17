@@ -16,23 +16,26 @@ The fork feature enables an LLM process to:
 
 - **Shared Context**: Each forked process inherits the full conversation history, ensuring continuity and context preservation.
 - **Parallel Processing**: Multiple tasks can be processed simultaneously, improving efficiency.
-- **Prompt Caching**: Shared conversation history prefix can be cached for performance benefits.
+- **Prompt Caching**: Shared conversation history prefix can be cached for performance benefits. Some providers expose explicit caching, while others implicitly reuse the shared context.
 - **Focus**: Each fork can concentrate on a specific subtask without distraction.
 
 ## Configuration
 
 To enable the fork system call, add it to the `[tools]` section in your TOML configuration file:
 
-```toml
-[tools]
-enabled = ["fork"]
+```yaml
+tools:
+  builtin:
+    - fork
 ```
 
 You can also combine it with other system tools:
 
-```toml
-[tools]
-enabled = ["fork", "spawn"]
+```yaml
+tools:
+  builtin:
+    - fork
+    - spawn
 ```
 
 ## Usage
@@ -99,9 +102,10 @@ When a process is forked:
 4. File descriptors are properly cloned to maintain independence between processes
 5. The access level is set to WRITE for child processes, enforcing security boundaries
 6. The forked process runs independently with its own query using the provider's appropriate executor
-7. Results from all forked processes are collected and returned to the parent process
+7. Results from all forked processes are collected and returned to the parent process as a list of dictionaries with `id` and `message` fields
 
-The implementation uses separate message buffers (`msg_prefix` and `tool_results_prefix`) to maintain proper causal ordering of messages and tool results, ensuring that tools executed later in a turn can see results from earlier tools.
+The implementation stores per-iteration buffers (`msg_prefix` and `tool_results_prefix`) on `process.iteration_state`. These maintain proper causal ordering of messages and tool results so tools executed later in a turn can see results from earlier tools.
+Each iteration also exposes the currently executing tool via `process.iteration_state.current_tool`.
 
 ## Differences from Unix Fork
 
@@ -113,7 +117,7 @@ While inspired by the Unix fork() system call, the LLMProc fork implementation h
 
 ## Example
 
-See `examples/fork.toml` for a complete example program configuration that demonstrates the fork system call.
+See `examples/fork.yaml` for a complete example program configuration that demonstrates the fork system call.
 
 ## Current Capabilities and Future Work
 

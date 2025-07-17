@@ -29,24 +29,27 @@ The file descriptor system is configured through two mechanisms:
 
 ### 1. Tool Configuration
 
-```toml
-[tools]
-enabled = ["read_fd", "fd_to_file"]  # FD reading and file export capability
+```yaml
+tools:
+  builtin:
+    - read_fd
+    - fd_to_file  # FD reading and file export capability
 ```
 
 ### 2. File Descriptor Settings
 
-```toml
-[file_descriptor]
-enabled = true                      # Explicitly enable (also enabled by read_fd in tools)
-max_direct_output_chars = 8000      # Threshold for FD creation
-default_page_size = 4000            # Size of each page
-max_input_chars = 8000              # Threshold for user input FD creation
-page_user_input = true              # Enable/disable user input paging
-enable_references = true            # Enable the reference ID system
+```yaml
+plugins:
+  file_descriptor:
+    enabled: true                      # Explicitly enable the plugin
+    max_direct_output_chars: 8000      # Threshold for FD creation
+    default_page_size: 4000            # Size of each page
+    max_input_chars: 8000              # Threshold for user input FD creation
+    page_user_input: true              # Enable/disable user input paging
+    enable_references: true            # Enable the reference ID system
 ```
-
-**Note**: The system is enabled if any FD tool is in `[tools].enabled` OR `enabled = true` exists in the `[file_descriptor]` section.
+**Note**: The system is enabled when the plugin is configured. The
+`read_fd` and `fd_to_file` tools are provided automatically by the plugin.
 
 ## Usage
 
@@ -170,6 +173,15 @@ The file descriptor system integrates with:
 - **fork_process**: Maintains FD state during process forking
 - **spawn_tool**: Shares references between parent and child processes
 
+### Hook System Migration
+
+Starting with version 0.10.0, file descriptor handling is provided through the
+plugin-based hook system. The built-in `FileDescriptorPlugin` listens for
+`hook_user_input` and `hook_tool_result` events to convert large inputs and
+tool outputs into file descriptors. This plugin is registered automatically when
+the file descriptor system is enabled, replacing the older embedded logic in
+`ToolManager` and `LLMProcess`.
+
 ### Performance Optimizations
 
 The file descriptor system includes several performance optimizations:
@@ -218,20 +230,20 @@ The file descriptor system is implemented in the following files:
 
 - `src/llmproc/file_descriptors/`: Package containing all file descriptor functionality
   - `manager.py`: Core implementation of FileDescriptorManager
-  - `fd_tools.py`: Implementation of read_fd and fd_to_file tools (in builtin/fd_tools.py)
+  - `plugins/file_descriptor/plugin.py`: FileDescriptorPlugin with read_fd and fd_to_file tool implementations
   - `references.py`: Reference ID system implementation (optimized for performance)
   - `paginator.py`: Line-aware content pagination
   - `formatter.py`: XML formatting utilities
   - `constants.py`: Shared constants and definitions
 - `src/llmproc/llm_process.py`: Integration with LLMProcess
 - `src/llmproc/providers/anthropic_process_executor.py`: Integration with AnthropicProcessExecutor for output wrapping
-- `src/llmproc/tools/spawn.py`: Integration with spawn system call for reference inheritance
+ - `src/llmproc/plugins/spawn.py`: Integration with spawn system call for reference inheritance
 - `src/llmproc/config/schema.py`: FileDescriptorConfig configuration schema
 - Tests:
   - `tests/test_file_descriptor.py`: Basic unit tests
   - `tests/test_file_descriptor_integration.py`: Integration tests with process model
   - `tests/test_fd_to_file_tool.py`: Tests for FD export functionality
-  - `tests/test_reference_system.py`: Tests for reference ID system
+  - `tests/test_file_descriptor_core.py`: Core tests including reference ID handling
   - `tests/test_fd_spawn_integration.py`: Tests for spawn integration
   - `tests/test_fd_all_features.py`: Tests for all FD features combined
 

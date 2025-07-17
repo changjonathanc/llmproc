@@ -1,0 +1,25 @@
+model:
+  name: "gpt-4o"
+  provider: "openai"
+
+prompt:
+  system: |
+    You are a helpful assistant with web search capabilities.
+    When asked about current events or recent information, use the web_search tool to find accurate, up-to-date information.
+    Always cite your sources when providing information from web searches.
+
+tools:
+  builtin: ["read_file", "list_dir"]
+  openai:
+    web_search:
+      enabled: true
+      search_context_size: "high"
+      user_location:
+        type: "approximate"
+        city: "New York"
+        region: "New York"
+        country: "US"
+
+parameters:
+  temperature: 0.7
+  max_tokens: 4000

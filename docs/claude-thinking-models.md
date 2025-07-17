@@ -16,20 +16,19 @@ Claude 3.7 Sonnet introduces extended thinking capabilities, allowing the model 
 
 ### Basic Configuration
 
-```toml
-[model]
-name = "claude-3-7-sonnet-20250219"
-provider = "anthropic"
+```yaml
+model:
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
 
-[prompt]
-system_prompt = "You are a helpful assistant with reasoning capabilities."
+prompt:
+  system_prompt: "You are a helpful assistant with reasoning capabilities."
 
-[parameters]
-max_tokens = 16384
-
-[parameters.thinking]
-type = "enabled"  # "enabled" or "disabled"
-budget_tokens = 4000  # Min: 1024, Higher values = more thorough reasoning
+parameters:
+  max_tokens: 16384
+  thinking:
+    type: "enabled"  # "enabled" or "disabled"
+    budget_tokens: 4000  # Min: 1024, Higher values = more thorough reasoning
 ```
 
 ### Thinking Configuration

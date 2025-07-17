@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from llmproc.callbacks import CallbackEvent
+from llmproc.plugin.events import CallbackEvent
 from llmproc.common.access_control import AccessLevel
 from llmproc.llm_process import LLMProcess
 
@@ -14,59 +14,50 @@ async def test_callbacks_inherited_by_forked_process():
     # Create mock parent process
     parent = MagicMock(spec=LLMProcess)
     parent.access_level = AccessLevel.ADMIN
+    parent.plugins = []
 
-    # Create a callback function and object
-    callback_fn_calls = []
+    # Create callback objects
+    callback_a_calls = []
+    callback_b_calls = []
 
-    def callback_fn(event, *args, **kwargs):
-        callback_fn_calls.append((event, args, kwargs))
+    class CallbackA:
+        def tool_start(self, tool_name, tool_args, *, process):
+            callback_a_calls.append(("tool_start", tool_name, tool_args))
 
-    callback_obj_calls = []
-
-    class CallbackObj:
-        def tool_start(self, tool_name, tool_args):
-            callback_obj_calls.append(("tool_start", tool_name, tool_args))
-
-        def tool_end(self, tool_name, result):
-            callback_obj_calls.append(("tool_end", tool_name, result))
-
-        def response(self, text):
-            callback_obj_calls.append(("response", text))
+    class CallbackB:
+        def response(self, text, *, process):
+            callback_b_calls.append(("response", text))
 
     # Add callbacks to parent
-    parent.callbacks = [callback_fn, CallbackObj()]
+    parent.plugins = [CallbackA(), CallbackB()]
 
     # Create a mock child process
     child = MagicMock(spec=LLMProcess)
-    child.callbacks = []
+    child.plugins = []
 
     # Use a simpler approach - directly mock the return value
     fork_mock = AsyncMock(return_value=child)
-    parent.fork_process = fork_mock
+    parent._fork_process = fork_mock
 
     # Call fork
-    forked = await parent.fork_process()
+    forked = await parent._fork_process()
 
-    # Simulate the callback copying behavior from LLMProcess.fork_process
+    # Simulate plugin copying behavior from LLMProcess._fork_process
     # This is what we're actually testing
-    if hasattr(parent, "callbacks") and parent.callbacks:
-        forked.callbacks = parent.callbacks.copy()
+    if hasattr(parent, "plugins") and parent.plugins:
+        forked.plugins = parent.plugins.copy()
 
     # Verify callbacks were copied to child
-    assert len(forked.callbacks) == 2
-    assert forked.callbacks == parent.callbacks
+    assert len(forked.plugins) == 2
+    assert forked.plugins == parent.plugins
 
-    # Verify both function and object callbacks work
-    for callback in forked.callbacks:
-        # Function callback
-        if callable(callback) and not hasattr(callback, "tool_start"):
-            callback(CallbackEvent.TOOL_START, "test_tool", {"arg": "value"})
-        # Object callback with method
-        elif hasattr(callback, "tool_start"):
-            callback.tool_start("test_tool", {"arg": "value"})
+    # Verify object callbacks work
+    for callback in forked.plugins:
+        if hasattr(callback, "tool_start"):
+            callback.tool_start("test_tool", {"arg": "value"}, process=None)
+        elif hasattr(callback, "response"):
+            callback.response("hi", process=None)
 
     # Verify the callbacks were called
-    assert len(callback_fn_calls) > 0
-    assert len(callback_obj_calls) > 0
-    assert callback_fn_calls[0][0] == CallbackEvent.TOOL_START
-    assert callback_obj_calls[0][0] == "tool_start"
+    assert callback_a_calls[0][0] == "tool_start"
+    assert callback_b_calls[0][0] == "response"

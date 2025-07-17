@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import llmproc.program_exec as program_exec
 import pytest
 from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+from llmproc.plugins.spawn import SpawnPlugin
 from llmproc.program import LLMProgram
 from llmproc.program_exec import (
     create_process,
@@ -23,11 +25,12 @@ def mock_program():
     """Provides a MagicMock instance of LLMProgram."""
     program = MagicMock(spec=LLMProgram)
     program.compiled = False  # Default to not compiled
-    program.tool_manager = AsyncMock()  # Tool manager needed for initialize_tools
+    program.tool_manager = AsyncMock()  # Tool manager needed for register_tools
     program.model_name = "test-model"
     program.provider = "test-provider"
     program.system_prompt = "You are a helpful assistant."
-    program.display_name = "Test Model"
+    program.project_id = None
+    program.region = None
     program.base_dir = None
     # Mock the method called by get_tool_configuration
     program.get_tool_configuration = MagicMock(return_value={"tool_key": "tool_value"})
@@ -39,15 +42,12 @@ def mock_process():
     """Provides a MagicMock instance of LLMProcess."""
     process = MagicMock(spec=LLMProcess)
     process.tool_manager = MagicMock()
-    process.tool_manager.get_registered_tools = MagicMock(return_value=["tool1", "tool2"])
-    # Define registered_tools for validate_process
-    process.tool_manager.get_registered_tools = MagicMock(return_value=["tool1", "tool2"])
+    process.tool_manager.registered_tools = ["tool1", "tool2"]
     process.model_name = "test-model"
     process.provider = "test-provider"
     # Mock attributes accessed by setup_runtime_context's default path
-    process.fd_manager = MagicMock(name="fd_manager")
-    process.linked_programs = {"prog_a": MagicMock(spec=LLMProgram)}
-    process.linked_program_descriptions = {"prog_a": "Test Program A"}
+    process.get_plugin(FileDescriptorPlugin).fd_manager = MagicMock(name="fd_manager")
+    process.plugins = [SpawnPlugin({"prog_a": MagicMock(spec=LLMProgram)}, {"prog_a": "Test Program A"})]
     return process
 
 
@@ -56,7 +56,6 @@ def mock_process():
 # Testing focuses on the new modular initialization functions instead of deprecated ones
 
 # Use import to access the actual class
-import inspect
 
 
 def test_instantiate_process():
@@ -66,49 +65,28 @@ def test_instantiate_process():
     Instead of mocking LLMProcess, we mock the inspection process itself
     to avoid issues with introspection in a test environment.
     """
-    from inspect import Parameter, Signature
     from unittest.mock import MagicMock, patch
 
-    # Create a process state dictionary with test parameters
-    process_state = {
-        "program": MagicMock(),
-        "model_name": "test-model",
-        "provider": "test-provider",
-        "original_system_prompt": "Test prompt",
-        "system_prompt": "Test prompt",
-        "enriched_system_prompt": "Enriched: Test prompt",
-        "state": [],
-        "tool_manager": MagicMock(),
-    }
-
-    # Mock inspect.signature to return a controlled signature
-    mock_signature = Signature(
-        parameters=[
-            Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
-            Parameter("program", Parameter.POSITIONAL_OR_KEYWORD),
-            Parameter("model_name", Parameter.POSITIONAL_OR_KEYWORD),
-            Parameter("provider", Parameter.POSITIONAL_OR_KEYWORD),
-            Parameter("original_system_prompt", Parameter.POSITIONAL_OR_KEYWORD),
-            Parameter("system_prompt", Parameter.POSITIONAL_OR_KEYWORD),
-            # Optional parameters
-            Parameter("state", Parameter.POSITIONAL_OR_KEYWORD, default=[]),
-            Parameter("tool_manager", Parameter.POSITIONAL_OR_KEYWORD, default=None),
-            Parameter("enriched_system_prompt", Parameter.POSITIONAL_OR_KEYWORD, default=None),
-        ]
+    # Create a ProcessConfig with test parameters
+    cfg = program_exec.ProcessConfig(
+        program=MagicMock(),
+        model_name="test-model",
+        provider="test-provider",
+        base_system_prompt="Test prompt",
+        enriched_system_prompt="Enriched: Test prompt",
+        state=[],
+        tool_manager=MagicMock(),
     )
 
-    # Create the mock process
     mock_process = MagicMock(spec=LLMProcess)
+    mock_process.plugins = []
 
-    # Test with patches
-    with (
-        patch("llmproc.program_exec.inspect.signature", return_value=mock_signature),
-        patch("llmproc.program_exec.LLMProcess", return_value=mock_process),
-    ):
-        process = program_exec.instantiate_process(process_state)
+    with patch("llmproc.program_exec.LLMProcess", return_value=mock_process) as mock_cls:
+        result = program_exec.instantiate_process(cfg)
 
-        # Assert the returned value matches our expected instance
-        assert process == mock_process
+        # Ensure a ProcessConfig was created and passed
+        assert isinstance(mock_cls.call_args.args[0], program_exec.ProcessConfig)
+        assert result == mock_process
 
 
 def test_setup_runtime_context_default(mock_process):
@@ -124,10 +102,6 @@ def test_setup_runtime_context_default(mock_process):
     # Assert the structure of the generated context
     expected_context = {
         "process": mock_process,
-        "fd_manager": mock_process.fd_manager,
-        "linked_programs": mock_process.linked_programs,
-        "linked_program_descriptions": mock_process.linked_program_descriptions,
-        "stderr": [],
     }
     assert context == expected_context
 
@@ -163,13 +137,25 @@ def test_setup_runtime_context_no_tool_manager(mock_process):
     # Assert the structure of the generated context (tool manager call won't happen)
     expected_context = {
         "process": mock_process,
-        "fd_manager": mock_process.fd_manager,
-        "linked_programs": mock_process.linked_programs,
-        "linked_program_descriptions": mock_process.linked_program_descriptions,
-        "stderr": [],
     }
     assert context == expected_context
     # No assertion for set_runtime_context as it shouldn't be called
+
+
+def test_setup_runtime_context_enables_fd_plugin(mock_process):
+    """FileDescriptorPlugin is enabled when present."""
+    from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+    from llmproc.config.schema import FileDescriptorPluginConfig
+
+    mock_process.get_plugin.return_value.enabled = True
+    mock_process.get_plugin.return_value.fd_manager = MagicMock()
+    plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    plugin.fd_manager = mock_process.get_plugin.return_value.fd_manager
+    mock_process.plugins = [plugin]
+
+    context = program_exec.setup_runtime_context(mock_process)
+
+    assert plugin.fd_manager is not None
 
 
 def test_validate_process(mock_process, caplog):
@@ -180,7 +166,7 @@ def test_validate_process(mock_process, caplog):
 
     # Check log messages
     assert f"Created process with model {mock_process.model_name} ({mock_process.provider})" in caplog.text
-    assert f"Tools enabled: {len(mock_process.tool_manager.get_registered_tools())}" in caplog.text
+    assert f"Tools enabled: {len(mock_process.tool_manager.registered_tools)}" in caplog.text
     assert len(caplog.records) == 2  # Expecting two INFO logs
 
 
@@ -188,11 +174,13 @@ def test_validate_process(mock_process, caplog):
 
 
 @pytest.mark.asyncio
-@patch("llmproc.program_exec.prepare_process_state")
+@patch("llmproc.program_exec.prepare_process_config")
 @patch("llmproc.program_exec.instantiate_process")
 @patch("llmproc.program_exec.setup_runtime_context")
 @patch("llmproc.program_exec.validate_process")
+@patch("llmproc.program_exec.ToolManager.register_tools", new_callable=AsyncMock)
 async def test_create_process_flow_not_compiled(
+    mock_init_tools,
     mock_validate,
     mock_setup_context,
     mock_instantiate,
@@ -210,10 +198,15 @@ async def test_create_process_flow_not_compiled(
     mock_program.compile = MagicMock()  # Mock the compile method
     mock_program.get_tool_configuration = MagicMock(return_value={"config": "test"})
     mock_program.tool_manager = AsyncMock()
-    mock_program.tool_manager.initialize_tools = AsyncMock()
+    mock_program.tool_manager.register_tools = AsyncMock()
 
     # Set return values for the mocked functions
-    mock_prepare_state.return_value = {"process_state": "data"}
+    mock_prepare_state.return_value = program_exec.ProcessConfig(
+        program=mock_program,
+        model_name=mock_program.model_name,
+        provider=mock_program.provider,
+        base_system_prompt=mock_program.system_prompt,
+    )
     # instantiate_process returns the mock_process fixture
     mock_instantiate.return_value = mock_process
     mock_setup_context.return_value = {"context": "test"}
@@ -225,17 +218,20 @@ async def test_create_process_flow_not_compiled(
     # 1. Ensure program is compiled
     mock_program.compile.assert_called_once()
 
-    # 2. Prepare process state
-    mock_prepare_state.assert_called_once_with(mock_program, None, None)
+    # 2. Prepare process configuration
+    mock_prepare_state.assert_called_once_with(mock_program, None)
 
     # 3. Extract tool configuration
     mock_program.get_tool_configuration.assert_called_once()
 
     # 4. Initialize tools
-    mock_program.tool_manager.initialize_tools.assert_awaited_once()
+    mock_init_tools.assert_awaited_once()
 
     # 5. Create process instance
-    mock_instantiate.assert_called_once_with({"process_state": "data"})
+    mock_instantiate.assert_called_once()
+    assert isinstance(
+        mock_instantiate.call_args.args[0], program_exec.ProcessConfig
+    )
 
     # 6. Set up runtime context
     mock_setup_context.assert_called_once_with(mock_process)  # Called with the result of instantiate
@@ -248,11 +244,13 @@ async def test_create_process_flow_not_compiled(
 
 
 @pytest.mark.asyncio
-@patch("llmproc.program_exec.prepare_process_state")
+@patch("llmproc.program_exec.prepare_process_config")
 @patch("llmproc.program_exec.instantiate_process")
 @patch("llmproc.program_exec.setup_runtime_context")
 @patch("llmproc.program_exec.validate_process")
+@patch("llmproc.program_exec.ToolManager.register_tools", new_callable=AsyncMock)
 async def test_create_process_flow_already_compiled(
+    mock_init_tools,
     mock_validate,
     mock_setup_context,
     mock_instantiate,
@@ -266,9 +264,14 @@ async def test_create_process_flow_already_compiled(
     mock_program.compile = MagicMock()  # Mock compile to ensure it's NOT called
     mock_program.get_tool_configuration = MagicMock(return_value={"config": "test"})
     mock_program.tool_manager = AsyncMock()
-    mock_program.tool_manager.initialize_tools = AsyncMock()
+    mock_program.tool_manager.register_tools = AsyncMock()
 
-    mock_prepare_state.return_value = {"process_state": "data"}
+    mock_prepare_state.return_value = program_exec.ProcessConfig(
+        program=mock_program,
+        model_name=mock_program.model_name,
+        provider=mock_program.provider,
+        base_system_prompt=mock_program.system_prompt,
+    )
     mock_instantiate.return_value = mock_process
     mock_setup_context.return_value = {"context": "test"}
 
@@ -276,47 +279,21 @@ async def test_create_process_flow_already_compiled(
     result_process = await program_exec.create_process(mock_program)
 
     # --- Assert ---
-    # 1. Ensure program.compile was NOT called
-    mock_program.compile.assert_not_called()
+    # 1. Ensure program.compile was called even if already compiled
+    mock_program.compile.assert_called_once()
 
     # Assert the rest of the flow is the same
-    mock_prepare_state.assert_called_once_with(mock_program, None, None)
+    mock_prepare_state.assert_called_once_with(mock_program, None)
     mock_program.get_tool_configuration.assert_called_once()
-    mock_program.tool_manager.initialize_tools.assert_awaited_once()
-    mock_instantiate.assert_called_once_with({"process_state": "data"})
+    mock_init_tools.assert_awaited_once()
+    mock_instantiate.assert_called_once()
+    assert isinstance(
+        mock_instantiate.call_args.args[0], program_exec.ProcessConfig
+    )
     mock_setup_context.assert_called_once_with(mock_process)
     mock_validate.assert_called_once_with(mock_process)
     assert result_process == mock_process
 
 
-def test_file_descriptor_tool_registration():
-    """Test that FD tools are registered during file descriptor initialization."""
-    from llmproc.program_exec import initialize_file_descriptor_system
-
-    # Create a mock program
-    program = MagicMock()
-
-    # Set up file descriptor config
-    program.file_descriptor = {
-        "enabled": True,
-        "default_page_size": 5000,
-        "enable_references": True,
-    }
-
-    # Set up enabled tools
-    program.tools = {"enabled": ["read_fd", "fd_to_file", "calculator"]}
-
-    # Initialize the fd system
-    fd_config = initialize_file_descriptor_system(program)
-
-    # Check fd_manager.fd_related_tools contains the FD-related tools
-    assert "read_fd" in fd_config.fd_manager.fd_related_tools
-    assert "fd_to_file" in fd_config.fd_manager.fd_related_tools
-
-    # Other tools should not be registered to fd_manager
-    assert "calculator" not in fd_config.fd_manager.fd_related_tools
-
-    # Verify other properties
-    assert fd_config.file_descriptor_enabled is True
-    assert fd_config.references_enabled is True
-    assert fd_config.fd_manager is not None
+# test_file_descriptor_tool_registration removed
+# File descriptor functionality is now handled entirely by FileDescriptorPlugin

@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Add src to path if needed (when running from repo)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -25,7 +25,6 @@ if str(SRC_DIR) not in sys.path:
 logging.basicConfig(level=logging.WARNING)  # Only show warnings and errors
 
 from llmproc import LLMProgram  # noqa: E402
-from llmproc.callbacks import CallbackEvent  # noqa: E402
 from llmproc.common.results import ToolResult  # noqa: E402
 from llmproc.tools.function_tools import register_tool  # noqa: E402
 
@@ -128,8 +127,8 @@ async def main():
         print("Starting LLM process...")
         process = await program.start()
 
-        # Step 4: Register callbacks using the new system
-        process.add_callback(TemperatureCallbacks())
+        # Step 4: Register plugins using the new system
+        process.add_plugins(TemperatureCallbacks())
 
         # Get initial temperature
         initial_temp = process.api_params.get("temperature")

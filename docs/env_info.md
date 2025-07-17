@@ -28,15 +28,15 @@ date: 2025-03-19
 
 ## Configuration
 
-Environment information is configured in the program file (TOML or YAML) using the `[env_info]` section:
+Environment information is configured in the program file using the `plugins` block:
 
 ```yaml
-env_info:
-  # Specify which variables to include
-  variables:
-    - working_directory
-    - platform
-    - date
+plugins:
+  env_info:
+    variables:
+      - working_directory
+      - platform
+      - date
 ```
 
 ### Configuration Options
@@ -45,14 +45,6 @@ env_info:
    - `variables = [...]`: Include specific standard variables from the list
    - `variables = "all"`: Include all standard environment variables
    - `variables = []`: Disable environment information (default)
-2. **Dynamic Information**:
-   - `env_vars = {region = "MY_ENV"}`: Append value of `MY_ENV` as `region`
-3. **Running Commands**:
-   - `commands = ["pwd", "git status"]`: Execute shell commands and include their output
-4. **file_map Options**:
-   - `file_map_root = "path"`: Directory to list (default is current directory)
-   - `file_map_max_files = N`: Maximum files to list before truncating (default 50)
-   - `file_map_show_size = true|false`: Include file sizes in bytes (default true)
 
 ## Available Standard Variables
 
@@ -66,7 +58,10 @@ The following standard environment variables are available:
 | `python_version` | Python version | `3.12.4` |
 | `hostname` | Machine hostname | `macbook-pro.local` |
 | `username` | Current user | `username` |
-| `file_map` | Recursive listing of `file_map_root` directory | `src/main.py (120 bytes)` |
+
+Directory listings are no longer part of the built-in options. Use the
+`FileMapPlugin` example from `src/llmproc/extensions/examples.py` to add a file map
+to the system prompt if needed.
 
 ## Security Considerations
 
@@ -116,94 +111,51 @@ For the best experience:
 ### Basic Environment Information
 
 ```yaml
-env_info:
-  variables:
-    - working_directory
-    - platform
-    - date
+plugins:
+  env_info:
+    variables:
+      - working_directory
+      - platform
+      - date
 ```
 
 ### All Standard Variables
 
 ```yaml
-env_info:
-  variables: all  # Include all standard environment variables
+plugins:
+  env_info:
+    variables: all  # Include all standard environment variables
 ```
 
 ### Development Environment
 
 ```yaml
-env_info:
-  variables:
-    - working_directory
-    - platform
-    - date
-    - username
+plugins:
+  env_info:
+    variables:
+      - working_directory
+      - platform
+      - date
+      - username
 ```
 
-### Custom Command Output
-
-```yaml
-env_info:
-  commands:
-    - echo hello
-    - uname -s
-```
-
-This will produce an environment block like:
-
-```
-<env>
-> echo hello
-hello
-> uname -s
-Linux
-</env>
-```
-
-If a command fails, an `error(code)` line is shown after its output.
-
-### Directory File Map
-
-```yaml
-env_info:
-  variables:
-    - file_map
-  file_map_root: src
-  file_map_max_files: 5
-```
 
 ### Comprehensive Example (All Features)
 
 This example demonstrates all `env_info` features working together:
 
 ```yaml
-env_info:
-  # Include all standard environment variables
-  variables:
-    - working_directory  # Current working directory
-    - platform           # Operating system
-    - date               # Current date
-    - python_version     # Python version
-    - hostname           # Machine hostname
-    - username           # Current user
-    - file_map           # Directory listing
+plugins:
+  env_info:
+    # Include all standard environment variables
+    variables:
+      - working_directory  # Current working directory
+      - platform           # Operating system
+      - date               # Current date
+      - python_version     # Python version
+      - hostname           # Machine hostname
+      - username           # Current user
 
-  # Configure file_map behavior
-  file_map_root: src     # Directory to scan (relative to working directory)
-  file_map_max_files: 20   # Maximum files to list
-  file_map_show_size: true # Show file sizes
-
-  # Add environment variables
-  env_vars:
-    region: AWS_REGION       # Value from AWS_REGION env var
-    project: PROJECT_NAME     # Value from PROJECT_NAME env var
-
-  # Execute commands and include output
-  commands:
-    - git rev-parse --short HEAD  # Current git commit
-    - date +%H:%M:%S              # Current time
-    - pwd                         # Current directory (alternative to working_directory)
 
   # Custom environment variables (direct values)
   custom_var: This is a custom value
@@ -220,11 +172,6 @@ date: 2025-03-19
 python_version: 3.12.4
 hostname: macbook-pro.local
 username: username
-file_map:
-  src/main.py (1250 bytes)
-  src/utils.py (750 bytes)
-  src/config.py (520 bytes)
-  ... (17 more files)
 region: us-west-2
 project: my-awesome-project
 git_rev_parse_--short_HEAD: a1b2c3d
@@ -234,62 +181,7 @@ custom_var: This is a custom value
 app_version: 1.0.3
 </env>
 ```
-
-## Testing with llmproc-prompt
-
-To test if your environment information configuration works correctly, you can use the `llmproc-prompt` command-line tool. This allows you to see exactly what the model will receive, including the environment information block.
-
-### Steps to Test Environment Information
-
-1. Create a program file with your desired `env_info` configuration (e.g., `my-program.yaml`)
-2. Run the `llmproc-prompt` command:
-
-```bash
-llmproc-prompt my-program.yaml
-```
-
-3. Review the output to see the complete system prompt, including the `<env>` block
-
-### Example Test Workflow
-
-1. Create a test program file (`test-env-info.yaml`):
-
-```yaml
-model:
-  name: claude-3-5-haiku-20241022
-  provider: anthropic
-
-prompt:
-  system: You are an assistant with access to environment information.
-
-env_info:
-  variables:
-    - working_directory
-    - platform
-    - date
-    - file_map
-  file_map_root: '.'
-  file_map_max_files: 10
-  commands:
-    - git status --short
-```
-
-2. Run the test:
-
-```bash
-llmproc-prompt test-env-info.yaml
-```
-
-3. Review the output to verify:
-   - The `<env>` block appears correctly
-   - All requested variables are present
-   - Command outputs are included
-   - File map shows the expected files
-
-This testing approach helps ensure your environment information is configured correctly before running your actual LLM application.
-
 ## Implementation Details
-
 The environment information is implemented in `env_info/builder.py` using the `EnvInfoBuilder` class. The feature:
 
 1. Collects requested environment variables at process initialization time

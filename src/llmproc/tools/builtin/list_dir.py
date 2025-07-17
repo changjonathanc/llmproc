@@ -4,7 +4,6 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
 
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult

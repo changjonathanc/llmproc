@@ -4,9 +4,10 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from llmproc.llm_process import LLMProcess
-from llmproc.program import LLMProgram
 
+from llmproc.llm_process import LLMProcess
+from llmproc.plugins.spawn import SpawnPlugin
+from llmproc.program import LLMProgram
 from tests.conftest import create_test_llmprocess_directly
 
 
@@ -44,11 +45,13 @@ async def test_process_stores_program_references_not_instances():
     with patch("llmproc.program_exec.get_provider_client", return_value=MagicMock()):
         process = await main_program.start()
 
-    # Verify that linked_programs contains the program reference, not a process instance
-    assert "expert" in process.linked_programs
-    assert process.linked_programs["expert"] is linked_program
-    assert not hasattr(process.linked_programs["expert"], "run")
-    assert process.linked_programs["expert"] == linked_program
+    # Verify that linked programs are exposed via SpawnPlugin
+    spawn_plugin = process.get_plugin(SpawnPlugin)
+    assert spawn_plugin is not None
+    assert "expert" in spawn_plugin.linked_programs
+    assert spawn_plugin.linked_programs["expert"] is linked_program
+    assert not hasattr(spawn_plugin.linked_programs["expert"], "run")
+    assert spawn_plugin.linked_programs["expert"] == linked_program
 
 
 @pytest.mark.asyncio
@@ -62,14 +65,17 @@ async def test_linked_programs_from_program_only(test_program):
     )
 
     # Add the linked program to the test program
-    test_program.linked_programs = {"test": linked_program}
+    from llmproc.plugins.spawn import SpawnPlugin
+
+    test_program.plugins.append(SpawnPlugin({"test": linked_program}))
 
     # Create a process
     with patch("llmproc.program_exec.get_provider_client", return_value=MagicMock()):
         # Our improved helper will automatically use the program's linked_programs
         process = create_test_llmprocess_directly(program=test_program)
 
-        # Verify linked_programs is initialized from the program
-        assert process.linked_programs == test_program.linked_programs
-        assert "test" in process.linked_programs
-        assert process.linked_programs["test"] is linked_program
+        # Verify linked programs are initialized from the program via SpawnPlugin
+        spawn_plugin = process.get_plugin(SpawnPlugin)
+        assert spawn_plugin is not None
+        assert "test" in spawn_plugin.linked_programs
+        assert spawn_plugin.linked_programs["test"] is linked_program

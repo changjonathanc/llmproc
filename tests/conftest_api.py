@@ -36,6 +36,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from llmproc.common.results import RunResult, ToolResult
 
 # Constants for model names - use the smallest models possible for tests
@@ -150,6 +151,32 @@ async def minimal_openai_process(minimal_openai_program):
     yield process
 
 
+@pytest.fixture(scope="session")
+def minimal_claude_code_program():
+    """Create a minimal Claude Code program."""
+    from llmproc import LLMProgram
+
+    return LLMProgram(
+        model_name=CLAUDE_SMALL_MODEL,
+        provider="claude_code",
+        system_prompt="You are a helpful assistant. Answer briefly.",
+        parameters={"max_tokens": 100},
+    )
+
+
+@pytest.fixture
+async def minimal_claude_code_process(minimal_claude_code_program):
+    """Create a minimal Claude Code process using cached OAuth tokens."""
+    from llmproc.providers.claude_code_oauth import AnthropicOAuth
+
+    oauth = AnthropicOAuth()
+    if not oauth.is_authenticated():
+        pytest.skip("Claude Code provider not authenticated")
+
+    process = await minimal_claude_code_program.start()
+    yield process
+
+
 #
 # Tool-Enabled Fixtures
 # Program (Session-Scoped) and Process (Function-Scoped) with tool support
@@ -197,14 +224,18 @@ def claude_program_with_fd(anthropic_api_key):
     """Create a Claude program with file descriptor support."""
     from llmproc import LLMProgram
 
-    return LLMProgram(
+    program = LLMProgram(
         model_name=CLAUDE_SMALL_MODEL,
         provider="anthropic",
         system_prompt="You are a helpful assistant. Use file descriptors when dealing with large content.",
         parameters={"max_tokens": 150},
         tools=["read_fd"],
-        file_descriptor={"enabled": True, "max_direct_output_chars": 500},
     )
+    from llmproc.config.schema import FileDescriptorPluginConfig
+    from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+
+    program.add_plugins(FileDescriptorPlugin(FileDescriptorPluginConfig(max_direct_output_chars=500)))
+    return program
 
 
 @pytest.fixture
@@ -229,7 +260,7 @@ async def claude_process_with_fd(claude_program_with_fd):
 
 #
 # Caching Fixtures
-# Program (Session-Scoped) and Process (Function-Scoped) with caching enabled/disabled
+# Program (Session-Scoped) and Process (Function-Scoped) with caching enabled
 #
 @pytest.fixture(scope="session")
 def claude_program_with_caching(anthropic_api_key):
@@ -244,24 +275,6 @@ def claude_program_with_caching(anthropic_api_key):
         provider="anthropic",
         system_prompt=long_system_prompt,
         parameters={"max_tokens": 150},
-        disable_automatic_caching=False,  # Explicitly enable caching
-    )
-
-
-@pytest.fixture(scope="session")
-def claude_program_without_caching(anthropic_api_key):
-    """Create a Claude program with caching disabled."""
-    from llmproc import LLMProgram
-
-    # Create the same large system prompt for comparison
-    long_system_prompt = "You are a helpful assistant. " + ("This is placeholder content. " * 500)
-
-    return LLMProgram(
-        model_name=CLAUDE_SMALL_MODEL,
-        provider="anthropic",
-        system_prompt=long_system_prompt,
-        parameters={"max_tokens": 150},
-        disable_automatic_caching=True,  # Explicitly disable caching
     )
 
 
@@ -282,27 +295,6 @@ async def claude_process_with_caching(claude_program_with_caching):
         LLMProcess: A started Claude process instance with caching enabled
     """
     process = await claude_program_with_caching.start()
-    yield process
-
-
-@pytest.fixture
-async def claude_process_without_caching(claude_program_without_caching):
-    """Create a Claude process with caching disabled for API testing.
-
-    This fixture provides an isolated LLMProcess instance with prompt caching
-    explicitly disabled while using a large system prompt. It follows the standard
-    program.start() pattern for initialization and uses function scope.
-
-    This fixture is designed for comparative testing against claude_process_with_caching
-    to verify caching behavior with real API calls.
-
-    Args:
-        claude_program_without_caching: The session-scoped program fixture with caching disabled
-
-    Yields:
-        LLMProcess: A started Claude process instance with caching disabled
-    """
-    process = await claude_program_without_caching.start()
     yield process
 
 

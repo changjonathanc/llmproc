@@ -4,7 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from llmproc.providers.anthropic_process_executor import RateLimitError, _call_with_retry
+from llmproc.providers.anthropic_utils import RateLimitError, call_with_retry
 
 
 class DummyClient:
@@ -23,11 +23,11 @@ class DummyClient:
 
 
 def test_call_with_retry_defaults(monkeypatch):
-    """Ensure `_call_with_retry` succeeds using default retry settings."""
+    """Ensure `call_with_retry` succeeds using default retry settings."""
     client = DummyClient(fail_times=2)
     monkeypatch.setattr(asyncio, "sleep", AsyncMock())
 
-    result = asyncio.run(_call_with_retry(client, {}))
+    result = asyncio.run(call_with_retry(client, {}))
 
     assert result == "ok"
     assert client.calls == 3
@@ -42,6 +42,6 @@ def test_call_with_retry_env_override(monkeypatch):
     monkeypatch.setenv("LLMPROC_RETRY_MAX_WAIT", "0")
 
     with pytest.raises(RateLimitError):
-        asyncio.run(_call_with_retry(client, {}))
+        asyncio.run(call_with_retry(client, {}))
 
     assert client.calls == 2

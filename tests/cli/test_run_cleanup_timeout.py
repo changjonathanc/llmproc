@@ -1,8 +1,9 @@
 """Tests for timeout handling in run.py cleanup operations."""
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from llmproc.cli.run import _async_main
 
@@ -18,8 +19,11 @@ class TestRunCleanupTimeout:
         mock_program = MagicMock()
         mock_process = AsyncMock()
 
+        async def _hang(*_args, **_kwargs):
+            await asyncio.sleep(10)
+
         # Make process.aclose() hang
-        mock_process.aclose = AsyncMock(side_effect=asyncio.sleep(10))
+        mock_process.aclose = AsyncMock(side_effect=_hang)
 
         # Mock prompt and user_prompt
         mock_process.user_prompt = "test prompt"
@@ -35,7 +39,7 @@ class TestRunCleanupTimeout:
              patch('asyncio.wait_for') as mock_wait_for:
 
             # Make wait_for raise TimeoutError when called with process.aclose()
-            mock_wait_for.side_effect = asyncio.TimeoutError()
+            mock_wait_for.side_effect = TimeoutError()
 
             # Call _async_main - should not hang despite aclose timeout
             await _async_main("test_path.toml", prompt="test")

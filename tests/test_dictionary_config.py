@@ -15,6 +15,7 @@ import yaml
 
 from llmproc import LLMProgram
 from llmproc.config.program_loader import ProgramLoader
+from llmproc.plugins.spawn import SpawnPlugin
 
 
 def test_basic_dictionary_config():
@@ -44,10 +45,8 @@ def test_mcp_server_config_in_dictionary():
 
     program = LLMProgram.from_dict(config)
 
-    # Embedded servers should be stored directly on the program
-    assert program.mcp_servers is not None
-    assert "test-server" in program.mcp_servers
-    assert program.mcp_servers["test-server"]["type"] == "stdio"
+    # Verify embedded MCP servers are preserved
+    assert program.mcp_servers == {"test-server": {"type": "stdio", "command": "echo", "args": ["hello"]}}
     assert program.mcp_config_path is None
 
 
@@ -80,9 +79,7 @@ def test_linked_programs_warning():
         "linked_programs": {"assistant": "assistant.toml"},
     }
 
-    # Check that a warning is raised
-    with pytest.warns(UserWarning, match="Dictionary configuration with linked_programs is not automatically resolved"):
-        program = LLMProgram.from_dict(config)
+    program = LLMProgram.from_dict(config)
 
 
 def test_extract_subsection_from_yaml():
@@ -140,10 +137,12 @@ def test_manual_program_linking():
     # Manually link programs
     main_program.add_linked_program("assistant", assistant_program, "Test assistant")
 
-    # Verify linking
-    assert "assistant" in main_program.linked_programs
-    assert main_program.linked_programs["assistant"] is assistant_program
-    assert main_program.linked_program_descriptions["assistant"] == "Test assistant"
+    # Verify linking via SpawnPlugin
+    spawn_plugin = next((p for p in main_program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "assistant" in spawn_plugin.linked_programs
+    assert spawn_plugin.linked_programs["assistant"] is assistant_program
+    assert spawn_plugin.linked_program_descriptions["assistant"] == "Test assistant"
 
 
 def test_no_warning_from_file():
@@ -176,18 +175,32 @@ def test_no_warning_from_file():
         # Create a separate config with the same linked_programs for direct dict use
         dict_config = yaml_content.copy()
 
-        # Test 1: Using from_dict directly should warn about linked_programs
-        with pytest.warns(UserWarning, match="linked_programs is not automatically resolved"):
-            program_from_dict = LLMProgram.from_dict(dict_config, base_dir=temp_dir)
+        # Test 1: Using from_dict directly
+        program_from_dict = LLMProgram.from_dict(dict_config, base_dir=temp_dir)
 
-        # Test 2: Using from_file should NOT warn about linked_programs
-        # Instead of catching all warnings, we'll just verify the behavior is correct
+        # Test 2: Using from_file does not automatically resolve linked programs
         program_from_file = LLMProgram.from_file(test_file)
 
-        # Verify that linked program was resolved when using from_file
-        assert "assistant" in program_from_file.linked_programs
-        assert isinstance(program_from_file.linked_programs["assistant"], LLMProgram)
+        # Linked programs are not automatically loaded without the spawn plugin
+        spawn_plugin_file = next((p for p in program_from_file.plugins if isinstance(p, SpawnPlugin)), None)
+        spawn_plugin_dict = next((p for p in program_from_dict.plugins if isinstance(p, SpawnPlugin)), None)
+        assert spawn_plugin_file is None or spawn_plugin_file.linked_programs == {}
 
-        # But not when using from_dict directly
-        assert "assistant" in program_from_dict.linked_programs
-        assert isinstance(program_from_dict.linked_programs["assistant"], str)
+        # The dictionary-based load does not resolve linked programs either
+        assert spawn_plugin_dict is None or spawn_plugin_dict.linked_programs == {}
+
+
+def test_from_file_explicit_format():
+    """Ensure from_file respects the provided format parameter."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yaml_file = Path(temp_dir) / "config.conf"
+        yaml_content = {
+            "model": {"name": "test", "provider": "test-provider"},
+            "prompt": {"system_prompt": "hi"},
+        }
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_content, f)
+
+        program = LLMProgram.from_file(yaml_file, format="yaml")
+        assert program.model_name == "test"
+        assert program.provider == "test-provider"

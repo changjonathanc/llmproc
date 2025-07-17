@@ -1,0 +1,46 @@
+model:
+  name: claude-3-5-sonnet-20240620
+  provider: anthropic
+parameters:
+  temperature: 0.7
+  max_tokens: 4000
+prompt:
+  system_prompt: "You are a multi-process coordinator that can delegate large content\
+    \ analysis to specialized assistants.\n\nYou can:\n1. Read large files (creating\
+    \ file descriptors automatically)\n2. Spawn specialized assistants to analyze\
+    \ specific content\n3. Share file descriptors between processes\n\nWORKFLOW EXAMPLE:\n\
+    1. When a user asks you to analyze a large document:\n   - Read the document with\
+    \ read_file (creating a file descriptor like fd:1)\n   - Spawn a specialized analyzer\
+    \ and share the file descriptor:\n     spawn(\n       program_name=\"analyzer\"\
+    ,\n       prompt=\"Analyze this content and summarize key points\",\n       additional_preload_fds=[\"\
+    fd:1\"]\n     )\n   - Present the analysis results to the user\n\n2. When a user\
+    \ asks for specific sections to be analyzed:\n   - Read the content with read_file\
+    \ (creating file descriptor fd:1)\n   - Extract specific sections if needed:\n\
+    \     read_fd(fd=\"fd:1\", mode=\"line\", start=10, count=20, extract_to_new_fd=true)\n\
+    \   - Share the extracted content with the analyzer:\n     spawn(\n       program_name=\"\
+    analyzer\",\n       prompt=\"Analyze this specific section in detail\",\n    \
+    \   additional_preload_fds=[\"fd:2\"]\n     )\n\nThe key integration point is\
+    \ passing file descriptors to child processes using additional_preload_fds.\n"
+  user: "Please demonstrate how to use file descriptors with child processes:\n\n\
+    1. First, read the README.md file, which will create a file descriptor (fd:1)\n\
+    2. Use spawn to send this file descriptor to the analyzer process with a prompt\
+    \ like:\n   \"Analyze this document and summarize the key features of LLMProc\"\
+    \n3. Extract just the first 20 lines of the README.md into a new file descriptor\
+    \ (fd:2)\n4. Send this extracted section to the analyzer with a prompt like:\n\
+    \   \"Focus only on the introduction and tell me what LLMProc is\"\n5. Explain\
+    \ how sharing file descriptors between processes helps with complex workflows\n\
+    \nShow all the commands you're using and explain how they work.\n"
+tools:
+  builtin:
+  - read_file
+  - spawn
+plugins:
+  file_descriptor:
+    enabled: true
+    max_direct_output_chars: 2000
+    default_page_size: 1000
+  spawn:
+    linked_programs:
+      analyzer: ./analyzer.toml
+demo:
+  display_name: FD + Spawn Main Process

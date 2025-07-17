@@ -5,10 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from llmproc.common.results import ToolResult
 from llmproc.tools import ToolManager
+from llmproc.tools.core import Tool
+from llmproc.common.metadata import get_tool_meta
 
 
 @pytest.fixture
-def tool_manager():
+async def tool_manager():
     """Create a tool manager with a test tool."""
     manager = ToolManager()
 
@@ -17,14 +19,16 @@ def tool_manager():
         return ToolResult.from_success("Test tool success")
 
     # Register the tool
-    manager.runtime_registry.register_tool(
-        "test_tool",
-        test_tool_handler,
-        {"name": "test_tool", "description": "A test tool"},
+    manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=test_tool_handler,
+            schema={"name": "test_tool", "description": "A test tool"},
+            meta=get_tool_meta(test_tool_handler),
+        )
     )
 
     # Register the tool by handler callable (not by name)
-    manager.register_tools([test_tool_handler])
+    await manager.register_tools([test_tool_handler])
 
     return manager
 
@@ -44,7 +48,8 @@ async def test_call_nonexistent_tool(tool_manager):
     result = await tool_manager.call_tool("nonexistent_tool", {})
     assert isinstance(result, ToolResult)
     assert result.is_error
-    assert result.content == "This tool is not available"
+    assert "nonexistent_tool" in result.content
+    assert "list_tools" in result.content
 
 
 @pytest.mark.asyncio
@@ -55,14 +60,16 @@ async def test_tool_execution_error(tool_manager):
     async def error_tool_handler(**kwargs):
         raise ValueError("Test error")
 
-    tool_manager.runtime_registry.register_tool(
-        "error_tool",
-        error_tool_handler,
-        {"name": "error_tool", "description": "A tool that errors"},
+    tool_manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=error_tool_handler,
+            schema={"name": "error_tool", "description": "A tool that errors"},
+            meta=get_tool_meta(error_tool_handler),
+        )
     )
 
     # Register the error tool by handler callable
-    tool_manager.register_tools([error_tool_handler])
+    await tool_manager.register_tools([error_tool_handler])
 
     result = await tool_manager.call_tool("error_tool", {})
     assert isinstance(result, ToolResult)

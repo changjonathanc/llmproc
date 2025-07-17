@@ -11,6 +11,9 @@ The runtime context system provides a standardized way for tools to:
 3. Validate required components at runtime
 4. Handle missing dependencies gracefully
 
+> [!TIP]
+> For tools that maintain internal state, register a class instance's method as the tool handler. This avoids injecting context and keeps state encapsulated.
+
 ## Using Context-Aware Tools
 
 ### Defining a Context-Aware Tool
@@ -38,13 +41,12 @@ For better reliability, always specify which context keys your tool requires usi
 ```python
 @register_tool(
     requires_context=True,
-    required_context_keys=["process", "linked_programs"]
+    required_context_keys=["process"]
 )
 async def spawn_tool(program_name: str, prompt: str, runtime_context=None):
     # Context validation happens automatically via the decorator
     # You can safely access the required keys without additional checks
     process = runtime_context["process"]
-    linked_programs = runtime_context["linked_programs"]
 
     # Implementation...
     return result
@@ -68,10 +70,6 @@ The `RuntimeContext` is defined as a TypedDict with the following keys:
 ```python
 class RuntimeContext(TypedDict, total=False):
     process: Any  # LLMProcess instance
-    fd_manager: Any  # FileDescriptorManager instance
-    linked_programs: dict[str, Any]  # Dictionary of linked programs
-    linked_program_descriptions: dict[str, str]  # Dictionary of program descriptions
-    stderr: list[str]  # Buffer for logging via write_stderr tool
 ```
 
 ## Runtime Context Initialization
@@ -88,13 +86,15 @@ context = setup_runtime_context(process)
 
 ## Logging to Standard Error
 
-The built-in `write_stderr` tool appends log messages to the
-`stderr` buffer in the runtime context. Retrieve the accumulated log with
-`process.get_stderr_log()`.
+Enable stderr logging by adding a `[plugins.stderr]` section to your
+configuration. The `StderrPlugin` then provides the `write_stderr` tool.
+Log messages are stored inside the plugin instance and retrieved with
+`process.get_plugin(StderrPlugin).get_log()` (or by keeping your own
+reference to the plugin).
 
 ```python
 process.call_tool("write_stderr", {"message": "starting step"})
-print(process.get_stderr_log())
+print(process.get_plugin(StderrPlugin).get_log())
 ```
 
 ## Best Practices
@@ -111,7 +111,7 @@ If you encounter runtime context issues:
 1. Check that your tool is properly marked with `requires_context=True`
 2. Verify that you've specified all required context keys via `required_context_keys`
 3. Ensure the tools are being called through `process.call_tool()` or `tool_manager.call_tool()`
-4. Check that the process has all required components (fd_manager, linked_programs, etc.)
+4. Check that the process has all required components
 5. Verify that `setup_runtime_context()` is being called during process initialization
 
 ## Implementation Details

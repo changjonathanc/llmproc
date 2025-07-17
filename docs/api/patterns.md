@@ -35,6 +35,25 @@ asyncio.run(main())
 > `run()` calls](../../FAQ.md#is-llmprocessrun-safe-to-call-concurrently) for
 > details.
 
+### Standard Sync Pattern
+
+For synchronous contexts like scripts and notebooks, use `start_sync()` to create a `SyncLLMProcess` with its own persistent event loop:
+
+```python
+from llmproc import LLMProgram
+
+def main():
+    program = LLMProgram.from_file("path/to/config.yaml")
+    process = program.start_sync()
+    run_result = process.run("User input")
+    response = process.get_last_message()
+    print(f"Response: {response}")
+    process.close()
+
+if __name__ == "__main__":
+    main()
+```
+
 ### Handling RunResult
 
 Always use the RunResult object for metrics and diagnostics:
@@ -43,7 +62,7 @@ Always use the RunResult object for metrics and diagnostics:
 run_result = await process.run("User input")
 
 print(f"Run completed in {run_result.duration_ms}ms")
-print(f"API calls: {run_result.api_calls}")
+print(f"API calls: {run_result.api_call_count}")
 
 # Detailed API information
 for i, api_info in enumerate(run_result.api_call_infos):
@@ -57,13 +76,18 @@ for i, api_info in enumerate(run_result.api_call_infos):
 Register callbacks to monitor execution in real-time:
 
 ```python
-callbacks = {
-    "on_tool_start": lambda tool_name, args: print(f"Starting tool: {tool_name}"),
-    "on_tool_end": lambda tool_name, result: print(f"Tool completed: {tool_name}"),
-    "on_response": lambda content: print(f"Response: {content[:30]}...")
-}
+class Monitor:
+    def tool_start(self, tool_name, tool_args, *, process):
+        print(f"Starting tool: {tool_name}")
 
-run_result = await process.run("User input", callbacks=callbacks)
+    def tool_end(self, tool_name, result, *, process):
+        print(f"Tool completed: {tool_name}")
+
+    def response(self, content, *, process):
+        print(f"Response: {content[:30]}...")
+
+process.add_plugins(Monitor())
+run_result = await process.run("User input")
 ```
 
 ## Unix-Inspired Program/Process Pattern
@@ -105,14 +129,13 @@ from llmproc.tools.function_tools import register_tool
 # Use the register_tool decorator with requires_context=True
 @register_tool(
     requires_context=True,
-    required_context_keys=["process", "fd_manager"]
+    required_context_keys=["process"]
 )
 async def my_tool(arg1: str, runtime_context=None) -> dict:
     """A tool that requires runtime context access."""
     # The decorator automatically validates the context
     # So you can safely access the required keys
     process = runtime_context["process"]
-    fd_manager = runtime_context["fd_manager"]
 
     # Use dependencies to implement the tool
     # ...
@@ -122,6 +145,21 @@ async def my_tool(arg1: str, runtime_context=None) -> dict:
 
 This pattern eliminates circular dependencies between tools and the LLMProcess.
 
+### Hook Plugin Pattern
+
+Plugins modify behavior by implementing `hook_*` methods. Add them to a program with `add_plugins()`:
+
+```python
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+
+program = (
+    LLMProgram.from_file("config.yaml")
+    .add_plugins(FileDescriptorPlugin(max_size=16000))
+)
+process = await program.start()
+```
+
+See [Plugin System](../plugin-system.md) for more details.
 ## Extension Patterns
 
 ### Adding a New Tool
@@ -147,13 +185,12 @@ from llmproc.common.results import ToolResult
 
 @register_tool(
     requires_context=True,
-    required_context_keys=["process", "fd_manager"]
+    required_context_keys=["process"]
 )
 async def my_tool_handler(param1: str, param2: int = 0, runtime_context=None) -> Any:
     # The decorator automatically validates context requirements
     # So you can safely access required context keys
     process = runtime_context["process"]
-    fd_manager = runtime_context["fd_manager"]
 
     # Tool implementation using dependencies
     result = f"Processed {param1} with value {param2}"
@@ -161,18 +198,8 @@ async def my_tool_handler(param1: str, param2: int = 0, runtime_context=None) ->
     # Return a proper ToolResult
     return ToolResult.from_success(result)
 
-# 3. Register with the tool registry
-def register_my_tool(registry):
-    registry.register_tool("my_tool", my_tool_handler, my_tool_def)
-
-# 4. Add to the registration system
-def register_system_tools_config(config):
-    # Get the tool registry
-    registry = config.get("registry")
-
-    # Register custom tool if enabled in config
-    if "my_tool" in config.get("enabled_tools", []):
-        register_my_tool(registry)
+# 3. Register the tool with a program
+program.register_tools([my_tool_handler])
 ```
 
 ### Adding a New Provider
@@ -191,33 +218,24 @@ def get_my_provider_client(model_name: str, **kwargs) -> Any:
     # Create and return client
     return Client(api_key=api_key)
 
-# 2. Create a process executor class
-class MyProviderProcessExecutor:
-    async def run(self, process, user_prompt, max_iterations=10,
-                  callbacks=None, run_result=None):
-        # Create a RunResult if not provided
-        if run_result is None:
-            from llmproc.common.results import RunResult
-            run_result = RunResult()
-
-        # Implementation specific to this provider
-        # ...
-
-        # Add API call info
-        run_result.add_api_call({
-            "model": process.model_name,
-            "usage": response.usage
-        })
-
-        # Complete and return the result
-        return run_result.complete()
-
-# 3. Update the provider mapping in LLMProcess._async_run
-elif self.provider == "my_provider":
-    executor = MyProviderProcessExecutor()
-    return await executor.run(self, user_prompt, max_iterations, callbacks, run_result)
 ```
 
+```python
+# 1. Create a process executor
+from llmproc.common.results import RunResult
+
+class MyProviderProcessExecutor:
+    async def run(self, process, user_prompt, max_iterations=10, run_result=None):
+        run_result = run_result or RunResult()
+        # Implementation specific to this provider...
+        return run_result.complete()
+
+# 2. Register the executor
+from llmproc.providers import EXECUTOR_MAP
+EXECUTOR_MAP["my_provider"] = MyProviderProcessExecutor
+```
+
+Use `provider="my_provider"` in your program configuration to activate the executor.
 ## Best Practices
 
 ### Program Configuration
@@ -245,7 +263,7 @@ elif self.provider == "my_provider":
    - Handle specific exceptions separately from general errors
 
 3. **Resource Management**:
-   - Monitor API calls with RunResult.api_calls
+   - Monitor API calls with RunResult.api_call_count
    - Track duration to identify performance issues
 
 ### Tool Development
@@ -285,14 +303,16 @@ elif self.provider == "my_provider":
 
 ```python
 # DON'T do this
-process = LLMProcess(program=program)  # Missing proper initialization
+from llmproc.config import ProcessConfig
+
+process = LLMProcess(ProcessConfig(program=program))  # Missing proper initialization
 ```
 
-Instead, use the program.start() method for proper async initialization:
+Instead, use the program.start() method (or `start_sync()` in synchronous contexts):
 
 ```python
 # DO this
-process = await program.start()
+process = await program.start()  # or program.start_sync()
 ```
 
 ### ❌ Tool Dependencies Without Context-Aware Pattern
@@ -336,7 +356,7 @@ Instead, capture and use the RunResult:
 # DO this
 run_result = await process.run("User input")
 response = process.get_last_message()
-print(f"Used {run_result.api_calls} API calls")
+print(f"Used {run_result.api_call_count} API calls")
 ```
 
 ### ❌ Synchronous Blocking
@@ -348,7 +368,7 @@ def main():
     process = asyncio.run(program.start())  # Blocking in sync function
 ```
 
-Instead, use proper async patterns:
+Instead, use proper async patterns or call `start_sync()`:
 
 ```python
 # DO this
@@ -357,6 +377,8 @@ async def main():
     process = await program.start()
 
 asyncio.run(main())
+# Or use the synchronous API
+process = LLMProgram.from_file("config.yaml").start_sync()
 ```
 
 ### ❌ Direct State Manipulation

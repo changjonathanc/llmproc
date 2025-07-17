@@ -7,6 +7,7 @@ import pytest
 
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
+from llmproc.plugins.spawn import SpawnPlugin
 
 
 def test_program_compile_with_env_info():
@@ -25,44 +26,21 @@ def test_program_compile_with_env_info():
             [prompt]
             system_prompt = "Test system prompt"
 
-            [env_info]
+            [plugins.env_info]
             variables = ["working_directory", "date"]
             custom_var = "custom value"
-            env_vars = { region = "EXTRA_INFO" }
             """
             )
 
         # Load the program from TOML
         program = LLMProgram.from_toml(toml_path)
 
-        # Verify env_info was properly loaded
-        assert program.env_info.variables == ["working_directory", "date"]
-        assert program.env_info.model_extra["custom_var"] == "custom value"
-        assert program.env_info.env_vars == {"region": "EXTRA_INFO"}
+        # Verify EnvInfoPlugin was loaded
+        from llmproc.plugins.env_info.plugin import EnvInfoPlugin
 
-
-def test_program_compile_with_env_commands():
-    """Test env_info commands are loaded from TOML."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        toml_path = Path(temp_dir) / "program.toml"
-        with open(toml_path, "w") as f:
-            f.write(
-                """
-            [model]
-            name = "cmd-model"
-            provider = "anthropic"
-
-            [prompt]
-            system_prompt = "Cmd prompt"
-
-            [env_info]
-            commands = ["echo hi"]
-            """
-            )
-
-        program = LLMProgram.from_toml(toml_path)
-
-        assert program.env_info.commands == ["echo hi"]
+        plugin = next(p for p in program.plugins if isinstance(p, EnvInfoPlugin))
+        assert plugin.env_config.variables == ["working_directory", "date"]
+        assert plugin.env_config.model_extra["custom_var"] == "custom value"
 
 
 def test_program_linking_with_env_info():
@@ -94,25 +72,30 @@ def test_program_linking_with_env_info():
             [prompt]
             system_prompt = "Main program system prompt"
 
-            [env_info]
+            [plugins.env_info]
             variables = ["working_directory"]
 
             [tools]
             builtin = ["spawn"]
 
-            [linked_programs]
-            test_program = "{linked_program_path}"
+            [plugins.spawn]
+            linked_programs = {{ test_program = "{linked_program_path}" }}
             """
             )
 
         # Compile the main program
         program = LLMProgram.from_toml(main_program_path)
 
-        # Verify that linked programs are correctly loaded and compiled
-        assert "test_program" in program.linked_programs
-        assert program.linked_programs["test_program"].model_name == "linked-model"
-        assert program.linked_programs["test_program"].provider == "anthropic"
-        assert program.env_info.variables == ["working_directory"]
+        # Verify that linked programs are correctly loaded and compiled via SpawnPlugin
+        spawn_plugin = next((p for p in program.plugins if p.__class__.__name__ == "SpawnPlugin"), None)
+        assert spawn_plugin is not None
+        assert "test_program" in spawn_plugin.linked_programs
+        assert spawn_plugin.linked_programs["test_program"].model_name == "linked-model"
+        assert spawn_plugin.linked_programs["test_program"].provider == "anthropic"
+        from llmproc.plugins.env_info.plugin import EnvInfoPlugin
+
+        plugin = next(p for p in program.plugins if isinstance(p, EnvInfoPlugin))
+        assert plugin.env_config.variables == ["working_directory"]
 
 
 # Original tests from the file
@@ -188,23 +171,18 @@ def test_preload_files_warnings():
             [prompt]
             system_prompt = "Test system prompt"
 
-            [preload]
+            [plugins.preload_files]
             files = ["non-existent-file.txt"]
             """
             )
 
-        # Check for warnings when loading from TOML
+        # Check for warnings when the plugin validates the missing file
         with warnings.catch_warnings(record=True) as w:
-            # Filter out DeprecationWarning
-            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            warnings.simplefilter("always")
             program = LLMProgram.from_toml(toml_path)
-            # Look through all warnings
-            preload_warning_found = False
-            for warning in w:
-                if "Preload file not found" in str(warning.message):
-                    preload_warning_found = True
-                    break
+            preload_warning_found = any("Preload file not found" in str(warning.message) for warning in w)
             assert preload_warning_found, "No warning about missing preload file found"
+            program.compile()
 
         # Verify the program was still compiled successfully
         assert program.model_name == "test-model"
@@ -213,10 +191,10 @@ def test_preload_files_warnings():
 
         # Don't do a strict path comparison since resolution can be inconsistent (/private/var vs /var)
         # Instead check that the filename component is correct
-        assert len(program.preload_files) == 1
-        preload_path = Path(program.preload_files[0])
+        plugin = next(p for p in program.plugins if p.__class__.__name__ == "PreloadFilesPlugin")
+        assert len(plugin.file_paths) == 1
+        preload_path = Path(plugin.file_paths[0])
         assert preload_path.name == "non-existent-file.txt"
-        assert Path(temp_dir).name in str(preload_path)
 
 
 def test_system_prompt_file_error():

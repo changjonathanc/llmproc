@@ -83,7 +83,6 @@ async def direct_anthropic_process_with_caching(anthropic_api_key):
         provider="anthropic",
         system_prompt="You are a helpful assistant. " + ("This is filler content. " * 500),
         parameters={"max_tokens": 1000},
-        disable_automatic_caching=False,  # Ensure caching is enabled
     )
 
     # Start the process using the standard pattern
@@ -134,7 +133,7 @@ class TestProviderSpecificUnitTests:
         assert is_direct_anthropic
 
         # Arrange & Act - Vertex AI provider detection
-        is_direct_anthropic = "anthropic" in "anthropic_vertex" and "vertex" not in "anthropic_vertex"
+        is_direct_anthropic = "anthropic" in "anthropic-vertex" and "vertex" not in "anthropic-vertex"
 
         # Assert
         assert not is_direct_anthropic
@@ -196,7 +195,6 @@ class TestProviderSpecificUnitTests:
         ]
         process.model_name = "claude-3-sonnet"
         process.api_params = {}
-        process.disable_automatic_caching = False
 
         # Act - Prepare API request
         request = prepare_api_request(process)
@@ -229,7 +227,7 @@ class TestProviderSpecificUnitTests:
         assert extra_headers["anthropic-beta"] == "token-efficient-tools-2025-02-19"
 
         # Arrange - Vertex AI
-        mock_process.provider = "anthropic_vertex"
+        mock_process.provider = "anthropic-vertex"
         extra_headers = {}
 
         # Act - Apply token-efficient tools logic
@@ -324,7 +322,7 @@ class TestProviderSpecificAPITests:
         with timed_api_test(timeout_seconds=25.0):
             # Act - First request WITHOUT token-efficient tools
             response_standard = await client.messages.create(
-                model="claude-3-7-sonnet@20250219",
+                model="claude-3-7-sonnet-20250219",
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
                 tools=[calculator_tool],
@@ -336,7 +334,7 @@ class TestProviderSpecificAPITests:
 
             # Act - Second request WITH token-efficient tools
             response_efficient = await client.messages.create(
-                model="claude-3-7-sonnet@20250219",
+                model="claude-3-7-sonnet-20250219",
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
                 tools=[calculator_tool],

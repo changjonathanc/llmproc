@@ -97,6 +97,114 @@ def _infer_repo_slug() -> str | None:
     return slug or None
 
 
+def _ensure_git_repo(yes: bool) -> None:
+    """Abort if not in a git repository unless user confirms."""
+    if not _is_git_repo():
+        click.echo("⚠️  Warning: You don't appear to be in a git repository.")
+        click.echo("Please run this command from the root of your GitHub repository.")
+        if not yes and not click.confirm("Continue anyway?"):
+            raise SystemExit(0)
+
+
+def _summarize_files(repo: str, ref: str, dest: Path) -> list[str]:
+    """Print file summary and return list of existing files."""
+    all_files = WORKFLOW_FILES + CONFIG_FILES
+    existing_files = [f for f in all_files if (dest / f).exists()]
+
+    if existing_files:
+        click.echo("⚠️  Warning: The following files already exist and will be overwritten:")
+        for file in existing_files:
+            click.echo(f"  {file}")
+        click.echo("")
+
+    click.echo(f"This will download the following files from {repo}@{ref}:")
+    click.echo("\nWorkflow files:")
+    for file in WORKFLOW_FILES:
+        status = " (will overwrite)" if file in existing_files else ""
+        click.echo(f"  {file}{status}")
+    click.echo("\nConfiguration files:")
+    for file in CONFIG_FILES:
+        status = " (will overwrite)" if file in existing_files else ""
+        click.echo(f"  {file}{status}")
+    click.echo(f"\nTotal: {len(all_files)} files")
+    return existing_files
+
+
+def _create_missing_dirs(dest: Path, yes: bool) -> None:
+    """Create directories required for installation."""
+    missing_dirs = sorted(
+        {(dest / Path(rel)).parent for rel in WORKFLOW_FILES + CONFIG_FILES if not (dest / Path(rel)).parent.exists()}
+    )
+    if not missing_dirs:
+        return
+    click.echo("The following directories will be created:")
+    for d in missing_dirs:
+        click.echo(f"  {d}")
+    if not yes and not click.confirm("Create directories and copy files?"):
+        raise SystemExit(0)
+    for d in missing_dirs:
+        d.mkdir(parents=True, exist_ok=True)
+
+
+def _maybe_show_diff(files: dict[str, bytes], dest: Path, repo: str, ref: str, yes: bool, upgrade: bool) -> None:
+    """Optionally print diffs for files and ask to apply updates."""
+    if not upgrade:
+        return
+    for rel, data in files.items():
+        target = dest / rel
+        old = target.read_bytes() if target.exists() else b""
+        diff = difflib.unified_diff(
+            old.decode(errors="ignore").splitlines(),
+            data.decode().splitlines(),
+            fromfile=str(target),
+            tofile=f"{repo}@{ref}/{rel}",
+            lineterm="",
+        )
+        diff_text = "\n".join(diff)
+        click.echo(f"\nDiff for {rel}:")
+        if diff_text:
+            click.echo(diff_text)
+        else:
+            click.echo("(no changes)")
+
+    if not yes and not click.confirm("\nApply updates?"):
+        raise SystemExit(0)
+
+
+def _print_next_steps(repo_slug: str, all_files: list[str]) -> None:
+    """Print git and token setup instructions."""
+    click.echo("\n📝 Next steps:")
+    click.echo("\n1. Add the files to git:")
+    if len(all_files) <= 6:
+        for file in all_files:
+            click.echo(f"   git add {file}")
+    else:
+        click.echo("   git add .github/")
+
+    click.echo("\n2. Commit the changes:")
+    click.echo('   git commit -m "Add llmproc GitHub Actions workflows"')
+
+    click.echo("\n3. Push to GitHub:")
+    click.echo("   git push")
+
+    click.echo("\n🔑 Set up required secrets:")
+    click.echo("\n1. Generate a GitHub personal access token:")
+    click.echo("   https://github.com/settings/tokens")
+    click.echo("   (Select 'repo' scope for private repositories)")
+
+    click.echo("\n2. Generate an Anthropic API key:")
+    click.echo("   https://console.anthropic.com/settings/keys")
+
+    click.echo("\n3. Add both tokens as repository secrets:")
+    click.echo(f"   https://github.com/{repo_slug}/settings/secrets/actions")
+    click.echo("   - Add LLMPROC_WRITE_TOKEN (your GitHub personal access token)")
+    click.echo("   - Add ANTHROPIC_API_KEY")
+
+    click.echo("\n4. Or use GitHub CLI to set secrets (if you have gh installed):")
+    click.echo(f"   echo $GITHUB_TOKEN      | gh secret set LLMPROC_WRITE_TOKEN -b- -R {repo_slug}")
+    click.echo(f"   echo $ANTHROPIC_API_KEY | gh secret set ANTHROPIC_API_KEY  -b- -R {repo_slug}")
+
+
 @click.command()
 @click.option("--repo", default=DEFAULT_REPO, show_default=True, help="Repository in owner/repo format.")
 @click.option("--ref", default=DEFAULT_REF, show_default=True, help="Branch or tag to fetch.")
@@ -120,108 +228,23 @@ def _infer_repo_slug() -> str | None:
 )
 def main(repo: str, ref: str, dest: Path, yes: bool, upgrade: bool) -> None:
     """Download and install GitHub Actions workflows."""
-    # Check if we're in a git repository
-    if not _is_git_repo():
-        click.echo("⚠️  Warning: You don't appear to be in a git repository.")
-        click.echo("Please run this command from the root of your GitHub repository.")
-        if not yes and not click.confirm("Continue anyway?"):
-            raise SystemExit(0)
+    _ensure_git_repo(yes)
 
-    # Check for existing files
-    all_files = WORKFLOW_FILES + CONFIG_FILES
-    existing_files = [f for f in all_files if (dest / f).exists()]
-
-    if existing_files:
-        click.echo("⚠️  Warning: The following files already exist and will be overwritten:")
-        for file in existing_files:
-            click.echo(f"  {file}")
-        click.echo("")
-
-    click.echo(f"This will download the following files from {repo}@{ref}:")
-    click.echo("\nWorkflow files:")
-    for file in WORKFLOW_FILES:
-        status = " (will overwrite)" if file in existing_files else ""
-        click.echo(f"  {file}{status}")
-    click.echo("\nConfiguration files:")
-    for file in CONFIG_FILES:
-        status = " (will overwrite)" if file in existing_files else ""
-        click.echo(f"  {file}{status}")
-    click.echo(f"\nTotal: {len(WORKFLOW_FILES) + len(CONFIG_FILES)} files")
+    _summarize_files(repo, ref, dest)
     if not yes and not click.confirm("\nContinue?"):
         raise SystemExit(0)
 
-    missing_dirs = sorted(
-        {(dest / Path(rel)).parent for rel in WORKFLOW_FILES + CONFIG_FILES if not (dest / Path(rel)).parent.exists()}
-    )
-    if missing_dirs:
-        click.echo("The following directories will be created:")
-        for d in missing_dirs:
-            click.echo(f"  {d}")
-        if not yes and not click.confirm("Create directories and copy files?"):
-            raise SystemExit(0)
-        for d in missing_dirs:
-            d.mkdir(parents=True, exist_ok=True)
+    _create_missing_dirs(dest, yes)
 
     files = asyncio.run(_download_files(repo, ref))
 
-    if upgrade:
-        for rel, data in files.items():
-            target = dest / rel
-            old = target.read_bytes() if target.exists() else b""
-            diff = difflib.unified_diff(
-                old.decode(errors="ignore").splitlines(),
-                data.decode().splitlines(),
-                fromfile=str(target),
-                tofile=f"{repo}@{ref}/{rel}",
-                lineterm="",
-            )
-            diff_text = "\n".join(diff)
-            click.echo(f"\nDiff for {rel}:")
-            if diff_text:
-                click.echo(diff_text)
-            else:
-                click.echo("(no changes)")
-
-        if not yes and not click.confirm("\nApply updates?"):
-            raise SystemExit(0)
+    _maybe_show_diff(files, dest, repo, ref, yes, upgrade)
 
     asyncio.run(_install(repo, ref, dest, files))
     click.echo(f"\n✅ Successfully installed GitHub Actions from {repo}@{ref}")
 
-    # Provide git instructions
-    click.echo("\n📝 Next steps:")
-    click.echo("\n1. Add the files to git:")
-    all_files = WORKFLOW_FILES + CONFIG_FILES
-    if len(all_files) <= 6:
-        for file in all_files:
-            click.echo(f"   git add {file}")
-    else:
-        click.echo("   git add .github/")
-
-    click.echo("\n2. Commit the changes:")
-    click.echo('   git commit -m "Add llmproc GitHub Actions workflows"')
-
-    click.echo("\n3. Push to GitHub:")
-    click.echo("   git push")
-
-    # Provide token setup instructions
     repo_slug = _infer_repo_slug() or "<user>/<repo>"
-    click.echo("\n🔑 Set up required secrets:")
-    click.echo("\n1. Generate a GitHub personal access token:")
-    click.echo("   https://github.com/settings/tokens")
-    click.echo("   (Select 'repo' scope for private repositories)")
-
-    click.echo("\n2. Generate an Anthropic API key:")
-    click.echo("   https://console.anthropic.com/settings/keys")
-
-    click.echo("\n3. Add both tokens as repository secrets:")
-    click.echo(f"   https://github.com/{repo_slug}/settings/secrets/actions")
-    click.echo("   - Add LLMPROC_WRITE_TOKEN (your GitHub personal access token)")
-    click.echo("   - Add ANTHROPIC_API_KEY")
-
-    click.echo("\n4. Or use GitHub CLI to set secrets (if you have gh installed):")
-    click.echo(f"   echo $GITHUB_TOKEN      | gh secret set LLMPROC_WRITE_TOKEN -b- -R {repo_slug}")
-    click.echo(f"   echo $ANTHROPIC_API_KEY | gh secret set ANTHROPIC_API_KEY  -b- -R {repo_slug}")
+    _print_next_steps(repo_slug, WORKFLOW_FILES + CONFIG_FILES)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation

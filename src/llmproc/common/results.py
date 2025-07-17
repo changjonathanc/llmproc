@@ -9,8 +9,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from llmproc.providers.pricing import get_claude_pricing
-
 
 class ToolResult:
     """A standardized result from tool execution.
@@ -117,6 +115,24 @@ class ToolResult:
         return f"ToolResult(content={self.content}, is_error={self.is_error}, abort_execution={self.abort_execution})"
 
 
+def ensure_tool_result(value: Any) -> "ToolResult":
+    """Return ``value`` as a :class:`ToolResult` instance.
+
+    If ``value`` is already a :class:`ToolResult`, it is returned as-is.
+    Otherwise ``value`` is wrapped with :func:`ToolResult.from_success`.
+
+    Args:
+        value: Arbitrary value returned from a tool handler.
+
+    Returns:
+        A ``ToolResult`` instance representing the value.
+    """
+    if isinstance(value, ToolResult):
+        return value
+
+    return ToolResult.from_success(value)
+
+
 @dataclass
 class RunResult:
     """Contains metadata about a process run.
@@ -133,7 +149,6 @@ class RunResult:
     # Basic attributes
     process: Any = None
     last_message: str = ""
-    token_counts: dict[str, int] = field(default_factory=dict)
 
     # Primary data storage - simplified to just two collections
     api_call_infos: list[dict[str, Any]] = field(default_factory=list)
@@ -154,14 +169,19 @@ class RunResult:
     stop_reason: str | None = None
 
     @property
-    def api_calls(self) -> int:
+    def api_call_count(self) -> int:
         """Get number of API calls made."""
         return len(self.api_call_infos)
 
     @property
+    def tool_call_count(self) -> int:
+        """Get number of tool calls made."""
+        return len(self.tool_calls)
+
+    @property
     def total_interactions(self) -> int:
         """Get total number of interactions (API calls + tool calls)."""
-        return self.api_calls + len(self.tool_calls)
+        return self.api_call_count + self.tool_call_count
 
     def add_api_call(self, info: dict[str, Any]) -> "RunResult":
         """Record information about an API call.
@@ -200,20 +220,20 @@ class RunResult:
 
         return self
 
-    def add_tool_call(self, name: str, args: dict = None) -> "RunResult":
+    def add_tool_call(self, tool_name: str, tool_args: dict = None) -> "RunResult":
         """Record a tool call.
 
         Args:
-            name: The name of the tool
-            args: The arguments passed to the tool
+            tool_name: The name of the tool
+            tool_args: The arguments passed to the tool
 
         Returns:
             self for method chaining
         """
         self.tool_calls.append(
             {
-                "tool_name": name,
-                "args": args or {},
+                "tool_name": tool_name,
+                "tool_args": tool_args or {},
             }
         )
         return self
@@ -240,14 +260,6 @@ class RunResult:
         self.duration_ms = int((self.end_time - self.start_time) * 1000)
         return self
 
-    def finish(self) -> "RunResult":
-        """Alias for complete() for API consistency.
-
-        Returns:
-            self for method chaining
-        """
-        return self.complete()
-
     def set_stop_reason(self, reason: str | None) -> "RunResult":
         """Set the reason why the run stopped.
 
@@ -269,20 +281,6 @@ class RunResult:
     def cache_write_tokens(self) -> int:
         """Return the total number of tokens written to cache."""
         return self._cache_write_tokens
-
-    @property
-    def cache_savings(self) -> float:
-        """
-        Return the estimated cost savings from cache usage.
-
-        Cached tokens cost only 10% of regular input tokens,
-        so savings is calculated as 90% of the cached token cost.
-        """
-        if not self._cached_tokens:
-            return 0.0
-
-        # Cached tokens are 90% cheaper than regular input tokens
-        return 0.9 * self._cached_tokens
 
     @property
     def input_tokens(self) -> int:
@@ -314,6 +312,9 @@ class RunResult:
         for info in self.api_call_infos:
             model = info.get("model")
             usage = info.get("usage", {})
+            # Import here to avoid circular dependency
+            from llmproc.providers.pricing import get_claude_pricing
+
             pricing = get_claude_pricing(model)
             if not pricing:
                 continue
@@ -352,4 +353,9 @@ class RunResult:
         if self._input_tokens + self._output_tokens > 0:
             token_stats = f", input_tokens={self._input_tokens}, output_tokens={self._output_tokens}, total_tokens={self._input_tokens + self._output_tokens}"
 
-        return f"RunResult({status}, api_calls={self.api_calls}, tool_calls={len(self.tool_calls)}, total={self.total_interactions}{cache_stats}{token_stats}, duration={duration})"
+        return (
+            "RunResult("
+            f"{status}, api_calls={self.api_call_count}, "
+            f"tool_calls={self.tool_call_count}, total={self.total_interactions}"
+            f"{cache_stats}{token_stats}, duration={duration})"
+        )

@@ -97,19 +97,32 @@ Both of these tools are powerful and can sometimes be used to achieve similar go
 
 ### How do I monitor what's happening during process execution?
 
-We have callbacks! The callback system provides visibility into execution without blocking the main application flow:
+We have a unified plugin system! The plugin system provides visibility into execution without blocking the main application flow:
 
 ```python
-callbacks = {
-    "on_tool_start": lambda tool_name, args: log_start(tool_name),
-    "on_tool_end": lambda tool_name, result: log_result(result),
-    "on_completion": lambda result: save_metrics(result)
-}
+class ProcessCallbacks:
+    def tool_start(self, tool_name, args):
+        log_start(tool_name)
 
-result = await process.run("Your query", callbacks=callbacks)
+    def tool_end(self, tool_name, result):
+        log_result(result)
+
+    def run_end(self, result):
+        save_metrics(result)
+
+    def api_stream_block(self, block):
+        # Handle streaming responses in real-time
+        if hasattr(block, 'type') and block.type == 'text':
+            print(block.text, end='', flush=True)
+
+# Register callbacks with the process
+process.add_plugins(ProcessCallbacks())
+
+# Run without callbacks parameter
+result = await process.run("Your query")
 ```
 
-This approach enables real-time monitoring, custom metrics collection, and integration with external logging systems. You can see examples of callback usage in the CLI implementation at `src/llmproc/cli.py`.
+This approach enables real-time monitoring, custom metrics collection, streaming responses, and integration with external logging systems. You can see examples of plugin usage in `examples/scripts/callback_demo.py`.
 
 ### How do I configure API retry behavior?
 
@@ -131,13 +144,15 @@ LLMProc supports two naming styles for prompt configuration:
 
 We recommend using the shorter forms for consistency with other configuration sections:
 
-```toml
-[prompt]
-system = "You are a helpful assistant."
-user = "Hello!"
+```yaml
+prompt:
+  system: "You are a helpful assistant."
+  user: "Hello!"
 
-[tools]
-builtin = ["calculator", "read_file"]  # Not "builtin_tools"
+tools:
+  builtin:
+    - calculator
+    - read_file  # Not "builtin_tools"
 ```
 
 The longer forms (`system_prompt`, `user_prompt`) remain fully supported for backward compatibility. Use them if you prefer more explicit field names or have existing configurations.

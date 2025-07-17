@@ -4,7 +4,7 @@ The preload feature allows you to provide files as context to the LLM at initial
 
 ## How Preloading Works
 
-When you specify files in the `[preload]` section of your TOML program, LLMProc will:
+When you specify files in the `[plugins.preload_files]` section of your program file, LLMProc will:
 
 1. Read all specified files at initialization time
 2. Format the content with XML tags for better context organization
@@ -13,16 +13,16 @@ When you specify files in the `[preload]` section of your TOML program, LLMProc 
 
 ## TOML Program Format
 
-Add a `[preload]` section to your TOML program file:
+Add a `plugins.preload_files` section to your program file:
 
-```toml
-[preload]
-files = [
-  "path/to/file1.txt",
-  "path/to/file2.md",
-  "path/to/another/file3.json"
-]
-relative_to = "program"  # or "cwd" to resolve at runtime
+```yaml
+plugins:
+  preload_files:
+    files:
+    - "path/to/file1.txt"
+    - "path/to/file2.md"
+    - "path/to/another/file3.json"
+    relative_to: "program"  # or "cwd" to resolve at runtime
 ```
 
 By default, paths are resolved relative to the program file. Set
@@ -36,6 +36,7 @@ directory when the program starts.
 ```python
 import asyncio
 from llmproc import LLMProgram
+from llmproc.plugins.preload_files import PreloadFilesPlugin
 
 async def main():
     # Create a program with preloaded files
@@ -46,8 +47,7 @@ async def main():
             system_prompt="You are a helpful assistant with knowledge about this project.",
             parameters={"max_tokens": 4096}
         )
-        .add_preload_file("README.md")
-        .add_preload_file("CONTRIBUTING.md")
+        .add_plugins(PreloadFilesPlugin(["README.md", "CONTRIBUTING.md"]))
     )
 
     # Start the process (handles async initialization)
@@ -79,7 +79,7 @@ from llmproc import LLMProgram
 
 async def main():
     # Load a program with linked programs
-    program = LLMProgram.from_toml("examples/program-linking/main.toml")
+    program = LLMProgram.from_yaml("examples/program-linking/main.yaml")
     process = await program.start()
 
     # Preload files are passed as an argument to the spawn tool
@@ -88,8 +88,7 @@ async def main():
         "README.md, pyproject.toml, and docs/preload-feature.md"
     )
 
-    # The spawn tool will internally pass these files to create_process
-    # with the additional_preload_files parameter
+    # The spawn tool will pass these files to the child's preload plugin
 
     # Get the response
     response = process.get_last_message()
@@ -136,7 +135,7 @@ This structure helps the model understand the source of the information and main
 - File content is inserted directly into the `enriched_system_prompt`; it is not stored separately
 - The enriched system prompt is generated during process creation, combining the original system prompt with preloaded content
 - The enriched system prompt is immutable after process creation
-- For child processes created with `spawn`, additional files can be preloaded via the `additional_preload_files` parameter
+- For child processes created with `spawn`, additional files can be preloaded via the `additional_preload_files` parameter, which appends paths to the child's plugin
 - The preloaded content is immutable after process creation
 - Missing files generate warnings but won't cause the initialization to fail
 - File paths are resolved relative to the program file unless

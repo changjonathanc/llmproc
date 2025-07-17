@@ -109,62 +109,71 @@ To get the most out of the enhanced program linking system:
 
 ### Multi-Specialist Research System
 
-```toml
-# main.toml
-[model]
-name = "claude-3-opus"
-provider = "anthropic"
+```yaml
+# main.yaml
+model:
+  name: "claude-3-opus"
+  provider: "anthropic"
 
-[prompt]
-system_prompt = "You are a research coordinator. Route queries to appropriate specialists."
+prompt:
+  system_prompt: "You are a research coordinator. Route queries to appropriate specialists."
 
-[tools]
-enabled = ["spawn"]
+tools:
+  builtin:
+    - spawn
 
-[linked_programs]
-academic = "academic.toml"
-web = "web.toml"
-data = "data.toml"
+plugins:
+  spawn:
+    linked_programs:
+      academic: academic.toml
+      web: web.toml
+      data: data.toml
 ```
 
 ### Code Generation with Test Verification
 
-```toml
-# main.toml
-[model]
-name = "claude-3-opus"
-provider = "anthropic"
+```yaml
+# main.yaml
+model:
+  name: "claude-3-opus"
+  provider: "anthropic"
 
-[prompt]
-system_prompt = "Generate code and verify it with tests."
+prompt:
+  system_prompt: "Generate code and verify it with tests."
 
-[tools]
-enabled = ["spawn"]
+tools:
+  builtin:
+    - spawn
 
-[linked_programs]
-code_generator = "code_generator.toml"
-test_writer = "test_writer.toml"
-code_reviewer = "code_reviewer.toml"
+plugins:
+  spawn:
+    linked_programs:
+      code_generator: code_generator.toml
+      test_writer: test_writer.toml
+      code_reviewer: code_reviewer.toml
 ```
 
 ### Interactive Document Processing
 
-```toml
-# main.toml
-[model]
-name = "claude-3-opus"
-provider = "anthropic"
+```yaml
+# main.yaml
+model:
+  name: "claude-3-opus"
+  provider: "anthropic"
 
-[prompt]
-system_prompt = "Process documents by routing to appropriate specialists."
+prompt:
+  system_prompt: "Process documents by routing to appropriate specialists."
 
-[tools]
-enabled = ["spawn"]
+tools:
+  builtin:
+    - spawn
 
-[linked_programs]
-summarizer = "summarizer.toml"
-translator = "translator.toml"
-formatter = "formatter.toml"
+plugins:
+  spawn:
+    linked_programs:
+      summarizer: summarizer.toml
+      translator: translator.toml
+      formatter: formatter.toml
 ```
 
 ## Conclusion

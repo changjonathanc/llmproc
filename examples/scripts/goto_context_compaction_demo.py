@@ -12,7 +12,6 @@ import sys
 from typing import Any
 
 from llmproc import LLMProgram
-from llmproc.callbacks import CallbackEvent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -112,8 +111,8 @@ The goto tool's detailed instructions will guide you on proper usage. Use this c
         process = await program.start()
         tracker = SimpleTracker()
 
-        # Register callbacks with the new pattern
-        process.add_callback(tracker)
+        # Register plugins with the unified API
+        process.add_plugins(tracker)
 
         # Run conversation
         for i, message in enumerate(conversation):

@@ -5,15 +5,27 @@
 </p>
 
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
-![Status](https://img.shields.io/badge/status-active-green)
+![Status](https://img.shields.io/badge/status-deprecated-orange)
 [![DOI](https://zenodo.org/badge/947976007.svg)](https://doi.org/10.5281/zenodo.15633191)
+
+> [!IMPORTANT]
+> ## 🚨 Project Status: No Longer Maintained
+>
+> **LLMProc has served its purpose and is no longer being maintained.** Through building this project, I discovered the plugin pattern, which make it easier to write your own agent framework. Read the new blog post for details: **[Agent-Environment Middleware (AEM)](https://jonathanc.net/blog/agent-environment-middleware)**.
+>
+>
+> The original LLMProc documentation follows below for reference.
+
+---
+
+## Original LLMProc Documentation
 
 LLMProc: Unix-inspired runtime that treats LLMs as processes. Build production-ready LLM programs with fully customizable YAML/TOML files. Or experiment with meta-tools via Python SDK - fork/spawn, goto, and more.
 Learn more at [llmproc.com](https://llmproc.com).
 
 **🔥 Check out our [LLMProc GitHub Actions](#llmproc-github-actions) to see LLMProc successfully automating code implementation, conflict resolution, and more!**
 
-**📋 Latest Updates: See [v0.9.3 Release Notes](docs/release_notes/RELEASE_NOTES_0.9.3.md) for cost control features, enhanced callbacks, and more.**
+**📋 Latest Updates: See [v0.10.0 Release Notes](docs/release_notes/RELEASE_NOTES_0.10.0.md) for cost control features, enhanced callbacks, and more.**
 
 ## Table of Contents
 
@@ -31,7 +43,7 @@ Learn more at [llmproc.com](https://llmproc.com).
 Automate your development workflow with LLMProc-powered GitHub Actions:
 
 - **`@llmproc /resolve`** - Automatically resolve merge conflicts
-- **`@llmproc /ask <question>`** - Answer questions on issues/PRs  
+- **`@llmproc /ask <question>`** - Answer questions on issues/PRs
 - **`@llmproc /code <request>`** - Implement features from comments
 
 > [!TIP]
@@ -69,6 +81,22 @@ uvx llmproc
 > [!IMPORTANT]
 > You'll need an API key from your chosen provider (Anthropic, OpenAI, etc.). Set it as an environment variable:
 > `export ANTHROPIC_API_KEY=your_key_here`
+
+## Setup
+
+For local development, run:
+
+```bash
+make setup
+source .venv/bin/activate
+```
+
+Common tasks:
+
+```bash
+make test    # Run tests
+make format  # Format and lint code
+```
 
 ## Quick Start
 
@@ -113,21 +141,55 @@ if __name__ == "__main__":
 - **[llmproc](./src/llmproc/cli/run.py)** - Execute an LLM program. Use `--json` mode to pipe output for automation (see GitHub Actions examples)
 - **[llmproc-demo](./src/llmproc/cli/demo.py)** - Interactive debugger for LLM programs/processes
 
+### Flexible Callback Signatures
+
+LLMProc uses Flask/pytest-style parameter injection for callbacks. Your callbacks only need to declare the parameters they actually use:
+
+```python
+class MyCallbacks:
+    def tool_start(self, tool_name):                    # Basic: just the tool name
+        print(f"🔧 Starting {tool_name}")
+
+    def tool_end(self, tool_name, result):              # Selective: name and result
+        print(f"✅ {tool_name} completed")
+
+    def response(self, content, process):               # Full context when needed
+        tokens = process.count_tokens()
+        print(f"💬 Response: {len(content)} chars, {tokens} tokens")
+
+    def turn_end(self, response, tool_results):         # Mix and match freely
+        print(f"🔄 Turn: {len(tool_results)} tools")
+
+# Register callbacks
+process.add_plugins(MyCallbacks())
+```
+
+**Benefits:**
+- **Clean signatures** - Declare only what you need
+- **Performance** - No unnecessary parameter processing
+- **Compatibility** - Legacy `*, process` signatures still work
+- **Flexibility** - Mix different styles freely
+
+See [flexible signatures cookbook](./examples/callbacks/flexible_signatures_cookbook.py) for comprehensive examples.
+
 ## Features
 
 ### Production Ready
 - **Claude 3.7/4 models** with full tool calling support
 - **Python SDK** - Register functions as tools with automatic schema generation
+- **Stateful tools** - Prefer class instances with instance method tools rather than injecting runtime context
 - **Async and sync APIs** - Use `await program.start()` or `program.start_sync()`
 - **TOML/YAML configuration** - Define LLM programs declaratively
 - **MCP protocol** - Connect to external tool servers
 - **Built-in tools** - File operations, calculator, spawning processes
 - **Tool customization** - Aliases, description overrides, parameter descriptions
 - **Automatic optimizations** - Prompt caching, retry logic with exponential backoff
+- **Streaming support** - Use `LLMPROC_USE_STREAMING=true` to handle high max_tokens values
+- **Flexible callback signatures** - Flask/pytest-style parameter injection - callbacks only need parameters they actually use
 
 ### In Development
-- **OpenAI/Gemini models** - Basic support, tool calling not yet implemented
-- **Streaming API** - Real-time token streaming (planned)
+- **Gemini models** - Basic support, tool calling not yet implemented
+- **Streaming callbacks** - Real-time token streaming callbacks via plugin system
 - **Process persistence** - Save/restore conversation state
 
 ### Experimental Features

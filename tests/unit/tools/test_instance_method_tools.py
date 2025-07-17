@@ -89,10 +89,17 @@ class TestInstanceMethodTools(unittest.TestCase):
 
         tools = MyTools()
         manager = ToolManager()
-        manager.register_tools([tools.greet])
-        manager.process_function_tools()
+        config = {
+            "fd_manager": None,
+            "linked_programs": {},
+            "linked_program_descriptions": {},
+            "has_linked_programs": False,
+            "provider": "test",
+            "mcp_enabled": False,
+        }
+        asyncio.run(manager.register_tools([tools.greet], config))
 
-        self.assertIn("hello", manager.runtime_registry.tool_handlers)
+        self.assertIn("hello", manager.runtime_registry.get_tool_names())
         handler = manager.runtime_registry.get_handler("hello")
         result = asyncio.run(handler(name="Tom"))
         self.assertEqual(result.content, "hi Tom")

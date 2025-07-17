@@ -5,9 +5,7 @@ in a future release for more comprehensive provider support once Anthropic and c
 functionality are mature enough.
 """
 
-import asyncio
 import logging
-from typing import Any, Optional, Union
 
 # Import Google Genai SDK (will be None if not installed)
 try:
@@ -17,7 +15,8 @@ except ImportError:
 
 from llmproc.callbacks import CallbackEvent
 from llmproc.common.results import RunResult
-from llmproc.providers.constants import GEMINI_PROVIDERS
+from llmproc.providers.gemini_utils import convert_tools_to_gemini_format, format_tool_result_for_gemini
+from llmproc.utils.message_utils import append_message
 
 logger = logging.getLogger(__name__)
 
@@ -95,69 +94,74 @@ class GeminiProcessExecutor:
     async def run(
         self,
         process: "Process",  # noqa: F821
-        user_prompt: str,
+        user_prompt: str | None = None,
         max_iterations: int = 10,
-        run_result=None,
         is_tool_continuation: bool = False,
     ) -> "RunResult":
         """Execute a conversation with the Gemini API.
 
-        This is a basic implementation that only supports text generation
-        (no tool calls or other advanced features).
-
         Args:
             process: The LLMProcess instance
-            user_prompt: The user's input message
-            max_iterations: Maximum number of API calls (not used in this basic implementation)
-            run_result: Optional RunResult object to track execution metrics
+            user_prompt: The user's input message (required unless continuing a tool call)
+            max_iterations: Maximum number of API calls for tool usage
             is_tool_continuation: Whether this is continuing a previous tool call
 
         Returns:
             RunResult object containing execution metrics and API call information
         """
-        # Prepare for API call
+        run_result = RunResult()
+        iterations = 0
 
         # Add user message to conversation state if not continuing from a tool call
         if not is_tool_continuation:
-            process.state.append({"role": "user", "content": user_prompt})
+            if user_prompt is None:
+                raise ValueError("user_prompt is required when not continuing a tool call")
+            append_message(process, "user", user_prompt)
 
-        # Trigger TURN_START event
-        process.trigger_event(CallbackEvent.TURN_START, process, run_result)
+        while iterations < max_iterations:
+            # Trigger TURN_START event
+            await process.trigger_event(CallbackEvent.TURN_START, run_result=run_result)
 
-        # Prepare messages for the API - convert internal state format to Gemini format
-        contents = self.format_state_to_api_messages(process.state)
+            # Prepare tools for API call
+            formatted_tools = convert_tools_to_gemini_format(process.tools)
 
-        # Prepare API parameters
-        api_params = self._prepare_api_params(process.api_params)
+            # Prepare messages for the API - convert internal state format to Gemini format
+            contents = self.format_state_to_api_messages(process.state)
 
-        # Prepare API call
-        api_request = {
-            "model": process.model_name,
-            "contents": contents,
-            "system_instruction": process.enriched_system_prompt,
-            "config": api_params,
-        }
+            # Prepare API parameters
+            api_params = self._prepare_api_params(process.api_params)
 
-        # Trigger API request event
-        process.trigger_event(CallbackEvent.API_REQUEST, api_request)
+            # Prepare API call
+            api_request = {
+                "model": process.model_name,
+                "contents": contents,
+                "system_instruction": process.enriched_system_prompt,
+                "config": api_params,
+            }
 
-        # Make the API call
-        response = await self._make_api_call(
-            client=process.client,
-            model=process.model_name,
-            contents=contents,
-            system_instruction=process.enriched_system_prompt,
-            config=api_params,
-        )
+            # Add tools to API request if available
+            if formatted_tools:
+                api_request["tools"] = formatted_tools
+                api_request["tool_config"] = {"function_calling_config": {"mode": "AUTO"}}
 
-        # Trigger API response event
-        process.trigger_event(CallbackEvent.API_RESPONSE, response)
+            # Trigger API request event
+            await process.trigger_event(CallbackEvent.API_REQUEST, api_request=api_request)
 
-        # Process API response
+            # Make the API call
+            response = await self._make_api_call(
+                client=process.client,
+                model=process.model_name,
+                contents=contents,
+                system_instruction=process.enriched_system_prompt,
+                config=api_params,
+                tools=formatted_tools,
+                tool_config={"function_calling_config": {"mode": "AUTO"}} if formatted_tools else None,
+            )
 
-        # Track API call in the run result if available
-        if run_result:
-            # Extract API usage information if available
+            # Trigger API response event
+            await process.trigger_event(CallbackEvent.API_RESPONSE, response=response)
+
+            # Process API response
             api_info = {
                 "model": process.model_name,
                 "id": getattr(response, "id", None),
@@ -166,35 +170,77 @@ class GeminiProcessExecutor:
             }
             run_result.add_api_call(api_info)
 
-        # Extract the text response
-        text_response = getattr(response, "text", "")
+            # Check for tool calls in the response
+            tool_calls = []
+            response_parts = getattr(response.candidates[0].content, "parts", [])
+            for part in response_parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    tool_calls.append(part.function_call)
 
-        # Trigger response event
-        if text_response:
-            process.trigger_event(CallbackEvent.RESPONSE, text_response)
+            if tool_calls:
+                # Handle tool calls
+                run_result.set_stop_reason("tool_use")
 
-        # Add assistant response to state - maintain consistent state format
-        process.state.append({"role": "assistant", "content": text_response})
+                # Add assistant message with tool calls to state
+                append_message(process, "assistant", [{"tool_calls": tool_calls}])
 
-        # Trigger TURN_END event (Gemini has no tool calls)
-        process.trigger_event(CallbackEvent.TURN_END, process, response, [])
+                tool_results = []
+                for tool_call in tool_calls:
+                    # Trigger tool call event
+                    await process.trigger_event(
+                        CallbackEvent.TOOL_START, tool_name=tool_call.name, tool_args=tool_call.args
+                    )
+                    run_result.add_tool_call(tool_name=tool_call.name, tool_args=tool_call.args)
 
-        # Set the stop reason (consistent with other providers)
-        run_result.set_stop_reason("end_turn")
+                    # Execute the tool
+                    tool_result = await process.call_tool(tool_call.name, tool_call.args)
+                    tool_results.append(tool_result)
 
-        # Create a new RunResult if one wasn't provided
-        if run_result is None:
-            run_result = RunResult()
+                    # Trigger tool result event
+                    await process.trigger_event(CallbackEvent.TOOL_END, tool_name=tool_call.name, result=tool_result)
+
+                    # Add tool result to state
+                    append_message(process, "tool", tool_result.content)
+                    # Store the tool name for proper formatting later
+                    process.state[-1]["tool_name"] = tool_call.name
+
+                # Continue the conversation with tool results
+                iterations += 1
+                continue
+            else:
+                # Handle text response
+                text_response = getattr(response, "text", "")
+
+                # Trigger response event
+                if text_response:
+                    hook_res = await process.plugins.response(process, text_response)
+                    stopped = hook_res is not None and getattr(hook_res, "stop", False)
+                    commit = not stopped or getattr(hook_res, "commit_current", True)
+                    if commit:
+                        append_message(process, "assistant", text_response)
+                    if stopped:
+                        run_result.set_stop_reason("hook_stop")
+                        break
+                else:
+                    append_message(process, "assistant", text_response)
+
+                # Trigger TURN_END event
+                await process.trigger_event(CallbackEvent.TURN_END, response=response, tool_results=[])
+
+                # Set stop reason and break
+                run_result.set_stop_reason("end_turn")
+                break
 
         # Set the last_message in the RunResult to ensure it's available
-        # This is critical for the sync interface tests
         last_message = process.get_last_message()
         run_result.set_last_message(last_message)
 
         # Complete the RunResult and return it
         return run_result.complete()
 
-    async def _make_api_call(self, client, model, contents, system_instruction=None, config=None):
+    async def _make_api_call(
+        self, client, model, contents, system_instruction=None, config=None, tools=None, tool_config=None
+    ):
         """Make a call to the Gemini API using the google-genai SDK.
 
         Uses the native async API provided by the SDK.
@@ -205,6 +251,8 @@ class GeminiProcessExecutor:
             contents: The content to send (single message or list of messages)
             system_instruction: Optional system instruction
             config: Optional API parameters
+            tools: Optional tools in Gemini format
+            tool_config: Optional tool configuration
 
         Returns:
             Response from the Gemini API
@@ -220,13 +268,27 @@ class GeminiProcessExecutor:
         if config:
             full_config.update(config)
 
+        # Add tool configuration if tools are provided
+        if tools and tool_config:
+            full_config.update(tool_config)
+
         try:
+            # Build the API call parameters
+            call_params = {
+                "model": model,
+                "contents": contents,
+            }
+
+            # Add tools if provided
+            if tools:
+                call_params["tools"] = tools
+
+            # Add config if not empty
+            if full_config:
+                call_params["config"] = full_config
+
             # Use the native async API provided by the SDK
-            return await client.aio.models.generate_content(
-                model=model,
-                contents=contents,  # The SDK accepts either a single message or list of messages
-                config=full_config if full_config else None,
-            )
+            return await client.aio.models.generate_content(**call_params)
         except Exception as e:
             # Handle API errors
             error_message = str(e)
@@ -293,10 +355,19 @@ class GeminiProcessExecutor:
                     # Simple text content
                     messages.append({"role": "model", "parts": [{"text": content}]})
                 elif isinstance(content, list):
-                    # Complex content
+                    # Complex content - check for tool calls
                     parts = []
                     for item in content:
-                        if isinstance(item, dict) and "text" in item:
+                        if isinstance(item, dict) and "tool_calls" in item:
+                            # Handle tool calls
+                            for tool_call in item["tool_calls"]:
+                                if genai and hasattr(genai.types, "FunctionCall"):
+                                    # Use SDK's FunctionCall type
+                                    parts.append(genai.types.FunctionCall(name=tool_call.name, args=tool_call.args))
+                                else:
+                                    # Fallback structure
+                                    parts.append({"function_call": {"name": tool_call.name, "args": tool_call.args}})
+                        elif isinstance(item, dict) and "text" in item:
                             parts.append({"text": item["text"]})
                         else:
                             parts.append({"text": str(item)})
@@ -304,6 +375,28 @@ class GeminiProcessExecutor:
                 else:
                     # Fallback for unknown content types
                     messages.append({"role": "model", "parts": [{"text": str(content)}]})
+            elif role == "tool":
+                # Handle tool results
+                if isinstance(content, str):
+                    # Get the tool name from the message metadata
+                    tool_name = message.get("tool_name", "unknown_tool")
+
+                    # For Gemini, tool results are formatted as FunctionResponse
+                    if genai and hasattr(genai.types, "FunctionResponse"):
+                        messages.append(
+                            {
+                                "role": "function",
+                                "parts": [genai.types.FunctionResponse(name=tool_name, response={"result": content})],
+                            }
+                        )
+                    else:
+                        # Fallback format
+                        messages.append(
+                            {
+                                "role": "function",
+                                "parts": [{"function_response": {"name": tool_name, "response": content}}],
+                            }
+                        )
 
         return messages
 
@@ -343,9 +436,6 @@ class GeminiProcessExecutor:
         Returns:
             dict: Token count information or error message
         """
-        # TODO: Token counting implementation needs more testing with different models
-        # Only some models support count_tokens, and the API may change in future SDK versions
-
         try:
             # Check if client exists and supports token counting
             if not self._supports_token_counting(process.client):

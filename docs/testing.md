@@ -120,15 +120,19 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from llmproc import LLMProcess
+from llmproc.config import ProcessConfig
 
 # Unit test that doesn't require API access
 def test_parameter_handling():
     """Test that parameters are correctly passed to the API."""
     process = LLMProcess(
-        model_name="test-model",
-        provider="openai",
-        system_prompt="Test system prompt",
-        parameters={"temperature": 0.7}
+        ProcessConfig(
+            program=MagicMock(),
+            model_name="test-model",
+            provider="openai",
+            system_prompt="Test system prompt",
+            parameters={"temperature": 0.7},
+        )
     )
 
     assert process.api_params["temperature"] == 0.7
@@ -141,9 +145,12 @@ async def test_actual_api_call():
         pytest.skip("OpenAI API key not available")
 
     process = LLMProcess(
-        model_name="gpt-4o-mini",
-        provider="openai",
-        system_prompt="You are a test assistant."
+        ProcessConfig(
+            program=MagicMock(),
+            model_name="gpt-4o-mini",
+            provider="openai",
+            system_prompt="You are a test assistant.",
+        )
     )
 
     response = await process.run("Say hello")

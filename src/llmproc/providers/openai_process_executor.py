@@ -1,158 +1,259 @@
 """OpenAI provider implementation for LLMProc.
 
+This executor handles OpenAI models using the Chat Completions API, including:
+- GPT-4, GPT-4o, GPT-3.5 models
+- Non-reasoning models that use traditional chat format
+
+This executor is used for:
+- provider = "openai" with non-reasoning models (auto-selected)
+- provider = "openai_chat" (explicit Chat Completions API)
+
+For reasoning models (o1, o3, o4 series), the openai_response provider
+uses the OpenAI Responses API (when implemented).
+
 NOTE: This implementation is minimally maintained as we plan to integrate with LiteLLM
 in a future release for more comprehensive provider support once Anthropic and core
 functionality are mature enough.
+
+Caching of the system prompt and recent messages is handled automatically by the
+OpenAI API, so there's no need for ephemeral cache control like we do in the
+Anthropic implementation.
 """
 
+import json
 import logging
+from typing import TYPE_CHECKING, Any
 
 from llmproc.callbacks import CallbackEvent
 from llmproc.common.results import RunResult
+from llmproc.providers.openai_utils import (
+    CONTEXT_WINDOW_SIZES,
+    call_with_retry,
+    convert_tools_to_openai_format,
+    format_tool_result_for_openai,
+    num_tokens_from_messages,
+)
+from llmproc.providers.utils import get_context_window_size
+from llmproc.utils.message_utils import append_message
+
+if TYPE_CHECKING:  # pragma: no cover - used for type hints only
+    from llmproc.llm_process import LLMProcess
 
 logger = logging.getLogger(__name__)
+
+
+def _format_state_messages(process: Any) -> list[dict[str, Any]]:
+    """Convert process state to OpenAI chat message format."""
+    messages: list[dict[str, Any]] = []
+
+    if process.enriched_system_prompt:
+        messages.append({"role": "system", "content": process.enriched_system_prompt})
+
+    for message in process.state:
+        role = message.get("role")
+        if role == "assistant":
+            msg = {"role": "assistant", "content": message.get("content")}
+            if "tool_calls" in message:
+                msg["tool_calls"] = message["tool_calls"]
+            messages.append(msg)
+        elif role == "user":
+            messages.append({"role": "user", "content": message.get("content")})
+        elif role == "tool":
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": message.get("tool_call_id"),
+                    "content": message.get("content"),
+                }
+            )
+
+    return messages
+
+
+def _normalize_api_params(model_name: str, api_params: dict[str, Any]) -> dict[str, Any]:
+    """Normalize API parameters based on model capabilities."""
+    params = api_params.copy()
+
+    is_reasoning_model = model_name.startswith(("o1", "o3"))
+    if is_reasoning_model:
+        if "max_tokens" in params:
+            params["max_completion_tokens"] = params.pop("max_tokens")
+    else:
+        params.pop("reasoning_effort", None)
+
+    return params
 
 
 class OpenAIProcessExecutor:
     """Process executor for OpenAI models.
 
-    This is a simplified version that doesn't support tools yet.
-    Tool support will be added in future versions.
-
-    Note: This executor is minimally maintained as we plan to replace provider-specific
-    executors with LiteLLM in a future release for unified provider support.
+    This executor implements basic conversation flow and tool usage for the
+    OpenAI chat API. It is minimally maintained as the project plans to migrate
+    to LiteLLM for unified provider support in the future.
     """
 
     async def run(
         self,
-        process: "Process",  # noqa: F821
-        user_prompt: str,
-        max_iterations: int = 1,
-        run_result=None,
+        process: "LLMProcess",
+        user_prompt: str | None = None,
+        max_iterations: int = 10,
         is_tool_continuation: bool = False,
-    ) -> "RunResult":
+    ) -> RunResult:
         """Execute a conversation with the OpenAI API.
 
         Args:
             process: The LLMProcess instance
-            user_prompt: The user's input message
-            max_iterations: Not used in OpenAI executor as tools aren't supported yet
-            run_result: Optional RunResult object to track execution metrics
-            is_tool_continuation: Not used in OpenAI executor as tools aren't supported yet
+            user_prompt: The user's input message (required unless continuing a tool call)
+            max_iterations: Maximum number of tool iterations
+            is_tool_continuation: Whether this call continues after a tool result
 
         Returns:
             RunResult object containing execution metrics and API call information
 
         Raises:
-            ValueError: If tools are configured but not yet supported
+            ValueError: If the OpenAI API call fails
         """
-        # Prepare for response handling
+        run_result = RunResult()
 
-        # Check if tools are configured but not yet supported
-        if process.tools and len(process.tools) > 0:
-            raise ValueError(
-                "Tool usage is not yet supported for OpenAI models in this implementation. Please use a model without tools, or use the Anthropic provider for tool support."
-            )
+        if not is_tool_continuation:
+            if user_prompt is None:
+                raise ValueError("user_prompt is required when not continuing a tool call")
+            append_message(process, "user", user_prompt)
 
-        # Add user message to conversation history
-        process.state.append({"role": "user", "content": user_prompt})
+        iterations = 0
 
-        # Trigger TURN_START event
-        process.trigger_event(CallbackEvent.TURN_START, process, run_result)
+        while iterations < max_iterations:
+            logger.debug(f"Making OpenAI API call {iterations + 1}/{max_iterations}")
 
-        # Set up messages for OpenAI format
-        formatted_messages = []
+            # Trigger TURN_START event
+            await process.trigger_event(CallbackEvent.TURN_START, run_result=run_result)
 
-        # First add system message if present
-        if process.enriched_system_prompt:
-            formatted_messages.append({"role": "system", "content": process.enriched_system_prompt})
+            formatted_messages = _format_state_messages(process)
 
-        # Then add conversation history
-        for message in process.state:
-            # Add user and assistant messages
-            if message["role"] in ["user", "assistant"]:
-                formatted_messages.append({"role": message["role"], "content": message["content"]})
+            logger.debug(f"Making OpenAI API call with {len(formatted_messages)} messages")
 
-        # Create a new RunResult if one wasn't provided
-        if run_result is None:
-            run_result = RunResult()
+            try:
+                api_params = _normalize_api_params(process.model_name, process.api_params)
 
-        logger.debug(f"Making OpenAI API call with {len(formatted_messages)} messages")
+                openai_tools = convert_tools_to_openai_format(process.tools)
 
-        try:
-            # Make the API call
-            # Check if this is a reasoning model (o1, o1-mini, o3, o3-mini)
-            api_params = process.api_params.copy()
+                # Build API request payload
+                api_request = {
+                    "model": process.model_name,
+                    "messages": formatted_messages,
+                    "params": api_params,
+                }
+                if openai_tools:
+                    api_request["tools"] = openai_tools
 
-            # Determine if this is a reasoning model
-            is_reasoning_model = process.model_name.startswith(("o1", "o3"))
+                # Trigger API request event
+                await process.trigger_event(CallbackEvent.API_REQUEST, api_request=api_request)
 
-            # Handle reasoning model specific parameters
-            if is_reasoning_model:
-                # Reasoning models use max_completion_tokens instead of max_tokens
-                if "max_tokens" in api_params:
-                    api_params["max_completion_tokens"] = api_params.pop("max_tokens")
-            else:
-                # Remove reasoning_effort for non-reasoning models
-                if "reasoning_effort" in api_params:
-                    del api_params["reasoning_effort"]
+                # Make API call
+                call_params = {
+                    "model": process.model_name,
+                    "messages": formatted_messages,
+                    **api_params,
+                }
+                if openai_tools:
+                    call_params["tools"] = openai_tools
 
-            # Build API request payload
-            api_request = {
-                "model": process.model_name,
-                "messages": formatted_messages,
-                "params": api_params,
-            }
+                response = await call_with_retry(process.client, "chat", call_params)
 
-            # Trigger API request event
-            process.trigger_event(CallbackEvent.API_REQUEST, api_request)
+                # Trigger API response event
+                await process.trigger_event(CallbackEvent.API_RESPONSE, response=response)
 
-            # Make API call
+                # Process API response
 
-            response = await process.client.chat.completions.create(
-                model=process.model_name,
-                messages=formatted_messages,
-                **api_params,
-            )
+                # Track API call in the run result
+                api_info = {
+                    "model": process.model_name,
+                    "usage": getattr(response, "usage", {}),
+                    "id": getattr(response, "id", None),
+                    "request": api_request,
+                    "response": response,
+                }
+                run_result.add_api_call(api_info)
 
-            # Trigger API response event
-            process.trigger_event(CallbackEvent.API_RESPONSE, response)
+                # Extract the response message and any tool calls
+                choice = response.choices[0]
+                message = choice.message
+                message_content = getattr(message, "content", "")
+                finish_reason = choice.finish_reason
 
-            # Process API response
+                # Set stop reason
+                run_result.set_stop_reason(finish_reason)
 
-            # Track API call in the run result
-            api_info = {
-                "model": process.model_name,
-                "usage": getattr(response, "usage", {}),
-                "id": getattr(response, "id", None),
-                "request": api_request,
-                "response": response,
-            }
-            run_result.add_api_call(api_info)
+                tool_calls = getattr(message, "tool_calls", None)
+                if not isinstance(tool_calls, list):
+                    tool_calls = []
 
-            # Extract the response message content
-            message_content = response.choices[0].message.content
-            finish_reason = response.choices[0].finish_reason
+                assistant_entry = {"role": "assistant", "content": message_content}
+                if tool_calls:
+                    serialized_calls = []
+                    for call in tool_calls:
+                        serialized_calls.append(
+                            {
+                                "id": getattr(call, "id", None),
+                                "type": getattr(call, "type", "function"),
+                                "function": {
+                                    "name": getattr(call.function, "name", ""),
+                                    "arguments": getattr(call.function, "arguments", "{}"),
+                                },
+                            }
+                        )
+                    assistant_entry["tool_calls"] = serialized_calls
 
-            # Set stop reason
-            run_result.set_stop_reason(finish_reason)
+                append_message(process, "assistant", message_content)
+                if tool_calls:
+                    process.state[-1]["tool_calls"] = serialized_calls
 
-            # Add assistant response to conversation history
-            process.state.append({"role": "assistant", "content": message_content})
+                # Trigger response event and hooks
+                if message_content:
+                    hook_res = await process.plugins.response(process, message_content)
+                    if hook_res is not None and getattr(hook_res, "stop", False):
+                        if not getattr(hook_res, "commit_current", True):
+                            process.state.pop()
+                        run_result.set_stop_reason("hook_stop")
+                        break
 
-            # Trigger response event
-            if message_content:
-                process.trigger_event(CallbackEvent.RESPONSE, message_content)
+                tool_results = []
+                for call in tool_calls:
+                    name = getattr(call.function, "name", "")
+                    args_str = getattr(call.function, "arguments", "{}")
+                    try:
+                        args_dict = json.loads(args_str)
+                    except Exception:  # noqa: BLE001 - fallback on parse errors
+                        args_dict = {}
 
-            # Trigger TURN_END event
-            process.trigger_event(CallbackEvent.TURN_END, process, response, [])
+                    await process.trigger_event(CallbackEvent.TOOL_START, tool_name=name, tool_args=args_dict)
+                    run_result.add_tool_call(tool_name=name, tool_args=args_dict)
+                    result = await process.call_tool(name, args_dict)
+                    await process.trigger_event(CallbackEvent.TOOL_END, tool_name=name, result=result)
 
-        except Exception as e:
-            logger.error(f"Error in OpenAI API call: {str(e)}")
-            # Add error to run result
-            run_result.add_api_call({"type": "error", "error": str(e)})
-            run_result.set_stop_reason("error")
-            raise
+                    tool_results.append(result.to_dict())
+                    # OpenAI doesn't support the is_error field like Anthropic,
+                    # so we format errors with "ERROR:" prefix for clear indication
+                    formatted_content = format_tool_result_for_openai(result)
+                    append_message(process, "tool", formatted_content)
+                    process.state[-1]["tool_call_id"] = getattr(call, "id", None)
+
+                # Trigger TURN_END event
+                await process.trigger_event(CallbackEvent.TURN_END, response=response, tool_results=tool_results)
+
+                # If no tool calls, we're done
+                if not tool_calls:
+                    break
+
+                # Increment iteration counter for tool calls
+                iterations += 1
+
+            except Exception as e:
+                logger.error(f"Error in OpenAI API call: {str(e)}")
+                # Add error to run result
+                run_result.add_api_call({"type": "error", "error": str(e)})
+                run_result.set_stop_reason("error")
+                raise
 
         # Set the last_message in the RunResult to ensure it's available
         # This is critical for the sync interface tests
@@ -162,4 +263,30 @@ class OpenAIProcessExecutor:
         # Complete the RunResult and return it
         return run_result.complete()
 
-    # TODO: Implement tool support
+    async def count_tokens(self, process: "LLMProcess") -> dict:
+        """Count tokens in the current conversation using ``tiktoken``.
+
+        Args:
+            process: The ``LLMProcess`` instance.
+
+        Returns:
+            Dictionary containing token usage information.
+        """
+        try:
+            messages: list[dict[str, Any]] = []
+            if process.enriched_system_prompt:
+                messages.append({"role": "system", "content": process.enriched_system_prompt})
+            messages.extend(process.state)
+
+            tokens = num_tokens_from_messages(messages, model=process.model_name)
+            window_size = get_context_window_size(process.model_name, CONTEXT_WINDOW_SIZES)
+
+            return {
+                "input_tokens": tokens,
+                "context_window": window_size,
+                "percentage": (tokens / window_size * 100) if window_size > 0 else 0,
+                "remaining_tokens": max(0, window_size - tokens),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Token counting failed: {exc}")
+            return {"error": str(exc)}

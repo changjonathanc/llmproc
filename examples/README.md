@@ -5,25 +5,25 @@ This directory contains examples demonstrating LLMProc features and configuratio
 ## Quick Start
 
 - [**tutorial-config.toml**](./tutorial-config.toml): Step-by-step configuration guide with all options explained
-- [**openai.toml**](./openai.toml) / [**openai.yaml**](./openai.yaml): OpenAI model configuration with GPT-4o
-- [**anthropic.toml**](./anthropic.toml) / [**anthropic.yaml**](./anthropic.yaml): Anthropic model configuration with Claude 3.5 Sonnet
-- [**dispatch_agent.toml**](./dispatch_agent.toml): Claude Code with Dispatch Agent configuration
+- [**openai.yaml**](./openai.yaml): OpenAI model configuration with GPT-4o
+- [**anthropic.yaml**](./anthropic.yaml): Anthropic model configuration with Claude 3.5 Sonnet
+- [**dispatch_agent.yaml**](./dispatch_agent.yaml): Claude Code with Dispatch Agent configuration
 
 For the formal configuration specification, see [`../docs/yaml_config_schema.yaml`](../docs/yaml_config_schema.yaml)
 
 ## Model Configuration Examples
 
-- [**openai.toml**](./openai.toml) / [**openai.yaml**](./openai.yaml): OpenAI model configuration
+- [**openai.yaml**](./openai.yaml): OpenAI model configuration
   - Defaults to GPT-4o with commented options for GPT-4o-mini, GPT-4.5
   - Includes configuration for o3-mini with reasoning levels
 
-- [**anthropic.toml**](./anthropic.toml) / [**anthropic.yaml**](./anthropic.yaml): Anthropic model configuration
+- [**anthropic.yaml**](./anthropic.yaml): Anthropic model configuration
   - Defaults to Claude 3.5 Sonnet
   - Contains commented configurations for all Claude variants (Haiku, 3.7 Sonnet)
   - Includes thinking budget options for Claude 3.7
   - Supports Vertex AI configuration options
 
-- [**gemini.toml**](./gemini.toml) / [**gemini.yaml**](./gemini.yaml): Google Gemini model configuration
+- [**gemini.yaml**](./gemini.yaml): Google Gemini model configuration
   - Defaults to Gemini 2.5 Pro with Direct API
   - Includes commented options for Gemini 2.0 Flash and Vertex AI
 
@@ -35,27 +35,27 @@ For the formal configuration specification, see [`../docs/yaml_config_schema.yam
 
 ## Feature Examples
 
-- [**basic-features.toml**](./basic-features.toml): Combined demonstration of:
+- [**basic-features.yaml**](./basic-features.yaml): Combined demonstration of:
   - File preloading for enhanced context
   - Environment information in system prompts
   - Tool aliases for simplified tool names
 
-- [**builtin-tools.toml**](./builtin-tools.toml): Demonstrates standard builtin tools:
+- [**builtin-tools.yaml**](./builtin-tools.yaml): Demonstrates standard builtin tools:
   - Calculator for mathematical operations
   - Read_file for file access
   - List_dir for directory listing
 
-- [**fork.toml**](./fork.toml): Demonstrates process duplication with fork
-- [**goto.toml**](./goto.toml): Demonstrates time travel with GOTO
-- [**mcp.toml**](./mcp.toml): Demonstrates Model Context Protocol tool usage
-- [**dispatch_agent.toml**](./dispatch_agent.toml): Claude Code Dispatch Agent specialization
+- [**fork.yaml**](./fork.yaml): Demonstrates process duplication with fork
+- [**goto.yaml**](./goto.yaml): Demonstrates time travel with GOTO
+- [**mcp.yaml**](./mcp.yaml): Demonstrates Model Context Protocol tool usage
+- [**dispatch_agent.yaml**](./dispatch_agent.yaml): Claude Code Dispatch Agent specialization
 
 ## Advanced Features
 
 - [**file-descriptor/**](./file-descriptor/): File descriptor system for handling large outputs
 - [**program-linking/**](./program-linking/): Program linking for LLM-to-LLM communication
 
-- [**claude-code.toml**](./claude-code.toml): Claude Code specialized coding assistant
+- [**claude-code.yaml**](./claude-code.yaml): Claude Code specialized coding assistant
   - Includes dispatch agent with inline configuration
   - Configures token-efficient tools for Claude 3.7
 
@@ -64,48 +64,50 @@ For the formal configuration specification, see [`../docs/yaml_config_schema.yam
   - **callback-demo.py**: Callback demonstrations
   - **goto_context_compaction_demo.py**: GOTO for efficient context management
 
+## Python Examples
+
+- [**multiply_example.py**](./multiply_example.py): Simple function tool demonstration
+- [**reasoning_with_tools_example.py**](./reasoning_with_tools_example.py): Claude 4 interleaved thinking with multi-step tool use
+  - Demonstrates Claude 4 Sonnet's advanced interleaved thinking capabilities
+  - Shows reasoning between every tool call for sophisticated decision-making
+  - Multi-iteration codebase analysis using list_dir and read_file tools
+  - Illustrates how Claude 4 reflects on tool results before planning next steps
+  - Provides comprehensive project analysis through strategic reasoning and tool sequencing
+
 ## Running Examples
 
 Use the `llmproc-demo` command-line tool:
 
 ```bash
 # Model examples
-llmproc-demo ./examples/openai.toml   # or ./examples/openai.yaml
-llmproc-demo ./examples/anthropic.toml   # or ./examples/anthropic.yaml
-llmproc-demo ./examples/gemini.toml   # or ./examples/gemini.yaml
+llmproc-demo ./examples/openai.yaml
+llmproc-demo ./examples/anthropic.yaml
+llmproc-demo ./examples/gemini.yaml
 
 # Feature examples
-llmproc-demo ./examples/basic-features.toml
-llmproc-demo ./examples/fork.toml
-llmproc-demo ./examples/goto.toml
-llmproc-demo ./examples/builtin-tools.toml
-llmproc-demo ./examples/mcp.toml
-llmproc-demo ./examples/dispatch_agent.toml
+llmproc-demo ./examples/basic-features.yaml
+llmproc-demo ./examples/fork.yaml
+llmproc-demo ./examples/goto.yaml
+llmproc-demo ./examples/builtin-tools.yaml
+llmproc-demo ./examples/mcp.yaml
+llmproc-demo ./examples/dispatch_agent.yaml
 
 # Advanced examples
-llmproc-demo ./examples/file-descriptor/main.toml
-llmproc-demo ./examples/program-linking/main.toml
-llmproc-demo ./examples/claude-code.toml
+llmproc-demo ./examples/file-descriptor/main.yaml
+llmproc-demo ./examples/program-linking/main.yaml
+llmproc-demo ./examples/claude-code.yaml
 
 # Quiet mode for minimal output
-llmproc-demo ./examples/claude-code.toml -q
+llmproc-demo ./examples/claude-code.yaml -q
 ```
 
 For Python script examples:
 
 ```bash
 python ./examples/scripts/python-sdk.py
+python ./examples/multiply_example.py
+python ./examples/reasoning_with_tools_example.py
 ```
-
-## Examining System Prompts
-
-To see what the enriched system prompt looks like for an example:
-
-```bash
-llmproc-prompt ./examples/file-descriptor/references.toml
-```
-
-## Configuration Features
 
 LLMProc supports several advanced configuration options in TOML or YAML files:
 
@@ -128,13 +130,13 @@ LLMProc supports several advanced configuration options in TOML or YAML files:
 LLMProc supports configuring models with different reasoning capabilities to balance thoroughness against speed:
 
 ### OpenAI Reasoning Models
-- **openai.toml** / **openai.yaml**: Includes configuration options for o3-mini with three reasoning levels:
+- **openai.yaml**: Includes configuration options for o3-mini with three reasoning levels:
   - High reasoning effort - thoroughness prioritized over speed
   - Medium reasoning effort - balanced approach
   - Low reasoning effort - speed prioritized over thoroughness
 
 ### Claude Thinking Models
-- **anthropic.toml** / **anthropic.yaml**: Includes configuration options for Claude 3.7 thinking budgets:
+- **anthropic.yaml**: Includes configuration options for Claude 3.7 thinking budgets:
   - High thinking budget (16,000 tokens) for thorough reasoning
   - Medium thinking budget (4,000 tokens) for balanced approach
   - Low thinking budget (1,024 tokens) for faster responses

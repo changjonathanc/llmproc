@@ -1,9 +1,13 @@
 """Tests for the SDK developer experience enhancements."""
 
+import asyncio
 from pathlib import Path
 
 import pytest
+
+from llmproc.plugins.preload_files import PreloadFilesPlugin
 from llmproc.program import LLMProgram
+from llmproc.plugins.spawn import SpawnPlugin
 
 
 def test_fluent_program_creation():
@@ -45,23 +49,29 @@ def test_program_linking():
     # Link them using the fluent interface
     main_program.add_linked_program("expert", expert_program, "Expert for specialized tasks")
 
-    # Check the linking was done correctly
-    assert "expert" in main_program.linked_programs
-    assert main_program.linked_programs["expert"] == expert_program
-    assert main_program.linked_program_descriptions["expert"] == "Expert for specialized tasks"
+    # Check the linking was done correctly via SpawnPlugin
+    spawn_plugin = next((p for p in main_program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "expert" in spawn_plugin.linked_programs
+    assert spawn_plugin.linked_programs["expert"] == expert_program
+    assert spawn_plugin.linked_program_descriptions["expert"] == "Expert for specialized tasks"
 
 
-def test_fluent_methods_chaining():
+def test_fluent_methods_chaining(tmp_path: Path):
     """Test chaining multiple fluent methods."""
     # Create and configure a program with method chaining
+    file1 = tmp_path / "example1.md"
+    file2 = tmp_path / "example2.md"
+    file1.write_text("one")
+    file2.write_text("two")
+
     program = (
         LLMProgram(
             model_name="claude-3-7-sonnet",
             provider="anthropic",
             system_prompt="You are a helpful assistant.",
         )
-        .add_preload_file("example1.md")
-        .add_preload_file("example2.md")
+        .add_plugins(PreloadFilesPlugin(["example1.md", "example2.md"], base_dir=tmp_path))
         .add_linked_program(
             "expert",
             LLMProgram(
@@ -74,11 +84,14 @@ def test_fluent_methods_chaining():
     )
 
     # Verify everything was configured correctly
-    assert len(program.preload_files) == 2
-    assert "example1.md" in program.preload_files
-    assert "example2.md" in program.preload_files
-    assert "expert" in program.linked_programs
-    assert program.linked_program_descriptions["expert"] == "Expert for special tasks"
+    plugin = next(p for p in program.plugins if p.__class__.__name__ == "PreloadFilesPlugin")
+    assert len(plugin.file_paths) == 2
+    assert "example1.md" in plugin.file_paths
+    assert "example2.md" in plugin.file_paths
+    spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "expert" in spawn_plugin.linked_programs
+    assert spawn_plugin.linked_program_descriptions["expert"] == "Expert for special tasks"
 
 
 # API now compiles programs automatically when needed
@@ -110,7 +123,7 @@ def test_system_prompt_file():
 # Test compile() through proper APIs
 
 
-def test_complex_method_chaining():
+def test_complex_method_chaining(tmp_path: Path):
     """Test more complex method chaining scenarios."""
     # Create nested programs with method chaining
     inner_expert = LLMProgram(
@@ -132,21 +145,27 @@ def test_complex_method_chaining():
         return f"Processed: {query}"
 
     # Create the main program with fluent chaining
+    ctx1 = tmp_path / "context1.md"
+    ctx2 = tmp_path / "context2.md"
+    expert1_ctx = tmp_path / "expert1_context.md"
+    ctx1.write_text("c1")
+    ctx2.write_text("c2")
+    expert1_ctx.write_text("c3")
+
     main_program = (
         LLMProgram(
             model_name="gpt-4o",
             provider="openai",
             system_prompt="You are a coordinator.",
         )
-        .add_preload_file("context1.md")
-        .add_preload_file("context2.md")
+        .add_plugins(PreloadFilesPlugin(["context1.md", "context2.md"], base_dir=tmp_path))
         .add_linked_program(
             "expert1",
             LLMProgram(
                 model_name="claude-3-5-haiku",
                 provider="anthropic",
                 system_prompt="Expert 1",
-            ).add_preload_file("expert1_context.md"),
+            ).add_plugins(PreloadFilesPlugin(["expert1_context.md"], base_dir=tmp_path)),
             "First level expert",
         )
         .add_linked_program("inner_expert", inner_expert, "Special inner expert")
@@ -154,20 +173,31 @@ def test_complex_method_chaining():
     )
 
     # Validate the complex structure
-    assert len(main_program.preload_files) == 2
-    assert "expert1" in main_program.linked_programs
-    assert "inner_expert" in main_program.linked_programs
+    plugin = next(p for p in main_program.plugins if p.__class__.__name__ == "PreloadFilesPlugin")
+    assert len(plugin.file_paths) == 2
+    assert "context1.md" in plugin.file_paths
+    assert "context2.md" in plugin.file_paths
+    spawn_plugin = next((p for p in main_program.plugins if isinstance(p, SpawnPlugin)), None)
+    assert spawn_plugin is not None
+    assert "expert1" in spawn_plugin.linked_programs
+    assert "inner_expert" in spawn_plugin.linked_programs
 
     # Validation and initialization happens during process startup, not here
 
     # Check that nested preload files were preserved
-    assert "expert1_context.md" in main_program.linked_programs["expert1"].preload_files
+    child_plugin = next(
+        p for p in spawn_plugin.linked_programs["expert1"].plugins if p.__class__.__name__ == "PreloadFilesPlugin"
+    )
+    assert "expert1_context.md" in child_plugin.file_paths
 
 
 def test_register_tools():
     """Test registering built-in tools."""
     # Import tool functions directly
     from llmproc.tools.builtin import calculator, fork_tool, read_file
+    from llmproc.common.metadata import get_tool_meta
+    get_tool_meta(calculator).name = None
+    get_tool_meta(read_file).name = None
 
     # Create a program
     program = LLMProgram(
@@ -182,48 +212,69 @@ def test_register_tools():
     # Check that the method returns self for chaining
     assert result is program
 
-    # Compile program to register tools
+    # Compile program
     program.compile()
-    # Check that tools were registered
+    from llmproc.tools.tool_manager import ToolManager
+
+    tm = ToolManager()
+    asyncio.run(
+        tm.register_tools(
+            program.tools,
+            {
+                "fd_manager": None,
+                "linked_programs": {},
+                "linked_program_descriptions": {},
+                "has_linked_programs": False,
+                "provider": "test",
+                "mcp_enabled": False,
+            },
+        )
+    )
     registered_tools = program.get_registered_tools()
-    # Tools are now stored as functions, but we can check their names
     tool_names = [tool.__name__ if callable(tool) else tool for tool in registered_tools]
     assert "calculator" in tool_names
     assert "read_file" in tool_names
 
-    # The internal tool_manager.registered_tools uses string names
-    assert "calculator" in program.tool_manager.registered_tools
-    assert "read_file" in program.tool_manager.registered_tools
+    assert "calculator" in tm.registered_tools
+    assert "read_file" in tm.registered_tools
 
-    # Remember the current list length
-    previous_tools_len = len(program.tool_manager.registered_tools)
+    previous_tools_len = len(tm.registered_tools)
 
     # Create a new program to avoid side effects from the previous calls
     program = LLMProgram(model_name="test-model", provider="test-provider", system_prompt="Test system prompt")
 
     # Register initial tools
     program.register_tools([calculator])
+    config = {
+        "fd_manager": None,
+        "linked_programs": {},
+        "linked_program_descriptions": {},
+        "has_linked_programs": False,
+        "provider": "test",
+        "mcp_enabled": False,
+    }
 
-    # Process function tools to ensure they're properly registered
-    program.tool_manager.process_function_tools()
+    from llmproc.tools.tool_manager import ToolManager
+
+    tm = ToolManager()
+    asyncio.run(tm.register_tools(program.tools, config))
+    manager = tm
 
     # Verify initial state
-    assert "calculator" in program.get_registered_tools()
-    assert "fork" not in program.get_registered_tools()
+    assert "calculator" in manager.registered_tools
+    assert "fork" not in manager.registered_tools
 
     # Clear all existing tools from the runtime registry first
-    program.tool_manager.runtime_registry.tool_handlers.clear()
-    program.tool_manager.runtime_registry.tool_definitions.clear()
-    program.tool_manager.function_tools.clear()
+    tm.runtime_registry._tools.clear()
+    tm.registered_tools.clear()
 
     # Replace with different tools
     program.register_tools([fork_tool])
-
-    # Process function tools to actually register the tools
-    program.tool_manager.process_function_tools()
+    asyncio.run(tm.register_tools([fork_tool], config))
+    manager = tm
 
     # Check that tools were replaced
-    registered_tools = program.get_registered_tools()
+    registered_tools = manager.registered_tools
     assert "fork" in registered_tools
     assert "calculator" not in registered_tools
 

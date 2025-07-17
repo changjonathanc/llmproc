@@ -1,17 +1,20 @@
 """Test the all_features.toml example file in file_descriptor directory."""
 
+import asyncio
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import MagicMock, patch
+
 from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
 from llmproc.program import LLMProgram
 
 
 @pytest.fixture(autouse=True)
-def patch_initialize_client():
-    """Patch client initialization to avoid API key requirements."""
-    with patch("llmproc.program_exec.initialize_client", return_value=MagicMock()):
+def patch_get_provider_client():
+    """Patch provider client initialization to avoid API key requirements."""
+    with patch("llmproc.program_exec.get_provider_client", return_value=MagicMock()):
         yield
 
 
@@ -37,9 +40,9 @@ def all_features_program(tmp_path):
     system_prompt = "You are a powerful assistant with access to an advanced file descriptor system."
 
     [tools]
-    builtin = ["read_fd", "fd_to_file", "read_file"]
+    builtin = ["read_file"]
 
-    [file_descriptor]
+    [plugins.file_descriptor]
     enabled = true
     max_direct_output_chars = 2000
     default_page_size = 1000
@@ -61,32 +64,30 @@ def test_all_features_config(all_features_program):
     assert program.provider == "anthropic"
     # We don't need to test display_name as it's not essential for functionality
 
-    # Check file descriptor configuration
-    assert program.file_descriptor is not None
-    assert program.file_descriptor.get("enabled") is True
-    assert program.file_descriptor.get("max_direct_output_chars") == 2000
-    assert program.file_descriptor.get("default_page_size") == 1000
-    assert program.file_descriptor.get("max_input_chars") == 2000
-    assert program.file_descriptor.get("page_user_input") is True
-    assert program.file_descriptor.get("enable_references") is True
+    # Check file descriptor configuration via plugin config
+    cfg = program.config.plugin_configs["file_descriptor"]
+    assert cfg["max_direct_output_chars"] == 2000
+    assert cfg["default_page_size"] == 1000
+    assert cfg["max_input_chars"] == 2000
+    assert cfg["page_user_input"] is True
+    assert cfg["enable_references"] is True
 
     # Import the needed tool callables
-    from llmproc.tools.builtin import fd_to_file_tool, read_fd_tool, read_file
+    from llmproc.tools.builtin import read_file
 
-    # Register the tools as callables
-    program.register_tools([read_fd_tool, fd_to_file_tool, read_file])
+    # Register the read_file tool; FD tools are provided by the plugin
+    program.register_tools([read_file])
+    process = program.start_sync()
 
-    # Process function tools to ensure they're registered in the registry
-    program.tool_manager.process_function_tools()
-
-    # Compile program to register tools
+    # Compile program (should be a no-op after start)
     program.compile()
 
     # Check tools configuration in tool_manager
-    registered_tools = program.tool_manager.get_registered_tools()
+    from llmproc.tools.tool_manager import ToolManager
 
-    # Also ensure process_function_tools is called to register tools in registry
-    program.tool_manager.process_function_tools()
+    tm = ToolManager()
+    asyncio.run(tm.register_tools(program.tools, {}))
+    registered_tools = tm.registered_tools
 
     # Now verify the tools are registered
     assert "read_fd" in registered_tools
@@ -105,18 +106,14 @@ async def test_process_initialization(all_features_program):
     # We don't need to test display_name as it's not essential for functionality
 
     # Check file descriptor configuration
-    assert process.file_descriptor_enabled is True
-    assert process.references_enabled is True
-    assert process.fd_manager is not None
-    assert process.fd_manager.max_direct_output_chars == 2000
-    assert process.fd_manager.default_page_size == 1000
-    assert process.fd_manager.max_input_chars == 2000
-    assert process.fd_manager.page_user_input is True
+    assert isinstance(process.get_plugin(FileDescriptorPlugin), FileDescriptorPlugin)
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.enable_references is True
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager is not None
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.max_direct_output_chars == 2000
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.default_page_size == 1000
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.max_input_chars == 2000
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.page_user_input is True
 
-    # Print the configuration to debug
-    print(f"FD Enabled: {process.file_descriptor_enabled}")
-    print(f"References Enabled: {process.references_enabled}")
-    print(f"Page User Input: {process.fd_manager.page_user_input}")
 
     # Use the enriched_system_prompt generated during process creation
     assert process.enriched_system_prompt is not None

@@ -8,26 +8,18 @@ from tempfile import NamedTemporaryFile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from llmproc.tools.mcp import MCPServerTools
-from llmproc.tools.mcp.manager import MCPManager
-from llmproc.tools.tool_registry import ToolRegistry
+from llmproc.tools.tool_manager import ToolManager
 
 
 def create_mock_mcp_registry():
-    """Helper to create mocked MCP registry objects."""
-    # Mock ServerRegistry class and instance
-    mock_server_registry = MagicMock()
-    mock_server_instance = MagicMock()
-    mock_server_registry.from_config = MagicMock(return_value=mock_server_instance)
-    mock_server_instance.filter_servers = MagicMock(return_value=mock_server_instance)
-
-    # Mock MCPAggregator class and instance
+    """Helper to create mocked MCP aggregator."""
     mock_aggregator_class = MagicMock()
     mock_aggregator = AsyncMock()
     mock_aggregator.list_tools = AsyncMock(return_value={})
     mock_aggregator_class.return_value = mock_aggregator
-
-    return mock_server_registry, mock_server_instance, mock_aggregator_class
+    return mock_aggregator_class
 
 
 @pytest.mark.asyncio
@@ -46,19 +38,17 @@ async def test_filter_servers_called():
         config_path = tmp.name
 
     try:
-        registry = ToolRegistry()
-        mock_server_registry, mock_server_instance, mock_aggregator_class = create_mock_mcp_registry()
+        mock_aggregator_class = create_mock_mcp_registry()
+        mock_aggregator = mock_aggregator_class.return_value
+        mock_aggregator.filter_servers = MagicMock(return_value=mock_aggregator)
 
-        with (
-            patch("llmproc.mcp_registry.ServerRegistry.from_config", return_value=mock_server_instance),
-            patch("llmproc.mcp_registry.MCPAggregator", mock_aggregator_class),
-        ):
-            manager = MCPManager(
-                config_path=config_path,
-                mcp_tools=[MCPServerTools(server="s1")],
+        with patch("llmproc.tools.mcp.MCPAggregator.from_config", return_value=mock_aggregator):
+            tm = ToolManager()
+            await tm.register_tools(
+                [MCPServerTools(server="s1")],
+                {"mcp_enabled": True, "mcp_config_path": config_path},
             )
-            await manager.initialize(registry)
 
-            mock_server_instance.filter_servers.assert_called_once_with(["s1"])
+            mock_aggregator.filter_servers.assert_called_once_with(["s1"])
     finally:
         os.unlink(config_path)

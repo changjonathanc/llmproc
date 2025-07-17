@@ -7,9 +7,8 @@ interface, and maintains proper causal ordering of messages and tool results.
 
 import asyncio
 import copy
-import json
 import logging
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
@@ -82,7 +81,6 @@ def tool_result_stub(tool_id: str) -> dict:
     },
     required=["prompts"],
     requires_context=True,
-    required_context_keys=["process", "msg_prefix", "tool_results_prefix", "tool_id"],
     access=AccessLevel.ADMIN,
 )
 async def fork_tool(
@@ -100,7 +98,7 @@ async def fork_tool(
 
     Args:
         prompts: List of prompts/instructions for each forked process
-        runtime_context: Runtime context containing process, msg_prefix, tool_results_prefix, and tool_id
+        runtime_context: Runtime context containing the parent process
 
     Returns:
         ToolResult with the combined results from all child processes
@@ -110,9 +108,12 @@ async def fork_tool(
 
     # Extract required context values
     parent = runtime_context["process"]
-    tool_id = runtime_context["tool_id"]
-    msg_prefix = runtime_context["msg_prefix"]
-    tool_results_prefix = runtime_context["tool_results_prefix"]
+    state = parent.iteration_state
+    tool_id = state.current_tool.id if state and state.current_tool is not None else None
+    if tool_id is None:
+        return ToolResult.from_error("tool id missing")
+    msg_prefix = state.msg_prefix if state else []
+    tool_results_prefix = state.tool_results_prefix if state else []
 
     # Create causal prefix by combining msg_prefix and tool_results_prefix
     # This maintains the correct order of messages and tool results
@@ -129,8 +130,8 @@ async def fork_tool(
 
     async def run_child(idx, prompt):
         """Create and run a child process with the given prompt."""
-        # Use the fork_process method to create a deep copy with WRITE access level
-        child = await parent.fork_process(access_level=AccessLevel.WRITE)
+        # Use the internal _fork_process method to create a deep copy with WRITE access level
+        child = await parent._fork_process(access_level=AccessLevel.WRITE)
 
         # Inherit history up to fork point (use deep copy to avoid shared references)
         child.state = copy.deepcopy(prefix)
@@ -180,7 +181,7 @@ async def fork_tool(
     # Process all forks in parallel
     try:
         results = await asyncio.gather(*(run_child(i, p) for i, p in enumerate(prompts)))
-        return ToolResult.from_success(json.dumps(results, ensure_ascii=False))
+        return ToolResult.from_success(results)
     except Exception as e:
         logger.error(f"Error during fork execution: {str(e)}", exc_info=True)
         return ToolResult.from_error(f"Fork error: {str(e)}")

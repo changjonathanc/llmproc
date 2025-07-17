@@ -171,7 +171,7 @@ from tests.patterns import timed_test
 async def configured_process(claude_base_process):
     """Setup process with file descriptor enabled."""
     process = claude_base_process
-    process.file_descriptor_enabled = True
+    process.get_plugin(FileDescriptorPlugin).enabled = True
     yield process
 
 @pytest.mark.llm_api

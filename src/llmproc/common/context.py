@@ -5,32 +5,23 @@ and decorators for working with runtime context for dependency injection in tool
 """
 
 import logging
-from collections.abc import Callable
 
 # Runtime context utilities live in common; avoid importing higher-level
 # packages to keep layering clean.
-from typing import Any, Optional, TypedDict, TypeVar
+from typing import Any, Optional, TypedDict
 
 # Set up logger
 logger = logging.getLogger(__name__)
-
-# Type definitions
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 class RuntimeContext(TypedDict, total=False):
     """Runtime context for dependency injection in tools.
 
-    This TypedDict defines the standard structure for runtime context
-    passed to tools that require runtime context. The 'total=False' means
-    that not all keys are required in every context instance.
+    Tools now rely only on the ``process`` field. Additional keys may be
+    present but are not validated by the framework.
     """
 
     process: Any  # LLMProcess instance
-    fd_manager: Any  # FileDescriptorManager instance
-    linked_programs: dict[str, Any]  # Dictionary of linked programs
-    linked_program_descriptions: dict[str, str]  # Dictionary of program descriptions
-    stderr: list[str]  # Buffer for stderr logging via write_stderr tool
 
 
 def validate_context_has(context: Optional[dict[str, Any]], *keys: str) -> tuple[bool, Optional[str]]:

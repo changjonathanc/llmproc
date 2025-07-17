@@ -1,10 +1,10 @@
 """Anthropic provider tools implementation for LLMProc."""
 
-import asyncio
 import copy
 import logging
-import os
-from typing import Any, Optional
+from dataclasses import dataclass, field
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 # Import Anthropic clients (will be None if not installed)
 try:
@@ -14,72 +14,32 @@ except ImportError:
     AsyncAnthropicVertex = None
 
 from llmproc.callbacks import CallbackEvent
-from llmproc.common.results import RunResult, ToolResult
+from llmproc.common.results import RunResult
 from llmproc.providers.anthropic_utils import (
-    add_token_efficient_header_if_needed,
-    get_context_window_size,
+    caching_disabled,
     prepare_api_request,
+    stream_call_with_retry,
 )
-from llmproc.providers.constants import ANTHROPIC_PROVIDERS
-from llmproc.providers.utils import safe_callback
-from llmproc.utils.message_utils import append_message_with_id
+from llmproc.providers.utils import get_context_window_size
+from llmproc.utils.background import AsyncBackgroundIterator
+from llmproc.utils.message_utils import append_message
+
+if TYPE_CHECKING:  # pragma: no cover - used for type hints only
+    from llmproc.llm_process import LLMProcess
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
-try:  # pragma: no cover - anthropic optional
-    from anthropic import (
-        APIConnectionError,
-        APIStatusError,
-        APITimeoutError,
-        OverloadedError,
-        RateLimitError,
-    )
-except Exception:  # pragma: no cover - anthropic optional
 
-    class RateLimitError(Exception):
-        pass
+@dataclass
+class IterationState:
+    """Mutable values for a single API iteration."""
 
-    class OverloadedError(Exception):
-        pass
-
-    class APIStatusError(Exception):
-        pass
-
-    class APIConnectionError(Exception):
-        pass
-
-    class APITimeoutError(Exception):
-        pass
-
-
-async def _call_with_retry(client: Any, request: dict[str, Any]) -> Any:
-    """Call ``client.messages.create`` with retries based on environment vars."""
-    max_attempts = int(os.getenv("LLMPROC_RETRY_MAX_ATTEMPTS", "6"))
-    initial_wait = int(os.getenv("LLMPROC_RETRY_INITIAL_WAIT", "1"))
-    max_wait = int(os.getenv("LLMPROC_RETRY_MAX_WAIT", "90"))
-
-    attempt = 0
-    wait = initial_wait
-    while True:
-        try:
-            return await client.messages.create(**request)
-        except (
-            RateLimitError,
-            OverloadedError,
-            APIStatusError,
-            APIConnectionError,
-            APITimeoutError,
-        ) as e:
-            attempt += 1
-            if attempt >= max_attempts:
-                logger.warning(
-                    f"Max retry attempts ({max_attempts}) reached for Anthropic API call, giving up: {str(e)}"
-                )
-                raise
-            logger.warning(f"Anthropic API error (attempt {attempt}/{max_attempts}), retrying in {wait}s: {str(e)}")
-            await asyncio.sleep(min(wait, max_wait))
-            wait = min(wait * 2, max_wait)
+    msg_prefix: list = field(default_factory=list)
+    tool_results_prefix: list = field(default_factory=list)
+    current_tool: Any | None = None
+    execution_aborted: bool = False
+    commit_partial: bool = True
 
 
 class AnthropicProcessExecutor:
@@ -105,10 +65,9 @@ class AnthropicProcessExecutor:
 
     async def run(
         self,
-        process: "Process",  # noqa: F821
-        user_prompt: str,
+        process: "LLMProcess",
+        user_prompt: str | None = None,
         max_iterations: int = 10,
-        run_result: Optional["RunResult"] = None,
         is_tool_continuation: bool = False,
     ) -> "RunResult":
         """Execute a conversation with the Anthropic API.
@@ -119,174 +78,57 @@ class AnthropicProcessExecutor:
 
         Args:
             process: The LLMProcess instance
-            user_prompt: The user's input message
+            user_prompt: The user's input message (required unless continuing a tool call)
             max_iterations: Maximum number of API calls for tool usage
-            run_result: Optional RunResult object to track execution metrics
             is_tool_continuation: Whether this is continuing a previous tool call
 
         Returns:
             RunResult object containing execution metrics and API call information
         """
-        # Initialize run result if not provided
-        if run_result is None:
-            run_result = RunResult()
+        run_result = RunResult()
 
         if not is_tool_continuation:
-            # Add user message with GOTO ID
-            append_message_with_id(process, "user", user_prompt)
+            if user_prompt is None:
+                raise ValueError("user_prompt is required when not continuing a tool call")
+            append_message(process, "user", user_prompt)
 
         run_result.set_stop_reason(None)
         iterations = 0
 
         while iterations < max_iterations:
-            # ── 1. reset per‑response buffers ───────────────────────────────────
-            self.msg_prefix = []
-            self.tool_results_prefix = []
+            state = IterationState()
+            process.iteration_state = state
 
-            # Trigger TURN_START event
-            process.trigger_event(CallbackEvent.TURN_START, process, run_result)
-
-            # Set up runtime context with live references to our buffers
-            ctx = process.tool_manager.runtime_context
-            ctx["msg_prefix"] = self.msg_prefix
-            ctx["tool_results_prefix"] = self.tool_results_prefix
+            await process.trigger_event(CallbackEvent.TURN_START, run_result=run_result)
 
             logger.debug(f"Making API call {iterations + 1}/{max_iterations}")
 
-            # Prepare the API request with unified payload preparation
-            use_caching = not getattr(process, "disable_automatic_caching", False)
-            api_request = prepare_api_request(process, add_cache=use_caching)
+            api_request = await self._prepare_request(process)
+            block_gen = await self._send_request(process, api_request)
 
-            # Trigger API request event
-            process.trigger_event(CallbackEvent.API_REQUEST, api_request)
+            tool_invoked, response = await self._stream_blocks(process, block_gen, run_result, state)
 
-            # Prepare and make API call with retry logic
-            response = await _call_with_retry(process.client, api_request)
+            await process.trigger_event(CallbackEvent.API_RESPONSE, response=response)
 
-            # Trigger API response event
-            process.trigger_event(CallbackEvent.API_RESPONSE, response)
+            api_info = {
+                "model": process.model_name,
+                "usage": getattr(response, "usage", {}),
+                "stop_reason": getattr(response, "stop_reason", None),
+                "id": getattr(response, "id", None),
+                "request": api_request,
+                "response": response,
+            }
+            run_result.add_api_call(api_info)
 
-            # Process API response
+            stop_reason = getattr(response, "stop_reason", None)
 
-            # Track API call in the run result if available
-            if run_result:
-                api_info = {
-                    "model": process.model_name,
-                    "usage": getattr(response, "usage", {}),
-                    "stop_reason": getattr(response, "stop_reason", None),
-                    "id": getattr(response, "id", None),
-                    "request": api_request,
-                    "response": response,
-                }
-                run_result.add_api_call(api_info)
+            await self._commit_state(process, response, state)
 
-            stop_reason = response.stop_reason
-            tool_invoked = False
-            execution_aborted = False
+            if state.execution_aborted:
+                run_result.set_stop_reason("hook_stop")
+                break
 
-            # ── 2. stream over content blocks ───────────────────────────────────
-            for block in response.content:
-                if block.type == "text":
-                    # NOTE: sometimes model can decide to not respond with any text, for example, after using tools.
-                    # appending the empty assistant message will cause the following API error in the next api call:
-                    # ERROR: all messages must have non-empty content except for the optional final assistant message
-                    if not hasattr(block, "text") or not block.text.strip():
-                        continue  # Skip empty text blocks
-
-                    # Trigger response event
-                    process.trigger_event(CallbackEvent.RESPONSE, block.text)
-
-                    # Store the original block for later assembly
-                    self.msg_prefix.append(block)
-                    continue
-
-                if block.type != "tool_use":
-                    continue  # Safety for future block types
-
-                # Store the original block
-                self.msg_prefix.append(block)
-
-                # Extract tool details
-                tool_name = block.name
-                tool_args = block.input
-                tool_id = block.id
-
-                # Trigger tool_start event
-                process.trigger_event(CallbackEvent.TOOL_START, tool_name, tool_args)
-
-                # Track tool in run_result if available
-                if run_result:
-                    run_result.add_tool_call(tool_name, tool_args)
-
-                # Execute tool ---------------------------------------------------
-                # Set tool_id for this specific tool call
-                ctx["tool_id"] = tool_id
-
-                # Call the tool
-                logger.debug(f"Calling tool '{tool_name}' with parameters: {tool_args}")
-                result = await process.call_tool(tool_name, tool_args)
-
-                # Remove tool_id from context now that the call is complete
-                ctx.pop("tool_id", None)
-
-                # Trigger tool_end event
-                process.trigger_event(CallbackEvent.TOOL_END, tool_name, result)
-
-                # Check if tool execution should abort further processing
-                if hasattr(result, "abort_execution") and result.abort_execution:
-                    logger.info(
-                        f"Tool '{tool_name}' requested execution abort. Stopping tool processing for this response."
-                    )
-                    execution_aborted = True
-                    break  # Exit the loop processing tools for this API response
-
-                # Process result for file descriptors if needed
-                if not isinstance(result, ToolResult):
-                    # This is a programming error - tools must return ToolResult
-                    error_msg = (
-                        f"Tool '{tool_name}' did not return a ToolResult instance. Got {type(result).__name__} instead."
-                    )
-                    logger.error(error_msg)
-                    tool_result = ToolResult.from_error(error_msg)
-                else:
-                    tool_result = result
-
-                # Create tool result content for state
-                tool_result_dict = tool_result.to_dict()
-                tool_result_content = {
-                    "type": "tool_result",
-                    "tool_use_id": tool_id,
-                    **tool_result_dict,
-                }
-
-                # Add to tool_results_prefix for causal history tracking
-                self.tool_results_prefix.append(tool_result_content)
-                tool_invoked = True
-
-            # ── 3. commit this provider response to conversation state ─────────
-            # Only update state if execution was not aborted by a tool
-            if not execution_aborted:
-                # Add assistant message with all content blocks
-                if self.msg_prefix:
-                    append_message_with_id(process, "assistant", self.msg_prefix)
-
-                # Add tool results as user messages
-                if self.tool_results_prefix:
-                    for tool_result in self.tool_results_prefix:
-                        append_message_with_id(process, "user", tool_result)
-
-            # Trigger TURN_END event
-            process.trigger_event(
-                CallbackEvent.TURN_END,
-                process,
-                response,
-                self.tool_results_prefix,
-            )
-
-            # If no response or no tools were invoked, we're done with this iteration
-            if not response.content or not tool_invoked:
-                # Get out of the tool loop as there are no more tools to execute
-                # Note: response.content could be empty in rare cases, which we handle gracefully
+            if not getattr(response, "content", None) or not tool_invoked:
                 run_result.set_stop_reason(stop_reason)
                 break
 
@@ -294,10 +136,6 @@ class AnthropicProcessExecutor:
 
         if iterations >= max_iterations:
             run_result.set_stop_reason("max_iterations")
-
-        # Create a new RunResult if one wasn't provided
-        if run_result is None:
-            run_result = RunResult()
 
         # Set the last_message in the RunResult to ensure it's available
         # This is critical for the sync interface tests
@@ -307,7 +145,130 @@ class AnthropicProcessExecutor:
         # Complete the RunResult and return it
         return run_result.complete()
 
-    async def count_tokens(self, process: "Process") -> dict:
+    async def _prepare_request(self, process: "LLMProcess") -> dict[str, Any]:
+        """Prepare Anthropic API request and trigger event."""
+        use_caching = not caching_disabled()
+        api_request = prepare_api_request(process, add_cache=use_caching)
+        await process.trigger_event(CallbackEvent.API_REQUEST, api_request=api_request)
+        return api_request
+
+    async def _send_request(self, process: "LLMProcess", api_request: dict[str, Any]):
+        """Send request to Anthropic and yield streaming blocks."""
+        return stream_call_with_retry(process.client, api_request)
+
+    async def _stream_blocks(
+        self,
+        process: "LLMProcess",
+        block_generator,
+        run_result: RunResult,
+        state: IterationState,
+    ) -> tuple[bool, Any]:
+        """Stream content blocks and execute tools."""
+        tool_invoked = False
+        response_obj = None
+
+        async def _immediate_streaming_callback(block):
+            """Execute streaming callbacks immediately when blocks arrive."""
+            await process.trigger_event(CallbackEvent.API_STREAM_BLOCK, block=block)
+
+        async with AsyncBackgroundIterator(
+            block_generator,
+            on_item=_immediate_streaming_callback,
+        ) as blocks:
+            async for block in blocks:
+                block_type = getattr(block, "type", None)
+                if block_type == "text":
+                    if not hasattr(block, "text") or not block.text.strip():
+                        continue
+                    hook_res = await process.plugins.response(process, block.text)
+                    if hook_res is not None and getattr(hook_res, "stop", False):
+                        state.commit_partial = getattr(hook_res, "commit_current", True)
+                        if state.commit_partial:
+                            state.msg_prefix.append(block)
+                        else:
+                            state.msg_prefix.clear()
+                        state.execution_aborted = True
+                        break
+                    state.msg_prefix.append(block)
+                    continue
+
+                if block_type == "thinking":
+                    # Handle thinking blocks - add to message prefix but don't treat as final response
+                    state.msg_prefix.append(block)
+                    continue
+
+                if block_type != "tool_use":
+                    response_obj = block
+                    break
+                state.msg_prefix.append(block)
+                invoked, aborted = await self._execute_tool(process, block, run_result, state)
+                tool_invoked = tool_invoked or invoked
+                if aborted:
+                    state.execution_aborted = True
+                    continue
+
+        if response_obj is None:
+            response_obj = SimpleNamespace(content=[], stop_reason=None, id=None, usage=SimpleNamespace())
+        return tool_invoked, response_obj
+
+    async def _execute_tool(
+        self,
+        process: "LLMProcess",
+        block: Any,
+        run_result: RunResult,
+        state: IterationState,
+    ) -> tuple[bool, bool]:
+        """Execute a single tool_use block."""
+        tool_name = block.name
+        tool_args = block.input
+        tool_id = block.id
+
+        await process.trigger_event(CallbackEvent.TOOL_START, tool_name=tool_name, tool_args=tool_args)
+        run_result.add_tool_call(tool_name=tool_name, tool_args=tool_args)
+
+        state.current_tool = block
+        logger.debug(f"Calling tool '{tool_name}' with parameters: {tool_args}")
+        result = await process.call_tool(tool_name, tool_args)
+        state.current_tool = None
+
+        await process.trigger_event(CallbackEvent.TOOL_END, tool_name=tool_name, result=result)
+
+        # Always create tool_result to maintain API protocol compliance
+        tool_result_dict = result.to_dict()
+        tool_result_content = {
+            "type": "tool_result",
+            "tool_use_id": tool_id,
+            **tool_result_dict,
+        }
+        state.tool_results_prefix.append(tool_result_content)
+
+        if hasattr(result, "abort_execution") and result.abort_execution:
+            logger.info(f"Tool '{tool_name}' requested execution abort. Stopping tool processing for this response.")
+            return True, True
+
+        return True, False
+
+    async def _commit_state(self, process: "LLMProcess", response: Any, state: IterationState) -> None:
+        """Commit streamed content and tool results to process state."""
+        if not state.execution_aborted or state.commit_partial:
+            if state.msg_prefix:
+                append_message(process, "assistant", state.msg_prefix)
+
+        # Always commit tool results to maintain API protocol compliance
+        # Even when execution is aborted, tool_result blocks must be present
+        if state.tool_results_prefix:
+            for tool_result in state.tool_results_prefix:
+                append_message(process, "user", tool_result)
+
+        await process.trigger_event(
+            CallbackEvent.TURN_END,
+            response=response,
+            tool_results=state.tool_results_prefix,
+        )
+
+        process.iteration_state = None
+
+    async def count_tokens(self, process: "LLMProcess") -> dict:
         """Count tokens in the current conversation context using Anthropic's API."""
         try:
             # Create state copy with dummy message and prepare API request

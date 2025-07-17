@@ -4,6 +4,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from llmproc.providers import get_provider_client
 from llmproc.providers.constants import PROVIDER_GEMINI, PROVIDER_GEMINI_VERTEX
 
@@ -29,7 +30,7 @@ def test_get_openai_provider(mock_openai, mock_env):
     mock_client = MagicMock()
     mock_openai.return_value = mock_client
 
-    client = get_provider_client("openai", "gpt-4o")
+    client = get_provider_client("openai")
 
     mock_openai.assert_called_once_with(api_key="test-openai-key")
     assert client == mock_client
@@ -39,14 +40,14 @@ def test_get_openai_provider(mock_openai, mock_env):
 def test_get_openai_provider_missing_import(mock_env):
     """Test getting OpenAI provider when import fails."""
     with pytest.raises(ImportError):
-        get_provider_client("openai", "gpt-4o")
+        get_provider_client("openai")
 
 
 @patch("llmproc.providers.providers.AsyncAnthropic", None)
 def test_get_anthropic_provider_missing_import(mock_env):
     """Test getting Anthropic provider when import fails."""
     with pytest.raises(ImportError):
-        get_provider_client("anthropic", "claude-3-5-sonnet-20241022")
+        get_provider_client("anthropic")
 
 
 @patch("llmproc.providers.providers.AsyncAnthropic")
@@ -55,45 +56,44 @@ def test_get_anthropic_provider(mock_anthropic, mock_env):
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
 
-    client = get_provider_client("anthropic", "claude-3-5-sonnet-20241022")
+    client = get_provider_client("anthropic")
 
     mock_anthropic.assert_called_once_with(api_key="test-anthropic-key")
     assert client == mock_client
 
 
-@patch("llmproc.providers.providers.AsyncAnthropicVertex", None)
-def test_get_anthropic_vertex_provider_missing_import(mock_env):
-    """Test getting Anthropic Vertex provider when import fails."""
+@patch("llmproc.providers.providers.AsyncAnthropic", None)
+def test_get_anthropic_provider_missing_import_haiku(mock_env):
+    """Test getting Anthropic provider when import fails (haiku model)."""
     with pytest.raises(ImportError):
-        get_provider_client("anthropic_vertex", "claude-3-5-haiku@20241022")
+        get_provider_client("anthropic")
 
 
-@patch("llmproc.providers.providers.AsyncAnthropicVertex")
-def test_get_anthropic_vertex_provider(mock_vertex, mock_env):
-    """Test getting Anthropic Vertex provider."""
+@patch("llmproc.providers.providers.AsyncAnthropic")
+def test_get_anthropic_provider_haiku(mock_anthropic, mock_env):
+    """Test getting Anthropic provider with haiku model."""
     mock_client = MagicMock()
-    mock_vertex.return_value = mock_client
+    mock_anthropic.return_value = mock_client
 
-    client = get_provider_client("anthropic_vertex", "claude-3-5-haiku@20241022")
+    client = get_provider_client("anthropic")
 
-    mock_vertex.assert_called_once_with(project_id="test-vertex-project", region="us-central1-vertex")
+    mock_anthropic.assert_called_once_with(api_key="test-anthropic-key")
     assert client == mock_client
 
 
-@patch("llmproc.providers.providers.AsyncAnthropicVertex")
-def test_get_anthropic_vertex_provider_with_params(mock_vertex, mock_env):
-    """Test getting Anthropic Vertex provider with explicit parameters."""
+@patch("llmproc.providers.providers.AsyncAnthropic")
+def test_get_anthropic_provider_with_params(mock_anthropic, mock_env):
+    """Test getting Anthropic provider with extraneous parameters."""
     mock_client = MagicMock()
-    mock_vertex.return_value = mock_client
+    mock_anthropic.return_value = mock_client
 
     client = get_provider_client(
-        "anthropic_vertex",
-        "claude-3-5-haiku@20241022",
+        "anthropic",
         project_id="custom-project",
         region="europe-west4",
     )
 
-    mock_vertex.assert_called_once_with(project_id="custom-project", region="europe-west4")
+    mock_anthropic.assert_called_once_with(api_key="test-anthropic-key")
     assert client == mock_client
 
 
@@ -103,7 +103,7 @@ def test_get_gemini_provider(mock_genai, mock_env):
     mock_client = MagicMock()
     mock_genai.Client.return_value = mock_client
 
-    client = get_provider_client(PROVIDER_GEMINI, "gemini-2.0-flash")
+    client = get_provider_client(PROVIDER_GEMINI)
 
     mock_genai.Client.assert_called_once_with(api_key="test-gemini-key")
     assert client == mock_client
@@ -115,7 +115,7 @@ def test_get_gemini_vertex_provider(mock_genai, mock_env):
     mock_client = MagicMock()
     mock_genai.Client.return_value = mock_client
 
-    client = get_provider_client(PROVIDER_GEMINI_VERTEX, "gemini-2.0-flash")
+    client = get_provider_client(PROVIDER_GEMINI_VERTEX)
 
     mock_genai.Client.assert_called_once_with(
         vertexai=True, project="test-google-project", location="us-central1-vertex"
@@ -131,7 +131,6 @@ def test_get_gemini_vertex_provider_with_params(mock_genai, mock_env):
 
     client = get_provider_client(
         PROVIDER_GEMINI_VERTEX,
-        "gemini-2.0-flash",
         project_id="custom-project",
         region="europe-west4",
     )
@@ -144,17 +143,17 @@ def test_get_gemini_vertex_provider_with_params(mock_genai, mock_env):
 def test_get_gemini_provider_missing_import(mock_env):
     """Test getting Gemini provider when import fails."""
     with pytest.raises(ImportError):
-        get_provider_client(PROVIDER_GEMINI, "gemini-2.0-flash")
+        get_provider_client(PROVIDER_GEMINI)
 
 
 @patch("llmproc.providers.providers.genai", None)
 def test_get_gemini_vertex_provider_missing_import(mock_env):
     """Test getting Gemini Vertex provider when import fails."""
     with pytest.raises(ImportError):
-        get_provider_client(PROVIDER_GEMINI_VERTEX, "gemini-2.0-flash")
+        get_provider_client(PROVIDER_GEMINI_VERTEX)
 
 
 def test_get_unsupported_provider(mock_env):
     """Test getting an unsupported provider."""
     with pytest.raises(NotImplementedError):
-        get_provider_client("unsupported", "model-name")
+        get_provider_client("unsupported")

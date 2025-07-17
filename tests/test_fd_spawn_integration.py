@@ -3,12 +3,16 @@
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-from llmproc.common.results import RunResult, ToolResult
-from llmproc.file_descriptors import FileDescriptorManager  # Fix import path
-from llmproc.llm_process import LLMProcess
-from llmproc.program import LLMProgram
-from llmproc.tools.builtin.spawn import spawn_tool
 
+from llmproc.common.results import RunResult, ToolResult
+from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import (
+    FileDescriptorManager,  # Fix import path
+    FileDescriptorPlugin,
+)
+from llmproc.plugins.preload_files import PreloadFilesPlugin
+from llmproc.plugins.spawn import SpawnPlugin, spawn_tool
+from llmproc.program import LLMProgram
 from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
@@ -26,55 +30,49 @@ async def test_spawn_tool_transfers_fd_to_child(mock_create_process, mock_get_pr
     parent_program.provider = "anthropic"
     parent_program.tools = {"enabled": ["read_fd", "spawn"]}
     parent_program.system_prompt = "parent system"
-    parent_program.display_name = "parent"
     parent_program.base_dir = None
     parent_program.api_params = {}
-    parent_program.get_enriched_system_prompt = Mock(return_value="enriched parent")
 
     # Create a child program for spawning
     child_program = create_mock_llm_program()
     child_program.provider = "anthropic"
     child_program.tools = {"enabled": ["read_fd"]}
     child_program.system_prompt = "child system"
-    child_program.display_name = "child"
     child_program.base_dir = None
     child_program.api_params = {}
-    child_program.get_enriched_system_prompt = Mock(return_value="enriched child")
 
     # Create a parent process
-    parent_process = create_test_llmprocess_directly(program=parent_program)
-
-    # Set up linked programs with PROGRAM REFERENCE, not process instance
-    parent_process.linked_programs = {"child": child_program}
-    parent_process.has_linked_programs = True
+    parent_process = create_test_llmprocess_directly(
+        program=parent_program, linked_programs={"child": child_program}
+    )
 
     # Set empty api_params to avoid None error
     parent_process.api_params = {}
 
     # Manually enable file descriptors
-    parent_process.file_descriptor_enabled = True
-    parent_process.fd_manager = FileDescriptorManager(max_direct_output_chars=100)
+    parent_process.get_plugin(FileDescriptorPlugin)
+    parent_process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager(max_direct_output_chars=100)
 
     # Create a file descriptor with test content
     test_content = "This is test content for FD sharing via spawn"
-    fd_xml = parent_process.fd_manager.create_fd_content(test_content)
+    fd_xml = parent_process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(test_content)
     # For test assertions, wrap in ToolResult
     fd_result = ToolResult(content=fd_xml, is_error=False)
     fd_id = fd_result.content.split('fd="')[1].split('"')[0]
 
     # Verify FD was created
     assert fd_id == "fd:1"
-    assert fd_id in parent_process.fd_manager.file_descriptors
+    assert fd_id in parent_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
 
     # Create our mock child process with everything needed to handle the spawn_tool flow
     mock_child_process = AsyncMock(spec=LLMProcess)
-    mock_child_process.preload_files = Mock()
+    mock_child_process.plugins = [PreloadFilesPlugin([])]
     mock_child_process.run = AsyncMock(return_value=RunResult())
     mock_child_process.get_last_message = Mock(return_value="Successfully processed FD content")
 
     # Pre-configure the file_descriptor_enabled to match what it should be at the end
     # This way we avoid the test checking this after spawn_tool modified it
-    mock_child_process.file_descriptor_enabled = True
+    mock_child_process.get_plugin(FileDescriptorPlugin)
 
     # Create a mock FileDescriptorManager for the child process
     mock_fd_manager = MagicMock()
@@ -83,50 +81,47 @@ async def test_spawn_tool_transfers_fd_to_child(mock_create_process, mock_get_pr
     mock_fd_manager.max_input_chars = 10000
     mock_fd_manager.page_user_input = False
     mock_fd_manager.file_descriptors = {}
-    mock_child_process.fd_manager = mock_fd_manager
+    mock_child_process.get_plugin(FileDescriptorPlugin).fd_manager = mock_fd_manager
+    mock_child_process.fd_manager = None
 
     # Configure references for inheritance
-    mock_child_process.references_enabled = False
+    mock_child_process.get_plugin(FileDescriptorPlugin).fd_manager.enable_references = False
 
     # Direct return value approach (without using future)
     # This is simpler and more reliable for async mocking
     mock_create_process.return_value = mock_child_process
 
     # Skip actual call to process.spawn_tool and directly test the implementation
-    # in llmproc/tools/builtin/spawn.py
-    runtime_context = {
-        "process": parent_process,
-        "fd_manager": parent_process.fd_manager,
-        "linked_programs": parent_process.linked_programs,
-    }
+    # in llmproc/plugins/spawn.py
+    runtime_context = {"process": parent_process}
 
     # Call the implementation function directly
+    # Note: additional_preload_files now expects actual file paths, not FD IDs
     result = await spawn_tool(
         program_name="child",
         prompt="Process the shared FD content",
-        additional_preload_files=[fd_id],
+        additional_preload_files=None,  # No preload files needed for FD test
         runtime_context=runtime_context,
     )
 
-    # Verify create_process was called with the child program and preload files
-    # The current implementation calls it with positional args
-    mock_create_process.assert_called_once_with(child_program, ["fd:1"])
-
-    # Verify additional_preload_files is passed directly to create_process
+    # Verify create_process was called for the child program
+    mock_create_process.assert_called_once_with(child_program)
 
     # Verify run was called with the query
     mock_child_process.run.assert_called_once_with("Process the shared FD content")
 
     # Verify file descriptor settings were applied
-    assert mock_child_process.file_descriptor_enabled is True
+    assert mock_child_process.get_plugin(FileDescriptorPlugin).fd_manager is not None
 
     # Verify result
     assert not result.is_error
     assert result.content == "Successfully processed FD content"
 
     # Verify linked program reference is still intact
-    assert "child" in parent_process.linked_programs
-    assert parent_process.linked_programs["child"] is child_program
+    spawn_plugin = parent_process.get_plugin(SpawnPlugin)
+    assert spawn_plugin is not None
+    assert "child" in spawn_plugin.linked_programs
+    assert spawn_plugin.linked_programs["child"] is child_program
 
 
 @pytest.mark.asyncio
@@ -140,36 +135,26 @@ async def test_spawn_schema_updates_when_fd_enabled():
     program_with_fd.provider = "anthropic"
     program_with_fd.tools = {"enabled": ["read_fd", "spawn"]}
     program_with_fd.system_prompt = "system"
-    program_with_fd.display_name = "display"
     program_with_fd.base_dir = None
     program_with_fd.api_params = {}
-    program_with_fd.get_enriched_system_prompt = Mock(return_value="enriched")
 
     # Create a program without file descriptor support
     program_without_fd = create_mock_llm_program()
     program_without_fd.provider = "anthropic"
     program_without_fd.tools = {"enabled": ["spawn"]}
     program_without_fd.system_prompt = "system"
-    program_without_fd.display_name = "display"
     program_without_fd.base_dir = None
     program_without_fd.api_params = {}
-    program_without_fd.get_enriched_system_prompt = Mock(return_value="enriched")
 
     # Create mock processes
     process_with_fd = Mock()
-    process_with_fd.file_descriptor_enabled = True
-    process_with_fd.fd_manager = FileDescriptorManager()
-    process_with_fd.linked_programs = linked_programs
-    process_with_fd.has_linked_programs = True
-    # Add empty linked_program_descriptions dictionary for proper iteration
-    process_with_fd.linked_program_descriptions = {}
+    process_with_fd.get_plugin(FileDescriptorPlugin)
+    process_with_fd.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager()
+    process_with_fd.plugins = [SpawnPlugin(linked_programs)]
 
     process_without_fd = Mock()
-    process_without_fd.file_descriptor_enabled = False
-    process_without_fd.linked_programs = linked_programs
-    process_without_fd.has_linked_programs = True
-    # Add empty linked_program_descriptions dictionary for proper iteration
-    process_without_fd.linked_program_descriptions = {}
+    process_without_fd.get_plugin(FileDescriptorPlugin)
+    process_without_fd.plugins = [SpawnPlugin(linked_programs)]
 
     # Set up mock ToolRegistry for testing registration
     registry_with_fd = MagicMock()
@@ -233,35 +218,27 @@ async def test_spawn_schema_updates_when_fd_enabled():
         return ToolResult.from_success("Successful spawn")
 
     # Register directly into the mock registries
-    registry_with_fd.register_tool.return_value = True
-    registry_without_fd.register_tool.return_value = True
+    registry_with_fd.register_tool_obj.return_value = True
+    registry_without_fd.register_tool_obj.return_value = True
 
     # Call the registry register_tool method directly with our mock schemas
-    registry_with_fd.register_tool("spawn", mock_handler, with_fd_schema)
-    registry_without_fd.register_tool("spawn", mock_handler, without_fd_schema)
+    registry_with_fd.register_tool_obj("spawn", mock_handler, with_fd_schema)
+    registry_without_fd.register_tool_obj("spawn", mock_handler, without_fd_schema)
 
     # Verify registry calls
-    assert registry_with_fd.register_tool.called
-    assert registry_without_fd.register_tool.called
+    assert registry_with_fd.register_tool_obj.called
+    assert registry_without_fd.register_tool_obj.called
 
     # Get the registered schemas from the call args
-    with_fd_call_args = registry_with_fd.register_tool.call_args
-    without_fd_call_args = registry_without_fd.register_tool.call_args
+    with_fd_call_args = registry_with_fd.register_tool_obj.call_args
+    without_fd_call_args = registry_without_fd.register_tool_obj.call_args
 
     # The schema is the third argument (index 2) in call_args[0]
     with_fd_schema = with_fd_call_args[0][2]
     without_fd_schema = without_fd_call_args[0][2]
 
-    # Debug output - print the schemas
-    print(
-        "\nWith FD Schema Properties:",
-        list(with_fd_schema["input_schema"]["properties"].keys()),
-    )
-    print(
-        "Without FD Schema Properties:",
-        list(without_fd_schema["input_schema"]["properties"].keys()),
-    )
-
-    # Test is now pending implementation changes - adjust assertion to make test pass for now
-    # In the future, the schemas should differ but currently they don't because of shared schema definition
-    assert True, "Test bypassed until implementation is updated to fully differentiate schemas"
+    # The spawn schema should include additional preload file support when
+    # file descriptors are enabled. Verify that this property is present only in
+    # the schema registered with file descriptor support.
+    assert "additional_preload_files" in with_fd_schema["input_schema"]["properties"]
+    assert "additional_preload_files" not in without_fd_schema["input_schema"]["properties"]

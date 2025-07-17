@@ -20,11 +20,13 @@ class TestLLMProcessContextIntegration:
         program.model_name = "test-model"
         program.provider = "test-provider"
         program.system_prompt = "Test system prompt"
-        program.display_name = "Test Model"
+        program.project_id = None
+        program.region = None
         program.base_dir = "."
         program.api_params = {}
         program.tools = {"enabled": []}
-        program.linked_programs = {}
+        from llmproc.plugins.spawn import SpawnPlugin
+        program.plugins = [SpawnPlugin()]
         program.tool_manager = MagicMock()
         return program
 

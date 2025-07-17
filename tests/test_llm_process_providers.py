@@ -58,25 +58,19 @@ def test_openai_provider_run(mock_openai, mock_env):
 
     # Create a SyncLLMProcess for synchronous testing
     from llmproc import SyncLLMProcess
+    from llmproc.config.process_config import ProcessConfig
 
-    # Create a sync process wrapper around our mocked process (without passing executor)
-    sync_process = SyncLLMProcess(
-        _loop=asyncio.new_event_loop(),
-        **{
-            k: getattr(process, k)
-            for k in [
-                "program",
-                "model_name",
-                "provider",
-                "original_system_prompt",
-                "system_prompt",
-                "display_name",
-                "state",
-                "client",
-                "tool_manager",
-            ]
-        },
+    cfg = ProcessConfig(
+        program=process.program,
+        model_name=process.model_name,
+        provider=process.provider,
+        base_system_prompt=process.base_system_prompt,
+        state=process.state,
+        client=process.client,
+        tool_manager=process.tool_manager,
     )
+
+    sync_process = SyncLLMProcess(cfg, _loop=asyncio.new_event_loop())
 
     # Now patch the executor on the sync process
     with patch.object(sync_process.executor, "run", return_value="Test response from OpenAI"):
@@ -134,25 +128,19 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
 
     # Create a SyncLLMProcess for synchronous testing
     from llmproc import SyncLLMProcess
+    from llmproc.config.process_config import ProcessConfig
 
-    # Create a sync process wrapper around our mocked process (without passing executor)
-    sync_process = SyncLLMProcess(
-        _loop=asyncio.new_event_loop(),
-        **{
-            k: getattr(process, k)
-            for k in [
-                "program",
-                "model_name",
-                "provider",
-                "original_system_prompt",
-                "system_prompt",
-                "display_name",
-                "state",
-                "client",
-                "tool_manager",
-            ]
-        },
+    cfg = ProcessConfig(
+        program=process.program,
+        model_name=process.model_name,
+        provider=process.provider,
+        base_system_prompt=process.base_system_prompt,
+        state=process.state,
+        client=process.client,
+        tool_manager=process.tool_manager,
     )
+
+    sync_process = SyncLLMProcess(cfg, _loop=asyncio.new_event_loop())
 
     # Now patch the executor on the sync process
     with patch.object(sync_process.executor, "run", return_value="Test response from Anthropic"):
@@ -175,19 +163,19 @@ def test_anthropic_provider_run(mock_anthropic, mock_env):
     ]
 
 
-@patch("llmproc.providers.providers.AsyncAnthropicVertex")
-def test_anthropic_vertex_provider_run(mock_vertex, mock_env):
-    """Test LLMProcess with Anthropic Vertex provider."""
+@patch("llmproc.providers.providers.AsyncAnthropic")
+def test_anthropic_provider_run_alt(mock_anthropic, mock_env):
+    """Test LLMProcess with Anthropic provider using haiku model."""
     # Setup mock client and response
     mock_client = MagicMock()
-    mock_vertex.return_value = mock_client
+    mock_anthropic.return_value = mock_client
 
     mock_response = MagicMock()
     mock_client.messages.create.return_value = mock_response
 
     mock_content = [MagicMock()]
     mock_response.content = mock_content
-    mock_content[0].text = "Test response from Anthropic Vertex"
+    mock_content[0].text = "Test response from Anthropic"
 
     # Create LLMProcess using the helper function
     from llmproc.program import LLMProgram
@@ -196,8 +184,8 @@ def test_anthropic_vertex_provider_run(mock_vertex, mock_env):
 
     # Create program and process
     program = LLMProgram(
-        model_name="claude-3-haiku@20240307",
-        provider="anthropic_vertex",
+        model_name="claude-3-haiku-20240307",
+        provider="anthropic",
         system_prompt="You are a test assistant.",
     )
 
@@ -212,26 +200,22 @@ def test_anthropic_vertex_provider_run(mock_vertex, mock_env):
     from llmproc import SyncLLMProcess
 
     # Create a sync process wrapper around our mocked process (without passing executor)
-    sync_process = SyncLLMProcess(
-        _loop=asyncio.new_event_loop(),
-        **{
-            k: getattr(process, k)
-            for k in [
-                "program",
-                "model_name",
-                "provider",
-                "original_system_prompt",
-                "system_prompt",
-                "display_name",
-                "state",
-                "client",
-                "tool_manager",
-            ]
-        },
+    from llmproc.config.process_config import ProcessConfig
+
+    cfg = ProcessConfig(
+        program=process.program,
+        model_name=process.model_name,
+        provider=process.provider,
+        base_system_prompt=process.base_system_prompt,
+        state=process.state,
+        client=process.client,
+        tool_manager=process.tool_manager,
     )
 
+    sync_process = SyncLLMProcess(cfg, _loop=asyncio.new_event_loop())
+
     # Now patch the executor on the sync process
-    with patch.object(sync_process.executor, "run", return_value="Test response from Anthropic Vertex"):
+    with patch.object(sync_process.executor, "run", return_value="Test response from Anthropic"):
         # Use the synchronous run method
         response = sync_process.run("Hello!")
 
@@ -239,13 +223,13 @@ def test_anthropic_vertex_provider_run(mock_vertex, mock_env):
         process.state = [
             {"role": "system", "content": "You are a test assistant."},
             {"role": "user", "content": "Hello!"},
-            {"role": "assistant", "content": "Test response from Anthropic Vertex"},
+            {"role": "assistant", "content": "Test response from Anthropic"},
         ]
 
     # Verify
-    assert response == "Test response from Anthropic Vertex"
+    assert response == "Test response from Anthropic"
     assert process.state == [
         {"role": "system", "content": "You are a test assistant."},
         {"role": "user", "content": "Hello!"},
-        {"role": "assistant", "content": "Test response from Anthropic Vertex"},
+        {"role": "assistant", "content": "Test response from Anthropic"},
     ]

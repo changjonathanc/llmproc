@@ -70,37 +70,37 @@ For security reasons, LLMProc requires all API keys to be configured via environ
 
 ### Direct API Configuration
 
-```toml
-[model]
-name = "gemini-2.0-flash"  # Smaller, faster model
-provider = "gemini"
-display_name = "Gemini 2.0 Flash"
+```yaml
+model:
+  name: "gemini-2.0-flash"  # Smaller, faster model
+  provider: "gemini"
+  display_name: "Gemini 2.0 Flash"
 
-[parameters]
-temperature = 0.7
-max_tokens = 4096
+parameters:
+  temperature: 0.7
+  max_tokens: 4096
 
-[prompt]
-system_prompt = "You are a helpful AI assistant."
+prompt:
+  system_prompt: "You are a helpful AI assistant."
 ```
 
 ### Vertex AI Configuration
 
-```toml
-[model]
-name = "gemini-2.0-flash"  # Recommended for testing
-provider = "gemini_vertex"
-display_name = "Gemini 2.0 Flash (Vertex AI)"
-# Optional: Override environment variables
-# project_id = "your-project-id"
-# region = "us-central1"
+```yaml
+model:
+  name: "gemini-2.0-flash"  # Recommended for testing
+  provider: "gemini_vertex"
+  display_name: "Gemini 2.0 Flash (Vertex AI)"
+  # Optional: Override environment variables
+  # project_id: "your-project-id"
+  # region: "us-central1"
 
-[parameters]
-temperature = 0.7
-max_tokens = 4096
+parameters:
+  temperature: 0.7
+  max_tokens: 4096
 
-[prompt]
-system_prompt = "You are a helpful AI assistant."
+prompt:
+  system_prompt: "You are a helpful AI assistant."
 ```
 
 ## Parameter Mapping
@@ -169,11 +169,11 @@ else:
 
 ### Command Line
 
-Using a TOML configuration file:
+Using a YAML configuration file:
 
 ```bash
 # Use the Gemini configuration
-llmproc-demo ./examples/gemini.toml
+llmproc-demo ./examples/gemini.yaml
 ```
 
 ## Troubleshooting

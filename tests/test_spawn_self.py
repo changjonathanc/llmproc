@@ -6,7 +6,8 @@ import pytest
 
 from llmproc.common.results import RunResult, ToolResult
 from llmproc.program import LLMProgram
-from llmproc.tools.builtin.spawn import spawn_tool
+from llmproc.plugins.spawn import spawn_tool
+from llmproc.tools.core import Tool
 from tests.conftest import create_test_llmprocess_directly
 
 
@@ -24,8 +25,9 @@ async def test_spawn_self_when_no_linked_programs():
 
         process = create_test_llmprocess_directly(program=program, linked_programs={}, has_linked_programs=False)
 
-        result = await spawn_tool(
-            prompt="hello",
+        tool = Tool.from_callable(spawn_tool)
+        result = await tool.execute(
+            {"prompt": "hello"},
             runtime_context={"process": process},
         )
 

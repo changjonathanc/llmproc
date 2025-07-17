@@ -6,10 +6,10 @@ import pytest
 
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import ToolResult
-from llmproc.file_descriptors import FileDescriptorManager
+from llmproc.config.process_config import ProcessConfig
 from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorManager, FileDescriptorPlugin
 from llmproc.program import LLMProgram
-from llmproc.tools.builtin.fd_tools import read_fd_tool
 from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
@@ -153,10 +153,19 @@ async def test_read_fd_tool():
     # Mock fd_manager
     fd_manager = Mock()
     fd_manager.read_fd_content.return_value = "Test result"
-    # Create runtime context
-    runtime_context = {"fd_manager": fd_manager}
-    # Call the tool with runtime context
-    result = await read_fd_tool(fd="fd:1", start=2, runtime_context=runtime_context)
+
+    # Create a process with the plugin so the tool can locate the manager
+    from llmproc.config.schema import FileDescriptorPluginConfig
+
+    plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    plugin.fd_manager = fd_manager
+    cfg = ProcessConfig(program=MagicMock(), model_name="m", provider="p", base_system_prompt="x", plugins=[plugin])
+    process = LLMProcess(cfg)
+
+    # Call the plugin method with runtime context
+    plugin = process.get_plugin(FileDescriptorPlugin)
+    result = await plugin.read_fd_tool(fd="fd:1", start=2)
+
     # Verify fd_manager.read_fd_content was called with correct args
     fd_manager.read_fd_content.assert_called_once_with(
         fd_id="fd:1",
@@ -166,6 +175,7 @@ async def test_read_fd_tool():
         start=2,
         count=1,
     )
+
     # Check result
     assert result.content == "Test result"
 
@@ -183,38 +193,33 @@ async def test_fd_integration_with_fork(mock_get_provider_client):
     # This is required for testing since we're setting up a controlled environment
     process = create_test_llmprocess_directly(program=program)
     # Manually enable file descriptors
-    process.file_descriptor_enabled = True
-    process.fd_manager = FileDescriptorManager(enable_references=True)
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager(enable_references=True)
     # Create a file descriptor
-    xml = process.fd_manager.create_fd_content("Test content")
+    xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content("Test content")
     fd_id = xml.split('fd="')[1].split('"')[0]
     # Check that FD exists
-    assert fd_id in process.fd_manager.file_descriptors
+    assert fd_id in process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
     # Create a mock forked process that will be returned by create_process
     mock_forked_process = Mock(spec=LLMProcess)
-    mock_forked_process.file_descriptor_enabled = False  # Will be set by fork_process
-    mock_forked_process.fd_manager = None  # Will be set by fork_process
-    # Create a patched version of fork_process that doesn't call create_process
+    mock_forked_process.get_plugin(FileDescriptorPlugin).fd_manager = None
+    # Create a patched version of _fork_process that doesn't call create_process
     # This allows us to test the file descriptor copying logic in isolation
-    original_fork_process = process.fork_process
+    original_fork_process = process._fork_process
 
     # Replace with our test version that skips the create_process call
     async def test_fork_process():
         # Set up the mock with expected properties
-        mock_forked_process.file_descriptor_enabled = True
         mock_forked_process.state = []
-        mock_forked_process.fd_manager = FileDescriptorManager(enable_references=True)
+        mock_forked_process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager(enable_references=True)
         # Child processes get WRITE access level (preventing further forking)
         mock_forked_process.access_level = AccessLevel.WRITE
         return mock_forked_process
 
-    # Patch the fork_process method on our specific process instance
-    process.fork_process = test_fork_process
-    # Now call fork_process - this will use our test implementation
-    forked_process = await process.fork_process()
-    # Verify the properties were set correctly
-    assert forked_process.file_descriptor_enabled is True
-    assert hasattr(forked_process, "fd_manager")
+    # Patch the _fork_process method on our specific process instance
+    process._fork_process = test_fork_process
+    # Now call _fork_process - this will use our test implementation
+    forked_process = await process._fork_process()
+    assert forked_process.get_plugin(FileDescriptorPlugin).fd_manager is not None
     assert hasattr(forked_process, "state")
     assert forked_process.access_level == AccessLevel.WRITE
 
@@ -233,17 +238,14 @@ async def test_large_output_wrapping(mock_executor):
     program = create_mock_llm_program(enabled_tools=["read_fd"])
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"
-    program.display_name = "display"
     program.base_dir = None
     program.api_params = {}
-    program.get_enriched_system_prompt.return_value = "enriched"
     # Create a process
     process = create_test_llmprocess_directly(program=program)
     # Manually enable file descriptors
-    process.file_descriptor_enabled = True
-    process.fd_manager = FileDescriptorManager(enable_references=True)
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager(enable_references=True)
     # Ensure max_direct_output_chars is small
-    process.fd_manager.max_direct_output_chars = 10
+    process.get_plugin(FileDescriptorPlugin).fd_manager.max_direct_output_chars = 10
     # Create a mock tool result with large content
     large_content = "This is a large content that exceeds the threshold"
     mock_tool_result = ToolResult(content=large_content)
@@ -255,8 +257,7 @@ async def test_large_output_wrapping(mock_executor):
     # Check that large content is wrapped
     # We can't fully test this without mocking the API calls, but we can
     # verify that the file descriptor manager is set up correctly
-    assert process.file_descriptor_enabled
-    assert process.fd_manager.max_direct_output_chars == 10
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.max_direct_output_chars == 10
 
 
 def test_calculate_total_pages_and_fd_tools():

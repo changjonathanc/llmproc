@@ -39,8 +39,10 @@ from typing import Any, Optional
 
 from dotenv import load_dotenv
 from llmproc import LLMProgram, register_tool
-from llmproc.callbacks import CallbackEvent
-from llmproc.tools.mcp import MCPServerTools
+from llmproc.config import EnvInfoConfig
+from llmproc.config.schema import FileDescriptorPluginConfig
+from llmproc.config.tool import ToolConfig
+from llmproc.plugins import EnvInfoPlugin, FileDescriptorPlugin
 
 # Load environment variables from .env file
 load_dotenv()
@@ -249,7 +251,7 @@ async def main():
             parameters={"temperature": 0.1, "max_tokens": 1024},
         )
         .register_tools([calculate, stats_calculator])
-        .configure_env_info([])  # Explicitly disable env info
+        .add_plugins(EnvInfoPlugin(EnvInfoConfig(variables=[])))  # Explicitly disable env info
     )
     print("   ✓ Math expert program created (claude-3-5-haiku)")
 
@@ -263,7 +265,7 @@ async def main():
         )
         .configure_thinking(budget_tokens=4096)  # Enable thinking capability
         .enable_token_efficient_tools()  # Enable token-efficient tools
-        .configure_env_info(["platform", "python_version"])  # Limited env info
+        .add_plugins(EnvInfoPlugin(EnvInfoConfig(variables=["platform", "python_version"])))
     )
     print("   ✓ Code expert program created (claude-3-7-sonnet with thinking)")
 
@@ -288,28 +290,30 @@ async def main():
             },
             display_name="Comprehensive Assistant",
         )
-        # Register all our tools
-        .register_tools([calculate, summarize_text, weather_lookup, stats_calculator, spawn_example])
-        # Set up tool aliases for convenience
-        .set_tool_aliases(
-            {
-                "calc": "calculator",
-                "stats": "stats_calculator",
-                "weather": "weather_lookup",
-                "summarize": "summarize_text",
-            }
+        # Register all our tools with easy aliases
+        .register_tools(
+            [
+                ToolConfig(name="calculator", alias="calc"),
+                ToolConfig(name="summarize_text", alias="summarize"),
+                ToolConfig(name="weather_lookup", alias="weather"),
+                ToolConfig(name="stats_calculator", alias="stats"),
+                spawn_example,
+            ]
         )
         # Add specialized programs
         .add_linked_program("math_expert", math_expert, "Expert in mathematics and calculations")
         .add_linked_program("code_expert", code_expert, "Expert in programming and software development")
-        # Configure environment info
-        .configure_env_info(["working_directory", "platform", "date"])
-        # Configure file descriptor system
-        .configure_file_descriptor(
-            enabled=True,
-            max_direct_output_chars=8000,
-            default_page_size=4000,
-            enable_references=True,
+        # Configure environment info and file descriptor system via plugins
+        .add_plugins(
+            EnvInfoPlugin(EnvInfoConfig(variables=["working_directory", "platform", "date"])),
+            FileDescriptorPlugin(
+                FileDescriptorPluginConfig(
+                    enabled=True,
+                    max_direct_output_chars=8000,
+                    default_page_size=4000,
+                    enable_references=True,
+                )
+            ),
         )
         # Configure thinking capability
         .configure_thinking(enabled=True, budget_tokens=8192)
@@ -330,7 +334,7 @@ async def main():
     print(f"   Provider: {main_program.provider}")
     print(f"   Display name: {main_program.display_name}")
     print(f"   Linked programs: {list(main_program.linked_programs.keys())}")
-    print(f"   Tools: {main_program.get_registered_tools()}")
+    print(f"   Tools: {main_program.registered_tools}")
 
     # Display detailed tool demonstration
     print("\n4. Tool Demonstration Before LLM Integration:")
@@ -374,8 +378,8 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor i
         print("\n8. Running with test prompt...")
         print(f"   Prompt (truncated): '{user_prompt[:100]}...'")
 
-        # Register callbacks using the new pattern
-        process.add_callback(SDKCallbacks())
+        # Register plugins using the unified API
+        process.add_plugins(SDKCallbacks())
 
         # Run without callbacks parameter
         result = await process.run(user_prompt)

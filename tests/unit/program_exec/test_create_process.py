@@ -4,11 +4,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
 from llmproc.program import LLMProgram
+from llmproc.tools.builtin import calculator, read_file
+import llmproc.program_exec as program_exec
 from llmproc.program_exec import (
     create_process,
     instantiate_process,
-    prepare_process_state,
+    prepare_process_config,
     setup_runtime_context,
     validate_process,
 )
@@ -24,7 +27,7 @@ async def test_create_process_new_path():
     program.model_name = "test-model"
     program.provider = "anthropic"  # Use a supported provider
     program.system_prompt = "Test system prompt"
-    program.display_name = "Test display name"
+    program.tools = [calculator, read_file]
 
     # Create tool manager
     from llmproc.tools.tool_manager import ToolManager
@@ -35,12 +38,13 @@ async def test_create_process_new_path():
     mock_process = MagicMock(spec=LLMProcess)
     mock_process.model_name = program.model_name
     mock_process.provider = program.provider
+    mock_process.plugins = []
 
     # Set up patches
     with (
-        patch("llmproc.program_exec.prepare_process_state") as mock_prepare,
+        patch("llmproc.program_exec.prepare_process_config") as mock_prepare,
         patch.object(program, "get_tool_configuration") as mock_get_config,
-        patch.object(program.tool_manager, "initialize_tools") as mock_initialize,
+        patch("llmproc.program_exec.ToolManager.register_tools", new_callable=AsyncMock) as mock_initialize,
         patch("llmproc.program_exec.instantiate_process") as mock_instantiate,
         patch("llmproc.program_exec.setup_runtime_context") as mock_setup,
         patch("llmproc.program_exec.validate_process") as mock_validate,
@@ -48,21 +52,20 @@ async def test_create_process_new_path():
         # Configure mocks
         mock_get_config.return_value = {"tool_config": "test", "provider": "anthropic"}
 
-        # Set up the initialize_tools mock to return a Future
+        # Set up the register_tools mock to return a Future
         future = AsyncMock()
         future.return_value = program.tool_manager
         mock_initialize.return_value = future
 
-        # Set up the prepare_process_state mock to return a state dict
-        state_dict = {
-            "model_name": program.model_name,
-            "provider": program.provider,
-            "original_system_prompt": program.system_prompt,
-            "system_prompt": program.system_prompt,
-            "program": program,  # Important: include program
-            "tool_manager": program.tool_manager,
-        }
-        mock_prepare.return_value = state_dict
+        # Set up the prepare_process_config mock to return a config state
+        state_cfg = program_exec.ProcessConfig(
+            program=program,
+            model_name=program.model_name,
+            provider=program.provider,
+            base_system_prompt=program.system_prompt,
+            tool_manager=program.tool_manager,
+        )
+        mock_prepare.return_value = state_cfg
 
         # Configure instantiate_process to return the mock process
         mock_instantiate.return_value = mock_process
@@ -73,13 +76,13 @@ async def test_create_process_new_path():
         # Verify all steps were called in the correct order
         program.compile.assert_called_once()  # Ensure compilation happened
         mock_prepare.assert_called_once_with(
-            program, None, None
-        )  # Verify prepare_process_state was called with correct args
+            program, None
+        )  # Verify prepare_process_config was called with correct args
         mock_get_config.assert_called_once()  # Verify program.get_tool_configuration was called
         mock_initialize.assert_called_once_with(
-            {"tool_config": "test", "provider": "anthropic"}
-        )  # Verify tool_manager.initialize_tools was called
-        mock_instantiate.assert_called_once_with(state_dict)  # Verify instantiate_process was called with state
+            [calculator, read_file], {"tool_config": "test", "provider": "anthropic"}
+        )  # Verify tool_manager.register_tools was called
+        mock_instantiate.assert_called_once_with(state_cfg)
         mock_setup.assert_called_once_with(mock_process)  # Verify setup_runtime_context was called
         mock_validate.assert_called_once_with(mock_process)  # Verify validate_process was called
 
@@ -96,19 +99,16 @@ async def test_create_process_integration():
     program.model_name = "test-model"
     program.provider = "test-provider"
     program.system_prompt = "Test system prompt"
-    program.display_name = "Test display name"
     program.base_dir = MagicMock()
     program.api_params = {}
     program.tool_manager = MagicMock()
     program.get_tool_configuration = MagicMock(return_value={})
-    program.tool_manager.initialize_tools = AsyncMock()
-    program.tool_manager.get_registered_tools = MagicMock(return_value=[])
+    program.tool_manager.register_tools = AsyncMock()
+    program.tool_manager.registered_tools = []
 
     # Optional attributes
-    program.file_descriptor = {"enabled": False}
-    program.linked_programs = {}
-    program.linked_program_descriptions = {}
-    program.preload_files = []
+    program.file_descriptor = {}
+    program.plugins = []
     program.project_id = None
     program.region = None
     program.mcp_config_path = None
@@ -118,17 +118,17 @@ async def test_create_process_integration():
         mock_client.return_value = MagicMock()
 
         # Call create_process
-        process = await create_process(program)
+        with patch("llmproc.program_exec.ToolManager.register_tools", new_callable=AsyncMock) as mock_init:
+            process = await create_process(program)
+            mock_init.assert_awaited_once()
 
         # Verify the process was created with the correct attributes
         assert isinstance(process, LLMProcess)
         assert process.model_name == "test-model"
         assert process.provider == "test-provider"
-        assert process.system_prompt == "Test system prompt"
-        assert process.display_name == "Test display name"
         assert process.program == program
         assert process.state == []
-        assert not process.file_descriptor_enabled
+        assert process.get_plugin(FileDescriptorPlugin) is None
 
         # Verify tool manager was initialized
-        program.tool_manager.initialize_tools.assert_called_once()
+        mock_init.assert_awaited_once()

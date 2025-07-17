@@ -3,10 +3,14 @@
 import asyncio
 from unittest.mock import Mock, patch
 
+import llmproc.program_exec as program_exec
+
 import pytest
 from llmproc.common.results import ToolResult
 from llmproc.tools import ToolManager, ToolRegistry
-from llmproc.tools.builtin import calculator, fd_to_file_tool, fork_tool, read_fd_tool, read_file, spawn_tool
+from llmproc.tools.core import Tool
+from llmproc.common.metadata import get_tool_meta
+from llmproc.tools.builtin import calculator, fork_tool, read_file, spawn_tool
 from llmproc.tools.function_tools import register_tool
 
 
@@ -17,38 +21,35 @@ def test_tool_manager_registry_initialization():
     assert isinstance(manager.runtime_registry, ToolRegistry)
 
     # Check that other attributes are initialized as expected
-    assert isinstance(manager.function_tools, list)
-    assert len(manager.function_tools) == 0
-    assert isinstance(manager.get_registered_tools(), list)
-    assert len(manager.get_registered_tools()) == 0
-    assert manager.mcp_manager is None
+    assert isinstance(manager.registered_tools, list)
+    assert len(manager.registered_tools) == 0
+    assert manager.mcp_aggregator is None
 
 
 @pytest.mark.asyncio
-async def test_initialize_tools_basic():
-    """Test the basic initialize_tools method."""
+async def test_register_tools_basic():
+    """Test the basic register_tools method."""
     manager = ToolManager()
-
-    # Register tools using function references
-    manager.register_tools([calculator, read_file, fork_tool])
 
     # Create a mock process configuration
     mock_config = {
-        "has_linked_programs": False,
         "fd_manager": None,
         "mcp_enabled": False,  # Ensure MCP is disabled
     }
 
     # Initialize the tools
-    await manager.initialize_tools(mock_config)
+    await manager.register_tools(
+        [calculator, read_file, fork_tool],
+        mock_config,
+    )
 
     # Verify that the runtime registry is populated
-    assert len(manager.runtime_registry.tool_handlers) > 0
+    assert len(manager.runtime_registry.get_tool_names()) > 0
 
     # Check that the enabled tools are registered
-    assert "calculator" in manager.runtime_registry.tool_handlers
-    assert "read_file" in manager.runtime_registry.tool_handlers
-    assert "fork" in manager.runtime_registry.tool_handlers
+    assert "calculator" in manager.runtime_registry.get_tool_names()
+    assert "read_file" in manager.runtime_registry.get_tool_names()
+    assert "fork" in manager.runtime_registry.get_tool_names()
 
 
 @pytest.mark.asyncio
@@ -57,21 +58,18 @@ async def test_function_tool_direct_registration():
     manager = ToolManager()
 
     # Register tools using function references
-    manager.register_tools([calculator, read_file])
-
     # Create a mock process configuration
     mock_config = {
-        "has_linked_programs": False,
         "fd_manager": None,
         "mcp_enabled": False,  # Disable MCP
     }
 
     # Initialize the tools
-    await manager.initialize_tools(mock_config)
+    await manager.register_tools([calculator, read_file], mock_config)
 
     # Verify direct registration was successful
-    assert "calculator" in manager.runtime_registry.tool_handlers
-    assert "read_file" in manager.runtime_registry.tool_handlers
+    assert "calculator" in manager.runtime_registry.get_tool_names()
+    assert "read_file" in manager.runtime_registry.get_tool_names()
 
     # Verify core functionality works
 
@@ -102,7 +100,13 @@ async def test_execution_phase_uses_runtime_registry():
     }
 
     # Test just with runtime registry first
-    manager.runtime_registry.register_tool("runtime_tool", runtime_registry_handler, runtime_tool_schema)
+    manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=runtime_registry_handler,
+            schema=runtime_tool_schema,
+            meta=get_tool_meta(runtime_registry_handler),
+        )
+    )
 
     # Create a callable for runtime_tool
     async def runtime_tool_callable(**kwargs):
@@ -111,7 +115,7 @@ async def test_execution_phase_uses_runtime_registry():
     runtime_tool_callable.__name__ = "runtime_tool"
 
     # Register the tool using callable
-    manager.register_tools([runtime_tool_callable])
+    await manager.register_tools([runtime_tool_callable], {})
 
     # Test runtime tool - should be found in runtime registry
     result_runtime = await manager.call_tool("runtime_tool", {})
@@ -122,7 +126,13 @@ async def test_execution_phase_uses_runtime_registry():
     manager2 = ToolManager()
 
     # Register in runtime registry
-    manager2.runtime_registry.register_tool("main_tool", main_registry_handler, main_tool_schema)
+    manager2.runtime_registry.register_tool_obj(
+        Tool(
+            handler=main_registry_handler,
+            schema=main_tool_schema,
+            meta=get_tool_meta(main_registry_handler),
+        )
+    )
 
     # Create a callable for main_tool
     async def main_tool_callable(**kwargs):
@@ -131,7 +141,7 @@ async def test_execution_phase_uses_runtime_registry():
     main_tool_callable.__name__ = "main_tool"
 
     # Register the tool using callable
-    manager2.register_tools([main_tool_callable])
+    await manager2.register_tools([main_tool_callable], {})
 
     # Call the main tool
     result_main = await manager2.call_tool("main_tool", {})
@@ -154,7 +164,13 @@ async def test_execution_phase_uses_runtime_registry():
     }
 
     # Register the tool in runtime registry
-    manager3.runtime_registry.register_tool("shared_tool", shared_tool_runtime_handler, shared_tool_schema.copy())
+    manager3.runtime_registry.register_tool_obj(
+        Tool(
+            handler=shared_tool_runtime_handler,
+            schema=shared_tool_schema.copy(),
+            meta=get_tool_meta(shared_tool_runtime_handler),
+        )
+    )
 
     # Call the shared tool - should use runtime registry version
     result_shared = await manager3.call_tool("shared_tool", {})
@@ -164,8 +180,20 @@ async def test_execution_phase_uses_runtime_registry():
     manager4 = ToolManager()
 
     # Register tools in runtime registry
-    manager4.runtime_registry.register_tool("runtime_tool", runtime_registry_handler, runtime_tool_schema.copy())
-    manager4.runtime_registry.register_tool("shared_tool", shared_tool_runtime_handler, shared_tool_schema.copy())
+    manager4.runtime_registry.register_tool_obj(
+        Tool(
+            handler=runtime_registry_handler,
+            schema=runtime_tool_schema.copy(),
+            meta=get_tool_meta(runtime_registry_handler),
+        )
+    )
+    manager4.runtime_registry.register_tool_obj(
+        Tool(
+            handler=shared_tool_runtime_handler,
+            schema=shared_tool_schema.copy(),
+            meta=get_tool_meta(shared_tool_runtime_handler),
+        )
+    )
 
     # Get schemas
     schemas = manager4.get_tool_schemas()
@@ -178,8 +206,20 @@ async def test_execution_phase_uses_runtime_registry():
     manager5 = ToolManager()
 
     # Register tools in runtime registry
-    manager5.runtime_registry.register_tool("main_tool", main_registry_handler, main_tool_schema.copy())
-    manager5.runtime_registry.register_tool("shared_tool", shared_tool_main_handler, shared_tool_schema.copy())
+    manager5.runtime_registry.register_tool_obj(
+        Tool(
+            handler=main_registry_handler,
+            schema=main_tool_schema.copy(),
+            meta=get_tool_meta(main_registry_handler),
+        )
+    )
+    manager5.runtime_registry.register_tool_obj(
+        Tool(
+            handler=shared_tool_main_handler,
+            schema=shared_tool_schema.copy(),
+            meta=get_tool_meta(shared_tool_main_handler),
+        )
+    )
 
     # Get schemas
     schemas = manager5.get_tool_schemas()
@@ -207,7 +247,8 @@ async def test_llmprocess_unified_mcp_initialization():
     program.compiled = True
     program.model_name = "test-model"
     program.provider = "anthropic"
-    program.display_name = "Test Model"
+    program.project_id = None
+    program.region = None
 
     # Configure the tool configuration to be returned
     tool_config = {
@@ -228,10 +269,18 @@ async def test_llmprocess_unified_mcp_initialization():
     # Mock the necessary components of the create_process flow
     with (
         patch("llmproc.program_exec.instantiate_process", return_value=mock_process),
-        patch("llmproc.program_exec.prepare_process_state", return_value={}),
+        patch(
+            "llmproc.program_exec.prepare_process_config",
+            return_value=program_exec.ProcessConfig(
+                program=program,
+                model_name=program.model_name,
+                provider=program.provider,
+                base_system_prompt="x",
+            ),
+        ),
         patch("llmproc.program_exec.setup_runtime_context"),
         patch("llmproc.program_exec.validate_process"),
-        patch.object(tool_manager, "initialize_tools") as mock_initialize,
+        patch("llmproc.program_exec.ToolManager.register_tools", new_callable=AsyncMock) as mock_initialize,
     ):
         # Setup the mock to return the manager itself for method chaining
         mock_initialize.return_value = asyncio.Future()
@@ -240,16 +289,14 @@ async def test_llmprocess_unified_mcp_initialization():
         # Call the create_process function
         await create_process(program)
 
-        # Verify the tool manager's initialize_tools was called with the configuration
+        # Verify the tool manager's register_tools was called with the configuration
         # from the program
         mock_initialize.assert_called_once()
 
-        # Get the first argument passed to initialize_tools
         args, _ = mock_initialize.call_args
-
-        # Check that it's a dictionary with the expected values
-        assert isinstance(args[0], dict)
-        assert args[0] == tool_config
+        called_tools = args[0]
+        assert [t.__name__ for t in called_tools] == []
+        assert args[1] == tool_config
 
 
 @pytest.mark.asyncio
@@ -269,8 +316,8 @@ async def test_fork_mcp_handling():
             if self.mcp_enabled:
                 forked.mcp_enabled = True
 
-                # Handle tool_manager.mcp_manager if it exists
-                if hasattr(self.tool_manager, "mcp_manager") and self.tool_manager.mcp_manager:
+                # Handle tool_manager.mcp_aggregator if it exists
+                if hasattr(self.tool_manager, "mcp_aggregator") and self.tool_manager.mcp_aggregator:
                     # In the real method, this is just a comment
                     # We use the pass statement to avoid indentation errors
                     pass
@@ -281,9 +328,9 @@ async def test_fork_mcp_handling():
     forker = TestForker()
     forker.mcp_enabled = True
 
-    # Create a tool manager with MCP manager
+    # Create a tool manager with MCP aggregator
     tool_manager = ToolManager()
-    tool_manager.mcp_manager = Mock()
+    tool_manager.mcp_aggregator = Mock()
     forker.tool_manager = tool_manager
 
     # Call fork_process

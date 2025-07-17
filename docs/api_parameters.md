@@ -50,17 +50,17 @@ When using Claude models through Vertex AI, the model name format includes the v
 
 In this project, all model generation parameters should be placed in the `[parameters]` section of the TOML configuration file, not in the `[model]` section:
 
-```toml
-[model]
-name = "gpt-4o"
-provider = "openai"
+```yaml
+model:
+  name: "gpt-4o"
+  provider: "openai"
 
-[parameters]
-temperature = 0.7
-max_tokens = 150
-top_p = 0.95
-frequency_penalty = 0.0
-presence_penalty = 0.0
+parameters:
+  temperature: 0.7
+  max_tokens: 150
+  top_p: 0.95
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
 ```
 
 ---

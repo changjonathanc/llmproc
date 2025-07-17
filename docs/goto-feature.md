@@ -39,9 +39,12 @@ The LLM can use the GOTO tool to:
 
 To enable the GOTO tool in your LLMProcess configuration:
 
-```toml
-[tools]
-enabled = ["goto", "read_file", "calculator"]  # Include "goto" in the enabled tools list
+```yaml
+tools:
+  builtin:
+    - goto
+    - read_file
+    - calculator  # Include "goto" in the builtin tools list
 ```
 
 ### Conversation Example

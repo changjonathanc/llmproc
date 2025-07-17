@@ -68,12 +68,11 @@ from llmproc.tools.function_tools import register_tool
 
 @register_tool(
     requires_context=True,
-    required_context_keys=["process", "fd_manager"]
+    required_context_keys=["process"]
 )
 async def my_tool(param: str, runtime_context=None):
     # Extract dependencies - validation happens automatically
     process = runtime_context["process"]
-    fd_manager = runtime_context["fd_manager"]
 
     # Use dependencies
     # ...
@@ -90,9 +89,6 @@ The runtime context typically contains:
 | Key | Value | Description |
 |-----|-------|-------------|
 | `process` | LLMProcess instance | The running process instance |
-| `fd_manager` | FileDescriptorManager | File descriptor management system |
-| `linked_programs` | dict | Available linked programs |
-| `linked_program_descriptions` | dict | Descriptions of linked programs |
 
 Tools only extract the dependencies they need, creating a cleaner interface.
 
@@ -103,7 +99,6 @@ Tool initialization uses a configuration-based approach to avoid circular depend
 ```python
 # Create a configuration dictionary
 config = {
-    "fd_manager": fd_manager,
     "linked_programs": program.linked_programs,
     "linked_program_descriptions": program.linked_program_descriptions,
     "has_linked_programs": bool(program.linked_programs),
@@ -113,15 +108,15 @@ config = {
     "mcp_tools": program.mcp_tools
 }
 
-# Initialize tools with configuration
-await tool_manager.initialize_tools(config)
+# Register tools with configuration
+await tool_manager.register_tools(program.tools, config)
 ```
 
 The configuration dictionary contains all dependencies tools need at initialization time, without containing a direct reference to the process instance. This breaks the circular dependency where tools required process, but process required tools.
 
 Key components in the configuration:
 
-1. **Resource References**: References to resources like `fd_manager` and `linked_programs`
+1. **Resource References**: References to resources like `linked_programs`
 2. **Capability Flags**: Flags like `has_linked_programs` and `mcp_enabled`
 3. **Configuration Paths**: Paths like `mcp_config_path` for external resources
 
@@ -159,22 +154,21 @@ from llmproc.common.results import ToolResult
 
 @register_tool(
     requires_context=True,
-    required_context_keys=["fd_manager"]
+    required_context_keys=["process"]
 )
 async def my_tool(param1: str, param2: int = 0, runtime_context=None) -> ToolResult:
-    """A tool that requires access to the file descriptor manager.
+    """A tool that uses the runtime process instance.
 
     Args:
         param1: First parameter description
         param2: Second parameter description
-        runtime_context: Runtime context with fd_manager (validated automatically)
+        runtime_context: Runtime context with process (validated automatically)
 
     Returns:
         ToolResult with the operation result
     """
-    # The decorator already validated fd_manager is present
-    # So we can safely access it directly
-    fd_manager = runtime_context["fd_manager"]
+    process = runtime_context["process"]
+
 
     try:
         # Tool implementation
@@ -241,13 +235,12 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_my_tool():
-    # Create mock dependencies
-    mock_fd_manager = MockFileDescriptorManager()
+    # Create mock process with FileDescriptorPlugin
+    process = MockProcess()
+    process.plugins = [FileDescriptorPlugin(MockFileDescriptorManager())]
 
-    # Create mock runtime context
-    mock_context = {
-        "fd_manager": mock_fd_manager
-    }
+    # Runtime context only needs the process handle
+    mock_context = {"process": process}
 
     # Call tool with mock context
     result = await my_tool({"param1": "test"}, runtime_context=mock_context)
@@ -265,7 +258,9 @@ When working with the Unix-inspired model, avoid these common anti-patterns:
 
 ```python
 # ANTI-PATTERN: Direct construction bypasses proper initialization
-process = LLMProcess(program=program)  # WRONG!
+from llmproc.config import ProcessConfig
+
+process = LLMProcess(ProcessConfig(program=program))  # WRONG!
 
 # CORRECT PATTERN: Use the start() method
 process = await program.start()  # Correct!
@@ -301,6 +296,8 @@ async def tool_handler(args, runtime_context=None):  # Correct!
 ```
 
 Tool handlers should use the context-aware pattern to access runtime dependencies.
+
+However, if a tool needs to maintain internal state, it's often better to implement it as a class instance with an instance method registered as the tool. This keeps state encapsulated and avoids injecting runtime context.
 
 ## Migration Guide
 

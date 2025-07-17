@@ -1,50 +1,30 @@
 """Tests for the ToolManager class."""
 
 import asyncio
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
+from llmproc.common.access_control import AccessLevel
+from llmproc.common.metadata import get_tool_meta
 from llmproc.common.results import ToolResult
+from llmproc.plugin.plugin_event_runner import PluginEventRunner
+from llmproc.plugins.file_descriptor import FileDescriptorManager, FileDescriptorPlugin
+from llmproc.plugins.spawn import SpawnPlugin
 from llmproc.tools import ToolManager, ToolRegistry
-from llmproc.file_descriptors import FileDescriptorManager
-from llmproc.tools.builtin import calculator, fd_to_file_tool, fork_tool, read_fd_tool, read_file, spawn_tool
+from llmproc.tools.builtin import calculator, fork_tool, read_file, spawn_tool
+from llmproc.tools.core import Tool
 from llmproc.tools.function_tools import register_tool
 
 
-def test_tool_manager_initialization():
-    """Test that ToolManager initializes correctly."""
+def test_tool_manager_starts_with_empty_registry():
+    """ToolManager should start with an empty runtime registry."""
     manager = ToolManager()
 
     # Check that the manager has the expected attributes
     assert isinstance(manager.runtime_registry, ToolRegistry)
-    assert isinstance(manager.function_tools, list)
-    assert len(manager.function_tools) == 0
-    # Check registered_tools through getter method
-    assert isinstance(manager.get_registered_tools(), list)
-    assert len(manager.get_registered_tools()) == 0
-
-
-def test_add_function_tool():
-    """Test adding function tools to the manager."""
-    manager = ToolManager()
-
-    # Define a test function
-    def test_func(x: int) -> int:
-        return x * 2
-
-    # Add the function
-    result = manager.add_function_tool(test_func)
-
-    # Check the result is the manager itself (for chaining)
-    assert result is manager
-
-    # Check the function was added
-    assert len(manager.function_tools) == 1
-    assert manager.function_tools[0] is test_func
-
-    # Test with non-callable
-    with pytest.raises(ValueError):
-        manager.add_function_tool("not a function")
+    assert isinstance(manager.registered_tools, list)
+    assert len(manager.registered_tools) == 0
 
 
 def test_get_tool_schemas():
@@ -72,12 +52,18 @@ def test_get_tool_schemas():
         return ToolResult.from_success("Result")
 
     # Register the tool in the runtime registry
-    manager.runtime_registry.register_tool("calculator", mock_handler, calculator_schema)
+    manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=mock_handler,
+            schema=calculator_schema,
+            meta=get_tool_meta(mock_handler),
+        )
+    )
 
     # Register the calculator tool using the function reference
     from llmproc.tools.builtin import calculator
 
-    manager.register_tools([calculator])
+    asyncio.run(manager.register_tools([calculator], {}))
 
     # Get the schemas
     schemas = manager.get_tool_schemas()
@@ -134,12 +120,30 @@ async def test_call_tool():
         },
     }
 
-    manager.runtime_registry.register_tool("calculator", simple_calculator, calculator_schema)
+    # Register the primary calculator tool
+    manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=simple_calculator,
+            schema=calculator_schema,
+            meta=get_tool_meta(simple_calculator),
+        )
+    )
+
+    # Also register a variant under a different name
+    disabled_schema = calculator_schema.copy()
+    disabled_schema["name"] = "disabled_tool"
+    manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=simple_calculator,
+            schema=disabled_schema,
+            meta=get_tool_meta(simple_calculator),
+        )
+    )
 
     # Register the tool using function reference
     from llmproc.tools.builtin import calculator
 
-    manager.register_tools([calculator])
+    await manager.register_tools([calculator], {})
 
     # Test calling a real tool with real functionality
     result = await manager.call_tool("calculator", {"expression": "3*7+2"})
@@ -152,10 +156,17 @@ async def test_call_tool():
     # Test with tool not found to check error handling
     missing_tool_result = await manager.call_tool("missing_tool", {})
     assert missing_tool_result.is_error
-    assert missing_tool_result.content == "This tool is not available"
+    assert "missing_tool" in missing_tool_result.content
+    assert "list_tools" in missing_tool_result.content
 
     # Test with a tool registered directly in the registry (now always available)
-    manager.runtime_registry.register_tool("disabled_tool", simple_calculator, calculator_schema)
+    manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=simple_calculator,
+            schema=calculator_schema,
+            meta=get_tool_meta(simple_calculator),
+        )
+    )
     disabled_result = await manager.call_tool("disabled_tool", {"expression": "1+1"})
     assert not disabled_result.is_error
     assert disabled_result.content == "2"
@@ -169,19 +180,43 @@ async def test_call_tool():
 
 @pytest.mark.asyncio
 async def test_call_tool_creates_fd_when_enabled():
-    """Test that call_tool wraps large results in a file descriptor."""
+    """Test that call_tool wraps large results via FileDescriptorPlugin."""
+    from unittest.mock import Mock
+
+    from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+
     manager = ToolManager()
 
     async def long_tool(**kwargs):
         return ToolResult.from_success("x" * 60)
 
     schema = {"name": "long_tool", "description": "Long output tool"}
-    manager.runtime_registry.register_tool("long_tool", long_tool, schema)
-    manager.register_tools([long_tool])
+    manager.runtime_registry.register_tool_obj(
+        Tool(
+            handler=long_tool,
+            schema=schema,
+            meta=get_tool_meta(long_tool),
+        )
+    )
+    await manager.register_tools([long_tool], {})
 
     fd_manager = FileDescriptorManager(max_direct_output_chars=50)
+
+    # Create FileDescriptorPlugin and enable it
+    from llmproc.config.schema import FileDescriptorPluginConfig
+
+    fd_plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    fd_plugin.fd_manager = fd_manager
+
+    # Create mock process with the FD plugin
+    mock_process = Mock()
+    mock_process._submit_to_loop = lambda coro: asyncio.get_running_loop().create_task(coro)
+    runner = PluginEventRunner(mock_process._submit_to_loop, [fd_plugin])
+    mock_process.plugins = runner
+    mock_process.hooks = runner
+
     runtime_context = {
-        "process": object(),
+        "process": mock_process,
         "fd_manager": fd_manager,
         "file_descriptor_enabled": True,
     }
@@ -193,10 +228,9 @@ async def test_call_tool_creates_fd_when_enabled():
     assert "<fd_result fd=" in result.content
 
 
-
 @pytest.mark.asyncio
-async def test_process_function_tools():
-    """Test processing function tools and verifying their behavior."""
+async def test_register_function_tool():
+    """Test registering a function tool and verifying its behavior."""
     manager = ToolManager()
 
     # Define a test function with the register_tool decorator
@@ -212,23 +246,28 @@ async def test_process_function_tools():
         """
         return x * 2
 
-    # Add the function tool
-    manager.add_function_tool(double_value)
-
     # Register the tool using function reference
-    manager.register_tools([double_value])
+    await manager.register_tools([double_value], {})
 
-    # Process the function tools (with real processing, not mocked)
-    result = manager.process_function_tools()
+    # Initialize tools to register handlers and schemas
+    config = {
+        "fd_manager": None,
+        "linked_programs": {},
+        "linked_program_descriptions": {},
+        "has_linked_programs": False,
+        "provider": "test",
+        "mcp_enabled": False,
+    }
+    result = await manager.register_tools([double_value], config)
 
     # Check the result is the manager itself (for chaining)
     assert result is manager
 
     # Verify the function tool is registered by using the getter method
-    assert "double_value" in manager.get_registered_tools()
+    assert "double_value" in manager.registered_tools
 
     # Verify the tool is registered in the runtime registry
-    assert "double_value" in manager.runtime_registry.tool_handlers
+    assert "double_value" in manager.runtime_registry.get_tool_names()
 
     # Most importantly: test that the tool actually works - with explicit parameters
     handler = manager.runtime_registry.get_handler("double_value")
@@ -255,62 +294,82 @@ async def test_process_function_tools():
         """
         return a + b
 
-    # Add and process the second function
-    manager.add_function_tool(add_numbers)
-
     # Register both tools using function references
-    manager.register_tools([double_value, add_numbers])
-
-    # Process tools
-    manager.process_function_tools()
+    await manager.register_tools([double_value, add_numbers], config)
 
     # Verify custom name is registered
-    assert "custom_adder" in manager.get_registered_tools()
+    assert "custom_adder" in manager.registered_tools
     adder_handler = manager.runtime_registry.get_handler("custom_adder")
     add_result = await adder_handler(a=7, b=3)
     assert add_result.content == 10
 
 
 @pytest.mark.asyncio
-async def test_initialize_tools_directly():
-    """Test initializing tools directly through initialize_tools method.
-
-    We test the direct tool initialization through initialize_tools.
-    """
+async def test_register_tools_directly():
+    """Test registering tools directly with configuration."""
     manager = ToolManager()
 
     # Register the tools in the manager directly using function references
-    manager.register_tools([calculator, read_file, fork_tool, spawn_tool, read_fd_tool, fd_to_file_tool])
+    from llmproc.config.schema import FileDescriptorPluginConfig
 
-    # Add function tools to manager
-    for tool in [calculator, read_file, fork_tool, spawn_tool, read_fd_tool, fd_to_file_tool]:
-        manager.add_function_tool(tool)
+    plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    await manager.register_tools(
+        [
+            calculator,
+            read_file,
+            fork_tool,
+            spawn_tool,
+            plugin.read_fd_tool,
+            plugin.fd_to_file_tool,
+        ],
+        {},
+    )
 
     # Create a mock process with properly mocked attributes
     mock_process = Mock()
-    mock_process.has_linked_programs = True
-    mock_process.linked_programs = {"test_program": Mock()}
-    mock_process.linked_program_descriptions = {"test_program": "Test program description"}
-    mock_process.file_descriptor_enabled = True
+    spawn_plugin = SpawnPlugin({"test_program": Mock()}, {"test_program": "Test program description"})
+    runner = PluginEventRunner(lambda coro: asyncio.get_running_loop().create_task(coro), [spawn_plugin])
+    mock_process.plugins = runner
+
+    def get_plugin_side_effect(t):
+        if t is FileDescriptorPlugin:
+            return plugin
+        if t is SpawnPlugin:
+            return spawn_plugin
+        return None
+
+    mock_process.get_plugin.side_effect = get_plugin_side_effect
+    mock_process._submit_to_loop = runner._submit
+    mock_process.hooks = runner
 
     # Mock the fd_manager to avoid AttributeError
     mock_fd_manager = Mock()
-    mock_process.fd_manager = mock_fd_manager
+    mock_process.get_plugin.return_value.fd_manager = mock_fd_manager
 
     # Set up the config dictionary with required fields
     config = {
         "fd_manager": mock_fd_manager,
-        "linked_programs": mock_process.linked_programs,
-        "linked_program_descriptions": mock_process.linked_program_descriptions,
-        "has_linked_programs": mock_process.has_linked_programs,
+        "linked_programs": mock_process.get_plugin(SpawnPlugin).linked_programs,
+        "linked_program_descriptions": mock_process.get_plugin(SpawnPlugin).linked_program_descriptions,
+        "has_linked_programs": True,
         "provider": "test",
     }
 
-    # Initialize tools directly through initialize_tools
-    await manager.initialize_tools(config)
+    # Register tools with configuration
+    await manager.register_tools(
+        [
+            calculator,
+            read_file,
+            fork_tool,
+            spawn_tool,
+            plugin.read_fd_tool,
+            plugin.fd_to_file_tool,
+        ],
+        config,
+    )
 
     # Verify tools were registered by checking the runtime registry directly
-    assert len(manager.runtime_registry.tool_handlers) >= 6
+    assert len(manager.runtime_registry.get_tool_names()) >= 6
 
     # Verify expected tools are in the runtime registry
     expected_tools = [
@@ -322,35 +381,62 @@ async def test_initialize_tools_directly():
         "fd_to_file",
     ]
     for tool_name in expected_tools:
-        assert tool_name in manager.runtime_registry.tool_handlers
+        assert tool_name in manager.runtime_registry.get_tool_names()
 
     # Test calculator tool by calling it
-    calculator_handler = manager.runtime_registry.get_handler("calculator")
-    calculator_result = await calculator_handler(expression="2+2")
+    calculator_tool = manager.runtime_registry.get_tool("calculator")
+    calculator_result = await calculator_tool.execute(
+        {"expression": "2+2"},
+        runtime_context=manager.runtime_context,
+        process_access_level=manager.process_access_level,
+    )
     assert isinstance(calculator_result, ToolResult)
     assert calculator_result.content == "4"
     assert not calculator_result.is_error
 
     # Test spawn tool (will return error in mock environment, but should be callable)
     # We need a proper mock context with a process that has linked_programs
-    mock_process = {"linked_programs": {"test_program": "mock_program"}}
+    class Dummy:
+        pass
+
+    mock_program = MagicMock()
+    mock_program.model_name = "dummy"
+
+    mock_process = Dummy()
+    mock_process.program = mock_program
+    mock_process.plugins = [SpawnPlugin({"test_program": mock_program})]
     runtime_context = {"process": mock_process}
     # Runtime context must be included in the args dictionary
     args = {"program_name": "test_program", "prompt": "Test", "runtime_context": runtime_context}
-    spawn_result = await manager.runtime_registry.call_tool("spawn", args)
+    spawn_tool_obj = manager.runtime_registry.get_tool("spawn")
+    spawn_result = await spawn_tool_obj.execute(
+        {"program_name": "test_program", "prompt": "Test"},
+        runtime_context=runtime_context,
+        process_access_level=AccessLevel.ADMIN,
+    )
     assert isinstance(spawn_result, ToolResult)
-    # The mock process doesn't actually have linked_programs as a proper attribute
-    # so the tool returns success but with an error message in the content
-    assert "linked_programs" in str(spawn_result.content)
+    assert spawn_result.is_error
+    assert "provider" in str(spawn_result.content).lower()
 
     # Test that fork tool is registered but returns expected error for direct calls
     # Add runtime_context similarly to spawn tool
-    fork_result = await manager.runtime_registry.call_tool(
-        "fork", {"prompts": ["Test"], "runtime_context": {"process": "mock_process"}}
+    fork_tool_obj = manager.runtime_registry.get_tool("fork")
+
+    class DummyProc:
+        pass
+
+    mock_process = DummyProc()
+    mock_process.iteration_state = None
+    runtime_context = {"process": mock_process}
+
+    fork_result = await fork_tool_obj.execute(
+        {"prompts": ["Test"]},
+        runtime_context=runtime_context,
+        process_access_level=AccessLevel.ADMIN,
     )
     assert isinstance(fork_result, ToolResult)
     # Check that an appropriate error is surfaced (exact wording may evolve)
-    assert "Runtime context" in str(fork_result.content) or "Direct calls to fork_tool" in str(fork_result.content)
+    assert fork_result.is_error
 
 
 def test_register_tools_with_mixed_input():
@@ -365,23 +451,22 @@ def test_register_tools_with_mixed_input():
     manager = ToolManager()
 
     # Test with mixed input - using function references for builtin tools
-    manager.register_tools([calculator, test_func, read_file])
+    asyncio.run(manager.register_tools([calculator, test_func, read_file], {}))
 
-    # Check that the function was added to function_tools
-    # With the updated implementation, we expect all 3 functions to be in function_tools
-    assert len(manager.function_tools) == 3
-    assert test_func in manager.function_tools
-    assert calculator in manager.function_tools
-    assert read_file in manager.function_tools
+    registered = manager.runtime_registry.get_tool_names()
+    assert "calculator" in registered
+    assert "read_file" in registered
+    assert "test_func" in registered
 
     # Test with invalid item type - should raise ValueError
     with pytest.raises(ValueError):
-        manager.register_tools([calculator, 123, read_file])
+        asyncio.run(manager.register_tools([calculator, 123, read_file], {}))
 
     # Test that valid tools still produce function_tools entries without error
-    manager.register_tools([calculator, read_file])
-    assert calculator in manager.function_tools
-    assert read_file in manager.function_tools
+    asyncio.run(manager.register_tools([calculator, read_file], {}))
+    registered = manager.runtime_registry.get_tool_names()
+    assert "calculator" in registered
+    assert "read_file" in registered
 
 
 def test_tool_registry_immutability():
@@ -394,8 +479,20 @@ def test_tool_registry_immutability():
         return ToolResult.from_success("Mock result")
 
     # Register a few tools
-    registry.register_tool("tool1", mock_handler, {"name": "tool1", "description": "Tool 1"})
-    registry.register_tool("tool2", mock_handler, {"name": "tool2", "description": "Tool 2"})
+    registry.register_tool_obj(
+        Tool(
+            handler=mock_handler,
+            schema={"name": "tool1", "description": "Tool 1"},
+            meta=get_tool_meta(mock_handler),
+        )
+    )
+    registry.register_tool_obj(
+        Tool(
+            handler=mock_handler,
+            schema={"name": "tool2", "description": "Tool 2"},
+            meta=get_tool_meta(mock_handler),
+        )
+    )
 
     # Test get_definitions returns a copy
     definitions = registry.get_definitions()
@@ -413,4 +510,31 @@ def test_tool_registry_immutability():
     tool_names.append("should_not_be_added")
 
     # Check the original mapping is unchanged
-    assert "should_not_be_added" not in registry.tool_handlers
+    assert "should_not_be_added" not in registry.get_tool_names()
+
+
+@pytest.mark.asyncio
+async def test_function_tool_returns_tool_result_without_double_wrap():
+    """Ensure function tools can return ToolResult directly without wrapping."""
+    manager = ToolManager()
+
+    @register_tool(description="Echo result")
+    async def echo_tool(x: int) -> ToolResult:
+        return ToolResult.from_success(x)
+
+    config = {
+        "fd_manager": None,
+        "linked_programs": {},
+        "linked_program_descriptions": {},
+        "has_linked_programs": False,
+        "provider": "test",
+        "mcp_enabled": False,
+    }
+
+    await manager.register_tools([echo_tool], config)
+
+    result = await manager.call_tool("echo_tool", {"x": 5})
+
+    assert isinstance(result, ToolResult)
+    assert result.content == 5
+    assert not isinstance(result.content, ToolResult)

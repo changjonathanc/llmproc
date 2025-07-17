@@ -1,6 +1,6 @@
 # Anthropic Integration in LLMProc
 
-This document provides information about using Anthropic models with LLMProc, including both direct API access and Google Vertex AI integration.
+LLMProc works with Anthropic's Claude models either through the direct Anthropic API or via Google Cloud Vertex AI. This guide explains how to configure both options.
 
 ## Direct Anthropic API
 
@@ -8,55 +8,51 @@ LLMProc supports direct integration with Anthropic's Claude models through the A
 
 ### Basic Configuration
 
-```toml
-[model]
-name = "claude-3-5-haiku-20241022"
-provider = "anthropic"
-display_name = "Claude Haiku"
+```yaml
+model:
+  name: "claude-3-5-haiku-20241022"
+  provider: "anthropic"
+  display_name: "Claude Haiku"
 
-[prompt]
-system_prompt = "You are Claude, a helpful AI assistant."
+prompt:
+  system_prompt: "You are Claude, a helpful AI assistant."
 
-[parameters]
-temperature = 0.7
-max_tokens = 1000
-
-# For Claude 3.7+ models, you can configure thinking capabilities
-[parameters.thinking]
-type = "enabled"
-budget_tokens = 4000
+parameters:
+  temperature: 0.7
+  max_tokens: 1000
+  thinking:
+    type: "enabled"
+    budget_tokens: 4000
 ```
 
 ### Authentication
 
-The direct Anthropic API integration requires an Anthropic API key:
+The direct integration requires an Anthropic API key:
 
-- Set the `ANTHROPIC_API_KEY` environment variable with your API key
-- You can get an API key from the [Anthropic Console](https://console.anthropic.com/)
+- Set the `ANTHROPIC_API_KEY` environment variable with your key
+- Obtain the key from the [Anthropic Console](https://console.anthropic.com/)
 
 ## Anthropic on Vertex AI Integration
 
-LLMProc also supports using Anthropic models through Google Cloud's Vertex AI platform, which can provide better infrastructure, compliance features, and potentially different pricing.
+You can also run Claude models via Google Cloud Vertex AI, which may offer different infrastructure, compliance options, or pricing.
 
 ### Basic Configuration
 
-```toml
-[model]
-name = "claude-3-5-haiku-20241022" # Use appropriate Vertex model name
-provider = "anthropic_vertex"
-display_name = "Claude Haiku (Vertex AI)"
+```yaml
+model:
+  name: "claude-3-5-haiku-20241022"  # Use appropriate Vertex model name
+  provider: "anthropic_vertex"
+  display_name: "Claude Haiku (Vertex AI)"
 
-[prompt]
-system_prompt = "You are Claude on Vertex AI, a helpful AI assistant."
+prompt:
+  system_prompt: "You are Claude on Vertex AI, a helpful AI assistant."
 
-[parameters]
-temperature = 0.7
-max_tokens = 1000
-
-# For Claude 3.7+ models, you can configure thinking capabilities
-[parameters.thinking]
-type = "enabled"
-budget_tokens = 4000
+parameters:
+  temperature: 0.7
+  max_tokens: 1000
+  thinking:
+    type: "enabled"
+    budget_tokens: 4000
 ```
 
 ### Authentication and Setup
@@ -68,20 +64,20 @@ To use Anthropic models through Vertex AI:
    - Ensure you have permissions to use the Vertex AI API and Claude models
 
 2. **Environment Variables and Configuration**:
-   - `ANTHROPIC_VERTEX_PROJECT_ID`: Set to your Google Cloud Project ID
-   - `CLOUD_ML_REGION`: Set to your preferred Google Cloud region (defaults to us-central1)
-   - In your TOML configuration, specify project and region:
-     ```toml
-     [model]
-     project_id = "your-project-id"  # Optional, can also use environment variable
-     region = "your-preferred-region"  # Refer to Google Cloud docs for available regions
-     ```
+   - `ANTHROPIC_VERTEX_PROJECT_ID`: Your Google Cloud project ID
+   - `CLOUD_ML_REGION`: Preferred region (defaults to `us-central1`)
+   - In the `[model]` section you can also specify:
+      ```yaml
+      model:
+        project_id: "your-project-id"
+        region: "your-region"
+      ```
 
 3. **Google Cloud Authentication**:
-   - Authenticate with Google Cloud using one of the following methods:
-     - Run `gcloud auth application-default login` on your machine
-     - Use service account credentials
-     - Use workload identity when running on Google Cloud
+   - Authenticate with Google Cloud using one of these methods:
+     - `gcloud auth application-default login`
+     - Service account credentials
+     - Workload identity when running on Google Cloud
 
 ### Vertex AI Models
 
@@ -89,9 +85,23 @@ Vertex AI offers specific versions of Claude models. Check the [Google Cloud Ver
 
 ### Parameter Differences
 
-- Most parameters work the same way across both providers
-- Some Anthropic-specific parameters may have different behavior on Vertex AI
-- Refer to the Google Cloud documentation for any Vertex-specific limitations
+- Most parameters behave the same across providers
+- Anthropic-specific settings may differ on Vertex AI
+- See Google Cloud documentation for Vertex-specific limits
+
+## Anthropic-Specific Features
+
+Anthropic models expose features not found with other providers. LLMProc
+supports two notable Claude-only capabilities:
+
+- **Explicit Prompt Caching** – Use the `cache_control` parameter to cache
+  system prompts and tool calls when interacting with Claude models. This
+  reduces token usage on repeated requests. Other providers do not currently
+  support explicit caching.
+- **Token-Efficient Tool Use** – Claude 3.7 models offer a beta feature that
+  lowers token consumption when using tools. Enable it via the
+  `anthropic-beta` header or the `enable_token_efficient_tools()` method in the
+  SDK. This optimization is specific to Anthropic models.
 
 ## Tool Support
 

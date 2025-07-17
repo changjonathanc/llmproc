@@ -1,0 +1,39 @@
+model:
+  name: claude-3-7-sonnet-20250219
+  provider: anthropic
+prompt:
+  system_prompt_file: prompts/claude-code-system-prompt.md
+  user: 'Hello Claude Code! I''m working on this codebase.
+
+
+    First, could you tell me what capabilities you have as Claude Code?
+
+    Then, show me how I could use you to search through a large codebase efficiently.
+
+    '
+parameters:
+  max_tokens: 20000
+  extra_headers:
+    anthropic-beta: token-efficient-tools-2025-02-19
+preload:
+  files:
+  - CLAUDE.md
+  relative_to: program
+mcp:
+  config_path: config/mcp_servers.json
+tools:
+  mcp:
+    sequential-thinking: all
+    everything:
+    - add
+  builtin:
+  - spawn
+  - read_file
+plugins:
+  spawn:
+    linked_programs:
+      dispatch_agent: dispatch_agent.toml
+    linked_program_descriptions:
+      dispatch_agent: Agent for exploring codebases efficiently
+demo:
+  display_name: Claude Code

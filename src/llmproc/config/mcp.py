@@ -3,7 +3,6 @@
 This module provides MCP tool configuration models with simplified interfaces.
 """
 
-import warnings
 from typing import Any, Literal
 
 from pydantic import BaseModel, RootModel, field_validator, model_validator
@@ -37,11 +36,7 @@ class MCPServerTools(BaseModel):
     default_access: AccessLevel | None = AccessLevel.WRITE
 
     # Support both positional and keyword arguments for backward compatibility
-    def __init__(self, server=None, tools=None, default_access=None, access=None, **kwargs):
-        # Handle special case for this test in particular
-        if isinstance(tools, dict) and access is not None:
-            raise ValueError("Cannot specify both tools dictionary and access parameter")
-
+    def __init__(self, server=None, tools=None, default_access=None, **kwargs):
         # If positional arguments are provided, convert them to keyword arguments
         if server is not None and "server" not in kwargs:
             kwargs["server"] = server
@@ -49,10 +44,6 @@ class MCPServerTools(BaseModel):
             kwargs["tools"] = tools
         if default_access is not None and "default_access" not in kwargs:
             kwargs["default_access"] = default_access
-        # Support legacy 'access' parameter
-        if access is not None and "default_access" not in kwargs and "access" not in kwargs:
-            kwargs["default_access"] = access
-
         # Pass on to the standard initialization
         super().__init__(**kwargs)
 
@@ -66,88 +57,81 @@ class MCPServerTools(BaseModel):
 
     @field_validator("tools", mode="before")
     @classmethod
-    def parse_tools(cls, v: Any) -> Literal["all"] | list[str | ToolConfig]:
+    def parse_tools(cls, value: Any) -> Literal["all"] | list[str | ToolConfig]:
         """Normalize tools into the canonical representation.
 
         The canonical form is either "all" or a list of strings/ToolConfig objects.
         """
-        # Handle "all" sentinel case
-        if v == "all" or v is None:
+        if value in (None, "all"):
             return "all"
 
-        # Convert single string to list
-        if isinstance(v, str):
-            return [v]
+        if isinstance(value, str):
+            return [value]
 
-        # Handle dictionary format for backward compatibility
-        if isinstance(v, dict):
-            items = []
-            for name, val in v.items():
-                description = None
-                access_level = None
-                alias = None
-                param_desc = None
+        if isinstance(value, dict):
+            return [cls._parse_dict_item(name, val) for name, val in value.items()]
 
-                if isinstance(val, dict):
-                    if "access" in val:
-                        access_val = val.get("access")
-                        access_level = AccessLevel(access_val.lower()) if isinstance(access_val, str) else access_val
-                    if "description" in val:
-                        description = val.get("description")
-                    if "alias" in val:
-                        alias = val.get("alias")
-                    if "param_descriptions" in val:
-                        param_desc = val.get("param_descriptions")
-                else:
-                    access_level = val
-                    if isinstance(val, str):
-                        access_level = AccessLevel(val.lower())
+        if isinstance(value, list):
+            return [cls._parse_list_item(item) for item in value]
 
-                items.append(
-                    ToolConfig(
-                        name=name,
-                        access=access_level,
-                        description=description,
-                        alias=alias,
-                        param_descriptions=param_desc,
-                    )
-                )
-            return items
+        raise ValueError(f"Unsupported tools specification type: {type(value)}")
 
-        # Normalize list elements
-        if isinstance(v, list):
-            normalized = []
-            for item in v:
-                if isinstance(item, str):
-                    if not item:
-                        raise ValueError("Tool names cannot be empty")
-                    normalized.append(item)
-                elif isinstance(item, ToolConfig):
-                    if not item.name:
-                        raise ValueError("Tool name cannot be empty")
-                    normalized.append(item)
-                elif isinstance(item, dict):
-                    # Handle dict shorthand in list
-                    try:
-                        normalized.append(ToolConfig(**item))
-                    except TypeError as exc:
-                        raise ValueError(f"Invalid tool definition: {item}") from exc
-                else:
-                    raise ValueError(f"Unsupported tool specification type: {type(item)}")
-            return normalized
+    def _find_tool(self, name: str) -> ToolConfig | None:
+        """Return ToolConfig for *name* if present."""
+        if self.tools == "all" or not isinstance(self.tools, list):
+            return None
+        for item in self.tools:
+            if isinstance(item, ToolConfig) and item.name == name:
+                return item
+        return None
 
-        # Any other type is invalid
-        raise ValueError(f"Unsupported tools specification type: {type(v)}")
+    @staticmethod
+    def _normalize_access(value: AccessLevel | str | None) -> AccessLevel | None:
+        """Convert a string or enum to an ``AccessLevel``."""
+        if isinstance(value, str):
+            return AccessLevel(value.lower())
+        return value
+
+    @classmethod
+    def _parse_dict_item(cls, name: str, val: Any) -> ToolConfig:
+        """Create ``ToolConfig`` from a dictionary entry."""
+        if isinstance(val, dict):
+            access = cls._normalize_access(val.get("access"))
+            return ToolConfig(
+                name=name,
+                access=access,
+                alias=val.get("alias"),
+                description=val.get("description"),
+                param_descriptions=val.get("param_descriptions"),
+            )
+
+        access = cls._normalize_access(val)
+        return ToolConfig(name=name, access=access)
+
+    @classmethod
+    def _parse_list_item(cls, item: Any) -> str | ToolConfig:
+        """Normalize a list entry to a string or ``ToolConfig``."""
+        if isinstance(item, str):
+            if not item:
+                raise ValueError("Tool names cannot be empty")
+            return item
+
+        if isinstance(item, ToolConfig):
+            if not item.name:
+                raise ValueError("Tool name cannot be empty")
+            return item
+
+        if isinstance(item, dict):
+            try:
+                return ToolConfig(**item)
+            except TypeError as exc:
+                raise ValueError(f"Invalid tool definition: {item}") from exc
+
+        raise ValueError(f"Unsupported tool specification type: {type(item)}")
 
     @model_validator(mode="after")
     def validate_combinations(self):
         """Validate that the configuration is consistent."""
-        # First, check for conflicting access parameter - this is specifically for backward compatibility
-        if hasattr(self, "access") and "access" in self.__dict__ and self.access is not None:
-            # Handle dictionary tools with access parameter
-            if isinstance(self.tools, list) and any(isinstance(item, ToolConfig) for item in self.tools):
-                raise ValueError("Cannot specify both tools dictionary and access parameter")
-
         # If tools is a list of ToolConfig objects with explicit access levels,
         # conflicting with a non-default default_access
         has_per_tool_access = isinstance(self.tools, list) and any(isinstance(item, ToolConfig) for item in self.tools)
@@ -171,44 +155,17 @@ class MCPServerTools(BaseModel):
         Returns:
             The appropriate AccessLevel for the tool
         """
-        # All tools share the default access
         if self.tools == "all":
             return self.default_access or AccessLevel.WRITE
 
-        # Search list for a matching entry
         if isinstance(self.tools, list):
-            for item in self.tools:
-                if isinstance(item, str) and item == tool_name:
-                    return self.default_access or AccessLevel.WRITE
-                elif isinstance(item, ToolConfig) and item.name == tool_name:
-                    return item.access or (self.default_access or AccessLevel.WRITE)
+            if tool_name in self.tools:
+                return self.default_access or AccessLevel.WRITE
+            cfg = self._find_tool(tool_name)
+            if cfg is not None:
+                return cfg.access or (self.default_access or AccessLevel.WRITE)
 
-        # Fallback - should not normally reach here
         return self.default_access or AccessLevel.WRITE
-
-    def get_description(self, tool_name: str) -> str | None:
-        """Return the override description for *tool_name* if provided."""
-        if self.tools == "all":
-            return None
-
-        if isinstance(self.tools, list):
-            for item in self.tools:
-                if isinstance(item, ToolConfig) and item.name == tool_name:
-                    return item.description
-
-        return None
-
-    def get_param_descriptions(self, tool_name: str) -> dict[str, str] | None:
-        """Return parameter description overrides for *tool_name* if provided."""
-        if self.tools == "all":
-            return None
-
-        if isinstance(self.tools, list):
-            for item in self.tools:
-                if isinstance(item, ToolConfig) and item.name == tool_name:
-                    return item.param_descriptions
-
-        return None
 
     def get_tool_names(self) -> list[str]:
         """Get a list of all tool names.

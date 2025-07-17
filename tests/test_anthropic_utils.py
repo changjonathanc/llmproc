@@ -4,20 +4,16 @@ import copy
 from unittest.mock import MagicMock, patch
 
 import pytest
-from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.providers.anthropic_utils import (
-    add_message_ids,
     add_token_efficient_header_if_needed,
     apply_cache_control,
     format_state_to_api_messages,
     format_system_prompt,
-    get_context_window_size,
     is_cacheable_content,
     prepare_api_request,
 )
+from llmproc.providers.utils import get_context_window_size
 from llmproc.providers.constants import ANTHROPIC_PROVIDERS
-from llmproc.providers.utils import safe_callback
-from llmproc.utils.id_utils import render_id
 
 
 class TestCacheControl:
@@ -44,36 +40,17 @@ class TestCacheControl:
 class TestMessageFormatting:
     """Tests for message formatting functions."""
 
-    def test_add_message_ids_string_content(self):
-        """Test adding message IDs to messages with string content."""
-        messages = [
+    def test_format_state_removes_message_id_metadata(self):
+        """Test that format_state_to_api_messages removes message ID metadata."""
+        state = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi"},
         ]
-        result = add_message_ids(messages)
-        assert result[0]["content"].startswith(render_id("msg_0"))
-        assert render_id("msg_1") not in result[1]["content"]
+        result = format_state_to_api_messages(state)
 
-    def test_add_message_ids_list_content(self):
-        """Test adding message IDs to messages with list content."""
-        messages = [
-            {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
-            {"role": "assistant", "content": [{"type": "text", "text": "Hi"}]},
-        ]
-        result = add_message_ids(messages)
-        assert result[0]["content"][0]["text"].startswith(render_id("msg_0"))
-        assert render_id("msg_1") not in result[1]["content"][0]["text"]
-
-    def test_add_message_ids_custom_msg_id(self):
-        """Test that custom message IDs are used and then removed."""
-        messages = [
-            {"role": "user", "content": "Hello", LLMPROC_MSG_ID: "custom_id"},  # Still allow custom string IDs
-            {"role": "assistant", "content": "Hi"},
-        ]
-        result = add_message_ids(messages)
-        assert result[0]["content"].startswith(render_id("custom_id"))
-        assert LLMPROC_MSG_ID not in result[0]
-        assert render_id("msg_1") not in result[1]["content"]
+        # Verify content is formatted correctly
+        assert result[0]["content"] == [{"type": "text", "text": "Hello"}]
+        assert result[1]["content"] == [{"type": "text", "text": "Hi"}]
 
     def test_format_and_cache_messages(self):
         """Test formatting messages and applying caching."""
@@ -99,10 +76,10 @@ class TestMessageFormatting:
         # Check first message has cache too (as per our 3 message caching policy)
         assert cached_messages[0]["content"][0].get("cache_control") == {"type": "ephemeral"}
 
-        # Verify message IDs are added
+        # Verify content is properly formatted
         assert isinstance(formatted[0]["content"], list)
-        assert render_id("msg_0") in formatted[0]["content"][0]["text"]
-        assert render_id("msg_1") not in formatted[1]["content"][0]["text"]
+        assert formatted[0]["content"][0]["text"] == "Hello"
+        assert formatted[1]["content"][0]["text"] == "Hi"
 
 
 class TestAPIFormatting:
@@ -118,10 +95,10 @@ class TestAPIFormatting:
         assert result[0]["text"] == system
 
     def test_format_system_prompt_empty(self):
-        """Test that empty system prompts are not modified."""
+        """Test that empty system prompts return empty list for safe concatenation."""
         system = ""
         result = format_system_prompt(system)
-        assert result == system
+        assert result == []  # Empty strings should return empty list to prevent list+string concatenation errors
 
     def test_format_and_cache_system_prompt(self):
         """Test formatting system prompt and applying cache."""
@@ -151,7 +128,6 @@ class TestAPIFormatting:
         ]
         process.model_name = "claude-3-sonnet"
         process.api_params = {}
-        process.disable_automatic_caching = False
 
         # Call prepare_api_request
         request = prepare_api_request(process)
@@ -217,33 +193,6 @@ class TestTokenEfficientHeaders:
         assert not headers  # Original headers unchanged
         assert result == headers  # Result headers should be empty
 
-
-class TestSafeCallback:
-    """Tests for the safe callback function."""
-
-    def test_safe_callback_successful_execution(self):
-        """Test successful callback execution."""
-        callback_fn = MagicMock()
-        safe_callback(callback_fn, "arg1", "arg2", callback_name="test_callback")
-
-        callback_fn.assert_called_once_with("arg1", "arg2")
-
-    @patch("llmproc.providers.utils.logger")
-    def test_safe_callback_handles_exception(self, mock_logger):
-        """Test that exceptions in callbacks are caught and logged."""
-        callback_fn = MagicMock(side_effect=Exception("Test error"))
-
-        # This should not raise an exception
-        safe_callback(callback_fn, "arg1", callback_name="test_callback")
-
-        callback_fn.assert_called_once_with("arg1")
-        mock_logger.warning.assert_called_once()
-        assert "Error in test_callback callback" in mock_logger.warning.call_args[0][0]
-
-    def test_safe_callback_none_callback(self):
-        """Test handling None callback."""
-        # Should not raise an exception
-        safe_callback(None, "arg1", callback_name="test_callback")
 
 
 class TestMiscUtils:

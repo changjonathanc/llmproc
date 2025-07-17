@@ -33,14 +33,18 @@ tools:
 
 ### Using External Configuration
 
-```toml
-# config.toml
-[mcp]
-config_path = "config/mcp_servers.json"  # External server definitions
+```yaml
+# config.yaml
+mcp:
+  config_path: "config/mcp_servers.json"  # External server definitions
 
-[tools.mcp]
-weather = ["get_forecast"]
-github = ["search_repositories", "get_file_contents"]
+tools:
+  mcp:
+    weather:
+      - get_forecast
+    github:
+      - search_repositories
+      - get_file_contents
 ```
 
 ## Advanced Features
@@ -63,12 +67,18 @@ tools:
         description: "Divide first number by second (read-only)"
 ```
 
-```toml
-# TOML format
-[tools.mcp.calculator]
-add = {description = "Add two numbers together"}
-multiply = {description = "Multiply two numbers"}
-divide = {access = "read", description = "Divide first number by second (read-only)"}
+```yaml
+# YAML format
+tools:
+  mcp:
+    calculator:
+      add:
+        description: "Add two numbers together"
+      multiply:
+        description: "Multiply two numbers"
+      divide:
+        access: read
+        description: "Divide first number by second (read-only)"
 ```
 
 ### Programmatic Configuration
@@ -151,9 +161,9 @@ Tools can have different access levels:
 ## Provider Support
 
 Currently supported:
-- ✅ Anthropic (Claude models)
-- ✅ Anthropic via Vertex AI
-- ❌ OpenAI (planned)
+- ✅ Anthropic (Claude models) - Full support including `is_error` field
+- ✅ Anthropic via Vertex AI - Full support including `is_error` field  
+- ✅ OpenAI - Full support with error formatting (errors prefixed with "ERROR:")
 
 ## Troubleshooting
 
@@ -175,7 +185,7 @@ logging.getLogger("llmproc.mcp").setLevel(logging.DEBUG)
 
 - [Tool Aliases](tool-aliases.md) - Simplify tool names
 - [Python SDK](python-sdk.md) - Programmatic usage
-- Example: `examples/mcp.toml`
+- Example: `examples/mcp.yaml`
 
 ---
 [← Back to Documentation Index](index.md)

@@ -29,7 +29,7 @@ program = LLMProgram.from_file("path/to/program.yaml")  # or .toml
 
 ### Recursive Program Initialization
 
-When programs reference other programs through the `[linked_programs]` section, the system initializes all referenced programs recursively:
+When programs reference other programs through the `[plugins.spawn]` section, the system initializes all referenced programs recursively:
 
 1. **Traverse Program Graph**: Starting from the main program, the system builds a graph of all linked programs.
 2. **Initialize Each Program**: Each program in the graph is initialized exactly once, even if referenced multiple times.
@@ -50,13 +50,11 @@ After compilation, programs need to be linked together to establish runtime conn
 2. **Establish Connections**: References between programs are resolved and connected.
 3. **Initialize Tools**: Spawn tools and other tools are initialized based on the program settings.
 
-The two-step factory pattern handles the complete compilation and linking process:
+Process creation now happens in a single step. Load the configuration and
+immediately start the process:
 
 ```python
-# Step 1: Compile the main program and all its linked programs
 program = LLMProgram.from_file("path/to/main.yaml")  # or .toml
-
-# Step 2: Start the process
 process = await program.start()  # Use await in async context
 ```
 
@@ -64,39 +62,41 @@ process = await program.start()  # Use await in async context
 
 Programs are defined in TOML or YAML files with standard sections:
 
-```toml
-[model]
-name = "model-name"
-provider = "model-provider"
-max_iterations = 10  # Maximum iterations for tool calls, defaults to 10 if not specified
+```yaml
+model:
+  name: "model-name"
+  provider: "model-provider"
+  max_iterations: 10  # Maximum iterations for tool calls, defaults to 10 if not specified
 
-[prompt]
-system_prompt = "System instructions for the model"
-user = "Optional user prompt to execute automatically"  # Auto-executes when program starts
+prompt:
+  system_prompt: "System instructions for the model"
+  user: "Optional user prompt to execute automatically"  # Auto-executes when program starts
 
-[linked_programs]
-helper = "path/to/helper.toml"
-math = "path/to/math.toml"
+plugins:
+  spawn:
+    linked_programs:
+      helper: path/to/helper.toml
+      math: path/to/math.toml
 
-[demo]
-prompts = [  # Optional list of prompts to execute sequentially
-  "First prompt in demo mode",
-  "Second prompt in demo mode"
-]
-pause_between_prompts = true  # Whether to pause between demo prompts, defaults to true
+demo:
+  prompts:  # Optional list of prompts to execute sequentially
+    - "First prompt in demo mode"
+    - "Second prompt in demo mode"
+  pause_between_prompts: true  # Whether to pause between demo prompts, defaults to true
 
-[tools]
-enabled = ["spawn"]
+tools:
+  builtin:
+    - spawn
 ```
 
 ### User Prompt Section
 
 The `[prompt]` section now includes an optional `user` field to specify an initial user prompt that will be executed automatically when the program starts:
 
-```toml
-[prompt]
-system_prompt = "System instructions for the model"
-user = "What are the key features of LLMProc?"  # Executed automatically when the program starts
+```yaml
+prompt:
+  system_prompt: "System instructions for the model"
+  user: "What are the key features of LLMProc?"  # Executed automatically when the program starts
 ```
 
 When a user prompt is specified in the configuration file, it follows a priority order for execution:
@@ -109,11 +109,11 @@ When a user prompt is specified in the configuration file, it follows a priority
 
 The `[model]` section includes an optional `max_iterations` field to control the maximum number of tool calls:
 
-```toml
-[model]
-name = "claude-3-7-sonnet"
-provider = "anthropic"
-max_iterations = 15  # Allow up to 15 iterations of tool calls
+```yaml
+model:
+  name: "claude-3-7-sonnet"
+  provider: "anthropic"
+  max_iterations: 15  # Allow up to 15 iterations of tool calls
 ```
 
 If not specified, the default is 10 iterations. This value can be overridden at runtime by passing the `max_iterations` parameter to the `run()` method.
@@ -122,27 +122,27 @@ If not specified, the default is 10 iterations. This value can be overridden at 
 
 The optional `[demo]` section enables running multiple prompts sequentially:
 
-```toml
-[demo]
-prompts = [
-  "What are the key features of LLMProc?",
-  "How does program linking work?",
-  "Explain the file descriptor system"
-]
-pause_between_prompts = true  # Pause between prompts for user review
+```yaml
+demo:
+  prompts:
+    - "What are the key features of LLMProc?"
+    - "How does program linking work?"
+    - "Explain the file descriptor system"
+  pause_between_prompts: true  # Pause between prompts for user review
 ```
 
 When demo mode is enabled, the prompts are executed in sequence, with optional pauses between each prompt. This is useful for demonstrations, tutorials, and testing.
 
 ### Linked Programs Section
 
-The `[linked_programs]` section defines connections to other program files:
+The `[plugins.spawn]` section defines connections to other program files:
 
-```toml
-[linked_programs]
-# Format: name = "path/to/program.toml"
-helper = "./helper.toml"
-math = "./math.toml"
+```yaml
+plugins:
+  spawn:
+    # Format: name = "path/to/program.toml"
+    helper: "./helper.toml"
+    math: "./math.toml"
 ```
 
 Each entry maps a logical name to a file path. The path can be:
@@ -211,7 +211,9 @@ Returns an `LLMProcess` instance with all linked programs properly connected.
 Initializes linked programs when an `LLMProcess` is created manually:
 
 ```python
-process = LLMProcess(program=main_program)
+from llmproc.config import ProcessConfig
+
+process = LLMProcess(ProcessConfig(program=main_program))
 process._initialize_linked_programs(linked_programs_dict)
 ```
 
@@ -251,35 +253,38 @@ Your program graph may have too many levels of nesting or an unintended circular
 Here's a complete example of a program graph:
 
 **main.toml**:
-```toml
-[model]
-name = "main-model"
-provider = "anthropic"
-max_iterations = 15
+```yaml
+model:
+  name: "main-model"
+  provider: "anthropic"
+  max_iterations: 15
 
-[prompt]
-system_prompt = "Main program"
-user = "Tell me about the LLMProc architecture"
+prompt:
+  system_prompt: "Main program"
+  user: "Tell me about the LLMProc architecture"
 
-[tools]
-enabled = ["spawn"]
+tools:
+  builtin:
+    - spawn
 
-[linked_programs]
-helper = "helper.toml"
-math = "math.toml"
+plugins:
+  spawn:
+    helper: "helper.toml"
+    math: "math.toml"
 ```
 
 **helper.toml**:
-```toml
-[model]
-name = "helper-model"
-provider = "anthropic"
+```yaml
+model:
+  name: "helper-model"
+  provider: "anthropic"
 
-[prompt]
-system_prompt = "Helper program"
+prompt:
+  system_prompt: "Helper program"
 
-[linked_programs]
-utility = "utility.toml"
+plugins:
+  spawn:
+    utility: "utility.toml"
 ```
 
 Compile and link the program graph:
@@ -297,25 +302,26 @@ process = await program.start()  # Creates process with all linked programs
 ### Demo Mode Example
 
 **demo.toml**:
-```toml
-[model]
-name = "claude-3-7-sonnet"
-provider = "anthropic"
+```yaml
+model:
+  name: "claude-3-7-sonnet"
+  provider: "anthropic"
 
-[prompt]
-system_prompt = "You are an expert on LLMProc architecture."
+prompt:
+  system_prompt: "You are an expert on LLMProc architecture."
 
-[demo]
-prompts = [
-  "What is LLMProc?",
-  "How does the program linking feature work?",
-  "Explain the file descriptor system",
-  "What tools are available in LLMProc?"
-]
-pause_between_prompts = true
+demo:
+  prompts:
+    - "What is LLMProc?"
+    - "How does the program linking feature work?"
+    - "Explain the file descriptor system"
+    - "What tools are available in LLMProc?"
+  pause_between_prompts: true
 
-[tools]
-enabled = ["calculator", "read_file"]
+tools:
+  builtin:
+    - calculator
+    - read_file
 ```
 
 Running the demo:

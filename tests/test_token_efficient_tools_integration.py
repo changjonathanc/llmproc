@@ -73,7 +73,7 @@ class TestTokenEfficientToolsIntegration:
         assert "16" in last_message, f"Expected calculator result '16' in message: {last_message}"
 
         # Check for usage information
-        assert result.api_calls > 0
+        assert result.api_call_count > 0
 
         # Verify test completes within reasonable time
         duration = time.time() - start_time
@@ -113,7 +113,7 @@ class TestTokenEfficientToolsIntegration:
         assert "16" in last_message, f"Expected calculator result '16' in message: {last_message}"
 
         # Check for usage information
-        assert result.api_calls > 0
+        assert result.api_call_count > 0
 
         # Verify test completes within reasonable time
         duration = time.time() - start_time

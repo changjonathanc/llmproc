@@ -18,62 +18,69 @@ Following Unix design principles, processes can spawn other processes to perform
 
 Program linking is configured in two places:
 
-1. The main TOML program's `[linked_programs]` section specifies which programs to link:
+1. The main TOML program's `[plugins.spawn]` section specifies which programs to link:
 
-```toml
-[linked_programs]
-repo_expert = "./repo_expert.toml"
-code_helper = "./code_helper.toml"
+```yaml
+plugins:
+  spawn:
+    linked_programs:
+      repo_expert: ./repo_expert.toml
+      code_helper: ./code_helper.toml
 ```
 
 2. The `[tools]` section must include "spawn" in the enabled system calls:
 
-```toml
-[tools]
-enabled = ["spawn"]
+```yaml
+tools:
+  builtin:
+    - spawn
 ```
 
 ## Example Program
 
-```toml
-# main.toml - Primary LLM program
-[model]
-name = "claude-3-haiku-20240307"
-provider = "anthropic"
-display_name = "Claude Haiku"
+```yaml
+# main.yaml - Primary LLM program
+model:
+  name: "claude-3-haiku-20240307"
+  provider: "anthropic"
+  display_name: "Claude Haiku"
 
-[prompt]
-system_prompt = """You are Claude, a helpful AI assistant.
-You have access to the 'spawn' tool that lets you communicate with specialized experts."""
+prompt:
+  system_prompt: |
+    You are Claude, a helpful AI assistant.
+    You have access to the 'spawn' tool that lets you communicate with specialized experts.
 
-[parameters]
-max_tokens = 1000
+parameters:
+  max_tokens: 1000
 
-[tools]
-enabled = ["spawn"]
+tools:
+  builtin:
+    - spawn
 
-[linked_programs]
-repo_expert = "./repo_expert.toml"
+plugins:
+  spawn:
+    linked_programs:
+      repo_expert: ./repo_expert.toml
 ```
 
-```toml
-# repo_expert.toml - Expert LLM program
-[model]
-name = "claude-3-haiku-20240307"
-provider = "anthropic"
+```yaml
+# repo_expert.yaml - Expert LLM program
+model:
+  name: "claude-3-haiku-20240307"
+  provider: "anthropic"
 
-[prompt]
-system_prompt = """You are a helpful assistant with specialized knowledge.
-Use the preloaded project files to answer questions."""
+prompt:
+  system_prompt: |
+    You are a helpful assistant with specialized knowledge.
+    Use the preloaded project files to answer questions.
 
-[parameters]
-max_tokens = 1000
+parameters:
+  max_tokens: 1000
 
-[preload]
-files = [
-  "../../README.md",
-  "../../pyproject.toml"
-]
+preload:
+  files:
+    - ../../README.md
+    - ../../pyproject.toml
 ```
 
 ## Implementation Details
@@ -112,7 +119,7 @@ async def main():
     print(f"Response (including expert knowledge): {response}")
 
     # Display run metrics
-    print(f"API calls: {run_result.api_calls}")
+    print(f"API calls: {run_result.api_call_count}")
     print(f"Duration: {run_result.duration_ms}ms")
 
 # Run the async function
@@ -131,20 +138,23 @@ async def main():
     program = LLMProgram.from_toml("path/to/main.toml")
     process = await program.start()
 
-    # Define callbacks for monitoring tool usage
-    callbacks = {
-        "on_tool_start": lambda tool_name, args: print(
-            f"Starting {tool_name} with program={args.get('program_name')}"
-        ),
-        "on_tool_end": lambda tool_name, result: print(
-            f"Expert response received from {result.get('program')}"
-        )
-    }
+    # Register a class-based callback to monitor tool usage
+    class SpawnMonitor:
+        def tool_start(self, tool_name, tool_args, *, process):
+            print(
+                f"Starting {tool_name} with program={tool_args.get('program_name')}"
+            )
 
-    # Run with callbacks
+        def tool_end(self, tool_name, result, *, process):
+            print(
+                f"Expert response received from {result.get('program')}"
+            )
+
+    process.add_plugins(SpawnMonitor())
+
+    # Run the process
     run_result = await process.run(
-        "Ask the code helper to explain how async/await works",
-        callbacks=callbacks
+        "Ask the code helper to explain how async/await works"
     )
 
     # Get the final response

@@ -71,24 +71,24 @@ class CliCallbackHandler:
         self.logger = logger
         self.cost_limit = cost_limit
 
-    def tool_start(self, tool_name: str, args: Any) -> None:
+    def tool_start(self, tool_name: str, tool_args: Any) -> None:
         self.logger.info(
-            json.dumps({"tool_start": {"tool_name": tool_name, "args": args}}, indent=2, ensure_ascii=False)
+            json.dumps({"tool_start": {"tool_name": tool_name, "tool_args": tool_args}}, indent=2, ensure_ascii=False)
         )
 
     def tool_end(self, tool_name: str, result: Any) -> None:
         self.logger.info(
             json.dumps({"tool_end": {"tool_name": tool_name, "result": result.to_dict()}}, indent=2, ensure_ascii=False)
         )
+        if tool_name == "write_stderr" and isinstance(result.content, str):
+            # Mirror old stderr_write callback behavior
+            self.logger.warning(json.dumps({"STDERR": result.content}, indent=2, ensure_ascii=False))
 
     def response(self, content: str) -> None:
         self.logger.info(json.dumps({"text response": content}, indent=2, ensure_ascii=False))
 
     def api_response(self, response: Any) -> None:
         self.logger.info(json.dumps({"api response usage": response.usage.model_dump()}, indent=2, ensure_ascii=False))
-
-    def stderr_write(self, text: str) -> None:
-        self.logger.warning(json.dumps({"STDERR": text}, indent=2, ensure_ascii=False))
 
     async def turn_start(self, process: Any, run_result=None) -> None:
         # Check cost limit before proceeding with the turn

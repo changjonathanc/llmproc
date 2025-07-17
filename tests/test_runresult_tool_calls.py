@@ -13,20 +13,20 @@ def test_runresult_records_tool_call():
     result = RunResult()
 
     # Initial state should be empty
-    assert len(result.tool_calls) == 0
+    assert result.tool_call_count == 0
 
     # Add a tool call
     result.add_tool_call("test_tool", {"param1": "value1"})
 
     # Check the tool_calls collection was updated
-    assert len(result.tool_calls) == 1
+    assert result.tool_call_count == 1
     assert result.tool_calls[0]["tool_name"] == "test_tool"
-    assert isinstance(result.tool_calls[0]["args"], dict)
-    assert result.tool_calls[0]["args"]["param1"] == "value1"
+    assert isinstance(result.tool_calls[0]["tool_args"], dict)
+    assert result.tool_calls[0]["tool_args"]["param1"] == "value1"
 
     # Test with multiple tool calls
     result.add_tool_call("another_tool")
-    assert len(result.tool_calls) == 2
+    assert result.tool_call_count == 2
     assert result.tool_calls[1]["tool_name"] == "another_tool"
 
 
@@ -60,7 +60,7 @@ def test_total_interactions_counts_calls():
     result.add_api_call({"model": "test2"})
 
     # Verify API calls count
-    assert result.api_calls == 2
+    assert result.api_call_count == 2
 
     # Add tool calls
     result.add_tool_call("tool1")
@@ -68,7 +68,7 @@ def test_total_interactions_counts_calls():
     result.add_tool_call("tool3")
 
     # Verify tool calls counts
-    assert len(result.tool_calls) == 3
+    assert result.tool_call_count == 3
 
     # Verify total interactions counts both API calls and tool calls
     assert result.total_interactions == 5  # 2 API calls + 3 tool calls

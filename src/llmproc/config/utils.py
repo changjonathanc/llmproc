@@ -43,21 +43,3 @@ def resolve_path(
         )
 
     return abs_path
-
-
-def is_subpath(path: Path, parent: Path) -> bool:
-    """Check if a path is a subpath of another path.
-
-    Args:
-        path: Path to check
-        parent: Potential parent path
-
-    Returns:
-        True if path is a subpath of parent, False otherwise
-    """
-    # Resolve both paths to absolute paths
-    path_abs = path.resolve()
-    parent_abs = parent.resolve()
-
-    # Check if path_abs starts with parent_abs
-    return str(path_abs).startswith(str(parent_abs))

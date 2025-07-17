@@ -32,7 +32,7 @@ sequenceDiagram
         Program->>Tool: get_tool_configuration()
         Note over Tool: Extract config without circular deps
 
-        Program->>Tool: await initialize_tools(config)
+        Program->>Tool: await register_tools(program.tools, config)
         Note over Tool: Set up tools before process exists
 
         Program->>Process: Create LLMProcess instance
@@ -69,13 +69,13 @@ flowchart TB
     ToolMgr[ToolManager]:::manager
     ToolReg[ToolRegistry]:::manager
     FDMgr[FileDescriptorManager]:::manager
-    MCPMgr[MCPManager]:::manager
+    MCPAgg[MCPAggregator]:::manager
 
     Program -->|"start()"| Process
     Program -->|owns| ToolMgr
     Process -->|runtime_context| ToolMgr
     ToolMgr -->|delegates to| ToolReg
-    ToolMgr -->|manages| MCPMgr
+    ToolMgr -->|manages| MCPAgg
     Process -->|runtime_context| FDMgr
 
     Process -->|"run()"| APIExec
@@ -131,10 +131,8 @@ flowchart TB
   - `provider`: Provider of the model (anthropic, openai, vertex)
   - `system_prompt`: Base system prompt for the model
   - `parameters`: API parameters dictionary
-  - `preload_files`: List of files to preload into context
-  - `preload_relative_to`: Whether preload paths are relative to the program file or CWD
   - `linked_programs`: Dictionary of linked programs
-  - `tool_manager`: Manager for all tool operations
+  - `config`: ``ProgramConfigData`` storing all program settings
   - `compiled`: Flag indicating if the program has been validated
 
 - **Key methods**:
@@ -142,8 +140,8 @@ flowchart TB
 - `from_yaml(path)`: Load configuration from YAML file
   - `start()`: Create fully initialized LLMProcess instance (handles validation automatically)
   - `register_tools(tools)`: Configure available tools
-  - `set_tool_aliases(aliases)`: Set user-friendly aliases
-  - `configure_file_descriptor(enabled)`: Configure FD system
+  - `add_plugins(*plugins)`: Register hook plugins such as
+    `FileDescriptorPlugin` for handling large content
   - `get_tool_configuration()`: Extract config for tools initialization
 
 #### LLMProcess
@@ -154,14 +152,13 @@ flowchart TB
   - `provider`: Provider of the model
   - `state`: List containing conversation history
   - `tool_manager`: Manager for tool operations
-  - `fd_manager`: File descriptor manager
   - `linked_programs`: Dictionary of linked program instances
 
 - **Key methods**:
   - `run(user_input, max_iterations)`: Process user input
   - `call_tool(tool_name, **kwargs)`: Call a tool by name
   - `get_state()`: Return current conversation state
-  - `reset_state(keep_system_prompt, keep_file_descriptors)`: Clear conversation history (⚠️ Experimental API)
+  - `reset_state()`: Clear conversation history (⚠️ Experimental API)
   - `count_tokens()`: Calculate token usage
   - `get_last_message()`: Get most recent model response
   - `fork_process()`: Create a copy with the same state *(deprecated; use `_fork_process` or the fork tool)*
@@ -171,15 +168,12 @@ flowchart TB
 - **Primary responsibility**: Unified management of all tool types
 - **Key properties**:
   - `runtime_registry`: Registry for tool definitions and handlers
-  - `mcp_manager`: Manager for MCP server tools
+  - `mcp_aggregator`: Aggregator instance for MCP server tools
   - `runtime_context`: Context for dependency injection
 
 - **Key methods**:
-  - `initialize_tools(config)`: Set up all tools
-  - `register_system_tools(config)`: Register built-in tools
+  - `register_tools(tools, config)`: Set up all tools
   - `process_function_tools()`: Process function-based tools
-  - `add_function_tool(func)`: Add individual function tools
-  - `register_aliases(aliases)`: Register user-friendly aliases
   - `call_tool(name, args, runtime_context)`: Execute a tool
   - `get_tool_schemas()`: Get tool definitions for LLM API
   - `register_tools(tools)`: Register tools for availability
@@ -266,9 +260,6 @@ def from_toml(cls, toml_path: Union[str, Path], include_linked: bool = True) -> 
 ```python
 async def start(self) -> "LLMProcess":
     """Create and fully initialize an LLMProcess from this program."""
-
-def get_enriched_system_prompt(self, process_instance=None, include_env: bool = True) -> str:
-    """Get the system prompt enriched with preloaded content and environment info."""
 ```
 
 ### Key Properties
@@ -279,8 +270,6 @@ def get_enriched_system_prompt(self, process_instance=None, include_env: bool = 
 - `api_params`: API parameters for the model
 - `linked_programs`: Dictionary of linked programs
 - `tools`: List of tool functions (or dict with aliases)
-- `preload_files`: List of files to preload
-- `preload_relative_to`: Whether preload paths are relative to the program file or CWD
 - `base_dir`: Base directory for resolving paths
 - `tool_manager`: Manager for all tool operations
 
@@ -299,13 +288,13 @@ async def create(cls, program: "LLMProgram", linked_programs_instances: dict[str
 ### Instance Methods
 
 ```python
-async def run(self, user_input: str, max_iterations: int = 10, callbacks: dict = None) -> "RunResult":
+async def run(self, user_input: str, max_iterations: int = 10) -> "RunResult":
     """Run the LLM process with user input and return metrics."""
 
 def get_last_message(self) -> str:
     """Get the most recent assistant message text."""
 
-def reset_state(self, keep_system_prompt: bool = True, keep_file_descriptors: bool = True) -> None:
+def reset_state(self) -> None:
     """Reset the conversation state. ⚠️ Experimental API - may change in future versions."""
 
 def get_state(self) -> list[dict[str, str]]:
@@ -321,7 +310,6 @@ async def call_tool(self, tool_name: str, **kwargs) -> Any:
 - `state`: List of conversation messages
 - `tool_manager`: Manager for all tool operations
 - `enriched_system_prompt`: System prompt with preloaded content
-- `fd_manager`: File descriptor manager (if enabled)
 - `linked_programs`: Dictionary of linked program instances
 
 ## RunResult
@@ -341,7 +329,8 @@ def complete(self) -> "RunResult":
 ### Properties
 
 - `api_call_infos`: List of raw API response data
-- `api_calls`: Number of API calls made
+- `api_call_count`: Number of API calls made
+- `tool_call_count`: Number of tool calls made
 - `start_time`: When the run started
 - `end_time`: When the run completed
 - `duration_ms`: Duration of the run in milliseconds
@@ -373,8 +362,6 @@ async def call_tool(self, name: str, args: Dict[str, Any]) -> Any:
 ### Properties
 
 - `tool_definitions`: List of tool schemas
-- `tool_handlers`: Dictionary mapping tool names to handlers
-- `tool_aliases`: Dictionary mapping alias names to actual tool names
 
 ## AnthropicProcessExecutor
 
@@ -384,7 +371,7 @@ The `AnthropicProcessExecutor` class handles Anthropic-specific process executio
 
 ```python
 async def run(self, process: 'Process', user_prompt: str, max_iterations: int = 10,
-              callbacks: dict = None, run_result = None, is_tool_continuation: bool = False) -> "RunResult":
+              run_result = None, is_tool_continuation: bool = False) -> "RunResult":
     """Execute a conversation with the Anthropic API."""
 
 async def run_till_text_response(self, process, user_prompt, max_iterations: int = 10):
@@ -413,24 +400,23 @@ async def spawn_tool(args: Dict[str, Any], runtime_context: Optional[Dict[str, A
 ### fork_tool
 
 ```python
-async def fork_tool(prompts: List[str], llm_process = None) -> Dict[str, Any]:
+async def fork_tool(prompts: List[str], llm_process = None) -> List[Dict[str, Any]]:
     """Fork the conversation into multiple processes."""
 ```
 
 ## Callback Definitions
 
 ```python
-# Type definitions for callbacks
-on_tool_start_callback = Callable[[str, Dict[str, Any]], None]  # (tool_name, args) -> None
-on_tool_end_callback = Callable[[str, Any], None]  # (tool_name, result) -> None
-on_response_callback = Callable[[str], None]  # (content) -> None
+# Callback class example
+class BasicCallbacks:
+    def tool_start(self, tool_name: str, tool_args: Dict[str, Any], *, process) -> None:
+        pass
 
-# Callback dictionary format
-callbacks = {
-    "on_tool_start": on_tool_start_callback,
-    "on_tool_end": on_tool_end_callback,
-    "on_response": on_response_callback
-}
+    def tool_end(self, tool_name: str, result: Any, *, process) -> None:
+        pass
+
+    def response(self, content: str, *, process) -> None:
+        pass
 ```
 
 ---

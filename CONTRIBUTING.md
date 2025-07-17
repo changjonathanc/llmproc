@@ -10,6 +10,15 @@ Thank you for considering contributing to LLMProc! This document provides guidel
 2. Set up your development environment:
 
 ```bash
+# Recommended: use the Makefile helper
+make setup
+# Then activate the environment
+source .venv/bin/activate
+```
+
+If you prefer manual steps:
+
+```bash
 # Install uv if you don't have it
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
@@ -136,6 +145,13 @@ pytest -m "llm_api"
 
 # Run with coverage report
 pytest --cov=llmproc
+```
+
+A dedicated test verifies that `docs/yaml_config_schema.yaml` matches the
+Pydantic configuration models. If this test fails, regenerate the file:
+
+```bash
+make yaml-schema
 ```
 
 ### Working with Git Worktrees

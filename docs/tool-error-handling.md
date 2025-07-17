@@ -89,9 +89,11 @@ Responsible for:
 
 ```python
 # In ToolManager.call_tool
-if resolved_name not in self.enabled_tools:
-    logger.warning(f"Tool '{name}' (resolved to '{resolved_name}') is not enabled")
-    return ToolResult.from_error("This tool is not available")
+try:
+    tool = self.runtime_registry.get_tool(name)
+except ValueError as exc:
+    logger.warning(f"Tool not available: '{name}'")
+    return ToolResult.from_error(str(exc))
 ```
 
 ### Handling Execution Errors

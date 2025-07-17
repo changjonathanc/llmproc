@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 from llmproc import LLMProgram
 from llmproc.config.schema import LLMProgramConfig
+import llmproc.program_exec as program_exec
 
 # We'll use asyncio only for specific tests
 
@@ -82,7 +83,7 @@ async def test_process_creation_with_user_prompt():
 
     # Mock the process creation since we can't actually create a process in unit tests
     with mock.patch("llmproc.program_exec.instantiate_process") as mock_instantiate:
-        with mock.patch("llmproc.program_exec.prepare_process_state") as mock_prepare:
+        with mock.patch("llmproc.program_exec.prepare_process_config") as mock_prepare:
             # Create a mock process to return
             mock_process = mock.MagicMock()
             mock_process.user_prompt = "Tell me about testing"
@@ -96,26 +97,26 @@ async def test_process_creation_with_user_prompt():
                 "user_prompt": program.user_prompt,
                 "max_iterations": program.max_iterations,
                 # Other required parameters
-                "original_system_prompt": program.system_prompt,
-                "system_prompt": program.system_prompt,
+                "base_system_prompt": program.system_prompt,
                 "program": program,
-                "file_descriptor_enabled": False,
-                "references_enabled": False,
             }
-            mock_prepare.return_value = mock_state
+            mock_prepare.return_value = program_exec.ProcessConfig(**mock_state)
 
             # Also mock tool initialization to avoid actual API calls
-            with mock.patch("llmproc.tools.ToolManager.initialize_tools"):
+            with mock.patch("llmproc.tools.ToolManager.register_tools"):
                 # Create the process
                 program.compile()
                 await program.start()
 
-                # Check that prepare_process_state was called with the program
+                # Check that prepare_process_config was called with the program
                 mock_prepare.assert_called_once()
                 assert mock_prepare.call_args[0][0] == program
 
-                # Check that instantiate_process was called with the mock state
-                mock_instantiate.assert_called_once_with(mock_state)
+                # Check that instantiate_process was called with the mock config
+                mock_instantiate.assert_called_once()
+                assert isinstance(
+                    mock_instantiate.call_args.args[0], program_exec.ProcessConfig
+                )
 
                 # Check that the user prompt and max_iterations were passed to the process
                 assert mock_process.user_prompt == "Tell me about testing"

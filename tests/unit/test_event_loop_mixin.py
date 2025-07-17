@@ -1,7 +1,6 @@
 """Unit tests for EventLoopMixin."""
 
 import asyncio
-import threading
 
 from llmproc.event_loop_mixin import EventLoopMixin
 from tests.conftest import create_test_llmprocess_directly
@@ -31,31 +30,6 @@ def test_mixin_starts_loop_and_runs_coroutine():
     dummy._loop_thread.join(timeout=1)
 
 
-def test_mixin_set_loop_assigns_existing_loop():
-    """_set_loop should use a provided loop without starting a new one."""
-    loop = asyncio.new_event_loop()
-
-    def runner():
-        asyncio.set_event_loop(loop)
-        loop.run_forever()
-
-    thread = threading.Thread(target=runner, daemon=True)
-    thread.start()
-
-    dummy = Dummy()
-    dummy._set_loop(loop, thread)
-
-    async def sample():
-        return "ok"
-
-    fut = dummy._submit_to_loop(sample())
-    assert fut.result(timeout=1) == "ok"
-    assert dummy._loop is loop
-    assert dummy._loop_thread is thread
-    assert not dummy._own_loop
-
-    loop.call_soon_threadsafe(loop.stop)
-    thread.join(timeout=1)
 
 
 def test_llmprocess_uses_event_loop_mixin():

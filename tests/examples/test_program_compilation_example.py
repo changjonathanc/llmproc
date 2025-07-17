@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
+from llmproc.plugins.spawn import SpawnPlugin
 
 
 @pytest.mark.asyncio
@@ -29,9 +30,8 @@ async def test_documentation_example():
             [tools]
             builtin = ["spawn"]
 
-            [linked_programs]
-            helper = "helper.toml"
-            math = "math.toml"
+            [plugins.spawn]
+            linked_programs = { helper = "helper.toml", math = "math.toml" }
             """
             )
 
@@ -46,8 +46,8 @@ async def test_documentation_example():
             [prompt]
             system_prompt = "Helper program"
 
-            [linked_programs]
-            utility = "utility.toml"
+            [plugins.spawn]
+            linked_programs = { utility = "utility.toml" }
             """
             )
 
@@ -98,9 +98,6 @@ async def test_documentation_example():
                 # Register the enabled tools in the program
                 tool_config = {
                     "enabled_tools": ["spawn"],
-                    "has_linked_programs": True,
-                    "linked_programs": program.linked_programs,
-                    "linked_program_descriptions": getattr(program, "linked_program_descriptions", {}),
                 }
 
                 # Import the test helper
@@ -109,15 +106,16 @@ async def test_documentation_example():
                 # Initialize the process with proper tool configuration using the helper
                 process = create_test_llmprocess_directly(
                     program=program,
-                    has_linked_programs=True,
                     enabled_tools=["spawn"],
                     tool_manager=tool_manager,
                 )
 
                 # Get references to the necessary registries
                 from unittest.mock import AsyncMock
+                from llmproc.tools.core import Tool
+                from llmproc.common.metadata import get_tool_meta
 
-                from llmproc.tools.builtin.spawn import spawn_tool
+                from llmproc.plugins.spawn import spawn_tool
                 from llmproc.tools.function_tools import function_to_tool_schema
                 from llmproc.tools.tool_registry import ToolRegistry
 
@@ -132,7 +130,7 @@ async def test_documentation_example():
                 from llmproc.tools.builtin import spawn_tool
 
                 # Register the spawn tool using callable
-                tool_manager.register_tools([spawn_tool])
+                await tool_manager.register_tools([spawn_tool])
 
                 # Create an async mock version of spawn_tool for testing
                 async def mock_spawn_tool(**kwargs):
@@ -153,7 +151,13 @@ async def test_documentation_example():
                 }
 
                 # Register the spawn tool directly into the runtime registry
-                tool_manager.runtime_registry.register_tool("spawn", mock_spawn_tool, spawn_tool_def)
+                tool_manager.runtime_registry.register_tool_obj(
+                    Tool(
+                        handler=mock_spawn_tool,
+                        schema=spawn_tool_def,
+                        meta=get_tool_meta(mock_spawn_tool),
+                    )
+                )
 
                 # Set up our mock to return the process
                 mock_create_process.return_value = process
@@ -165,12 +169,14 @@ async def test_documentation_example():
             assert process.model_name == "main-model"
             assert process.provider == "anthropic"
             # Process now uses registered_tools property instead of enabled_tools
-            assert "spawn" in process.tool_manager.get_registered_tools()
+            assert "spawn" in process.tool_manager.registered_tools
 
-            # Check linked programs exist (as Program objects, not LLMProcess instances)
-            assert len(process.linked_programs) == 2
-            assert "helper" in process.linked_programs
-            assert "math" in process.linked_programs
+            # Check linked programs exist via the SpawnPlugin
+            spawn_plugin = process.get_plugin(SpawnPlugin)
+            assert spawn_plugin is not None
+            assert len(spawn_plugin.linked_programs) == 2
+            assert "helper" in spawn_plugin.linked_programs
+            assert "math" in spawn_plugin.linked_programs
 
             # With our new implementation, linked programs are stored as Program objects,
             # not automatically instantiated as LLMProcess instances
@@ -179,25 +185,27 @@ async def test_documentation_example():
             from tests.conftest import create_test_llmprocess_directly
 
             # Manually instantiate helper to check it
-            helper_program = process.linked_programs["helper"]
+            helper_program = spawn_plugin.linked_programs["helper"]
             helper_process = create_test_llmprocess_directly(program=helper_program)
             assert helper_process.model_name == "helper-model"
             assert helper_process.provider == "anthropic"
-            assert "utility" in helper_process.linked_programs
+            child_spawn = helper_process.get_plugin(SpawnPlugin)
+            assert child_spawn is not None
+            assert "utility" in child_spawn.linked_programs
 
             # Check math program
-            math_program = process.linked_programs["math"]
+            math_program = spawn_plugin.linked_programs["math"]
             math_process = create_test_llmprocess_directly(program=math_program)
             assert math_process.model_name == "math-model"
             assert math_process.provider == "anthropic"
 
             # Check that the spawn tool is registered in the tool registry
             assert hasattr(process, "tool_manager")
-            assert "spawn" in process.tool_manager.runtime_registry.tool_handlers
+            assert "spawn" in process.tool_manager.runtime_registry.get_tool_names()
 
             # Get the spawn tool schema from the registry's definitions list
             spawn_def = None
-            for tool_def in process.tool_manager.runtime_registry.tool_definitions:
+            for tool_def in process.tool_manager.runtime_registry.get_definitions():
                 if tool_def["name"] == "spawn":
                     spawn_def = tool_def
                     break

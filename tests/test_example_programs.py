@@ -9,19 +9,18 @@ from pathlib import Path
 from typing import Optional
 
 import pytest
-import tomli
+import yaml
 from llmproc import LLMProcess, LLMProgram
 
 
 def get_example_programs():
-    """Get all example TOML program files as test params."""
+    """Get all example YAML program files as test params."""
     base_dir = Path(__file__).parent.parent / "examples"
     programs = []
 
-    # Get all .toml files recursively
-    for program_file in base_dir.glob("**/*.toml"):
-        # Skip tutorial/reference files and any scripts
-        if program_file.name not in ["tutorial-config.toml", "scripts"]:
+    # Get all .yaml files recursively
+    for program_file in base_dir.glob("**/*.yaml"):
+        if program_file.name != "scripts":
             programs.append(program_file.relative_to(base_dir.parent))
 
     return programs
@@ -50,7 +49,7 @@ def test_test_structure():
     # Known files with special syntax that aren't standard TOML
     skip_files = [
         # No longer skipping claude-code.toml, as the linked_programs syntax has been fixed
-        "main.toml",  # Uses a complex linked_programs syntax in program-linking folder
+        "main.yaml",  # Uses a complex linked_programs syntax in program-linking folder
     ]
 
     # Check that each program is valid TOML
@@ -60,23 +59,23 @@ def test_test_structure():
             continue
 
         full_path = Path(__file__).parent.parent / program_path
-        with open(full_path, "rb") as f:
+        with open(full_path, "r") as f:
             try:
-                program = tomli.load(f)
+                program = yaml.safe_load(f)
                 # Basic validation of required fields
                 # Check for model configuration in either the root or in a model section
                 has_model_info = ("model_name" in program and "provider" in program) or (
                     "model" in program and "name" in program["model"] and "provider" in program["model"]
                 )
                 assert has_model_info, f"Program {program_path} missing model information"
-            except tomli.TOMLDecodeError as e:
-                pytest.fail(f"Invalid TOML in {program_path}: {e}")
+            except yaml.YAMLError as e:
+                pytest.fail(f"Invalid YAML in {program_path}: {e}")
 
 
 def get_provider_from_program(program_path):
-    """Extract provider from a TOML program file."""
-    with open(program_path, "rb") as f:
-        program = tomli.load(f)
+    """Extract provider from a YAML program file."""
+    with open(program_path, "r") as f:
+        program = yaml.safe_load(f)
 
     # Check in both root level and model section
     if "provider" in program:
@@ -98,11 +97,11 @@ async def test_example_program(program_path):
 
     # Skip certain providers if you need to
     provider = get_provider_from_program(program_path)
-    if provider in ["anthropic_vertex", "gemini_vertex"] and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+    if "vertex" in provider and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
         pytest.skip("Vertex AI credentials not available")
 
     # Create and start process using two-step pattern
-    program = LLMProgram.from_toml(program_path)
+    program = LLMProgram.from_yaml(program_path)
     process = await program.start()
 
     # Send a simple test query
@@ -167,9 +166,9 @@ def test_cli_with_minimal_example():
     if not api_keys_available():
         pytest.skip("API keys not available for testing")
 
-    program_path = Path(__file__).parent.parent / "examples" / "openai.toml"
+    program_path = Path(__file__).parent.parent / "examples" / "openai.yaml"
     if not program_path.exists():
-        program_path = Path(__file__).parent.parent / "examples" / "anthropic.toml"
+        program_path = Path(__file__).parent.parent / "examples" / "anthropic.yaml"
 
     # Resolve to absolute path before changing directory
     program_path = program_path.resolve()
@@ -206,7 +205,7 @@ def test_cli_with_program_linking():
         pytest.skip("API keys not available for testing")
 
     # Create absolute path and resolve it
-    program_path = (Path(__file__).parent.parent / "examples" / "program-linking" / "main.toml").resolve()
+    program_path = (Path(__file__).parent.parent / "examples" / "program-linking" / "main.yaml").resolve()
 
     # Change directory to repo root to ensure relative paths work correctly
     original_dir = os.getcwd()
@@ -232,11 +231,11 @@ def test_cli_with_program_linking():
 @pytest.mark.parametrize(
     "program_name",
     [
-        "anthropic.toml",
-        "openai.toml",
-        "claude-code.toml",
-        "mcp.toml",
-        "basic-features.toml",
+        "anthropic.yaml",
+        "openai.yaml",
+        "claude-code.yaml",
+        "mcp.yaml",
+        "basic-features.yaml",
     ],
 )
 def test_cli_with_all_programs(program_name):
@@ -316,9 +315,9 @@ def test_error_handling_and_recovery():
         ), "Expected error message for invalid program"
 
     # Now test with a valid program to make sure the system recovers
-    program_path = Path(__file__).parent.parent / "examples" / "openai.toml"
+    program_path = Path(__file__).parent.parent / "examples" / "openai.yaml"
     if not program_path.exists():
-        program_path = Path(__file__).parent.parent / "examples" / "anthropic.toml"
+        program_path = Path(__file__).parent.parent / "examples" / "anthropic.yaml"
 
     # Change working directory temporarily to ensure file is found
     original_dir = os.getcwd()

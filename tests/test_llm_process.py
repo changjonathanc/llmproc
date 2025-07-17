@@ -3,12 +3,14 @@
 import asyncio
 import os
 import uuid
+import warnings
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from llmproc import LLMProcess
+from llmproc.plugins.preload_files import PreloadFilesPlugin
 
 
 @pytest.fixture
@@ -66,7 +68,6 @@ async def test_initialization(mock_env, mock_get_provider_client, create_test_pr
         provider="openai",
         system_prompt="You are a test assistant.",
         parameters={},
-        display_name="Test Model",
     )
 
     # Create process from the program using the helper function
@@ -75,7 +76,6 @@ async def test_initialization(mock_env, mock_get_provider_client, create_test_pr
     # Verify process initialization
     assert process.model_name == "test-model"
     assert process.provider == "openai"
-    assert process.system_prompt == "You are a test assistant."
     assert process.enriched_system_prompt is not None  # Generated at initialization time now
     assert "You are a test assistant." in process.enriched_system_prompt  # Contains the original prompt
     assert process.state == []  # Empty until first run
@@ -148,13 +148,17 @@ async def test_preload_at_initialization(mock_env, mock_get_provider_client):
         with (
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
-            patch(
-                "pathlib.Path.read_text",
-                return_value="This is test content for initialization preloading.",
-            ),
+            patch("pathlib.Path.read_text", return_value="This is test content for initialization preloading."),
+            patch("llmproc.plugins.preload_files.load_files") as mock_load,
         ):
-            # Create process with preloaded files
-            process = await create_process(program, additional_preload_files=[temp_path])
+            mock_load.return_value = {normalized_temp_path: "This is test content for initialization preloading."}
+            program.add_plugins(PreloadFilesPlugin([temp_path]))
+            process = await create_process(program)
+
+        mock_load.assert_called_once()
+        args = mock_load.call_args.args
+        assert args[0] == [temp_path]
+        assert args[1].resolve() == Path(".").resolve()
 
         # Check the enriched_system_prompt contains our content
 
@@ -162,9 +166,9 @@ async def test_preload_at_initialization(mock_env, mock_get_provider_client):
         assert process.enriched_system_prompt is not None
         assert "This is test content for initialization preloading" in process.enriched_system_prompt
 
-        # Verify the original_system_prompt was preserved
-        assert hasattr(process, "original_system_prompt")
-        assert process.original_system_prompt == "You are a test assistant."
+        # Verify the base_system_prompt was preserved
+        assert hasattr(process, "base_system_prompt")
+        assert process.base_system_prompt == "You are a test assistant."
 
     finally:
         os.unlink(temp_path)
@@ -188,23 +192,21 @@ provider = "openai"
 [prompt]
 system_prompt = "Base"
 
-[preload]
+[plugins.preload_files]
 files = ["pre.txt"]
 relative_to = "cwd"
 """
         )
 
-        program = LLMProgram.from_toml(program_path)
-
-        with patch("llmproc.env_info.builder.EnvInfoBuilder.load_files") as mock_load:
-            mock_load.return_value = {str(preload_file): "dynamic"}
-
-            current = os.getcwd()
-            os.chdir(run_dir)
-            try:
+        current = os.getcwd()
+        os.chdir(run_dir)
+        try:
+            with patch("llmproc.plugins.preload_files.load_files") as mock_load:
+                mock_load.return_value = {str(preload_file): "dynamic"}
+                program = LLMProgram.from_toml(program_path)
                 await create_test_process(program)
-            finally:
-                os.chdir(current)
+        finally:
+            os.chdir(current)
 
         mock_load.assert_called_once()
         args = mock_load.call_args.args
@@ -230,26 +232,24 @@ provider = "openai"
 [prompt]
 system_prompt = "Base"
 
-[preload]
+[plugins.preload_files]
 files = ["pre.txt"]
 """
         )
 
-        program = LLMProgram.from_toml(program_path)
-
-        with patch("llmproc.env_info.builder.EnvInfoBuilder.load_files") as mock_load:
-            mock_load.return_value = {str(preload_file): "static"}
-
-            current = os.getcwd()
-            os.chdir(run_dir)
-            try:
+        current = os.getcwd()
+        os.chdir(run_dir)
+        try:
+            with patch("llmproc.plugins.preload_files.load_files") as mock_load:
+                mock_load.return_value = {str(preload_file): "static"}
+                program = LLMProgram.from_toml(program_path)
                 await create_test_process(program)
-            finally:
-                os.chdir(current)
+        finally:
+            os.chdir(current)
 
         mock_load.assert_called_once()
         args = mock_load.call_args.args
-        assert args[0] == [str(preload_file.resolve())]
+        assert args[0] == ["pre.txt"]
         assert args[1].resolve() == Path(program_dir).resolve()
 
 
@@ -300,7 +300,8 @@ async def test_llm_uses_preloaded_content_at_creation():
         )
 
         # Start the process with preloaded files
-        process = await create_process(program, additional_preload_files=[temp_path])
+        program.add_plugins(PreloadFilesPlugin([temp_path]))
+        process = await create_process(program)
 
         # Ask the model about the secret flag - using await with async run method
         await process.run(
@@ -316,8 +317,8 @@ async def test_llm_uses_preloaded_content_at_creation():
 
 
 @pytest.mark.asyncio
-async def test_async_initialize_tools(mock_env, mock_get_provider_client):
-    """Test async initialization of tools in LLMProcess."""
+async def test_async_register_tools(mock_env, mock_get_provider_client):
+    """Test async registration of tools in LLMProcess."""
     # Create a program
     from unittest.mock import AsyncMock
 
@@ -329,27 +330,26 @@ async def test_async_initialize_tools(mock_env, mock_get_provider_client):
         system_prompt="You are a test assistant.",
     )
 
-    # In the Unix-inspired approach, create_process calls ToolManager.initialize_tools
-    # directly with configuration during program.start()
+    # In the Unix-inspired approach, create_process calls ToolManager.register_tools
+    # with configuration during program.start()
     with patch(
-        "llmproc.tools.tool_manager.ToolManager.initialize_tools",
+        "llmproc.tools.tool_manager.ToolManager.register_tools",
         new_callable=AsyncMock,
     ) as mock_init_tools:
-        # Create a mock future that returns successfully
         mock_future = asyncio.Future()
-        mock_future.set_result(program.tool_manager)
+        mock_future.set_result(None)
         mock_init_tools.return_value = mock_future
 
         # Create process using program.start() method
         process = await program.start()
 
-        # Verify ToolManager.initialize_tools was called during program.start()
+        # Verify ToolManager.register_tools was called during program.start()
         assert mock_init_tools.called
 
 
 @pytest.mark.asyncio
-async def test_programexec_initializes_tools(mock_env, mock_get_provider_client):
-    """Test that program_exec initializes tools during process creation."""
+async def test_process_creation_initializes_tools(mock_env, mock_get_provider_client):
+    """Ensure tools are registered during process creation."""
     # Create a program with some tools
     from llmproc.program import LLMProgram
 
@@ -369,7 +369,7 @@ async def test_programexec_initializes_tools(mock_env, mock_get_provider_client)
     # Patch both functions to verify they're used correctly
     with (
         patch.object(program, "get_tool_configuration", return_value=mock_config),
-        patch.object(program.tool_manager, "initialize_tools") as mock_initialize,
+        patch("llmproc.program_exec.ToolManager.register_tools") as mock_initialize,
     ):
         # Create a mock future to return
         mock_future = asyncio.Future()
@@ -379,10 +379,13 @@ async def test_programexec_initializes_tools(mock_env, mock_get_provider_client)
         # Create a process using program.start()
         await program.start()
 
-        # Verify initialize_tools was called with the right arguments
+        # Verify register_tools was called with the right arguments
         mock_initialize.assert_called_once()
-        # First arg should be the config
-        assert mock_initialize.call_args[0][0] is mock_config
+        # First arg should be the list of tool callables
+        called_tools = mock_initialize.call_args[0][0]
+        assert [t.__name__ for t in called_tools] == ["calculator", "read_file"]
+        # Second argument should be the tool configuration
+        assert mock_initialize.call_args[0][1] is mock_config
 
 
 @pytest.mark.asyncio
@@ -398,9 +401,11 @@ async def test_tool_calling_works(mock_env, mock_get_provider_client):
         tools=["calculator"],
     )
 
-    # Create a process using mocked initialization
-    with patch.object(program.tool_manager, "initialize_tools", new_callable=AsyncMock):
-        # Create process using program.start()
+    # Create a process using mocked registration
+    with patch(
+        "llmproc.tools.tool_manager.ToolManager.register_tools",
+        new_callable=AsyncMock,
+    ):
         process = await program.start()
 
     # Now try calling the calculator tool
@@ -449,9 +454,8 @@ async def test_mcp_tools_initialization(mock_env, mock_get_provider_client):
 
     # Mock the import in integration.py
     with (
-        patch.dict("sys.modules", {"llmproc.mcp_registry": MagicMock()}),
         patch.object(program, "get_tool_configuration", return_value=mock_config),
-        patch.object(program.tool_manager, "initialize_tools") as mock_init_tools,
+        patch("llmproc.program_exec.ToolManager.register_tools") as mock_init_tools,
     ):
         # Setup mock to return a coroutine
         mock_future = asyncio.Future()
@@ -461,10 +465,11 @@ async def test_mcp_tools_initialization(mock_env, mock_get_provider_client):
         # Create process using program.start()
         process = await program.start()
 
-        # Verify initialize_tools was called with the right arguments
+        # Verify register_tools was called with the right arguments
         mock_init_tools.assert_called_once()
-        # First arg should be the config
-        assert mock_init_tools.call_args[0][0] == mock_config
+        called_tools = mock_init_tools.call_args[0][0]
+        assert [t.__name__ for t in called_tools] == []  # No tools provided
+        assert mock_init_tools.call_args[0][1] == mock_config
 
         # Verify mcp_enabled flag was passed to the process
         assert process.mcp_enabled is True
@@ -484,10 +489,7 @@ async def test_mcp_tool_initialization_in_create_process(mock_env, mock_get_prov
     )
 
     # Mock program_exec.create_process to verify how it handles MCP initialization
-    with (
-        patch("llmproc.program_exec.create_process") as mock_create_process,
-        patch.dict("sys.modules", {"llmproc.mcp_registry": MagicMock()}),
-    ):
+    with patch("llmproc.program_exec.create_process") as mock_create_process:
         # Configure mock
         mock_process = MagicMock()
         mock_process.provider = "anthropic"

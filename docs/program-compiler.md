@@ -87,7 +87,7 @@ async def main():
     print(f"Response: {response}")
 
     # Display metrics
-    print(f"API calls: {run_result.api_calls}")
+    print(f"API calls: {run_result.api_call_count}")
     print(f"Duration: {run_result.duration_ms}ms")
 
 # Run the async function
@@ -104,15 +104,21 @@ async def main():
     program = LLMProgram.from_toml("path/to/program.toml")
     process = await program.start()
 
-    # Define callbacks
-    callbacks = {
-        "on_tool_start": lambda tool_name, args: print(f"Starting tool: {tool_name}"),
-        "on_tool_end": lambda tool_name, result: print(f"Tool completed: {tool_name}"),
-        "on_response": lambda content: print(f"Received response: {content[:30]}...")
-    }
+    # Register a class-based callback
+    class Monitor:
+        def tool_start(self, tool_name, tool_args, *, process):
+            print(f"Starting tool: {tool_name}")
 
-    # Run with callbacks
-    run_result = await process.run("What can you tell me about Python?", callbacks=callbacks)
+        def tool_end(self, tool_name, result, *, process):
+            print(f"Tool completed: {tool_name}")
+
+        def response(self, content, *, process):
+            print(f"Received response: {content[:30]}...")
+
+    process.add_plugins(Monitor())
+
+    # Run the process
+    run_result = await process.run("What can you tell me about Python?")
 
     # Get the final response
     response = process.get_last_message()
@@ -120,7 +126,7 @@ async def main():
 
     # Print run metrics
     print(f"Run completed in {run_result.duration_ms}ms")
-    print(f"API calls: {run_result.api_calls}")
+    print(f"API calls: {run_result.api_call_count}")
 
 asyncio.run(main())
 ```
@@ -166,7 +172,6 @@ A compiled program includes these components:
 - `parameters`: Dictionary of parameters for the LLM
 - `api_params`: Extracted API parameters (temperature, max_tokens, etc.)
 - `display_name`: User-facing name for the process
-- `preload_files`: List of files to preload into the system prompt
 - `mcp_config_path`: Path to MCP configuration file
 - `mcp_tools`: Dictionary of MCP tools to enable
 - `tools`: Dictionary of built-in tools configuration
@@ -185,7 +190,8 @@ class RunResult:
     """Contains metadata about a process run."""
 
     api_call_infos: List[Dict[str, Any]]  # Raw API response data
-    api_calls: int                        # Number of API calls made
+    api_call_count: int                   # Number of API calls made
+    tool_call_count: int                  # Number of tool calls made
     start_time: float                     # When the run started
     end_time: Optional[float]             # When the run completed
     duration_ms: int                      # Duration in milliseconds

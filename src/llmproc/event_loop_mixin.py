@@ -32,14 +32,3 @@ class EventLoopMixin:
         self._ensure_loop_thread()
         assert self._loop is not None
         return asyncio.run_coroutine_threadsafe(coro, self._loop)
-
-    def _set_loop(
-        self,
-        loop: asyncio.AbstractEventLoop,
-        thread: Optional[threading.Thread],
-        own: bool = False,
-    ) -> None:
-        """Assign an existing event loop and thread to the mixin."""
-        self._loop = loop
-        self._loop_thread = thread
-        self._own_loop = own

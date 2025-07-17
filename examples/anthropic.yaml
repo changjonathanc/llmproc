@@ -1,10 +1,9 @@
 # Anthropic example: defaulting to Claude 3.5 Haiku
 model:
-  #name: claude-3-7-sonnet@20250219  # Other models: claude-3-5-sonnet-20241022, claude-3-5-haiku@20241022
-  name: claude-3-5-haiku@20241022  # Other models: claude-3-5-sonnet-20241022, claude-3-7-sonnet@20250219
-  provider: anthropic_vertex
-  # disable_automatic_caching: false  # Uncomment to disable automatic caching
-  # For Vertex AI: provider: anthropic_vertex, name: claude-3-5-haiku@20241022, region: us-east5, project_id: your-project-id
+  #name: claude-3-7-sonnet-20250219  # Other models: claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
+  name: claude-3-5-haiku-20241022  # Other models: claude-3-5-sonnet-20241022, claude-3-7-sonnet-20250219
+  provider: anthropic
+  # For direct Anthropic API: provider: anthropic, name: claude-3-5-haiku-20241022
 
 prompt:
   system_prompt: |

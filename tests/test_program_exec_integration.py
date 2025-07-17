@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+
 import pytest
 from llmproc.llm_process import LLMProcess
 from llmproc.program import LLMProgram
@@ -32,11 +34,10 @@ async def test_program_start_with_new_initialization_path(model, provider):
         assert isinstance(process, LLMProcess)
         assert process.model_name == model
         assert process.provider == provider
-        assert process.system_prompt == "Test system prompt"
-        assert process.original_system_prompt == "Test system prompt"
+        assert process.base_system_prompt == "Test system prompt"
         assert process.state == []
         # Content is included in enriched system prompt
-        assert not process.file_descriptor_enabled
+        assert process.get_plugin(FileDescriptorPlugin) is None
 
 
 @pytest.mark.asyncio

@@ -3,8 +3,8 @@
 import pytest
 
 from llmproc.common.access_control import AccessLevel
-from llmproc.tools.mcp import MCPServerTools
 from llmproc.config.tool import ToolConfig
+from llmproc.tools.mcp import MCPServerTools
 
 
 def test_tool_config_defaults():
@@ -60,12 +60,12 @@ def test_mcp_server_tools_list_tools():
 
 def test_mcp_server_tools_with_access():
     """Test MCPServerTools with a specified access level."""
-    tools = MCPServerTools("calc", ["add"], AccessLevel.READ)
+    tools = MCPServerTools("calc", ["add"], default_access=AccessLevel.READ)
     assert tools.server == "calc"
     assert tools.tools == ["add"]
     assert tools.default_access == AccessLevel.READ
 
-    tools2 = MCPServerTools("calc", ["add"], "read")
+    tools2 = MCPServerTools("calc", ["add"], default_access="read")
     assert tools2.server == "calc"
     assert tools2.tools == ["add"]
     assert tools2.default_access == AccessLevel.READ
@@ -88,8 +88,10 @@ def test_mcp_server_tools_description_override_dict():
         {"add": {"access": "read", "description": "Add numbers", "param_descriptions": {"a": "num"}}},
     )
     assert isinstance(tools.tools[0], ToolConfig)
-    assert tools.get_description("add") == "Add numbers"
-    assert tools.get_param_descriptions("add") == {"a": "num"}
+    cfg = tools._find_tool("add")
+    assert cfg is not None
+    assert cfg.description == "Add numbers"
+    assert cfg.param_descriptions == {"a": "num"}
 
 
 def test_mcp_server_tools_with_tool_items():
@@ -124,8 +126,8 @@ def test_mcp_server_tools_invalid_tools():
 def test_mcp_server_tools_invalid_combination():
     """Test that MCPServerTools raises an error for invalid parameter combinations."""
     with pytest.raises(ValueError):
-        MCPServerTools("calc", {"add": "write"}, AccessLevel.READ)
+        MCPServerTools("calc", {"add": "write"}, default_access=AccessLevel.READ)
 
     with pytest.raises(ValueError):
         items = [ToolConfig("add")]
-        MCPServerTools("calc", items, AccessLevel.READ)
+        MCPServerTools("calc", items, default_access=AccessLevel.READ)

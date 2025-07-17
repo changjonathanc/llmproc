@@ -3,8 +3,9 @@ import logging
 from contextlib import asynccontextmanager
 
 import pytest
-from llmproc.mcp_registry.compound import MCPAggregator, MCPServerSettings, ServerRegistry
 from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
+
+from llmproc.tools.mcp import MCPAggregator, MCPServerSettings
 
 
 class FakeClient:
@@ -19,18 +20,18 @@ class FakeClient:
         return self._call_results[name]
 
 
-class FakeRegistry(ServerRegistry):
+class FakeAggregator(MCPAggregator):
     def __init__(self, clients):
         servers = {name: MCPServerSettings() for name in clients}
         super().__init__(servers)
         self.clients = clients
 
-    def list_servers(self):
-        return list(self.clients.keys())
+    def get_client(self, server_name):
+        @asynccontextmanager
+        async def _ctx():
+            yield self.clients[server_name]
 
-    @asynccontextmanager
-    async def get_client(self, server_name):
-        yield self.clients[server_name]
+        return _ctx()
 
 
 def test_list_tools_namespaced():
@@ -44,8 +45,7 @@ def test_list_tools_namespaced():
         [tool_b], {"b": CallToolResult(isError=False, message="", content=[TextContent(type="text", text="B")])}
     )
 
-    registry = FakeRegistry({"s1": client1, "s2": client2})
-    aggregator = MCPAggregator(registry)
+    aggregator = FakeAggregator({"s1": client1, "s2": client2})
 
     result = asyncio.run(aggregator.list_tools())
     names = sorted(t.name for t in result.tools)
@@ -56,14 +56,28 @@ def test_call_tool_basic():
     tool_a = Tool(name="a", inputSchema={})
     call_result = CallToolResult(isError=False, message="", content=[TextContent(type="text", text="A result")])
     client1 = FakeClient([tool_a], {"a": call_result})
-    registry = FakeRegistry({"s1": client1})
-    aggregator = MCPAggregator(registry)
+    aggregator = FakeAggregator({"s1": client1})
 
     result = asyncio.run(aggregator.call_tool("s1__a"))
     assert result.content[0].text == "A result"
 
     result2 = asyncio.run(aggregator.call_tool("a", server_name="s1"))
     assert result2.content[0].text == "A result"
+
+
+def test_call_tool_resolved():
+    """Verify call_tool_resolved executes a tool without name parsing."""
+    tool_a = Tool(name="a", inputSchema={})
+    call_result = CallToolResult(
+        isError=False,
+        message="",
+        content=[TextContent(type="text", text="A result")],
+    )
+    client1 = FakeClient([tool_a], {"a": call_result})
+    aggregator = FakeAggregator({"s1": client1})
+
+    result = asyncio.run(aggregator.call_tool_resolved("s1", "a"))
+    assert result.content[0].text == "A result"
 
 
 def test_call_tool_error_logging(caplog):
@@ -86,8 +100,7 @@ def test_call_tool_error_logging(caplog):
     client1 = FakeClient(
         [tool_a], {"a": error_result_with_message, "b": error_result_without_message, "c": error_result_empty}
     )
-    registry = FakeRegistry({"testserver": client1})
-    aggregator = MCPAggregator(registry)
+    aggregator = FakeAggregator({"testserver": client1})
 
     # Test error with message
     with caplog.at_level(logging.ERROR):

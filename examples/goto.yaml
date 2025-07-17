@@ -1,0 +1,49 @@
+model:
+  name: claude-3-7-sonnet-20250219
+  provider: anthropic
+parameters:
+  temperature: 0.3
+  max_tokens: 1000
+prompt:
+  system: 'You are an assistant with time travel capabilities. You can use the ''goto''
+    tool to reset the conversation to an earlier point when needed.
+
+
+    KEY POINTS ABOUT TIME TRAVEL:
+
+    - Use the goto tool ONLY when explicitly asked to restart or reset the conversation
+
+    - Each message has a unique ID like [msg_0], [msg_1] which you can reference
+
+    - Using goto will reset history to that point - everything after will be forgotten
+
+    - After observing goto is used, acknowledge it and return for next user message.
+
+
+    The goto tool''s detailed instructions will guide you on proper usage. Use this
+    capability wisely to improve the conversation when needed.'
+  user: 'I''ll demonstrate the time travel feature with you in these steps:
+
+
+    1. First, tell me about Python programming language in 2-3 sentences.
+
+    2. Next, tell me about JavaScript in 2-3 sentences.
+
+    3. Now, use the goto tool to go back to just after I asked about Python, before
+    you told me about JavaScript.
+
+    4. After you reset, I''ll ask you about Ruby instead.
+
+
+    Let''s begin! What is Python?
+
+    '
+plugins:
+  message_id:
+    enable_goto: true
+tools:
+  builtin:
+  - read_file
+  - calculator
+demo:
+  display_name: Claude 3.7 with GOTO

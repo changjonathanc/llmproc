@@ -1,6 +1,6 @@
 model:
-  name: "claude-3-7-sonnet@20250219"
-  provider: "anthropic_vertex"
+  name: "claude-3-7-sonnet-20250219"
+  provider: "anthropic"
   max_iterations: 30
 
 prompt:
@@ -25,16 +25,19 @@ mcp:
         - "mcp"
         - "serve"
 
+plugins:
+  stderr:
+    tools:
+      - name: "write_stderr"
+        alias: "write_log"
+        description: "append a new message to the work log"
+        param_descriptions:
+          message: "a message to be logged"
 tools:
   builtin:
     #- "spawn"
     #- "fork"
     - name: "calculator"
-    - name: "write_stderr"
-      alias: "write_log"
-      description: "append a new message to the work log"
-      param_descriptions:
-        message: "a message to be logged"
   mcp:
     claude:
       - name: "Glob"

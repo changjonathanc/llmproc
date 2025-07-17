@@ -6,10 +6,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 from llmproc.common.results import ToolResult
-from llmproc.file_descriptors import FileDescriptorManager
+from llmproc.plugins.file_descriptor import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorPlugin
 from llmproc.program import LLMProgram
-from llmproc.tools.builtin.fd_tools import fd_to_file_tool
+from llmproc.tools.core import Tool
 
 from tests.conftest import create_test_llmprocess_directly
 
@@ -24,13 +25,11 @@ async def test_fd_to_file_tool(mocked_llm_process):
     # Use the mocked process provided by the fixture
     process = mocked_llm_process
 
-    # Enable file descriptors for this test
-    process.file_descriptor_enabled = True
-    process.fd_manager = FileDescriptorManager()
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager()
 
     # Create a file descriptor with content
     test_content = "This is test content for fd_to_file tool"
-    fd_xml = process.fd_manager.create_fd_content(test_content)
+    fd_xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(test_content)
     # For testing compatibility, wrap in ToolResult
     fd_result = ToolResult(content=fd_xml, is_error=False)
     fd_id = fd_result.content.split('fd="')[1].split('"')[0]
@@ -39,12 +38,8 @@ async def test_fd_to_file_tool(mocked_llm_process):
     with tempfile.NamedTemporaryFile(delete=True) as tmp:
         tmp_path = tmp.name
 
-    # Call the tool with runtime_context
-    result = await fd_to_file_tool(
-        fd=fd_id,
-        file_path=tmp_path,
-        runtime_context={"fd_manager": process.fd_manager},
-    )
+    plugin = process.get_plugin(FileDescriptorPlugin)
+    result = await plugin.fd_to_file_tool(fd=fd_id, file_path=tmp_path)
 
     try:
         # Check result
@@ -74,19 +69,14 @@ async def test_fd_to_file_invalid_fd(mocked_llm_process):
     process = mocked_llm_process
 
     # Enable file descriptors for this test
-    process.file_descriptor_enabled = True
-    process.fd_manager = FileDescriptorManager()
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager()
 
     # Create temporary file path
     with tempfile.NamedTemporaryFile(delete=True) as tmp:
         tmp_path = tmp.name
 
-    # Call the tool with invalid FD and runtime_context
-    result = await fd_to_file_tool(
-        fd="fd:999",
-        file_path=tmp_path,
-        runtime_context={"fd_manager": process.fd_manager},
-    )
+    plugin = process.get_plugin(FileDescriptorPlugin)
+    result = await plugin.fd_to_file_tool(fd="fd:999", file_path=tmp_path)
 
     # Check result
     assert result.is_error
@@ -103,13 +93,11 @@ async def test_fd_to_file_invalid_path(mocked_llm_process):
     # Use the mocked process provided by the fixture
     process = mocked_llm_process
 
-    # Enable file descriptors for this test
-    process.file_descriptor_enabled = True
-    process.fd_manager = FileDescriptorManager()
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager()
 
     # Create a file descriptor with content
     test_content = "This is test content for fd_to_file tool"
-    fd_xml = process.fd_manager.create_fd_content(test_content)
+    fd_xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(test_content)
     # For testing compatibility, wrap in ToolResult
     fd_result = ToolResult(content=fd_xml, is_error=False)
     fd_id = fd_result.content.split('fd="')[1].split('"')[0]
@@ -119,11 +107,9 @@ async def test_fd_to_file_invalid_path(mocked_llm_process):
 
     # Patch open to force a permission error
     with patch("builtins.open", side_effect=PermissionError("no permission")):
-        result = await fd_to_file_tool(
-            fd=fd_id,
-            file_path=invalid_path,
-            runtime_context={"fd_manager": process.fd_manager},
-        )
+        plugin = process.get_plugin(FileDescriptorPlugin)
+        tool = Tool.from_callable(plugin.fd_to_file_tool)
+        result = await tool.execute({"fd": fd_id, "file_path": invalid_path})
 
     # Check result
     assert result.is_error
@@ -132,10 +118,12 @@ async def test_fd_to_file_invalid_path(mocked_llm_process):
 
 @pytest.mark.asyncio
 async def test_fd_to_file_no_process():
-    """Test fd_to_file without a valid process."""
-    # Call the tool without runtime_context
-    result = await fd_to_file_tool(fd="fd:1", file_path="test.txt", runtime_context=None)
+    """fd_to_file works without a process context."""
+    from llmproc.config.schema import FileDescriptorPluginConfig
 
-    # Check result
+    plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    plugin.fd_manager = FileDescriptorManager()
+    tool = Tool.from_callable(plugin.fd_to_file_tool)
+    result = await tool.execute({"fd": "fd:1", "file_path": "test.txt"})
+
     assert result.is_error
-    assert "runtime context" in result.content.lower()

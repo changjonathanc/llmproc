@@ -6,12 +6,13 @@ from pathlib import Path
 
 import pytest
 from llmproc.program import LLMProgram
+from llmproc.plugins.spawn import SpawnPlugin
 
 
 def test_linked_programs_validation_error():
     """Test that incorrect linked_programs format raises a validation error."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Create a temporary TOML file with incorrect linked_programs format
+        # Create a temporary TOML file with incorrect spawn plugin format
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
             f.write(
@@ -23,8 +24,8 @@ def test_linked_programs_validation_error():
             [prompt]
             system_prompt = "Test system prompt"
 
-            [linked_programs]
-            enabled = ["./other_program.toml"]
+            [plugins.spawn]
+            linked_programs = { enabled = ["./other_program.toml"] }
             """
             )
 
@@ -34,14 +35,13 @@ def test_linked_programs_validation_error():
 
         # Verify the error message indicates the linked_programs validation issue
         error_message = str(excinfo.value)
-        assert "linked_programs.enabled" in error_message
-        assert "should be a valid string" in error_message
+        assert "plugins.spawn.linked_programs.enabled" in error_message
 
 
 def test_valid_linked_programs_format():
-    """Test that correct linked_programs format compiles successfully."""
+    """Test that correct spawn plugin format compiles successfully."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Create a temporary TOML file with correct linked_programs format
+        # Create a temporary TOML file with correct spawn plugin format
         toml_path = Path(temp_dir) / "test_program.toml"
         with open(toml_path, "w") as f:
             f.write(
@@ -53,8 +53,8 @@ def test_valid_linked_programs_format():
             [prompt]
             system_prompt = "Test system prompt"
 
-            [linked_programs]
-            program1 = "./other_program.toml"
+            [plugins.spawn]
+            linked_programs = { program1 = "./other_program.toml" }
             """
             )
 
@@ -75,7 +75,9 @@ def test_valid_linked_programs_format():
         # Load the program from TOML - now we have the file created
         program = LLMProgram.from_toml(toml_path)
 
-        # Verify linked_programs was properly loaded with the compiled program object
-        assert "program1" in program.linked_programs
-        assert program.linked_programs["program1"].model_name == "other-model"
-        assert program.linked_programs["program1"].provider == "anthropic"
+        # Verify linked programs were loaded via SpawnPlugin
+        spawn_plugin = next((p for p in program.plugins if isinstance(p, SpawnPlugin)), None)
+        assert spawn_plugin is not None
+        assert "program1" in spawn_plugin.linked_programs
+        assert spawn_plugin.linked_programs["program1"].model_name == "other-model"
+        assert spawn_plugin.linked_programs["program1"].provider == "anthropic"

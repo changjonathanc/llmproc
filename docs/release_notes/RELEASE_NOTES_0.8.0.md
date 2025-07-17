@@ -43,20 +43,20 @@
 
 ### Enhanced Callbacks System
 - Monitor tool registration, execution, and API events
-- Supports `TOOL_START`, `TOOL_END`, `RESPONSE`, `API_REQUEST`, `API_RESPONSE`, `TURN_START`, `TURN_END`, and `STDERR_WRITE` events
+- Supports `TOOL_START`, `TOOL_END`, `RESPONSE`, `API_REQUEST`, `API_RESPONSE`, `TURN_START`, and `TURN_END` events
 - **New support for async callback methods** alongside synchronous functions
 - Transparently handles both async and sync callbacks in the same implementation
 - Callback classes can freely mix sync and async methods
-- See [Callbacks documentation](../callbacks.md) for usage examples
+- See [Plugin System documentation](../plugin-system.md) for usage examples
 
 ### New Tool: Write to Standard Error
 - New built-in `write_stderr` tool allows LLMProcess to have stderr output
 - Inspired by Unix processes with distinct stdin, stdout, and stderr while LLM processes previously only had input and output
 - Provides a logging channel so messages can be reviewed later without exposing the full conversation
 - With the description override config option you can rename and repurpose the tool, e.g. piping the log to another LLM process
-- Integrated with CLI callback system for proper stderr handling (see `cli/run.py` for example usage)
-- Accessible via Callback `stderr_write(text)` or `LLMProcess.get_stderr_log()`
-- **Experimental feature**
+ - Integrated with CLI callback system for proper stderr handling (see `cli/run.py` for example usage)
+ - Accessible via `StderrPlugin.get_log()`
+ - **Experimental feature**
 
 ### Unified ToolConfig for MCP and Built-in Tools
 - Now MCP and built-in tools share the same ToolConfig

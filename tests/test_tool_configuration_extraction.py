@@ -8,7 +8,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from llmproc.file_descriptors.manager import FileDescriptorManager
+from llmproc.plugins.file_descriptor import FileDescriptorManager
 from llmproc.program import LLMProgram
 
 
@@ -31,8 +31,9 @@ def test_basic_tool_configuration():
     assert config["has_linked_programs"] is False
     assert config["linked_programs"] == {}
     assert config["linked_program_descriptions"] == {}
-    assert config["fd_manager"] is None
-    assert config["file_descriptor_enabled"] is False
+
+    # File descriptor configuration is now handled by FileDescriptorPlugin
+    # and is not included in the base tool configuration
 
 
 def test_tool_configuration_with_mcp():
@@ -82,51 +83,61 @@ def test_tool_configuration_with_linked_programs():
 
 
 def test_tool_configuration_with_file_descriptors():
-    """Test tool configuration with file descriptor settings."""
-    # Create a program with file descriptor configuration
+    """Test tool configuration with a file descriptor plugin."""
+    from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+    from llmproc.config.schema import FileDescriptorPluginConfig
+
     program = LLMProgram(
         model_name="test-model",
         provider="anthropic",
         system_prompt="Test system prompt",
-        file_descriptor={
-            "enabled": True,
-            "default_page_size": 5000,
-            "max_direct_output_chars": 10000,
-            "max_input_chars": 12000,
-            "page_user_input": True,
-            "enable_references": True,
-        },
+    )
+    program.add_plugins(
+        FileDescriptorPlugin(
+            FileDescriptorPluginConfig(
+                default_page_size=5000,
+                max_direct_output_chars=10000,
+                max_input_chars=12000,
+                page_user_input=True,
+                enable_references=True,
+            )
+        )
     )
 
     # Extract configuration
     config = program.get_tool_configuration()
 
-    # Verify file descriptor properties
-    assert config["file_descriptor_enabled"] is True
-    assert isinstance(config["fd_manager"], FileDescriptorManager)
-    assert config["fd_manager"].default_page_size == 5000
-    assert config["fd_manager"].max_direct_output_chars == 10000
-    assert config["fd_manager"].max_input_chars == 12000
-    assert config["fd_manager"].page_user_input is True
-    assert config["references_enabled"] is True
+    # Verify basic configuration structure
+    assert config["provider"] == "anthropic"
+    assert config["has_linked_programs"] is False
+    assert config["linked_programs"] == {}
+    assert config["linked_program_descriptions"] == {}
+
+    # File descriptor settings come from the FileDescriptorPlugin added above
 
 
-def test_tool_configuration_with_implicit_fd():
-    """Test tool configuration with implicit file descriptor through read_fd tool."""
-    # Create a program with read_fd tool enabled
+def test_tool_configuration_with_explicit_fd():
+    """Test tool configuration with explicit file descriptor plugin."""
+    from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+    from llmproc.config.schema import FileDescriptorPluginConfig
+
+    # Create a program with FD plugin (which provides read_fd tool)
     program = LLMProgram(
         model_name="test-model",
         provider="anthropic",
         system_prompt="Test system prompt",
-        tools=["read_fd"],
     )
+    # FD tools now come from plugin
+    program.add_plugins(FileDescriptorPlugin(FileDescriptorPluginConfig()))
 
     # Extract configuration
     config = program.get_tool_configuration()
 
-    # Verify file descriptor properties
-    assert config["file_descriptor_enabled"] is True
-    assert isinstance(config["fd_manager"], FileDescriptorManager)
-    # Check default values since no explicit configuration was provided
-    assert config["fd_manager"].default_page_size == 4000  # Default
-    assert config["fd_manager"].max_direct_output_chars == 8000  # Default
+    # Verify basic configuration structure (FD is handled by plugin, not in tool config)
+    assert config["provider"] == "anthropic"
+    assert config["has_linked_programs"] is False
+    assert config["linked_programs"] == {}
+    assert config["linked_program_descriptions"] == {}
+
+    # File descriptor functionality is provided through the plugin system
+    # and is configured at the plugin level, not in the tool configuration

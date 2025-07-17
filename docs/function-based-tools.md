@@ -101,6 +101,8 @@ async def fetch_data(url: str, timeout: int = 30) -> dict:
 
 ### Class Instance Methods as Tools
 
+For tools that maintain state across invocations, prefer registering a class instance's method as the tool handler instead of relying on injected context.
+
 You can use instance methods to create stateful tools:
 
 ```python
@@ -204,8 +206,9 @@ async def spawn_child_process(
 
 The runtime context typically contains:
 - `process`: The LLMProcess instance
-- `fd_manager`: File descriptor manager (if enabled)
-- `linked_programs`: Dictionary of linked programs (if available)
+
+Additional keys may be supplied by the application, but they are
+optional and not validated by LLMProc.
 
 ## Registering Tools
 
@@ -249,7 +252,7 @@ program = (
         system_prompt="You are a helpful assistant."
     )
     .register_tools([add_numbers, get_weather, fetch_data])
-    .add_preload_file("context.txt")
+    .add_plugins(PreloadFilesPlugin(["context.txt"]))
     .add_linked_program("expert", expert_program, "A specialized expert program")
 )
 

@@ -3,38 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from llmproc.providers.utils import (
-    get_context_window_size,
-    safe_callback,
-)
-
-
-class TestSafeCallback:
-    """Tests for the provider utilities safe callback function."""
-
-    def test_safe_callback_successful_execution(self):
-        """Test successful callback execution."""
-        callback_fn = MagicMock()
-        safe_callback(callback_fn, "arg1", "arg2", callback_name="test_callback")
-
-        callback_fn.assert_called_once_with("arg1", "arg2")
-
-    @patch("llmproc.providers.utils.logger")
-    def test_safe_callback_handles_exception(self, mock_logger):
-        """Test that exceptions in callbacks are caught and logged."""
-        callback_fn = MagicMock(side_effect=Exception("Test error"))
-
-        # This should not raise an exception
-        safe_callback(callback_fn, "arg1", callback_name="test_callback")
-
-        callback_fn.assert_called_once_with("arg1")
-        mock_logger.warning.assert_called_once()
-        assert "Error in test_callback callback" in mock_logger.warning.call_args[0][0]
-
-    def test_safe_callback_none_callback(self):
-        """Test handling None callback."""
-        # Should not raise an exception
-        safe_callback(None, "arg1", callback_name="test_callback")
+from llmproc.providers.utils import get_context_window_size
 
 
 class TestContextWindowSize:

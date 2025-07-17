@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-Minimal example demonstrating the LLMProc callback system.
+Flexible Callback Signatures Demo
+
+This demonstrates LLMProc's Flask/pytest-style parameter injection for callbacks.
+Your callbacks only need to declare the parameters they actually use!
 
 This shows how to:
-1. Create and register callbacks with a process
-2. Handle tool execution and model responses
-3. Collect basic metrics
+1. Use minimal callback signatures (just what you need)
+2. Mix different signature styles freely
+3. Maintain backward compatibility with legacy signatures
+4. Get performance benefits from flexible signatures
+5. Collect metrics with clean, readable code
 """
 
 import asyncio
@@ -14,26 +19,27 @@ import sys
 import time
 
 from llmproc import LLMProgram
-from llmproc.callbacks import CallbackEvent
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("callback_demo")
 
 
-# Simple timing callback for tool execution
-class TimingCallback:
+# Flexible callback signatures demonstration
+class FlexibleCallbacks:
+    """Demonstrates flexible callback signatures - only declare what you need!"""
+
     def __init__(self):
         self.tools = {}
         self.current_tools = {}
 
-    def tool_start(self, tool_name, tool_args):
-        """Record when a tool starts."""
+    def tool_start(self, tool_name):
+        """Basic signature: just the tool name (no tool_args or process needed)."""
         logger.info(f"Tool started: {tool_name}")
         self.current_tools[tool_name] = time.time()
 
     def tool_end(self, tool_name, result):
-        """Record tool completion and calculate duration."""
+        """Selective signature: name and result (no process parameter)."""
         if tool_name in self.current_tools:
             duration = time.time() - self.current_tools[tool_name]
             if tool_name not in self.tools:
@@ -43,15 +49,29 @@ class TimingCallback:
             self.tools[tool_name]["total_time"] += duration
             logger.info(f"Tool completed: {tool_name} ({duration:.2f}s)")
 
-    def response(self, text):
-        """Log when model generates a response."""
-        preview = text[:50] + "..." if len(text) > 50 else text
-        logger.info(f"Response: {preview}")
+    def response(self, content, process):
+        """Full context signature: content and process when needed."""
+        tokens = process.count_tokens()
+        preview = content[:50] + "..." if len(content) > 50 else content
+        logger.info(f"Response: {preview} (tokens: {tokens})")
+
+    def turn_end(self, response, tool_results):
+        """Mix and match: some params but not process."""
+        logger.info(f"Turn completed: {len(tool_results)} tools used, {len(response)} chars")
+
+
+# Legacy callback for compatibility demonstration
+class LegacyCallback:
+    """Shows that old-style signatures still work."""
+
+    def tool_start(self, tool_name, tool_args, *, process):
+        """Legacy pattern: keyword-only process parameter."""
+        logger.info(f"Legacy callback: {tool_name} with {len(tool_args)} args")
 
 
 async def main():
     # Load program configuration
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "./examples/basic-features.toml"
+    config_path = sys.argv[1] if len(sys.argv) > 1 else "./examples/basic-features.yaml"
     print(f"Using configuration: {config_path}")
 
     try:
@@ -59,9 +79,17 @@ async def main():
         program = LLMProgram.from_toml(config_path)
         process = await program.start()
 
-        # Register a timing callback
-        timer = TimingCallback()
-        process.add_callback(timer)
+        # Register flexible callbacks (demonstrates different signature styles)
+        flexible = FlexibleCallbacks()
+        legacy = LegacyCallback()
+
+        process.add_plugins(flexible)
+        process.add_plugins(legacy)
+
+        print("📝 Registered callbacks with different signature styles:")
+        print("   - FlexibleCallbacks: minimal signatures (Flask/pytest style)")
+        print("   - LegacyCallback: keyword-only process parameter")
+        print("   Both work together seamlessly!\n")
 
         # Get user input
         user_input = input("You> ")
@@ -76,11 +104,16 @@ async def main():
         print(f"Assistant> {process.get_last_message()}")
 
         # Show tool timing statistics
-        if timer.tools:
+        if flexible.tools:
             print("\nTool statistics:")
-            for name, stats in timer.tools.items():
+            for name, stats in flexible.tools.items():
                 avg = stats["total_time"] / stats["count"]
                 print(f"  {name}: {stats['count']} calls, {avg:.2f}s avg")
+
+        print("\n🎯 Demonstrated flexible callback signatures:")
+        print("   ✅ Minimal signatures work perfectly")
+        print("   ✅ Legacy signatures still supported")
+        print("   ✅ Performance benefits from declaring only what you need")
 
     except Exception as e:
         print(f"Error: {e}")

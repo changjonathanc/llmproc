@@ -23,7 +23,6 @@ def test_tool_meta_creation():
     assert meta.description == "Test tool description"
     assert meta.access == AccessLevel.READ
     assert meta.requires_context is True
-    assert meta.required_context_keys == ()
 
 
 def test_attach_meta_retrieval():
@@ -71,7 +70,6 @@ def test_register_tool_with_params():
         description="Custom description",
         access=AccessLevel.READ,
         requires_context=True,
-        required_context_keys=["process"],
     )
     async def param_tool(arg: str, runtime_context=None):
         """Tool docstring."""
@@ -83,7 +81,6 @@ def test_register_tool_with_params():
     assert meta.description == "Custom description"
     assert meta.access == AccessLevel.READ
     assert meta.requires_context is True
-    assert "process" in meta.required_context_keys
 
 
 def test_register_tool_with_string_access():
@@ -135,21 +132,18 @@ def test_metadata_default_values():
     assert meta.description is None
     assert meta.access == AccessLevel.WRITE
     assert meta.requires_context is False
-    assert meta.required_context_keys == ()
 
 
 def test_metadata_for_context_wrapper():
     """Test metadata is properly attached to context wrappers."""
 
-    @register_tool(requires_context=True, required_context_keys=["process", "fd_manager"])
+    @register_tool(requires_context=True)
     async def context_tool(param: str, runtime_context=None):
         return f"processed {param}"
 
     # The wrapper should have metadata
     meta = get_tool_meta(context_tool)
     assert meta.requires_context is True
-    assert "process" in meta.required_context_keys
-    assert "fd_manager" in meta.required_context_keys
 
     # The name should default to the function name
     assert meta.name == "context_tool"

@@ -3,14 +3,13 @@
 from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
+
 from llmproc.common.access_control import AccessLevel
 from llmproc.common.results import RunResult, ToolResult
-from llmproc.file_descriptors import FileDescriptorManager
 from llmproc.llm_process import LLMProcess
+from llmproc.plugins.file_descriptor import FileDescriptorManager, FileDescriptorPlugin
 from llmproc.program import LLMProgram
 from llmproc.providers.anthropic_process_executor import AnthropicProcessExecutor
-from llmproc.tools.builtin.fd_tools import read_fd_tool
-
 from tests.conftest import create_mock_llm_program, create_test_llmprocess_directly
 
 
@@ -49,17 +48,15 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
     program = create_mock_llm_program()
     program.tools = {"enabled": ["read_fd"]}
     program.system_prompt = "system"
-    program.display_name = "display"
     program.base_dir = None
     program.api_params = {}
-    program.get_enriched_system_prompt = Mock(return_value="enriched system prompt")
 
     # Create a process
     process = create_test_llmprocess_directly(program=program)
 
     # Manually enable file descriptors with a small max_direct_output_chars for testing
-    process.file_descriptor_enabled = True
-    process.fd_manager = FileDescriptorManager(max_direct_output_chars=100)
+    process.get_plugin(FileDescriptorPlugin)
+    process.get_plugin(FileDescriptorPlugin).fd_manager = FileDescriptorManager(max_direct_output_chars=100)
 
     # Create multiple file descriptors with different content
     fd1_content = "This is content for the first file descriptor"
@@ -68,8 +65,8 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
         * 3
     )
 
-    fd1_xml = process.fd_manager.create_fd_content(fd1_content)
-    fd2_xml = process.fd_manager.create_fd_content(fd2_content)
+    fd1_xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(fd1_content)
+    fd2_xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(fd2_content)
 
     # For test assertions, wrap in ToolResult
     fd1_result = ToolResult(content=fd1_xml, is_error=False)
@@ -84,46 +81,43 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
     assert fd2_id == "fd:2"
 
     # Verify content is stored in the original process
-    assert process.fd_manager.file_descriptors[fd1_id]["content"] == fd1_content
-    assert process.fd_manager.file_descriptors[fd2_id]["content"] == fd2_content
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors[fd1_id]["content"] == fd1_content
+    assert process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors[fd2_id]["content"] == fd2_content
 
     # Create a mock forked process that will be returned by create_process
     mock_forked_process = MagicMock(spec=LLMProcess)
-    mock_forked_process.file_descriptor_enabled = False  # Will be set by fork_process
+    mock_forked_process.get_plugin(FileDescriptorPlugin)  # Will be set by _fork_process
+    mock_forked_process.plugins = []
 
     # Create a real FileDescriptorManager to use in the mock
     mock_fd_manager = FileDescriptorManager(max_direct_output_chars=100)
-    mock_forked_process.fd_manager = None  # Will be set by fork_process
+    mock_forked_process.get_plugin(FileDescriptorPlugin).fd_manager = None  # Will be set by _fork_process
 
-    # Add necessary attributes that will be set by fork_process
+    # Add necessary attributes that will be set by _fork_process
 
-    # Create a patched version of fork_process that doesn't call create_process
+    # Create a patched version of _fork_process that doesn't call create_process
     # This allows us to test the file descriptor copying logic in isolation
-    original_fork_process = process.fork_process
+    original_fork_process = process._fork_process
 
     # Replace with our test version that skips the create_process call
     async def test_fork_process():
         # Set up the mock with expected properties
-        mock_forked_process.file_descriptor_enabled = True
-        mock_forked_process.fd_manager = mock_fd_manager
+        mock_forked_process.get_plugin(FileDescriptorPlugin)
+        mock_forked_process.get_plugin(FileDescriptorPlugin).fd_manager = mock_fd_manager
         mock_forked_process.state = []
         # Child processes are created with WRITE access level (which prevents further forking)
         mock_forked_process.access_level = AccessLevel.WRITE
         mock_forked_process.tool_manager = MagicMock()
         return mock_forked_process
 
-    # Patch the fork_process method on our specific process instance
-    process.fork_process = test_fork_process
+    # Patch the _fork_process method on our specific process instance
+    process._fork_process = test_fork_process
 
-    # Now call fork_process - this will use our test implementation
-    forked_process = await process.fork_process()
+    # Now call _fork_process - this will use our test implementation
+    forked_process = await process._fork_process()
 
     # Verify attributes were set correctly
-    assert forked_process.file_descriptor_enabled is True
-
-    # Since we're using a mock, we can't check actual file descriptors
-    # Instead, check that the fd_manager attribute was set
-    assert hasattr(forked_process, "fd_manager")
+    assert forked_process.get_plugin(FileDescriptorPlugin).fd_manager is not None
     assert forked_process.access_level == AccessLevel.WRITE
 
     # Create our own fd_manager with copied content to use in the remaining tests
@@ -133,31 +127,34 @@ async def test_fd_copy_during_fork(mock_get_provider_client):
     forked_fd_manager.create_fd_content(fd2_content)
 
     # Update the mock with our manager for the remaining tests
-    forked_process.fd_manager = forked_fd_manager
+    forked_process.get_plugin(FileDescriptorPlugin).fd_manager = forked_fd_manager
 
     # Verify file descriptors were created in our manager
-    assert fd1_id in forked_process.fd_manager.file_descriptors
-    assert fd2_id in forked_process.fd_manager.file_descriptors
+    assert fd1_id in forked_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
+    assert fd2_id in forked_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
 
     # Verify the content matches
-    assert forked_process.fd_manager.file_descriptors[fd1_id]["content"] == fd1_content
-    assert forked_process.fd_manager.file_descriptors[fd2_id]["content"] == fd2_content
+    assert forked_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors[fd1_id]["content"] == fd1_content
+    assert forked_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors[fd2_id]["content"] == fd2_content
 
     # Test that changes to the original process don't affect the fork
     fd3_content = "This is content created after the fork"
-    xml = process.fd_manager.create_fd_content(fd3_content)
+    xml = process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(fd3_content)
 
     # New FD should exist in original but not in fork
-    assert "fd:3" in process.fd_manager.file_descriptors
-    assert "fd:3" not in forked_process.fd_manager.file_descriptors
+    assert "fd:3" in process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
+    assert "fd:3" not in forked_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
 
     # Create a new FD in the fork
     fd3_fork_content = "This is content created in the fork"
-    xml_fork = forked_process.fd_manager.create_fd_content(fd3_fork_content)
+    xml_fork = forked_process.get_plugin(FileDescriptorPlugin).fd_manager.create_fd_content(fd3_fork_content)
 
     # New fork FD should exist in fork but not original
-    assert "fd:3" in forked_process.fd_manager.file_descriptors
-    assert forked_process.fd_manager.file_descriptors["fd:3"]["content"] == fd3_fork_content
+    assert "fd:3" in forked_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors
+    assert (
+        forked_process.get_plugin(FileDescriptorPlugin).fd_manager.file_descriptors["fd:3"]["content"]
+        == fd3_fork_content
+    )
 
 
 def test_fd_pagination_with_very_long_lines():
@@ -261,7 +258,7 @@ def test_fd_api_call_tracking():
 
     # Verify counts
     assert len(run_result.api_call_infos) == 2
-    assert len(run_result.tool_calls) == 3
+    assert run_result.tool_call_count == 3
 
 
 def test_recursive_fd_protection():

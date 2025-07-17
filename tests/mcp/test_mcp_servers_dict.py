@@ -1,6 +1,7 @@
 import pytest
 
 from llmproc.config.program_loader import ProgramLoader
+from llmproc.program import LLMProgram
 from llmproc.config.schema import (
     LLMProgramConfig,
     MCPConfig,
@@ -29,7 +30,8 @@ def test_mcp_servers_dict(tmp_path):
         tools=ToolsConfig(mcp=MCPToolsConfig(root={"calc": [ToolConfig(name="add")]})),
     )
 
-    program = ProgramLoader._build_from_config(config, tmp_path)
+    data = ProgramLoader._build_from_config(config, tmp_path)
+    program = LLMProgram._from_config_data(data)
     assert program.mcp_servers == {"calc": {"type": "stdio", "command": "echo", "args": ["calc"]}}
     cfg = program.get_tool_configuration()
     assert cfg["mcp_servers"] == program.mcp_servers

@@ -1,0 +1,16 @@
+model:
+  name: "claude-3-5-haiku-20241022"
+  provider: "claude_code"
+  display_name: "Claude Code (OAuth)"
+
+prompt:
+  system: |
+    You are Claude Code, a helpful AI assistant that runs via OAuth authentication.
+    Be concise and helpful in your responses.
+
+  user: |
+    Hello! Can you tell me about yourself and how you're different from other Claude instances?
+
+parameters:
+  max_tokens: 300
+  temperature: 0.7

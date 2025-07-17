@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+from llmproc.llm_process import LLMProcess
+
 
 # Register custom markers to avoid warnings
 def pytest_configure(config):
@@ -14,6 +16,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "anthropic_api: mark test as requiring Anthropic API")
     config.addinivalue_line("markers", "openai_api: mark test as requiring OpenAI API")
     config.addinivalue_line("markers", "gemini_api: mark test as requiring Gemini API")
+    config.addinivalue_line("markers", "claude_code_api: mark test as requiring Claude Code provider")
 
     # Test tier markers
     config.addinivalue_line("markers", "essential_api: mark test as essential for daily development")
@@ -129,16 +132,13 @@ def create_mock_llm_program(enabled_tools=None):
     program.provider = "anthropic"
     program.system_prompt = "You are a helpful assistant."
     program.api_params = {}
-    program.display_name = "Test Model"
     program.base_dir = None
+    program.file_descriptor = {}
 
     # Configure tools
     if enabled_tools is None:
         enabled_tools = []
     program.tools = enabled_tools
-
-    # Mock the getter for enriched system prompt
-    program.get_enriched_system_prompt.return_value = program.system_prompt
 
     return program
 
@@ -154,7 +154,7 @@ class GotoTracker:
         self.goto_count = 0
         self.single_run_count = 0  # Count per user message
 
-    def tool_start(self, tool_name, tool_args):
+    def tool_start(self, tool_name, tool_args, *, process):
         """Record when the GOTO tool is called."""
         self.tool_calls.append({"tool": tool_name, "args": tool_args, "status": "started"})
 
@@ -165,13 +165,9 @@ class GotoTracker:
             self.goto_count += 1
             self.single_run_count += 1
 
-    def tool_end(self, tool_name, result):
+    def tool_end(self, tool_name, result, *, process):
         """Record when the GOTO tool completes."""
         self.tool_calls.append({"tool": tool_name, "result": result, "status": "completed"})
-
-    def reset_for_new_message(self):
-        """Reset single run counter for a new user message."""
-        self.single_run_count = 0
 
 
 @pytest.fixture
@@ -266,32 +262,43 @@ def create_program():
 # Add a helper function for LLMProcess instantiation in tests
 @pytest.fixture
 async def create_test_process():
-    """Helper function for creating test processes the right way.
+    """Factory fixture for creating test ``LLMProcess`` instances.
 
-    This function is an async fixture that properly instantiates LLMProcess
-    instances for tests, using the correct program.start() pattern.
+    This helper uses ``program.start()`` to construct a process and allows
+    callers to optionally override attributes on the returned instance. It keeps
+    initialization lightweight by mocking tool setup during tests.
 
-    Example usage:
-        @pytest.mark.asyncio
-        async def test_something(create_test_process):
-            process = await create_test_process(program)
-            assert process.model_name == "test-model"
+    Example:
+        ``process = await create_test_process(program, file_descriptor_enabled=True)``
     """
     from unittest.mock import AsyncMock, patch
 
-    async def _create_process(program, mock_for_tests=True):
-        # Always use program.start() as the standard API to create a process.
-        # For tests, we may want to mock some components to speed up testing
-        # and avoid external dependencies.
+    async def _create_process(program, mock_for_tests=True, **overrides):
         if mock_for_tests:
-            # Mock necessary dependencies to create a lightweight process for testing
-            with patch.object(
-                program.tool_manager, "initialize_tools", new=AsyncMock()
-            ):  # Skip actual tool initialization
-                return await program.start()
+            with patch(
+                "llmproc.tools.tool_manager.ToolManager.register_tools",
+                new=AsyncMock(),
+            ):
+                proc = await program.start()
         else:
-            # Use the proper factory method with full initialization
-            return await program.start()
+            proc = await program.start()
+
+        for name, value in overrides.items():
+            setattr(proc, name, value)
+
+        if "fd_manager" in overrides:
+            from llmproc.config.schema import FileDescriptorPluginConfig
+            from llmproc.plugins.file_descriptor import FileDescriptorPlugin
+
+            plugin = proc.get_plugin(FileDescriptorPlugin)
+            if plugin is None:
+                plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+                proc.plugins = (*proc.plugins, plugin)
+
+            plugin.fd_manager = overrides["fd_manager"]
+            plugin.fd_manager.enable_references = bool(overrides.get("references_enabled", False))
+
+        return proc
 
     return _create_process
 
@@ -322,7 +329,7 @@ async def mocked_llm_process():
     # Patch the actual client to prevent API calls
     with (
         patch("anthropic.AsyncAnthropic") as mock_client_class,
-        patch("llmproc.program_exec.initialize_client", return_value=MagicMock()),
+        patch("llmproc.program_exec.get_provider_client", return_value=MagicMock()),
     ):
         # Configure the mock client
         mock_client = MagicMock()
@@ -347,6 +354,14 @@ async def mocked_llm_process():
 
         # Start the process with our mocks in place
         process = await program.start()
+
+        # Attach a disabled FileDescriptorPlugin for tests that enable it later
+        from llmproc.config.schema import FileDescriptorPluginConfig
+        from llmproc.plugins.file_descriptor import FileDescriptorManager, FileDescriptorPlugin
+
+        plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+        plugin.fd_manager = FileDescriptorManager()
+        process.add_plugins(plugin)
 
         # Patch the run method to update state like a real process would
         original_run = process.run
@@ -386,7 +401,10 @@ def create_test_llmprocess_directly(program=None, **kwargs):
     from unittest.mock import MagicMock, patch
 
     from llmproc.program import LLMProgram
-    from llmproc.program_exec import instantiate_process, prepare_process_state
+    from llmproc.program_exec import (
+        instantiate_process,
+        prepare_process_config,
+    )
     from llmproc.tools.tool_manager import ToolManager
 
     # If no program provided, create a mock program with defaults
@@ -397,21 +415,39 @@ def create_test_llmprocess_directly(program=None, **kwargs):
         program.provider = kwargs.get("provider", "test-provider")
         program.system_prompt = kwargs.get("system_prompt", "Test prompt")
         program.base_dir = None
-        program.display_name = kwargs.get("display_name", "Test Model")
         program.api_params = {}
+        program.project_id = kwargs.get("project_id", None)
+        program.region = kwargs.get("region", None)
         program.tool_manager = kwargs.get("tool_manager", MagicMock(spec=ToolManager))
-        program.linked_programs = kwargs.get("linked_programs", {})
-        program.linked_program_descriptions = kwargs.get("linked_program_descriptions", {})
-        program.preload_files = []
-        from llmproc.config import EnvInfoConfig
-
-        program.env_info = EnvInfoConfig()
         program.compiled = True
+        program.plugins = kwargs.get("plugins", [])
+        if "linked_programs" in kwargs or "linked_program_descriptions" in kwargs:
+            from llmproc.plugins.spawn import SpawnPlugin
+
+            plugin = SpawnPlugin(
+                kwargs.get("linked_programs", {}),
+                kwargs.get("linked_program_descriptions", {}),
+            )
+            program.plugins.append(plugin)
+    else:
+        if not hasattr(program, "plugins") or not isinstance(program.plugins, list):
+            object.__setattr__(program, "plugins", kwargs.get("plugins", []))
+        elif "plugins" in kwargs:
+            object.__setattr__(program, "plugins", kwargs["plugins"])
+        if "linked_programs" in kwargs or "linked_program_descriptions" in kwargs:
+            from llmproc.plugins.spawn import SpawnPlugin
+
+            plugin = SpawnPlugin(
+                kwargs.get("linked_programs", {}),
+                kwargs.get("linked_program_descriptions", {}),
+            )
+            program.plugins.append(plugin)
+        if not hasattr(program, "project_id"):
+            program.project_id = kwargs.get("project_id", None)
+        if not hasattr(program, "region"):
+            program.region = kwargs.get("region", None)
 
     # Set up some key attributes if they don't exist already, for backward compatibility
-    for key_attr in ["tool_manager", "linked_programs", "linked_program_descriptions"]:
-        if not hasattr(program, key_attr) or getattr(program, key_attr) is None:
-            setattr(program, key_attr, {})
 
     if not hasattr(program, "tool_manager") or program.tool_manager is None:
         program.tool_manager = MagicMock(spec=ToolManager)
@@ -419,7 +455,7 @@ def create_test_llmprocess_directly(program=None, **kwargs):
     # Perform OpenAI + tools validation check to match real behavior
     if hasattr(program, "provider") and program.provider == "openai":
         if hasattr(program, "tool_manager"):
-            registered_tools = program.tool_manager.get_registered_tools()
+            registered_tools = program.tool_manager.registered_tools
             # Allow OpenAI with tools in test mode
             if registered_tools and False:  # Disable this validation for tests
                 raise ValueError(
@@ -428,10 +464,15 @@ def create_test_llmprocess_directly(program=None, **kwargs):
 
     # Prepare state using the actual logic, with mocked external dependencies
     with (
-        patch("llmproc.program_exec.initialize_client", return_value=MagicMock()),
-        patch("llmproc.env_info.builder.EnvInfoBuilder.load_files", return_value={}),
+        patch("llmproc.program_exec.get_provider_client", return_value=MagicMock()),
+        patch("llmproc.plugins.preload_files.load_files", return_value={}),
     ):
-        state = prepare_process_state(program)
+        cfg = prepare_process_config(program)
+
+    if "tool_manager" in kwargs:
+        cfg.tool_manager = kwargs["tool_manager"]
+    elif hasattr(program, "tool_manager"):
+        cfg.tool_manager = program.tool_manager
 
     # Apply test-specific overrides to the state
     # First extract the parameters that would be used for direct LLMProcess.__init__
@@ -440,29 +481,38 @@ def create_test_llmprocess_directly(program=None, **kwargs):
         "model_name",
         "provider",
         "system_prompt",
-        "original_system_prompt",
+        "base_system_prompt",
         "enriched_system_prompt",
         "state",
         "client",
         "fd_manager",
         "file_descriptor_enabled",
         "references_enabled",
-        "has_linked_programs",
         "registered_tools",
         "mcp_config_path",
         "mcp_tools",
         "mcp_enabled",
         "_needs_async_init",
         "_tools_need_initialization",
+        "plugins",
     ]:
-        if param in kwargs:
-            state[param] = kwargs[param]
+        if param in kwargs and hasattr(cfg, param):
+            setattr(cfg, param, kwargs[param])
 
     # Special case for system prompts to maintain consistency with the old implementation
     if "system_prompt" in kwargs:
-        state["original_system_prompt"] = kwargs["system_prompt"]
+        cfg.base_system_prompt = kwargs["system_prompt"]
         if "enriched_system_prompt" not in kwargs:
-            state["enriched_system_prompt"] = f"Enriched: {kwargs['system_prompt']}"
+            cfg.enriched_system_prompt = f"Enriched: {kwargs['system_prompt']}"
+
+    # Always attach a FileDescriptorPlugin for convenience in tests
+    from llmproc.config.schema import FileDescriptorPluginConfig
+    from llmproc.plugins.file_descriptor import FileDescriptorManager, FileDescriptorPlugin
+
+    fd_manager = FileDescriptorManager()
+    plugin = FileDescriptorPlugin(FileDescriptorPluginConfig())
+    plugin.fd_manager = fd_manager
+    cfg.plugins.append(plugin)
 
     # Instantiate using the filtered/validated path
-    return instantiate_process(state)
+    return instantiate_process(cfg)

@@ -9,8 +9,8 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from llmproc import LLMProgram
-from llmproc.common.constants import LLMPROC_MSG_ID
 from llmproc.common.results import RunResult
 from llmproc.providers.anthropic_utils import (
     apply_cache_control,
@@ -19,25 +19,11 @@ from llmproc.providers.anthropic_utils import (
     is_cacheable_content,
     prepare_api_request,
 )
-
-from tests.conftest_api import (
-    claude_process_with_caching,
-    claude_process_without_caching,
-)
+from tests.conftest_api import claude_process_with_caching
 
 # =============================================================================
 # UNIT TESTS - Test the prompt caching utility functions
 # =============================================================================
-
-
-def has_cache_control(messages):
-    """Helper function to check if any message has cache_control."""
-    for msg in messages:
-        if isinstance(msg.get("content"), list):
-            for content in msg["content"]:
-                if isinstance(content, dict) and "cache_control" in content:
-                    return True
-    return False
 
 
 def test_run_result_cache_metrics():
@@ -143,8 +129,8 @@ async def test_caching_integration(claude_process_with_caching):
     duration = time.time() - start_time
 
     # Assert - verify API calls occurred
-    assert result1.api_calls > 0, "No API calls recorded in first result"
-    assert result2.api_calls > 0, "No API calls recorded in second result"
+    assert result1.api_call_count > 0, "No API calls recorded in first result"
+    assert result2.api_call_count > 0, "No API calls recorded in second result"
 
     # Assert - verify responses are different
     state = process.get_state()
@@ -188,40 +174,13 @@ async def test_multi_turn_caching(claude_process_with_caching):
     assert duration < 60.0, f"Test took too long: {duration:.2f} seconds"
 
 
-@pytest.mark.llm_api
-@pytest.mark.extended_api
-@pytest.mark.asyncio
-async def test_disable_automatic_caching(claude_process_with_caching, claude_process_without_caching):
-    """Test disabling automatic caching."""
-    # Arrange
-    process_with_caching_disabled = claude_process_without_caching
-    process_with_caching_enabled = claude_process_with_caching
-    start_time = time.time()
-
-    # Act - make API calls with both processes
-    result_disabled = await process_with_caching_disabled.run("Hello, how are you?")
-    result_enabled = await process_with_caching_enabled.run("Hello, how are you?")
-    duration = time.time() - start_time
-
-    # Assert - both processes should have API calls
-    assert result_disabled.api_calls > 0, "No API calls recorded with caching disabled"
-    assert result_enabled.api_calls > 0, "No API calls recorded with caching enabled"
-
-    # Assert - both processes should produce valid responses
-    assert process_with_caching_disabled.get_last_message(), "No response from process with caching disabled"
-    assert process_with_caching_enabled.get_last_message(), "No response from process with caching enabled"
-
-    # Timing assertion (not strictly necessary but good practice)
-    assert duration < 60.0, f"Test took too long: {duration:.2f} seconds"
-
-
 def test_format_state_to_api_messages():
     """Test format_state_to_api_messages function."""
     # Arrange
     state = [
-        {"role": "user", "content": "Hello", LLMPROC_MSG_ID: 1},
-        {"role": "assistant", "content": "Hi there!", LLMPROC_MSG_ID: 2},
-        {"role": "user", "content": [{"type": "text", "text": "How are you?"}], LLMPROC_MSG_ID: 3},
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there!"},
+        {"role": "user", "content": [{"type": "text", "text": "How are you?"}]},
     ]
 
     # Act
@@ -230,26 +189,23 @@ def test_format_state_to_api_messages():
     result = format_state_to_api_messages(state)
 
     # Assert
-    # Verify message IDs are added correctly
+    # Verify message ID metadata is removed and content is properly formatted
     assert len(result) == 3
-    assert LLMPROC_MSG_ID not in result[0], "LLMPROC_MSG_ID should be removed"
-    assert LLMPROC_MSG_ID not in result[1], "LLMPROC_MSG_ID should be removed"
-    assert LLMPROC_MSG_ID not in result[2], "LLMPROC_MSG_ID should be removed"
 
     # Check first message (string content)
     assert isinstance(result[0]["content"], list)
     assert result[0]["content"][0]["type"] == "text"
-    assert "[msg_1]" in result[0]["content"][0]["text"]
+    assert result[0]["content"][0]["text"] == "Hello"
 
     # Check second message (string content)
     assert isinstance(result[1]["content"], list)
     assert result[1]["content"][0]["type"] == "text"
-    assert "[msg_2]" not in result[1]["content"][0]["text"]
+    assert result[1]["content"][0]["text"] == "Hi there!"
 
     # Check third message (list content)
     assert isinstance(result[2]["content"], list)
     assert result[2]["content"][0]["type"] == "text"
-    assert "[msg_3]" in result[2]["content"][0]["text"]
+    assert result[2]["content"][0]["text"] == "How are you?"
 
 
 def test_format_system_prompt():
@@ -324,17 +280,14 @@ def test_prepare_api_request():
     # Create a mock process
     process = MagicMock()
     process.state = [
-        {"role": "user", "content": "Hello", LLMPROC_MSG_ID: 1},
-        {"role": "assistant", "content": "Hi there!", LLMPROC_MSG_ID: 2},
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there!"},
     ]
     process.enriched_system_prompt = "You are a helpful assistant."
     process.tools = [{"name": "calculator", "description": "A calculator tool"}]
     process.model_name = "claude-3-7-sonnet"
     process.api_params = {"max_tokens": 1000}
-    process.disable_automatic_caching = False
     process.provider = "anthropic"
-    process.tool_manager.message_ids_enabled = True
-
     # Act
     from llmproc.providers.anthropic_utils import prepare_api_request
 
@@ -356,9 +309,9 @@ def test_prepare_api_request():
 
     # System prompt is now a string, not a list with cache_control
 
-    # Verify messages have message IDs and cache control
-    assert "[msg_1]" in api_request["messages"][0]["content"][0]["text"]
-    assert "[msg_2]" not in api_request["messages"][1]["content"][0]["text"]
+    # Verify messages have proper content and cache control (but no embedded message IDs)
+    assert api_request["messages"][0]["content"][0]["text"] == "Hello"
+    assert api_request["messages"][1]["content"][0]["text"] == "Hi there!"
     assert "cache_control" in api_request["messages"][0]["content"][0]
     assert "cache_control" in api_request["messages"][1]["content"][0]
 

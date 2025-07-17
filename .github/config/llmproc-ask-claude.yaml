@@ -35,13 +35,16 @@ mcp:
         - "serve"
       # claude is the executable built in the previous step of the GitHub action
 
+plugins:
+  stderr:
+    tools:
+      - name: "write_stderr"
+        alias: "write_log"
+        description: "Document your reasoning process or observations"
+        param_descriptions:
+          message: "A log message about what you're doing or thinking"
 tools:
   builtin:
-    - name: "write_stderr"
-      alias: "write_log"
-      description: "Document your reasoning process or observations"
-      param_descriptions:
-        message: "A log message about what you're doing or thinking"
     - name: "read_file"
       alias: "read"
       description: "Read the contents of a file"
